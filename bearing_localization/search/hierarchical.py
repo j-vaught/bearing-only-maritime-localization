@@ -16,6 +16,7 @@ import numpy as np
 from ..algorithms import SearchResult, associate
 
 WaterPredicate = Callable[[float, float], bool]
+LineOfSightPredicate = Callable[[tuple[float, float], tuple[float, float]], bool]
 
 
 def hierarchical_search(
@@ -33,6 +34,7 @@ def hierarchical_search(
     visibility_radius_m: float = float("inf"),
     penalize_missing_ais: bool = False,
     water_predicate: WaterPredicate | None = None,
+    line_of_sight_predicate: LineOfSightPredicate | None = None,
 ) -> SearchResult:
     """Estimate position with a bounded coarse-to-fine search.
 
@@ -40,6 +42,10 @@ def hierarchical_search(
     ``water_predicate`` receives ``(east_m, north_m)`` and returns whether a
     candidate is water. It is optional so callers without a water mask can use
     the same search interface.
+
+    ``line_of_sight_predicate`` receives candidate observer and AIS target
+    ``(east_m, north_m)`` pairs. When supplied, AIS targets outside the range
+    limit or behind land are removed before association at each candidate.
 
     ``coarse_spacing_m`` sets the initial lattice spacing. Each refinement
     level divides the spacing by ``refinement_factor`` and evaluates a 3-by-3
@@ -79,16 +85,39 @@ def hierarchical_search(
                 continue
             if water_predicate is not None and not water_predicate(x, y):
                 continue
+            candidate_indices = np.arange(len(xy))
+            if np.isfinite(visibility_radius_m):
+                offsets = xy - np.asarray([x, y])
+                candidate_indices = candidate_indices[
+                    np.einsum("ij,ij->i", offsets, offsets) <= visibility_radius_m**2
+                ]
+            if line_of_sight_predicate is not None and len(candidate_indices):
+                observer_xy = (x, y)
+                candidate_indices = np.asarray(
+                    [
+                        index
+                        for index in candidate_indices
+                        if line_of_sight_predicate(
+                            observer_xy,
+                            (float(xy[index, 0]), float(xy[index, 1])),
+                        )
+                    ],
+                    dtype=int,
+                )
             score, matches = associate(
                 np.asarray([x, y]),
                 observations,
-                xy,
-                ais_types,
+                xy[candidate_indices],
+                [ais_types[index] for index in candidate_indices],
                 sigma_deg,
                 unmatched_penalty_deg,
                 use_types,
-                visibility_radius_m,
+                float("inf"),
                 penalize_missing_ais,
+            )
+            matches = tuple(
+                (observation_index, int(candidate_indices[local_ais_index]))
+                for observation_index, local_ais_index in matches
             )
             scored[key] = (score, matches)
             evaluations += 1
@@ -97,9 +126,7 @@ def hierarchical_search(
         xs = np.arange(xmin, xmax + step * 0.5, step)
         ys = np.arange(ymin, ymax + step * 0.5, step)
         return {
-            (float(np.clip(x, xmin, xmax)), float(np.clip(y, ymin, ymax)))
-            for x in xs
-            for y in ys
+            (float(np.clip(x, xmin, xmax)), float(np.clip(y, ymin, ymax))) for x in xs for y in ys
         }
 
     evaluate(lattice(coarse_spacing_m))
@@ -119,9 +146,7 @@ def hierarchical_search(
                         next_points.add((candidate_x, candidate_y))
         evaluate(next_points)
 
-    (best_x, best_y), (best_score, best_matches) = min(
-        scored.items(), key=lambda item: item[1][0]
-    )
+    (best_x, best_y), (best_score, best_matches) = min(scored.items(), key=lambda item: item[1][0])
     return SearchResult(
         east_m=best_x,
         north_m=best_y,
@@ -132,4 +157,4 @@ def hierarchical_search(
     )
 
 
-__all__ = ["WaterPredicate", "hierarchical_search"]
+__all__ = ["LineOfSightPredicate", "WaterPredicate", "hierarchical_search"]
