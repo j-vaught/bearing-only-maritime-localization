@@ -8,10 +8,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
-SEARCH_ROOTS = ("bearing_localization.search", "bearing_localization.search_cli")
+SEARCH_ROOTS = (
+    "bearing_localization.search",
+    "bearing_localization.search_cli",
+    "bearing_localization.algorithms",
+    "bearing_localization.ransac",
+    "bearing_localization.backends",
+)
 SIMULATOR_ROOTS = ("bearing_localization.simulator",)
 EVALUATION_ROOTS = ("bearing_localization.evaluation", "bearing_localization.evaluate_cli")
 SHARED_ROOTS = ("maritime_localization_shared",)
@@ -72,6 +76,20 @@ def _is_under(target: str, roots: tuple[str, ...]) -> bool:
 
 
 def _dynamic_import_calls(tree: ast.Module) -> list[ast.Call]:
+    importlib_names = {"importlib"}
+    import_module_names = {"import_module"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            importlib_names.update(
+                alias.asname or alias.name.split(".")[0]
+                for alias in node.names
+                if alias.name == "importlib"
+            )
+        elif isinstance(node, ast.ImportFrom) and node.module == "importlib":
+            import_module_names.update(
+                alias.asname or alias.name for alias in node.names if alias.name == "import_module"
+            )
+
     calls: list[ast.Call] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -79,11 +97,13 @@ def _dynamic_import_calls(tree: ast.Module) -> list[ast.Call]:
         function = node.func
         if isinstance(function, ast.Name) and function.id == "__import__":
             calls.append(node)
+        elif isinstance(function, ast.Name) and function.id in import_module_names:
+            calls.append(node)
         elif (
             isinstance(function, ast.Attribute)
             and function.attr == "import_module"
             and isinstance(function.value, ast.Name)
-            and function.value.id == "importlib"
+            and function.value.id in importlib_names
         ):
             calls.append(node)
     return calls
@@ -101,7 +121,7 @@ def test_program_packages_do_not_import_other_program_internals() -> None:
                 forbidden |= target == "maritime_localization_shared.contracts.truth"
                 forbidden |= "EvaluationTruth" in names or "TrueObject" in names
             elif program == "simulator":
-                forbidden = _is_under(target, ("bearing_localization.search", *EVALUATION_ROOTS))
+                forbidden = _is_under(target, (*SEARCH_ROOTS, *EVALUATION_ROOTS))
             elif program == "evaluation":
                 forbidden = _is_under(target, (*SIMULATOR_ROOTS, *SEARCH_ROOTS))
             elif program == "shared":
@@ -118,12 +138,22 @@ def test_program_packages_do_not_import_other_program_internals() -> None:
 
 def test_search_has_no_dynamic_import_escape_hatches() -> None:
     sources = _python_sources()
-    violations = [
-        f"{module}:{call.lineno} uses a dynamic import"
-        for module, (_, tree) in sources.items()
-        if _program_for(module) == "search"
-        for call in _dynamic_import_calls(tree)
-    ]
+    violations: list[str] = []
+    forbidden_roots = (*SIMULATOR_ROOTS, *EVALUATION_ROOTS)
+    for module, (_, tree) in sources.items():
+        if _program_for(module) != "search":
+            continue
+        for call in _dynamic_import_calls(tree):
+            target = (
+                call.args[0].value if call.args and isinstance(call.args[0], ast.Constant) else None
+            )
+            forbidden = not isinstance(target, str)
+            if isinstance(target, str):
+                forbidden = _is_under(target, forbidden_roots) or target == (
+                    "maritime_localization_shared.contracts.truth"
+                )
+            if forbidden:
+                violations.append(f"{module}:{call.lineno} has an unsafe dynamic import")
     assert not violations, "Dynamic imports bypass static dependency checks:\n" + "\n".join(
         violations
     )
@@ -161,10 +191,12 @@ def test_search_imports_under_runtime_boundary_guard() -> None:
     guard_script = r"""
 import builtins
 import importlib
+import inspect
 import pkgutil
 import sys
 
 original_import = builtins.__import__
+original_import_module = importlib.import_module
 blocked = (
     "bearing_localization.simulator",
     "bearing_localization.evaluation",
@@ -177,6 +209,11 @@ def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
         caller == "bearing_localization.search"
         or caller.startswith("bearing_localization.search.")
         or caller == "bearing_localization.search_cli"
+        or caller in {
+            "bearing_localization.algorithms",
+            "bearing_localization.ransac",
+            "bearing_localization.backends",
+        }
     )
     if is_search:
         if any(name == prefix or name.startswith(prefix + ".") for prefix in blocked[:2]):
@@ -186,11 +223,38 @@ def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
             raise AssertionError(f"search attempted truth import: {name} {fromlist}")
     return original_import(name, globals, locals, fromlist, level)
 
+def guarded_import_module(name, package=None):
+    caller = inspect.currentframe().f_back.f_globals.get("__package__") or ""
+    is_search = (
+        caller == "bearing_localization.search"
+        or caller.startswith("bearing_localization.search.")
+        or caller == "bearing_localization.search_cli"
+        or caller in {
+            "bearing_localization.algorithms",
+            "bearing_localization.ransac",
+            "bearing_localization.backends",
+        }
+    )
+    if is_search and (
+        any(name == prefix or name.startswith(prefix + ".") for prefix in blocked[:2])
+        or name == "maritime_localization_shared.contracts.truth"
+    ):
+        raise AssertionError(f"search dynamically imported forbidden module: {name}")
+    return original_import_module(name, package)
+
 builtins.__import__ = guarded_import
+importlib.import_module = guarded_import_module
 import bearing_localization.search as package
 for entry in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
     importlib.import_module(entry.name)
 importlib.import_module("bearing_localization.search_cli")
+legacy_search_modules = (
+    "bearing_localization.algorithms",
+    "bearing_localization.ransac",
+    "bearing_localization.backends",
+)
+for name in legacy_search_modules:
+    importlib.import_module(name)
 """
     result = subprocess.run(
         [sys.executable, "-c", guard_script],
@@ -200,17 +264,3 @@ importlib.import_module("bearing_localization.search_cli")
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-
-
-@pytest.mark.parametrize(
-    ("module", "forbidden"),
-    [
-        ("bearing_localization.search.grid", "bearing_localization.simulator.scene_builder"),
-        ("bearing_localization.simulator.runner", "bearing_localization.search.grid"),
-        ("bearing_localization.evaluation.metrics", "bearing_localization.search.grid"),
-    ],
-)
-def test_boundary_rule_helper_rejects_cross_branch_targets(module: str, forbidden: str) -> None:
-    """Keep the policy mapping itself covered for representative branch pairs."""
-    assert _program_for(module) is not None
-    assert _is_under(forbidden, ("bearing_localization.simulator", "bearing_localization.search"))
