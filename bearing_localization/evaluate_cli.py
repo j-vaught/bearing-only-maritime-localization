@@ -47,6 +47,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    output_path = args.output.expanduser().resolve()
+    if output_path in {
+        args.estimate.expanduser().resolve(),
+        args.truth.expanduser().resolve(),
+    }:
+        parser.error("evaluation output must be separate from estimate and truth inputs")
     try:
         metrics = evaluate_files(
             args.estimate,

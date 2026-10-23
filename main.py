@@ -33,6 +33,16 @@ class _ArgumentParser(argparse.ArgumentParser):
 
 def run_pipeline(args: argparse.Namespace) -> dict[str, object]:
     """Compose search then evaluation without exposing truth to search."""
+    input_paths = [args.measurements, args.ais, args.truth]
+    if args.map_path is not None:
+        input_paths.append(args.map_path)
+    input_paths = [path.expanduser().resolve() for path in input_paths]
+    output_paths = [
+        args.estimate_output.expanduser().resolve(),
+        args.metrics_output.expanduser().resolve(),
+    ]
+    if len(set(input_paths + output_paths)) != len(input_paths) + len(output_paths):
+        raise ValueError("Pipeline inputs and outputs must use distinct files.")
     estimate = run_search_files(
         args.measurements,
         args.ais,

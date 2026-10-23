@@ -204,6 +204,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("grid spacing, refine starts, and iterations must be positive")
     if args.visibility_radius_m <= 0 or np.isnan(args.visibility_radius_m):
         parser.error("visibility radius must be positive")
+    inputs = [args.measurements, args.ais]
+    if args.map_path is not None:
+        inputs.append(args.map_path)
+    if args.output.expanduser().resolve() in {path.expanduser().resolve() for path in inputs}:
+        parser.error("search output must be separate from measurement, AIS, and map inputs")
     try:
         estimate = run_search_files(
             args.measurements,
