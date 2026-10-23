@@ -37,7 +37,7 @@
 #align(center)[
   #text(size: 28pt, weight: "bold")[Software package tree]
   #v(2mm)
-  #text(size: 14pt, fill: muted)[Horizontal view from main.py through 59 connected file-level leaves. External ingestion remains outside the software branches.]
+  #text(size: 14pt, fill: muted)[Horizontal view from main.py through simulator, search, and evaluation. The shared Python library is shown separately.]
 ]
 #v(5mm)
 
@@ -45,37 +45,22 @@
   import cetz.draw: *
 
   // External data providers feed the main entry point from outside the package tree.
-  box(4, 60, "External inputs", fill: gray, edge: muted)
-  content((4, 58.4), [#align(center)[#text(size: 8pt, fill: muted)[AIS • charts • scene and sensor settings]]])
-  box(19, 60, "main.py", fill: gray)
+  let main-y = 45.4
+  box(4, main-y, "External inputs", fill: gray, edge: muted)
+  content((4, main-y - 1.6), [#align(center)[#text(size: 8pt, fill: muted)[AIS • charts • scene and sensor settings]]])
+  box(19, main-y, "main.py", fill: gray)
   let input-width = node-width("External inputs")
   let main-width = node-width("main.py")
-  line((4 + input-width / 2, 60), (19 - main-width / 2, 60), stroke: (paint: garnet, thickness: 1.6pt), mark: (end: "stealth", fill: garnet))
+  line((4 + input-width / 2, main-y), (19 - main-width / 2, main-y), stroke: (paint: garnet, thickness: 1.6pt), mark: (end: "stealth", fill: garnet))
 
   // Each top-level branch occupies a separate vertical band and expands left to right.
-  let shared-y = 104.5
   let simulator-y = 77.9
   let search-y = 45.9
   let evaluation-y = 12.3
-  connect(19, 60, main-width, ((48, shared-y, node-width("shared/")), (48, simulator-y, node-width("simulator/")), (48, search-y, node-width("search/")), (48, evaluation-y, node-width("evaluation/"))), shared-y, evaluation-y)
-  box(48, shared-y, "shared/", fill: green, edge: muted)
+  connect(19, main-y, main-width, ((48, simulator-y, node-width("simulator/")), (48, search-y, node-width("search/")), (48, evaluation-y, node-width("evaluation/"))), simulator-y, evaluation-y)
   box(48, simulator-y, "simulator/", fill: rose, edge: garnet)
   box(48, search-y, "search/", fill: blue, edge: blue-edge)
   box(48, evaluation-y, "evaluation/", fill: gray)
-
-  // shared/ contains reusable contracts and geospatial functions.
-  let contracts-y = 109
-  let geospatial-y = 100
-  connect(48, shared-y, node-width("shared/"), ((82, contracts-y, node-width("contracts/")), (82, geospatial-y, node-width("geospatial/"))), contracts-y, geospatial-y)
-  box(82, contracts-y, "contracts/", fill: green, edge: muted)
-  box(82, geospatial-y, "geospatial/", fill: green, edge: muted)
-  let shared-contracts = ((116, 112, node-width("observation.py")), (116, 110.5, node-width("ais.py")), (116, 109, node-width("truth.py")), (116, 107.5, node-width("estimate.py")), (116, 106, node-width("validation.py")))
-  let shared-geospatial = ((116, 103, node-width("projection.py")), (116, 101.5, node-width("land_water.py")), (116, 100, node-width("line_of_sight.py")), (116, 98.5, node-width("spatial_index.py")), (116, 97, node-width("bearing_math.py")))
-  connect(82, contracts-y, node-width("contracts/"), shared-contracts, 112, 106)
-  connect(82, geospatial-y, node-width("geospatial/"), shared-geospatial, 103, 97)
-  for (y, label) in ((112, "observation.py"), (110.5, "ais.py"), (109, "truth.py"), (107.5, "estimate.py"), (106, "validation.py"), (103, "projection.py"), (101.5, "land_water.py"), (100, "line_of_sight.py"), (98.5, "spatial_index.py"), (97, "bearing_math.py")) {
-    box(116, y, label, fill: white, edge: muted)
-  }
 
   // simulator/ owns scene setup, visibility, detection, reports, and configuration.
   let sim-scene-y = 89.5

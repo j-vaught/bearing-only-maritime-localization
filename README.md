@@ -8,11 +8,17 @@ Each simulated sensor report includes every object inside the selected visibilit
 
 The target design keeps the simulator and position search as separate programs. The simulator writes sensor measurements and a separate truth file; the search program receives measurements, an AIS catalogue, and map inputs, while only the evaluator reads simulator truth. A standalone map and visibility component supplies land-water and line-of-sight queries to both programs. The figures show the proposed component boundaries and file responsibilities; these names describe the intended structure and are not all implemented in the current prototype.
 
-The single-page mega figure reads left to right from external ingestion and the `main.py` trunk through shared utilities, the simulator, search, and evaluation to 59 file-level leaves. Each box width follows its label length, while every box shares the same height and font size. No dataset or output folders appear in the software tree.
+The main software tree reads left to right from external ingestion and the `main.py` trunk through the simulator, search, and evaluation to 49 file-level leaves. The shared Python library is an independent package, not a branch in this tree. Each box width follows its label length, while every box shares the same height and font size. No dataset or output folders appear in the software tree.
 
-![Single connected mega diagram of the full software package tree, from external inputs and main.py through all branches and 59 file-level leaves.](docs/figures/software-architecture.png)
+![Single connected horizontal diagram of the main software tree, from external inputs and main.py through simulator, search, evaluation, and 49 file-level leaves.](docs/figures/software-architecture.png)
 
-The [single-page zoomable PDF](docs/figures/software-architecture.pdf) and editable [Typst source](docs/figures/software-architecture.typ) are also available.
+The [main-tree zoomable PDF](docs/figures/software-architecture.pdf) and editable [Typst source](docs/figures/software-architecture.typ) are also available.
+
+The shared library is shown separately. It contains ten file-level leaves under contracts and geospatial modules, and consumer programs import the APIs they need.
+
+![Separate horizontal tree for the shared Python library, with contracts and geospatial modules expanded to ten file-level leaves.](docs/figures/shared-library-architecture.png)
+
+The [shared-library zoomable PDF](docs/figures/shared-library-architecture.pdf) and editable [Typst source](docs/figures/shared-library-architecture.typ) are also available.
 
 ## What a range limit changes
 
