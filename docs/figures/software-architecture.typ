@@ -1,6 +1,6 @@
 #import "@preview/cetz:0.5.2"
 
-#set page(width: 2900mm, height: 1200mm, margin: 18mm, fill: white)
+#set page(width: 1600mm, height: 1300mm, margin: 18mm, fill: white)
 #set text(font: "Arial", size: 10pt, fill: rgb("#000000"))
 
 #let ink = rgb("#000000")
@@ -11,92 +11,141 @@
 #let blue = rgb("#EAF2F7")
 #let gray = rgb("#F1F3F5")
 #let blue-edge = rgb("#006BA4")
+#let label-size = 10pt
+#let node-height = 1.3
 
-#let box(cx, y, w, h, label, fill: white, edge: ink, size: 9pt) = {
-  cetz.draw.rect((cx - w / 2, y), (cx + w / 2, y + h), fill: fill, stroke: (paint: edge, thickness: 1.2pt))
-  cetz.draw.content((cx, y + h / 2), [#align(center)[#text(size: size, weight: "bold", fill: edge)[#label]]])
+#let node-width(label) = label.len() * 0.22 + 0.9
+
+#let box(cx, cy, label, fill: white, edge: ink) = {
+  let width = node-width(label)
+  cetz.draw.rect((cx - width / 2, cy - node-height / 2), (cx + width / 2, cy + node-height / 2), fill: fill, stroke: (paint: edge, thickness: 1.2pt))
+  cetz.draw.content((cx, cy), [#align(center)[#text(size: label-size, weight: "bold", fill: edge)[#label]]])
 }
 
-#let tree(parent, parent-bottom, children, child-top, bus-y) = {
-  cetz.draw.line((parent, parent-bottom), (parent, bus-y), stroke: (paint: ink, thickness: 1.1pt))
-  cetz.draw.line((children.at(0), bus-y), (children.at(children.len() - 1), bus-y), stroke: (paint: ink, thickness: 1.1pt))
+#let connect(parent-x, parent-y, parent-width, children, bus-top, bus-bottom) = {
+  let bus-x = parent-x + parent-width / 2 + 1.1
+  cetz.draw.line((parent-x + parent-width / 2, parent-y), (bus-x, parent-y), stroke: (paint: ink, thickness: 1.1pt))
+  cetz.draw.line((bus-x, bus-top), (bus-x, bus-bottom), stroke: (paint: ink, thickness: 1.1pt))
   for child in children {
-    cetz.draw.line((child, bus-y), (child, child-top), stroke: (paint: ink, thickness: 1.1pt), mark: (end: "stealth", fill: ink))
+    let child-x = child.at(0)
+    let child-y = child.at(1)
+    let child-width = child.at(2)
+    cetz.draw.line((bus-x, child-y), (child-x - child-width / 2, child-y), stroke: (paint: ink, thickness: 1.1pt), mark: (end: "stealth", fill: ink))
   }
 }
 
 #align(center)[
-  #text(size: 32pt, weight: "bold")[Software package tree]
+  #text(size: 28pt, weight: "bold")[Software package tree]
   #v(2mm)
-  #text(size: 15pt, fill: muted)[One connected view from main.py through 59 file-level leaves. External ingestion is shown outside the software tree.]
+  #text(size: 14pt, fill: muted)[Horizontal view from main.py through 59 connected file-level leaves. External ingestion remains outside the software branches.]
 ]
 #v(5mm)
 
 #cetz.canvas({
   import cetz.draw: *
 
-  // External source is adjacent to the trunk and is not a software package branch.
-  box(112, 91, 18, 5, [External inputs], fill: gray, edge: muted, size: 12pt)
-  content((112, 89), [#text(size: 9pt, fill: muted)[AIS • charts • scene and sensor settings]])
-  box(138, 91, 14, 5, [main.py], fill: gray, size: 14pt)
-  line((121, 93.5), (131, 93.5), stroke: (paint: garnet, thickness: 1.6pt), mark: (end: "stealth", fill: garnet))
+  // External data providers feed the main entry point from outside the package tree.
+  box(4, 60, "External inputs", fill: gray, edge: muted)
+  content((4, 58.4), [#align(center)[#text(size: 8pt, fill: muted)[AIS • charts • scene and sensor settings]]])
+  box(19, 60, "main.py", fill: gray)
+  let input-width = node-width("External inputs")
+  let main-width = node-width("main.py")
+  line((4 + input-width / 2, 60), (19 - main-width / 2, 60), stroke: (paint: garnet, thickness: 1.6pt), mark: (end: "stealth", fill: garnet))
 
-  // Four independent top-level software branches.
-  tree(138, 91, (22, 83, 163, 243), 73, 82)
-  box(22, 68, 20, 5, [shared/], fill: green, edge: muted, size: 13pt)
-  box(83, 68, 20, 5, [simulator/], fill: rose, edge: garnet, size: 13pt)
-  box(163, 68, 20, 5, [search/], fill: blue, edge: blue-edge, size: 13pt)
-  box(243, 68, 20, 5, [evaluation/], fill: gray, size: 13pt)
+  // Each top-level branch occupies a separate vertical band and expands left to right.
+  let shared-y = 104.5
+  let simulator-y = 77.9
+  let search-y = 45.9
+  let evaluation-y = 12.3
+  connect(19, 60, main-width, ((48, shared-y, node-width("shared/")), (48, simulator-y, node-width("simulator/")), (48, search-y, node-width("search/")), (48, evaluation-y, node-width("evaluation/"))), shared-y, evaluation-y)
+  box(48, shared-y, "shared/", fill: green, edge: muted)
+  box(48, simulator-y, "simulator/", fill: rose, edge: garnet)
+  box(48, search-y, "search/", fill: blue, edge: blue-edge)
+  box(48, evaluation-y, "evaluation/", fill: gray)
 
-  // shared/ divides into neutral contracts and geospatial functions.
-  tree(22, 68, (12, 32), 44, 55)
-  box(12, 39, 18, 5, [contracts/], fill: green, edge: muted, size: 11pt)
-  box(32, 39, 18, 5, [geospatial/], fill: green, edge: muted, size: 11pt)
-  tree(12, 39, (4, 8, 12, 16, 20), 15, 27)
-  tree(32, 39, (24, 28, 32, 36, 40), 15, 27)
-  for (x, label) in ((4, [observation.py]), (8, [ais.py]), (12, [truth.py]), (16, [estimate.py]), (20, [validation.py]), (24, [projection.py]), (28, [land_water.py]), (32, [line_of_sight.py]), (36, [spatial_index.py]), (40, [bearing_math.py])) {
-    box(x, 10, 3.5, 5, label, fill: white, edge: muted, size: 8pt)
-  }
-
-  // simulator/ owns scene construction, visibility, detection, reports, and settings.
-  tree(83, 68, (55, 68, 83, 98, 109), 44, 55)
-  for (x, label) in ((55, [scene/]), (68, [visibility/]), (83, [detection/]), (98, [reports/]), (109, [config/])) {
-    box(x, 39, 11, 5, label, fill: rose, edge: garnet, size: 10pt)
-  }
-  tree(55, 39, (51, 55, 59), 15, 27)
-  tree(68, 39, (64, 68, 72), 15, 27)
-  tree(83, 39, (77, 81, 85, 89), 15, 27)
-  tree(98, 39, (94, 98, 102), 15, 27)
-  tree(109, 39, (107, 111), 15, 27)
-  for (x, label) in ((51, [builder.py]), (55, [object_model.py]), (59, [observer.py]), (64, [range_filter.py]), (68, [land_blocking.py]), (72, [spatial_query.py]), (77, [geometry.py]), (81, [clustering.py]), (85, [merging.py]), (89, [noise.py]), (94, [observation.py]), (98, [truth.py]), (102, [schema.py]), (107, [settings.py]), (111, [random_state.py])) {
-    box(x, 10, 3.5, 5, label, fill: white, edge: garnet, size: 8pt)
+  // shared/ contains reusable contracts and geospatial functions.
+  let contracts-y = 109
+  let geospatial-y = 100
+  connect(48, shared-y, node-width("shared/"), ((82, contracts-y, node-width("contracts/")), (82, geospatial-y, node-width("geospatial/"))), contracts-y, geospatial-y)
+  box(82, contracts-y, "contracts/", fill: green, edge: muted)
+  box(82, geospatial-y, "geospatial/", fill: green, edge: muted)
+  let shared-contracts = ((116, 112, node-width("observation.py")), (116, 110.5, node-width("ais.py")), (116, 109, node-width("truth.py")), (116, 107.5, node-width("estimate.py")), (116, 106, node-width("validation.py")))
+  let shared-geospatial = ((116, 103, node-width("projection.py")), (116, 101.5, node-width("land_water.py")), (116, 100, node-width("line_of_sight.py")), (116, 98.5, node-width("spatial_index.py")), (116, 97, node-width("bearing_math.py")))
+  connect(82, contracts-y, node-width("contracts/"), shared-contracts, 112, 106)
+  connect(82, geospatial-y, node-width("geospatial/"), shared-geospatial, 103, 97)
+  for (y, label) in ((112, "observation.py"), (110.5, "ais.py"), (109, "truth.py"), (107.5, "estimate.py"), (106, "validation.py"), (103, "projection.py"), (101.5, "land_water.py"), (100, "line_of_sight.py"), (98.5, "spatial_index.py"), (97, "bearing_math.py")) {
+    box(116, y, label, fill: white, edge: muted)
   }
 
-  // search/ consumes observations and AIS independently of simulator internals.
-  tree(163, 68, (126, 137, 150, 163, 180, 197), 44, 55)
-  for (x, label) in ((126, [inputs/]), (137, [candidates/]), (150, [association/]), (163, [scoring/]), (180, [algorithms/]), (197, [output/])) {
-    box(x, 39, 11, 5, label, fill: blue, edge: blue-edge, size: 10pt)
+  // simulator/ owns scene setup, visibility, detection, reports, and configuration.
+  let sim-scene-y = 89.5
+  let sim-visibility-y = 84
+  let sim-detection-y = 77.75
+  let sim-reports-y = 71.5
+  let sim-config-y = 66.75
+  connect(48, simulator-y, node-width("simulator/"), ((82, sim-scene-y, node-width("scene/")), (82, sim-visibility-y, node-width("visibility/")), (82, sim-detection-y, node-width("detection/")), (82, sim-reports-y, node-width("reports/")), (82, sim-config-y, node-width("config/"))), sim-scene-y, sim-config-y)
+  for (y, label) in ((sim-scene-y, "scene/"), (sim-visibility-y, "visibility/"), (sim-detection-y, "detection/"), (sim-reports-y, "reports/"), (sim-config-y, "config/")) {
+    box(82, y, label, fill: rose, edge: garnet)
   }
-  tree(126, 39, (124, 128), 15, 27)
-  tree(137, 39, (133, 137, 141), 15, 27)
-  tree(150, 39, (146, 150, 154), 15, 27)
-  tree(163, 39, (159, 163, 167), 15, 27)
-  tree(180, 39, (172, 176, 180, 184, 188), 15, 27)
-  tree(197, 39, (193, 197, 201), 15, 27)
-  for (x, label) in ((124, [obs_io.py]), (128, [ais_io.py]), (133, [water_grid.py]), (137, [bounds.py]), (141, [range.py]), (146, [type_match.py]), (150, [bearing_gate.py]), (154, [assign.py]), (159, [likelihood.py]), (163, [visibility.py]), (167, [ranking.py]), (172, [grid.py]), (176, [ransac.py]), (180, [branch_bound.py]), (184, [refine.py]), (188, [gpu_batch.py]), (193, [estimate.py]), (197, [confidence.py]), (201, [diagnostics.py])) {
-    box(x, 10, 3.5, 5, label, fill: white, edge: blue-edge, size: 8pt)
+  let sim-scene = ((116, 91, node-width("builder.py")), (116, 89.5, node-width("object_model.py")), (116, 88, node-width("observer.py")))
+  let sim-visibility = ((116, 85.5, node-width("range_filter.py")), (116, 84, node-width("land_blocking.py")), (116, 82.5, node-width("spatial_query.py")))
+  let sim-detection = ((116, 80, node-width("geometry.py")), (116, 78.5, node-width("clustering.py")), (116, 77, node-width("merging.py")), (116, 75.5, node-width("noise.py")))
+  let sim-reports = ((116, 73, node-width("observation.py")), (116, 71.5, node-width("truth.py")), (116, 70, node-width("schema.py")))
+  let sim-config = ((116, 67.5, node-width("settings.py")), (116, 66, node-width("random_state.py")))
+  connect(82, sim-scene-y, node-width("scene/"), sim-scene, 91, 88)
+  connect(82, sim-visibility-y, node-width("visibility/"), sim-visibility, 85.5, 82.5)
+  connect(82, sim-detection-y, node-width("detection/"), sim-detection, 80, 75.5)
+  connect(82, sim-reports-y, node-width("reports/"), sim-reports, 73, 70)
+  connect(82, sim-config-y, node-width("config/"), sim-config, 67.5, 66)
+  for (y, label) in ((91, "builder.py"), (89.5, "object_model.py"), (88, "observer.py"), (85.5, "range_filter.py"), (84, "land_blocking.py"), (82.5, "spatial_query.py"), (80, "geometry.py"), (78.5, "clustering.py"), (77, "merging.py"), (75.5, "noise.py"), (73, "observation.py"), (71.5, "truth.py"), (70, "schema.py"), (67.5, "settings.py"), (66, "random_state.py")) {
+    box(116, y, label, fill: white, edge: garnet)
   }
 
-  // evaluation/ alone reads simulator truth to measure estimates and runtime.
-  tree(243, 68, (217, 232, 249, 266), 44, 55)
-  for (x, label) in ((217, [runner/]), (232, [metrics/]), (249, [timing/]), (266, [reporting/])) {
-    box(x, 39, 13, 5, label, fill: gray, size: 10pt)
+  // search/ uses observations and AIS inputs without importing simulator internals.
+  let search-inputs-y = 59.75
+  let search-candidates-y = 55
+  let search-association-y = 49.5
+  let search-scoring-y = 44
+  let search-algorithms-y = 37
+  let search-output-y = 30
+  connect(48, search-y, node-width("search/"), ((82, search-inputs-y, node-width("inputs/")), (82, search-candidates-y, node-width("candidates/")), (82, search-association-y, node-width("association/")), (82, search-scoring-y, node-width("scoring/")), (82, search-algorithms-y, node-width("algorithms/")), (82, search-output-y, node-width("output/"))), search-inputs-y, search-output-y)
+  for (y, label) in ((search-inputs-y, "inputs/"), (search-candidates-y, "candidates/"), (search-association-y, "association/"), (search-scoring-y, "scoring/"), (search-algorithms-y, "algorithms/"), (search-output-y, "output/")) {
+    box(82, y, label, fill: blue, edge: blue-edge)
   }
-  tree(217, 39, (213, 217, 221), 15, 27)
-  tree(232, 39, (226, 230, 234, 238), 15, 27)
-  tree(249, 39, (243, 247, 251, 255), 15, 27)
-  tree(266, 39, (260, 264, 268, 272), 15, 27)
-  for (x, label) in ((213, [trials.py]), (217, [repeat.py]), (221, [runner.py]), (226, [position_error.py]), (230, [success_rate.py]), (234, [feature_count.py]), (238, [association.py]), (243, [stage_timer.py]), (247, [end_to_end.py]), (251, [cpu_scale.py]), (255, [gpu_scale.py]), (260, [summary.py]), (264, [tables.py]), (268, [figures.py]), (272, [export.py])) {
-    box(x, 10, 3.5, 5, label, fill: white, edge: ink, size: 8pt)
+  let search-inputs = ((116, 60.5, node-width("obs_io.py")), (116, 59, node-width("ais_io.py")))
+  let search-candidates = ((116, 56.5, node-width("water_grid.py")), (116, 55, node-width("bounds.py")), (116, 53.5, node-width("range.py")))
+  let search-association = ((116, 51, node-width("type_match.py")), (116, 49.5, node-width("bearing_gate.py")), (116, 48, node-width("assign.py")))
+  let search-scoring = ((116, 45.5, node-width("likelihood.py")), (116, 44, node-width("visibility.py")), (116, 42.5, node-width("ranking.py")))
+  let search-algorithms = ((116, 40, node-width("grid.py")), (116, 38.5, node-width("ransac.py")), (116, 37, node-width("branch_bound.py")), (116, 35.5, node-width("refine.py")), (116, 34, node-width("gpu_batch.py")))
+  let search-output = ((116, 31.5, node-width("estimate.py")), (116, 30, node-width("confidence.py")), (116, 28.5, node-width("diagnostics.py")))
+  connect(82, search-inputs-y, node-width("inputs/"), search-inputs, 60.5, 59)
+  connect(82, search-candidates-y, node-width("candidates/"), search-candidates, 56.5, 53.5)
+  connect(82, search-association-y, node-width("association/"), search-association, 51, 48)
+  connect(82, search-scoring-y, node-width("scoring/"), search-scoring, 45.5, 42.5)
+  connect(82, search-algorithms-y, node-width("algorithms/"), search-algorithms, 40, 34)
+  connect(82, search-output-y, node-width("output/"), search-output, 31.5, 28.5)
+  for (y, label) in ((60.5, "obs_io.py"), (59, "ais_io.py"), (56.5, "water_grid.py"), (55, "bounds.py"), (53.5, "range.py"), (51, "type_match.py"), (49.5, "bearing_gate.py"), (48, "assign.py"), (45.5, "likelihood.py"), (44, "visibility.py"), (42.5, "ranking.py"), (40, "grid.py"), (38.5, "ransac.py"), (37, "branch_bound.py"), (35.5, "refine.py"), (34, "gpu_batch.py"), (31.5, "estimate.py"), (30, "confidence.py"), (28.5, "diagnostics.py")) {
+    box(116, y, label, fill: white, edge: blue-edge)
+  }
+
+  // evaluation/ alone reads simulator truth and reports accuracy and runtime.
+  let eval-runner-y = 25.5
+  let eval-metrics-y = 18.75
+  let eval-timing-y = 11.25
+  let eval-reporting-y = 3.75
+  connect(48, evaluation-y, node-width("evaluation/"), ((82, eval-runner-y, node-width("runner/")), (82, eval-metrics-y, node-width("metrics/")), (82, eval-timing-y, node-width("timing/")), (82, eval-reporting-y, node-width("reporting/"))), eval-runner-y, eval-reporting-y)
+  for (y, label) in ((eval-runner-y, "runner/"), (eval-metrics-y, "metrics/"), (eval-timing-y, "timing/"), (eval-reporting-y, "reporting/")) {
+    box(82, y, label, fill: gray)
+  }
+  let eval-runner = ((116, 27, node-width("trials.py")), (116, 25.5, node-width("repeat.py")), (116, 24, node-width("runner.py")))
+  let eval-metrics = ((116, 21, node-width("position_error.py")), (116, 19.5, node-width("success_rate.py")), (116, 18, node-width("feature_count.py")), (116, 16.5, node-width("association.py")))
+  let eval-timing = ((116, 13.5, node-width("stage_timer.py")), (116, 12, node-width("end_to_end.py")), (116, 10.5, node-width("cpu_scale.py")), (116, 9, node-width("gpu_scale.py")))
+  let eval-reporting = ((116, 6, node-width("summary.py")), (116, 4.5, node-width("tables.py")), (116, 3, node-width("figures.py")), (116, 1.5, node-width("export.py")))
+  connect(82, eval-runner-y, node-width("runner/"), eval-runner, 27, 24)
+  connect(82, eval-metrics-y, node-width("metrics/"), eval-metrics, 21, 16.5)
+  connect(82, eval-timing-y, node-width("timing/"), eval-timing, 13.5, 9)
+  connect(82, eval-reporting-y, node-width("reporting/"), eval-reporting, 6, 1.5)
+  for (y, label) in ((27, "trials.py"), (25.5, "repeat.py"), (24, "runner.py"), (21, "position_error.py"), (19.5, "success_rate.py"), (18, "feature_count.py"), (16.5, "association.py"), (13.5, "stage_timer.py"), (12, "end_to_end.py"), (10.5, "cpu_scale.py"), (9, "gpu_scale.py"), (6, "summary.py"), (4.5, "tables.py"), (3, "figures.py"), (1.5, "export.py")) {
+    box(116, y, label, fill: white, edge: ink)
   }
 })
