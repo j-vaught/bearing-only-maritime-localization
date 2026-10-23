@@ -1,0 +1,25 @@
+[project]
+name = "bearing-only-maritime-localization"
+version = "0.1.0"
+description = "Simulation benchmarks for bearing-only maritime localization with incomplete object identity."
+authors = [{ name = "J.C. Vaught", email = "jvaught@sc.edu" }]
+requires-python = ">=3.11"
+dependencies = ["numpy>=2.0", "scipy>=1.14"]
+
+[project.scripts]
+bearing-localization = "bearing_localization.cli:main"
+
+[dependency-groups]
+dev = ["ruff>=0.9", "ty>=0.0.1a0"]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ty.environment]
+python-version = "3.11"
