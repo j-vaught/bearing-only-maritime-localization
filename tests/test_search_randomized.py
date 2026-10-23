@@ -81,6 +81,43 @@ def test_randomized_adapter_is_seed_reproducible() -> None:
     )
 
 
+def test_randomized_adapter_rejects_land_hypotheses_and_checks_sight_lines() -> None:
+    measurements, ais = _fixture()
+
+    class Map:
+        checked_rays = 0
+
+        def is_water(self, east_m: float, north_m: float) -> bool:
+            _ = north_m
+            return east_m >= 0.0
+
+        def has_line_of_sight(
+            self,
+            observer_east_m: float,
+            observer_north_m: float,
+            target_east_m: float,
+            target_north_m: float,
+        ) -> bool:
+            _ = observer_east_m, observer_north_m, target_east_m, target_north_m
+            self.checked_rays += 1
+            return True
+
+    map_queries = Map()
+    estimate = randomized_search(
+        measurements,
+        ais,
+        RandomizedSearchConfig(
+            bounds_xy=(-500.0, 500.0, -500.0, 500.0),
+            iterations=500,
+            seed=9,
+            visibility=map_queries,
+        ),
+    )
+
+    assert estimate.east_m >= 0.0
+    assert map_queries.checked_rays > 0
+
+
 @pytest.mark.parametrize("field", ["measurements", "ais", "config"])
 def test_randomized_adapter_rejects_wrong_contract_types(field: str) -> None:
     measurements, ais = _fixture()

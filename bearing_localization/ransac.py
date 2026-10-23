@@ -10,6 +10,7 @@ optionally penalize AIS objects that should have been visible but were not.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from itertools import permutations
 from time import perf_counter
 
@@ -17,6 +18,9 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from .algorithms import SearchResult, associate, wrap_deg
+
+WaterPredicate = Callable[[float, float], bool]
+LineOfSightPredicate = Callable[[tuple[float, float], tuple[float, float]], bool]
 
 
 def randomized_hypothesis_search(
@@ -31,6 +35,8 @@ def randomized_hypothesis_search(
     penalize_missing_ais: bool = False,
     iterations: int = 500,
     seed: int | None = 0,
+    water_predicate: WaterPredicate | None = None,
+    line_of_sight_predicate: LineOfSightPredicate | None = None,
 ) -> SearchResult:
     """Estimate position with randomized three-correspondence hypotheses.
 
@@ -67,6 +73,45 @@ def randomized_hypothesis_search(
             or ais_types[ais_i] is None
             or observations[obs_i][0] == ais_types[ais_i]
         )
+
+    def score_position(
+        position: np.ndarray,
+    ) -> tuple[float, tuple[tuple[int, int], ...]] | None:
+        if water_predicate is not None and not water_predicate(
+            float(position[0]), float(position[1])
+        ):
+            return None
+        distances = np.linalg.norm(xy - position[None, :], axis=1)
+        candidate_indices = np.flatnonzero(distances <= visibility_radius_m)
+        if line_of_sight_predicate is not None and len(candidate_indices):
+            observer = (float(position[0]), float(position[1]))
+            candidate_indices = np.asarray(
+                [
+                    index
+                    for index in candidate_indices
+                    if line_of_sight_predicate(
+                        observer,
+                        (float(xy[index, 0]), float(xy[index, 1])),
+                    )
+                ],
+                dtype=int,
+            )
+        score, local_matches = associate(
+            position,
+            observations,
+            xy[candidate_indices],
+            [ais_types[int(index)] for index in candidate_indices],
+            sigma_deg,
+            unmatched_penalty_deg,
+            use_types,
+            float("inf"),
+            penalize_missing_ais,
+        )
+        matches = tuple(
+            (observation_index, int(candidate_indices[local_ais_index]))
+            for observation_index, local_ais_index in local_matches
+        )
+        return score, matches
 
     for _ in range(iterations):
         if obs_count < 3 or candidate_count < 3:
@@ -108,17 +153,10 @@ def randomized_hypothesis_search(
             max_nfev=80,
         )
         position = fit.x[:2]
-        score, matches = associate(
-            position,
-            observations,
-            xy,
-            ais_types,
-            sigma_deg,
-            unmatched_penalty_deg,
-            use_types,
-            visibility_radius_m,
-            penalize_missing_ais,
-        )
+        scored = score_position(position)
+        if scored is None:
+            continue
+        score, matches = scored
         candidate = (score, position.copy(), 0.0, matches)
         if best is None or candidate[0] < best[0]:
             best = candidate
@@ -126,18 +164,18 @@ def randomized_hypothesis_search(
     if best is None:
         # No three-point hypothesis was possible. Return a valid, explicitly
         # uninformative result so benchmark sweeps can continue.
-        position = np.array([(xmin + xmax) / 2.0, (ymin + ymax) / 2.0])
-        score, matches = associate(
-            position,
-            observations,
-            xy,
-            ais_types,
-            sigma_deg,
-            unmatched_penalty_deg,
-            use_types,
-            visibility_radius_m,
-            penalize_missing_ais,
-        )
+        position: np.ndarray | None = None
+        for _ in range(10_000):
+            candidate_position = np.array(
+                [rng.uniform(xmin, xmax), rng.uniform(ymin, ymax)], dtype=float
+            )
+            scored = score_position(candidate_position)
+            if scored is not None:
+                position = candidate_position
+                score, matches = scored
+                break
+        if position is None:
+            raise ValueError("No water-valid randomized candidate falls within the search bounds.")
         best = (score, position, 0.0, matches)
 
     score, position, heading, matches = best

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 
@@ -11,6 +12,20 @@ from maritime_localization_shared.contracts.estimate import PositionEstimate
 from maritime_localization_shared.contracts.observation import MeasurementSet
 
 from ..ransac import randomized_hypothesis_search
+
+
+class VisibilityProtocol(Protocol):
+    """Map queries needed to constrain randomized candidate hypotheses."""
+
+    def is_water(self, east_m: float, north_m: float) -> bool: ...
+
+    def has_line_of_sight(
+        self,
+        observer_east_m: float,
+        observer_north_m: float,
+        target_east_m: float,
+        target_north_m: float,
+    ) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +46,7 @@ class RandomizedSearchConfig:
     penalize_missing_ais: bool = False
     iterations: int = 500
     seed: int | None = 0
+    visibility: VisibilityProtocol | None = None
 
     def __post_init__(self) -> None:
         if len(self.bounds_xy) != 4:
@@ -79,6 +95,18 @@ def randomized_search(
     else:
         sigma_deg = config.sigma_deg
 
+    water_predicate = config.visibility.is_water if config.visibility is not None else None
+    line_of_sight_predicate = None
+    if config.visibility is not None:
+
+        def line_of_sight_predicate(
+            observer: tuple[float, float], target: tuple[float, float]
+        ) -> bool:
+            assert config.visibility is not None
+            return config.visibility.has_line_of_sight(
+                observer[0], observer[1], target[0], target[1]
+            )
+
     result = randomized_hypothesis_search(
         observations=observations,
         ais_xy=ais_xy,
@@ -91,6 +119,8 @@ def randomized_search(
         penalize_missing_ais=config.penalize_missing_ais,
         iterations=config.iterations,
         seed=config.seed,
+        water_predicate=water_predicate,
+        line_of_sight_predicate=line_of_sight_predicate,
     )
     return PositionEstimate(
         east_m=result.east_m,

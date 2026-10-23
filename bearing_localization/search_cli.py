@@ -14,8 +14,8 @@ from pathlib import Path
 
 import numpy as np
 
+from bearing_localization.search import HierarchicalSearchConfig, run_hierarchical_search
 from bearing_localization.search.grid import GridSearchConfig, run_grid_search
-from bearing_localization.search.hierarchical import hierarchical_search
 from bearing_localization.search.randomized import RandomizedSearchConfig, randomized_search
 from maritime_localization_shared.contracts import AISSnapshot, MapInput, MeasurementSet
 from maritime_localization_shared.contracts.estimate import PositionEstimate
@@ -107,8 +107,6 @@ def run_search_files(
             visibility=_RasterVisibility(map_input) if map_input is not None else None,
         )
     if algorithm == "randomized":
-        if map_input is not None:
-            raise ValueError("The randomized search adapter does not yet support map constraints.")
         return randomized_search(
             measurements,
             ais,
@@ -118,44 +116,20 @@ def run_search_files(
                 use_types=use_types,
                 iterations=iterations,
                 seed=seed,
+                visibility=_RasterVisibility(map_input) if map_input is not None else None,
             ),
         )
     if algorithm == "hierarchical":
-        if map_input is not None:
-            raise ValueError(
-                "The hierarchical search adapter does not yet support map constraints."
-            )
-        observations = [(item.object_type, item.bearing_deg) for item in measurements.observations]
-        ais_xy = np.asarray(
-            [(record.east_m, record.north_m) for record in ais.records], dtype=float
-        ).reshape((-1, 2))
-        ais_types: list[str | None] = [record.ais_class for record in ais.records]
-        sigmas = [
-            item.bearing_sigma_deg
-            for item in measurements.observations
-            if item.bearing_sigma_deg > 0
-        ]
-        sigma_deg = float(np.sqrt(np.mean(np.square(sigmas)))) if sigmas else 0.5
-        result = hierarchical_search(
-            observations,
-            ais_xy,
-            ais_types,
+        return run_hierarchical_search(
+            measurements,
+            ais,
             bounds_xy,
-            sigma_deg=sigma_deg,
-            coarse_spacing_m=grid_spacing_m,
-            use_types=use_types,
-            visibility_radius_m=visibility_radius_m,
-        )
-        return PositionEstimate(
-            east_m=result.east_m,
-            north_m=result.north_m,
-            score=result.score_sigma,
-            elapsed_s=result.elapsed_s,
-            algorithm="hierarchical",
-            matched_pairs=tuple(
-                (observation_index, ais.records[ais_index].record_id)
-                for observation_index, ais_index in result.matches
+            HierarchicalSearchConfig(
+                coarse_spacing_m=grid_spacing_m,
+                visibility_radius_m=visibility_radius_m,
+                use_types=use_types,
             ),
+            visibility=_RasterVisibility(map_input) if map_input is not None else None,
         )
     raise ValueError(f"Unsupported search algorithm {algorithm!r}.")
 

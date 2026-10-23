@@ -70,6 +70,18 @@ The benchmark takes approximately half a minute on the development machine. It r
 
 Run the automated checks with `uv run pytest`, `uv run ruff format --check .`, `uv run ruff check .`, and `uv run ty check .`. The continuous-integration workflow also builds the package and compiles the figures.
 
+## B1–B5 AIS-layout pilot
+
+The first location-specific run uses five water sites, a July 2023 Chesapeake AIS snapshot, charted aids to navigation, and a 10 km visibility limit. The simulator generates synthetic global bearings with 0.5° Gaussian noise and applies land occlusion. The search region is 114 × 333 km. Three paired noise seeds were run per site with AIS type labels enabled and disabled.
+
+![Median position error for grid, randomized, and hierarchical search at B1–B5. The dashed line marks the 250 m position threshold.](docs/figures/b1-b5-search-accuracy.png)
+
+At the 250 m and three-correct-association success rule, type-aware hierarchical search succeeded in 3 of 15 cases, all at B1. Grid and randomized search had no successful cases. Median errors across the 15 cases were 51.3 km for grid, 85.8 km for randomized, and 18.1 km for hierarchical search. Median search times were 1,187 ms, 37 ms, and 1,035 ms respectively. Without type labels, all three methods had zero successes. These timings exceed the 100 ms budget for 10 frames per second. Randomized search is fastest in this comparison, but its median location error is high and its runtime becomes comparable to the exhaustive methods when observations are too few for meaningful hypotheses.
+
+B1 through B5 had 8, 3, 1, 1, and 9 visible AIS bearings at 10 km. The results show that sparse observations hurt recovery, but feature count alone does not explain accuracy: B5 had nine AIS bearings and still missed the 250 m threshold. The three-seed pilot cannot establish a general minimum feature count. Detailed per-trial results, coordinates, aggregate summaries, and assumptions are in [`results/ais-b1-b5-pilot-v1/`](results/ais-b1-b5-pilot-v1/). The figure source is [`figures/b1-b5-search-accuracy.typ`](figures/b1-b5-search-accuracy.typ).
+
+The vessel layout and chart features are real, while the observer bearings are simulated. The 500 m land/water mask was classified from a rendered electronic chart and is approximate. Raw AIS rows and map imagery are not included in the repository.
+
 ## Next validation stage
 
 Historical AIS broadcasts can provide realistic vessel layouts for selected dates and coastal regions. A first Chesapeake pilot has now been extracted from NOAA's July 15, 2023 daily archive. It contains 372 unique AIS vessels in a one-minute UTC window and demonstrates the bounded extraction workflow in [`tools/extract_ais_snapshot.py`](tools/extract_ais_snapshot.py). The full national archive and the extracted vessel records remain outside this repository while data-sharing terms are reviewed. The processing details and next steps are in [`docs/experiment-design.md`](docs/experiment-design.md).
