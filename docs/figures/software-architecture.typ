@@ -1,6 +1,6 @@
 #import "@preview/cetz:0.5.2"
 
-#set page(width: 360mm, height: 240mm, margin: 11mm, fill: white)
+#set page(width: 360mm, height: 240mm, margin: 10mm, fill: white)
 #set text(font: "Arial", size: 9pt, fill: rgb("#000000"))
 
 #let garnet = rgb("#73000A")
@@ -8,152 +8,152 @@
 #let muted = rgb("#53606A")
 #let sim-bg = rgb("#F8ECEC")
 #let search-bg = rgb("#EAF2F7")
-#let map-bg = rgb("#EAF3ED")
+#let shared-bg = rgb("#EAF3ED")
 #let neutral-bg = rgb("#F1F3F5")
 
 #let panel(title, body, fill, edge: ink) = block(
-  width: 100%,
-  fill: fill,
-  stroke: (paint: edge, thickness: 0.9pt),
-  inset: 4mm,
+  width: 100%, fill: fill, stroke: (paint: edge, thickness: 0.9pt), inset: 3.5mm,
 )[
-  #text(weight: "bold", size: 11pt, fill: edge)[#title]
-  #v(1.5mm)
+  #text(weight: "bold", size: 10pt, fill: edge)[#title]
+  #v(1.3mm)
   #body
 ]
 
-#let file(name, role) = [#text(font: "Menlo", size: 8pt, weight: "bold")[#name] — #role]
+#let item(path, role) = [#text(font: "Menlo", size: 7.5pt, weight: "bold")[#path] — #role]
 
 #align(center)[
-  #text(size: 18pt, weight: "bold")[Bearing-only localization software architecture]
+  #text(size: 18pt, weight: "bold")[A rooted software package tree]
   #v(1mm)
-  #text(size: 9pt, fill: muted)[Two independent programs exchange a measurement file; a standalone geospatial component supports both.]
+  #text(size: 9pt, fill: muted)[One top-level entry point coordinates independent branches; sibling programs exchange files, not each other's internal code.]
 ]
-#v(5mm)
+#v(4mm)
 
-#text(size: 10pt, weight: "bold")[1. External data and ingestion]
-#v(2mm)
-#grid(
-  columns: (1fr, 1fr, 1fr),
-  gutter: 5mm,
-  panel([Scenario + sensor config], [Synthetic object inventory, AIS-present flags, boat truth pose, range, noise, and sensor resolution.], neutral-bg),
-  panel([AIS feed], [Historical or live AIS records. Normalize timestamps, coordinates, vessel type, dimensions, and AtoN reports when present.], search-bg),
-  panel([Shoreline + hydrography], [Read chart / coastline geometry, project to metric coordinates, validate coverage, and rasterize land and water.], map-bg),
-)
-#v(2mm)
-#align(center)[#text(size: 8pt, fill: muted)[Scenario ingest feeds simulation. AIS ingest feeds search. Map ingest builds the neutral, versioned geospatial input.]]
-#v(5mm)
-
-#text(size: 10pt, weight: "bold")[2. Separate runtime programs]
-#v(2mm)
-#grid(
-  columns: (1.02fr, 1.08fr, 0.9fr),
-  gutter: 5mm,
-  panel([SIMULATOR — generates observations], [
-    #file([scene_builder.py], [place boat and all scene objects; preserve hidden truth])\
-    #file([visibility_filter.py], [apply max range and land-blocked line of sight])\
-    #file([angular_detector.py], [merge angularly overlapping objects; report one detection])\
-    #file([bearing_model.py], [compute global center bearing; add noise and uncertainty])\
-    #file([writers.py], [write measurements, truth, and simulated AIS catalogue separately])
-  ], sim-bg, edge: garnet),
-  panel([SEARCH — estimates boat position], [
-    #file([inputs.py], [read measurements, AIS catalogue, and map version])\
-    #file([candidates.py], [generate boat hypotheses only in water])\
-    #file([association.py], [match detections to AIS candidates by type and bearing])\
-    #file([scoring.py], [score candidate pose with bearing error and visibility])\
-    #file([algorithms/], [grid, RANSAC, and refinement methods as swappable solvers])\
-    #file([writers.py], [write estimated pose, confidence, and optional associations])
-  ], search-bg, edge: rgb("#006BA4")),
-  panel([EVALUATOR + BENCHMARK], [
-    #file([run_trials.py], [run identical cases through each search method])\
-    #file([metrics.py], [position error, success rate, and minimum feature count])\
-    #file([timing.py], [stage and total latency; CPU / GPU scaling])\
-    #file([report.py], [tables, figures, and reproducible result bundle])
-  ], neutral-bg),
-)
-
-#v(3mm)
+#panel([main.py — package trunk / orchestrator], [
+  Parses the command, loads configuration, selects a run mode, starts the appropriate branch, and records run metadata. It passes versioned files and shared-service handles between branches; it does not contain sensor simulation or localization algorithms.
+], neutral-bg)
+#v(1mm)
 #align(center)[
   #cetz.canvas({
     import cetz.draw: *
-    line((0, 0), (3.0, 0), stroke: (paint: garnet, thickness: 1pt), mark: (end: "stealth", fill: garnet))
-    content((4.5, 0), [#text(size: 8pt, weight: "bold")[measurements.json]])
-    line((6.2, 0), (9.2, 0), stroke: (paint: rgb("#006BA4"), thickness: 1pt), mark: (end: "stealth", fill: rgb("#006BA4")))
-    content((10.6, 0), [#text(size: 8pt, weight: "bold")[estimate.json]])
-    line((12.2, 0), (15.2, 0), stroke: (paint: ink, thickness: 1pt), mark: (end: "stealth", fill: ink))
-    content((16.8, 0), [#text(size: 8pt, weight: "bold")[evaluation]])
+    let xs = (1.8, 6.1, 10.4, 14.7, 19.0, 23.3)
+    line((12.55, 3.0), (12.55, 2.3), stroke: (paint: ink, thickness: 1pt))
+    line((xs.at(0), 2.3), (xs.at(5), 2.3), stroke: (paint: ink, thickness: 1pt))
+    for x in xs {
+      line((x, 2.3), (x, 1.5), stroke: (paint: ink, thickness: 0.9pt), mark: (end: "stealth", fill: ink))
+    }
   })
 ]
-#v(2mm)
-#panel([3. Standalone map / visibility capability], [
-  #grid(
-    columns: (1fr, 1fr, 1fr),
-    gutter: 4mm,
-    [#text(weight: "bold")[land_water.py]#linebreak()Versioned projected raster or vector mask. Candidate generation uses water cells; visibility checks use land cells.],
-    [#text(weight: "bold")[line_of_sight.py]#linebreak()Independent ray-tracing / segment-query routine. Simulator uses it to hide blocked detections; search uses it to score candidate views.],
-    [#text(weight: "bold")[geo_cache.py]#linebreak()Optional tiled / cached lookup for repeated queries. Same map version and resolution are recorded in each experiment.],
-  )
-], map-bg, edge: muted)
-#v(2mm)
-#align(center)[#text(size: 8pt, fill: muted)[The visibility component is not the simulator or a search algorithm. Both programs call it through the same stable interface.]]
-
-#pagebreak()
-#set page(width: 360mm, height: 240mm, margin: 11mm, fill: white)
-#align(center)[
-  #text(size: 18pt, weight: "bold")[Proposed files and responsibilities]
-  #v(1mm)
-  #text(size: 9pt, fill: muted)[A suggested package layout. These are proposed module names, not a claim that the files already exist.]
-]
-#v(5mm)
-
+#v(0mm)
 #grid(
-  columns: (1fr, 1fr),
-  gutter: 6mm,
-  panel([ingest/ — data adapters], [
-    #file([scenario.py], [load scene configuration and generate the synthetic object inventory])\
-    #file([ais.py], [read AIS snapshots; normalize vessel and AtoN records])\
-    #file([nautical_map.py], [read shoreline / hydrography sources and CRS metadata])\
-    #file([schemas.py], [validate inputs and versioned JSON exchange formats])
+  columns: (1fr, 1fr, 1fr, 1fr, 1fr, 1fr),
+  gutter: 3mm,
+  panel([ingest/], [
+    #item([scenario.py], [synthetic scene + sensor config])\
+    #item([ais.py], [real / simulated AIS catalogue])\
+    #item([map.py], [shoreline / hydrography input])
   ], neutral-bg),
-  panel([geo/ — map and visibility], [
-    #file([project.py], [transform geographic coordinates into a local metric frame])\
-    #file([land_water.py], [build / query the land-water mask])\
-    #file([line_of_sight.py], [test whether land blocks a ray between two points])\
-    #file([geo_cache.py], [cache tiles and repeated visibility queries])
-  ], map-bg, edge: muted),
-  panel([simulator/ — measurement generation], [
-    #file([cli.py], [run one scene or a batch from configuration])\
-    #file([scene_builder.py], [place vessel, markers, and non-AIS objects; keep truth private])\
-    #file([visibility_filter.py], [range gate then query land visibility])\
-    #file([angular_detector.py], [merge close bearings; select reported class and representative target])\
-    #file([bearing_model.py], [center bearing, sensor noise, sigma, and apparent angular width])\
-    #file([writers.py], [emit measurements.json, truth.json, and simulated AIS catalogue])
+  panel([shared/], [
+    #item([schemas/], [file contracts])\
+    #item([geo/], [projection, land-water, LOS])\
+    Public API only; no feature-branch imports.
+  ], shared-bg, edge: muted),
+  panel([simulator/], [
+    #item([main.py], [standalone simulate command])\
+    #item([scene.py], [place objects + hidden truth])\
+    #item([detect.py], [range, LOS, angular merge])\
+    #item([bearing.py], [center + uncertainty])
   ], sim-bg, edge: garnet),
-  panel([search/ — position estimation], [
-    #file([cli.py], [run search against measurement and AIS files])\
-    #file([inputs.py], [load reports, AIS records, and map metadata; never read truth])\
-    #file([candidates.py], [create coarse water-only position hypotheses])\
-    #file([association.py], [resolve unknown object identity and type compatibility])\
-    #file([scoring.py], [bearing residual, uncertainty weighting, range, and LOS consistency])\
-    #file([algorithms/grid.py], [exhaustive or hierarchical spatial search])\
-    #file([algorithms/ransac.py], [sample feature correspondences and propose poses])\
-    #file([algorithms/refine.py], [locally refine top candidate poses])\
-    #file([writers.py], [emit estimate.json and solver diagnostics])
+  panel([search/], [
+    #item([main.py], [standalone search command])\
+    #item([candidates.py], [water-only hypotheses])\
+    #item([associate.py], [unknown object identity])\
+    #item([algorithms/], [grid, RANSAC, refine])
   ], search-bg, edge: rgb("#006BA4")),
-  panel([evaluation/ — scoring and benchmarks], [
-    #file([run_trials.py], [pair each measurement set with each search method])\
-    #file([metrics.py], [position error, confidence calibration, feature-count threshold])\
-    #file([timing.py], [per-stage runtime, full latency, and parallelism measurements])\
-    #file([report.py], [save CSV / JSON summaries and publication figures])
+  panel([evaluation/], [
+    #item([run.py], [trial orchestration])\
+    #item([metrics.py], [error + feature count])\
+    #item([timing.py], [stage + total latency])\
+    #item([report.py], [tables + figures])
   ], neutral-bg),
-  panel([schemas/ — program boundary], [
-    #file([observation.schema.json], [type label, global bearing, optional bearing sigma / apparent width])\
-    #file([truth.schema.json], [true boat position and hidden scene identity; evaluator only])\
-    #file([ais.schema.json], [normalized AIS object records and raw source fields])\
-    #file([estimate.schema.json], [estimated pose, confidence, optional associations])
+  panel([artifacts/], [
+    #item([inputs/], [scenario, AIS, map refs])\
+    #item([measurements/], [sensor reports])\
+    #item([truth/], [evaluator-only truth])\
+    #item([results/], [estimates + metrics])
   ], neutral-bg),
 )
-#v(5mm)
-#panel([Data separation rule], [
-  The simulator may know every object identity, position, size, and AIS-present flag. The search input contains only reported types and bearings, the AIS catalogue, and the map. The evaluator alone joins the estimated position to simulator truth. The shared geo component supplies land / water and line-of-sight queries to both programs without coupling the simulator to the search implementation.
+#v(3mm)
+#panel([Branch boundaries], [
+  The simulator branch never imports search internals, and search never imports simulator internals. Both may call the stable shared/geo API; they do not call one another. The simulator writes observations and hidden truth to separate artifacts. Main passes observations and AIS to search, then passes estimate plus truth to evaluation.
+], white)
+
+#pagebreak()
+#set page(width: 360mm, height: 240mm, margin: 10mm, fill: white)
+#align(center)[
+  #text(size: 18pt, weight: "bold")[Expanded branch tree and file roles]
+  #v(1mm)
+  #text(size: 9pt, fill: muted)[Proposed directory and file names. Each branch has its own entry point and owns its implementation.]
+]
+#v(4mm)
+
+#grid(
+  columns: (1fr, 1fr), gutter: 5mm,
+  panel([main.py → ingest/], [
+    #item([ingest/main.py], [entry point for ingestion commands])\
+    #item([ingest/scenario.py], [load configuration; generate object inventory with AIS-present flags])\
+    #item([ingest/ais.py], [read records; normalize time, position, type, dimensions, and AtoN type])\
+    #item([ingest/map.py], [load coastline / hydrography, CRS, and source metadata])\
+    Main chooses the ingest operation and writes normalized inputs for the later branch.
+  ], neutral-bg),
+  panel([main.py → shared/], [
+    #item([shared/schemas/observation.py], [type label, global bearing, optional bearing sigma and apparent width])\
+    #item([shared/schemas/truth.py], [true boat pose and hidden scene IDs; evaluator only])\
+    #item([shared/schemas/estimate.py], [estimated pose, confidence, optional associations])\
+    #item([shared/geo/project.py], [convert lat/lon to local metric coordinates])\
+    #item([shared/geo/land_water.py], [build and query versioned land-water mask])\
+    #item([shared/geo/line_of_sight.py], [ray / segment test; same API for both programs])
+  ], shared-bg, edge: muted),
+  panel([main.py → simulator/], [
+    #item([simulator/main.py], [standalone simulation command])\
+    #item([simulator/scene.py], [place boat and objects; preserve hidden truth])\
+    #item([simulator/visibility.py], [apply range gate, then shared land-occlusion query])\
+    #item([simulator/detection.py], [merge angularly close detections; select reported type])\
+    #item([simulator/bearing.py], [center of object's angular extent; add noise / uncertainty])\
+    #item([simulator/write.py], [write measurements, truth, and scenario AIS catalogue separately])
+  ], sim-bg, edge: garnet),
+  panel([main.py → search/], [
+    #item([search/main.py], [standalone localization command])\
+    #item([search/inputs.py], [read measurements + AIS; reject truth input])\
+    #item([search/candidates.py], [generate coarse candidates on water])\
+    #item([search/association.py], [compare reported type / bearing to unknown AIS identity])\
+    #item([search/scoring.py], [bearing residual, uncertainty weight, LOS consistency])\
+    #item([search/algorithms/grid.py], [exhaustive or hierarchical grid])\
+    #item([search/algorithms/ransac.py], [sample correspondence hypotheses])\
+    #item([search/algorithms/refine.py], [refine best candidate positions])\
+    #item([search/write.py], [write estimate + diagnostics])
+  ], search-bg, edge: rgb("#006BA4")),
+  panel([main.py → evaluation/], [
+    #item([evaluation/main.py], [standalone evaluation / benchmark command])\
+    #item([evaluation/run.py], [run fixed cases across search methods])\
+    #item([evaluation/metrics.py], [position error, success, minimum features])\
+    #item([evaluation/timing.py], [per-stage, end-to-end, CPU / GPU timing])\
+    #item([evaluation/report.py], [write CSV / JSON and publication figures])
+  ], neutral-bg),
+  panel([main.py → artifacts/], [
+    #item([inputs/scene.json], [simulator scene configuration])\
+    #item([inputs/ais.json], [AIS catalogue passed to search])\
+    #item([inputs/map/], [versioned map/mask data])\
+    #item([runs/<id>/measurements.json], [search input])\
+    #item([runs/<id>/truth.json], [evaluation input only])\
+    #item([runs/<id>/estimate.json], [search output])\
+    #item([runs/<id>/metrics.json], [evaluation output])
+  ], neutral-bg),
+)
+#v(4mm)
+#panel([Execution path], [
+  #text(font: "Menlo", size: 8pt, weight: "bold")[main.py → ingest → simulator → measurements.json → search → estimate.json → evaluation]
+  #linebreak()
+  #text(font: "Menlo", size: 8pt, weight: "bold")[simulator → truth.json → evaluation only]
+  #linebreak()
+  The map and AIS inputs are passed as data; search does not reach into simulator to get them.
 ], white)
