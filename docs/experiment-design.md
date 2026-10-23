@@ -26,6 +26,14 @@ Marine Cadastre publishes U.S. Coast Guard Nationwide Automatic Identification S
 
 The first real-data scene should select a UTC minute and a Mid-Atlantic region, extract the nearest usable broadcast point per vessel within a defined time tolerance, and project longitude and latitude into a local metric coordinate system. The hypothetical observer should be sampled from water-only positions, not uniformly over a rectangular bounding box. A shoreline or navigable-water mask is therefore required.
 
+### Chesapeake pilot
+
+A first extraction was completed from NOAA's daily archive for July 15, 2023. It read 10,068,463 archive rows and selected the vessel report nearest 12:00:30 UTC for each MMSI with a report in the 12:00:00–12:01:00 UTC window and the WGS 84 bounding box from 36.5° to 39.5° north and 76.8° to 75.5° west. The selected set contains 372 unique vessels from 373 reports. The reusable extractor is `tools/extract_ais_snapshot.py`.
+
+The full national ZIP archive is approximately 395 MB compressed and 1.08 GB uncompressed. Neither that archive nor the extracted vessel records are checked into Git. The pilot's extracted CSV and provenance manifest are stored locally at `work/ais-pilot/chesapeake_2023-07-15_1200Z.csv` and `work/ais-pilot/chesapeake_2023-07-15_1200Z.manifest.json`. The CSV drops MMSI, vessel name, and call sign, but its time and position values still describe individual AIS transmissions. The pilot remains local until the terms for sharing derived records are reviewed.
+
+This slice provides vessel positions for a real AIS traffic layout, not measured visual detections. It contains no charted non-AIS buoys, shore structures, or observer ground truth. It can support the first integration pass by converting the vessel coordinates into a local metric projection and generating synthetic global bearings at hypothetical water locations. A shoreline or navigable-water mask and charted features are still required before testing scenes that include all visible-object types.
+
 Broadcast points are not a complete catalogue of visually detectable objects. NOAA states that these archive points come from land-based receiving stations rather than satellite AIS, and coverage generally does not extend more than 40–50 miles offshore. The archive also documents gaps and excludes some law-enforcement and military vessels. The simulation should record those coverage limitations and avoid treating missing AIS reports as proof that no vessel was present.
 
 To model aids to navigation and other static objects, join the vessel points with charted features from NOAA Electronic Navigational Charts (ENCs). The ENC source supplies charted aids such as buoys, beacons, and lights. The scene can then distinguish AIS-transmitting objects, charted non-AIS objects, and uncharted or undetected clutter. A historical comparison must use chart versions appropriate to the AIS date where available; otherwise, chart-feature status should be identified as a modern approximation.
@@ -43,6 +51,8 @@ The current comparison contains an unrefined grid and a grid with multi-start le
 NOAA Office for Coastal Management. “Automatic Identification System Frequently Asked Questions.” [Data coverage, sampling, formats, and access](https://coast.noaa.gov/data/marinecadastre/ais/faq.pdf).
 
 NOAA Office for Coastal Management. “AIS Point Data Summary.” [Annual record counts and file sizes](https://coast.noaa.gov/data/marinecadastre/ais/point-data-summary.pdf).
+
+NOAA Office for Coastal Management. “Nationwide Automatic Identification System 2023.” [Dataset metadata and daily archive index](https://www.fisheries.noaa.gov/inport/item/70162).
 
 NOAA Office of Coast Survey. “ENC Direct to GIS.” [Charted coastal features and geographic extracts](https://www.nauticalcharts.noaa.gov/learn/encdirect/).
 

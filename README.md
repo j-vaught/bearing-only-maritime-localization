@@ -45,7 +45,9 @@ The benchmark takes approximately half a minute on the development machine. It r
 
 ## Next validation stage
 
-Historical AIS broadcasts can provide realistic vessel layouts for selected dates and coastal regions. The repository documents the data sources, archive sizes, coverage limits, preprocessing steps, and chart-data plan in [`docs/experiment-design.md`](docs/experiment-design.md). The proposed first study uses a short Mid-Atlantic UTC time slice, a water-only observer sampling mask, and NOAA ENC features for aids to navigation. Raw AIS records are not included in this repository.
+Historical AIS broadcasts can provide realistic vessel layouts for selected dates and coastal regions. A first Chesapeake pilot has now been extracted from NOAA's July 15, 2023 daily archive. It contains 372 unique AIS vessels in a one-minute UTC window and demonstrates the bounded extraction workflow in [`tools/extract_ais_snapshot.py`](tools/extract_ais_snapshot.py). The full national archive and the extracted vessel records remain outside this repository while data-sharing terms are reviewed. The processing details and next steps are in [`docs/experiment-design.md`](docs/experiment-design.md).
+
+This pilot supplies a real vessel layout, but it is not a real visual-observation dataset. The next integration step will convert positions to a local metric frame, sample hypothetical observers over navigable water, and generate global-bearing observations. NOAA Electronic Navigational Chart features will be needed to add buoys and other fixed aids to navigation.
 
 For coast-wide scale, exhaustive position-grid work grows with map area divided by grid-cell area, then incurs assignment cost at every candidate. The next algorithm comparison should add sampled AIS-pair geometry, hierarchical search, and prior-guided local tracking. Ten frames per second allows 100 ms total per update; the current 10 km median search time already exceeds that budget.
 
