@@ -80,6 +80,10 @@ At the 250 m and three-correct-association success rule, type-aware hierarchical
 
 B1 through B5 had 8, 3, 1, 1, and 9 visible AIS bearings at 10 km. The results show that sparse observations hurt recovery, but feature count alone does not explain accuracy: B5 had nine AIS bearings and still missed the 250 m threshold. The three-seed pilot cannot establish a general minimum feature count. Detailed per-trial results, coordinates, aggregate summaries, and assumptions are in [`results/ais-b1-b5-pilot-v1/`](results/ais-b1-b5-pilot-v1/). The figure source is [`figures/b1-b5-search-accuracy.typ`](figures/b1-b5-search-accuracy.typ).
 
+The next figure zooms in on B1 and B5 for the first paired 10 km trial. Each panel is centered on the true boat location so the nearby grid and hierarchical estimates are easy to compare. Randomized estimates fall far outside the ±2 km panels. Exact projected positions and offsets are in [`b1-b5-estimate-positions.csv`](results/ais-b1-b5-pilot-v1/b1-b5-estimate-positions.csv).
+
+![B1 and B5 true locations and search estimates, with local ±2 km views.](docs/figures/b1-b5-estimate-comparison.png)
+
 The vessel layout and chart features are real, while the observer bearings are simulated. The 500 m land/water mask was classified from a rendered electronic chart and is approximate. Raw AIS rows and map imagery are not included in the repository.
 
 ## Next validation stage

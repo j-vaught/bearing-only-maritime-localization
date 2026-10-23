@@ -11,3 +11,5 @@ Across the 15 type-aware cases, grid search had 0 successes, 51.3 km median erro
 The site layout had 8, 3, 1, 1, and 9 visible AIS bearings at B1 through B5 at 10 km. The full visible report counts were 23, 4, 1, 7, and 13 after including charted aids. Thus B3 and B4 are information-poor, while B5 demonstrates that a larger count alone does not guarantee recovery. Three noise seeds at five fixed sites are too few to establish a general minimum-feature threshold.
 
 These are simulated observations over a real historical vessel layout, not measured visual detections. The chart-derived 500 m land mask is approximate, and this is a single minute and region. Raw AIS records and the rendered map are not redistributed here. `config.json` records the source time, map service, assumptions, and processing limits.
+
+`b1-b5-estimate-positions.csv` records the true and estimated projected coordinates, local east/north offsets, errors, association counts, and success status for the first paired 10 km type-aware trial at B1 and B5. The zoom figure uses these positions.
