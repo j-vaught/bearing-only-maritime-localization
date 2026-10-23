@@ -20,7 +20,7 @@ class TrueObject:
     object_type: str
     east_m: float
     north_m: float
-    ais_id: str | None = None
+    ais_record_id: str | None = None
     observation_index: int | None = None
 
     def __post_init__(self) -> None:

@@ -30,4 +30,6 @@ class PositionEstimate:
         if not self.algorithm.strip():
             raise ValueError("algorithm must be nonempty.")
         if any(index < 0 or not ais_id for index, ais_id in self.matched_pairs):
-            raise ValueError("matched_pairs must contain valid observation indices and AIS IDs.")
+            raise ValueError(
+                "matched_pairs must contain observation indices and AIS snapshot record IDs."
+            )
