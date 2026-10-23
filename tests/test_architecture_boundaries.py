@@ -129,6 +129,8 @@ def test_program_packages_do_not_import_other_program_internals() -> None:
                     "bearing_localization."
                 )
             if forbidden:
+                if not isinstance(node, (ast.Import, ast.ImportFrom)):
+                    raise TypeError("Import collector returned a non-import AST node.")
                 violations.append(
                     f"{module}:{node.lineno} imports forbidden module or symbol {target} {names}"
                 )
