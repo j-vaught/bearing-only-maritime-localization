@@ -2,19 +2,19 @@
 
 This repository is a reproducible simulation study for locating a vessel from globally referenced object bearings and a catalog of AIS coordinates. Bearings are measured clockwise from north. The estimator receives object types when enabled, but it does not receive object identities, ranges, non-AIS coordinates, or the vessel's position.
 
-Each simulated sensor report includes every object inside the selected visibility radius. Some objects have AIS coordinates available to the estimator; other detections are deliberately unmatched. Objects are stationary during a simulated instant, the map is two-dimensional, and bearing error is Gaussian. The synthetic scenes do not yet model coastlines, navigable water, receiver coverage, or realistic traffic density.
+The simulator reports objects inside a configurable visibility radius, including detections that have no AIS match. Reports contain global bearing and an optional type label, but no object identity, range, or observer pose. The initial sensor model uses Gaussian bearing error and can merge objects whose bearings fall within the configured angular resolution. When a map is supplied, water masks constrain observer placement and search candidates, while line-of-sight checks remove objects hidden by land. These map features are implemented, but the checked-in synthetic baseline does not use a coastline or navigable-water dataset.
 
-## Proposed software architecture
+## Software architecture
 
-The target design keeps the simulator and position search as separate programs. The simulator writes sensor measurements and a separate truth file; the search program receives measurements, an AIS catalogue, and map inputs, while only the evaluator reads simulator truth. A standalone map and visibility component supplies land-water and line-of-sight queries to both programs. The figures show the proposed component boundaries and file responsibilities; these names describe the intended structure and are not all implemented in the current prototype.
+The implementation keeps simulation, search, and evaluation as separate runnable programs. The simulator writes sensor measurements, an AIS snapshot, and evaluator-only truth to separate files. Search reads measurements, AIS, optional map inputs, and configuration; it cannot use truth. Evaluation reads truth only after search has produced an estimate. The shared Python package contains versioned contracts, deterministic JSON serialization, water-mask queries, vector and raster line-of-sight, and spatial queries. `main.py` provides an orchestration entry point, and the standalone commands can also be invoked independently.
 
-The main software tree reads left to right from external ingestion and the `main.py` trunk through the simulator, search, and evaluation to 49 file-level leaves. The shared Python library is an independent package, not a branch in this tree. Each box width follows its label length, while every box shares the same height and font size. No dataset or output folders appear in the software tree.
+The main software tree reads left to right from external ingestion and the `main.py` trunk through the simulator, search, and evaluation. It presents the intended full component decomposition. The shared Python library is an independent package, not a branch in this tree. Each box width follows its label length, while every box shares the same height and font size. No dataset or output folders appear in the software tree.
 
 ![Single connected horizontal diagram of the main software tree, from external inputs and main.py through simulator, search, evaluation, and 49 file-level leaves.](docs/figures/software-architecture.png)
 
 The [main-tree zoomable PDF](docs/figures/software-architecture.pdf) and editable [Typst source](docs/figures/software-architecture.typ) are also available.
 
-The shared library is shown separately. It contains ten file-level leaves under contracts and geospatial modules, and consumer programs import the APIs they need.
+The shared library is shown separately. Its diagram follows the current package structure, with versioned contracts and geospatial modules imported by the programs that need them.
 
 ![Separate horizontal tree for the shared Python library, with contracts and geospatial modules expanded to ten file-level leaves.](docs/figures/shared-library-architecture.png)
 
@@ -49,7 +49,16 @@ uv sync
 uv run bearing-localization
 ```
 
-The command writes `trials.csv`, `summary.csv`, `minimum_features.csv`, and `backend_profile.csv` to `results/`. The backend profile measures a batched angular-residual kernel separately from full data association. It includes transfer time when an optional CuPy backend is available, but it is not an end-to-end GPU localization benchmark.
+The command runs the original synthetic baseline and writes trial summaries and backend timing data to `results/`. Separate commands are available for each program:
+
+```sh
+uv run bearing-simulator --help
+uv run bearing-localization-search --help
+uv run bearing-localization-evaluate --help
+uv run bearing-benchmark --help
+```
+
+The simulator accepts separate measurement and truth output paths; AIS is also serialized separately for search. The benchmark command compares grid, randomized-hypothesis, and hierarchical search across visibility ranges and type-label settings. Its CPU/GPU backend profile measures the optional CuPy angular-residual kernel, including transfer time, but does not represent an end-to-end GPU localization benchmark.
 
 To reproduce the checked-in results and explanatory figures, run:
 
@@ -57,7 +66,9 @@ To reproduce the checked-in results and explanatory figures, run:
 sh tools/run_release_benchmark.sh
 ```
 
-The benchmark takes approximately half a minute on the development machine. It requires Typst to compile the Typst figure sources. The PNG outputs are committed under `docs/figures/`; the editable sources are in `figures/` and use CeTZ or Lilaq.
+The benchmark takes approximately half a minute on the development machine. It requires Typst to compile the Typst figure sources. The PNG and PDF outputs are committed under `docs/figures/`; the editable sources use CeTZ or Lilaq.
+
+Run the automated checks with `uv run pytest`, `uv run ruff format --check .`, `uv run ruff check .`, and `uv run ty check .`. The continuous-integration workflow also builds the package and compiles the figures.
 
 ## Next validation stage
 

@@ -115,8 +115,7 @@ def add_bearing_noise(observation: Observation, rng: Generator) -> Observation:
     if not isinstance(rng, Generator):
         raise TypeError("rng must be a numpy.random.Generator.")
     noisy_bearing = _wrap_bearing(
-        observation.bearing_deg
-        + float(rng.normal(0.0, observation.bearing_sigma_deg))
+        observation.bearing_deg + float(rng.normal(0.0, observation.bearing_sigma_deg))
     )
     return Observation(
         bearing_deg=noisy_bearing,

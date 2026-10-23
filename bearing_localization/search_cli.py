@@ -125,9 +125,7 @@ def run_search_files(
             raise ValueError(
                 "The hierarchical search adapter does not yet support map constraints."
             )
-        observations = [
-            (item.object_type, item.bearing_deg) for item in measurements.observations
-        ]
+        observations = [(item.object_type, item.bearing_deg) for item in measurements.observations]
         ais_xy = np.asarray(
             [(record.east_m, record.north_m) for record in ais.records], dtype=float
         ).reshape((-1, 2))

@@ -167,9 +167,7 @@ def run_grid_search(
                 )
             ]
             candidate_xy = ais_xy[candidate_indices]
-            candidate_types: list[str | None] = [
-                ais_types[index] for index in candidate_indices
-            ]
+            candidate_types: list[str | None] = [ais_types[index] for index in candidate_indices]
             score, local_matches = associate(
                 np.asarray([east_m, north_m]),
                 observations,

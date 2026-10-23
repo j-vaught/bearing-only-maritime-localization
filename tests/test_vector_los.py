@@ -33,8 +33,16 @@ class VectorLineOfSightTests(unittest.TestCase):
         self.assertFalse(line_of_sight_clear((0.0, 0.0), (10.0, 0.0), [closed_reversed]))
 
     def test_concave_polygon_is_supported(self) -> None:
-        concave = ((3.0, -2.0), (7.0, -2.0), (7.0, -1.0), (4.0, -1.0),
-                   (4.0, 1.0), (7.0, 1.0), (7.0, 2.0), (3.0, 2.0))
+        concave = (
+            (3.0, -2.0),
+            (7.0, -2.0),
+            (7.0, -1.0),
+            (4.0, -1.0),
+            (4.0, 1.0),
+            (7.0, 1.0),
+            (7.0, 2.0),
+            (3.0, 2.0),
+        )
         self.assertTrue(line_of_sight_clear((4.5, 0.0), (10.0, 0.0), [concave]))
         self.assertFalse(line_of_sight_clear((3.5, -3.0), (3.5, 3.0), [concave]))
 

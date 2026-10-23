@@ -51,9 +51,7 @@ def contract_from_dict(model: type[Contract], payload: dict[str, Any]) -> Contra
     _strict_fields(model, payload)
     declared_type = payload.get("contract_type")
     if declared_type is not None and declared_type != model.__name__:
-        raise ValueError(
-            f"Document declares {declared_type!r}, expected {model.__name__!r}."
-        )
+        raise ValueError(f"Document declares {declared_type!r}, expected {model.__name__!r}.")
     values = {key: value for key, value in payload.items() if key != "contract_type"}
     if model is MeasurementSet:
         values["observations"] = tuple(Observation(**item) for item in values["observations"])

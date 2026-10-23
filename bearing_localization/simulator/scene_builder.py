@@ -144,9 +144,7 @@ def to_simulator_scene(
     if unknown_ais_ids:
         raise ValueError(f"Truth contains unknown AIS record IDs: {sorted(unknown_ais_ids)}")
 
-    object_ids = {
-        item.object_id: index for index, item in enumerate(built_scene.truth_objects)
-    }
+    object_ids = {item.object_id: index for index, item in enumerate(built_scene.truth_objects)}
     landmarks = tuple(
         Landmark(
             object_id=index,

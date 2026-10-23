@@ -31,7 +31,7 @@
 #align(center)[
   #text(size: 28pt, weight: "bold")[Shared Python library]
   #v(2mm)
-  #text(size: 14pt, fill: muted)[An independent package. Consumer programs import only the APIs they need.]
+  #text(size: 14pt, fill: muted)[Independent package imported by simulator, search, and evaluation through shared contracts and geometry.]
 ]
 #v(5mm)
 
@@ -39,18 +39,37 @@
   import cetz.draw: *
 
   let library-y = 29
-  let contracts-y = 39
-  let geospatial-y = 19
-  box(20, library-y, "shared Python library")
-  connect(20, library-y, node-width("shared Python library"), ((64, contracts-y, node-width("contracts/")), (64, geospatial-y, node-width("geospatial/"))), contracts-y, geospatial-y)
+  let contracts-y = 41
+  let geospatial-y = 20
+  let serialization-y = 29
+  box(20, library-y, "maritime_localization_shared")
+
+  let root-children = (
+    (64, contracts-y, node-width("contracts/")),
+    (64, geospatial-y, node-width("geospatial/")),
+    (110, serialization-y, node-width("serialization.py")),
+  )
+  connect(20, library-y, node-width("maritime_localization_shared"), root-children, contracts-y, geospatial-y)
   box(64, contracts-y, "contracts/")
   box(64, geospatial-y, "geospatial/")
+  box(110, serialization-y, "serialization.py")
 
-  let contracts = ((110, 45, node-width("observation.py")), (110, 42, node-width("ais.py")), (110, 39, node-width("truth.py")), (110, 36, node-width("estimate.py")), (110, 33, node-width("validation.py")))
-  let geospatial = ((110, 25, node-width("projection.py")), (110, 22, node-width("land_water.py")), (110, 19, node-width("line_of_sight.py")), (110, 16, node-width("spatial_index.py")), (110, 13, node-width("bearing_math.py")))
-  connect(64, contracts-y, node-width("contracts/"), contracts, 45, 33)
-  connect(64, geospatial-y, node-width("geospatial/"), geospatial, 25, 13)
-  for (y, label) in ((45, "observation.py"), (42, "ais.py"), (39, "truth.py"), (36, "estimate.py"), (33, "validation.py"), (25, "projection.py"), (22, "land_water.py"), (19, "line_of_sight.py"), (16, "spatial_index.py"), (13, "bearing_math.py")) {
+  let contracts = (
+    (110, 49, node-width("observation.py")),
+    (110, 46, node-width("ais.py")),
+    (110, 43, node-width("map_input.py")),
+    (110, 40, node-width("estimate.py")),
+    (110, 37, node-width("truth.py")),
+  )
+  let geospatial = (
+    (110, 26, node-width("water_mask.py")),
+    (110, 23, node-width("raster_los.py")),
+    (110, 20, node-width("vector_los.py")),
+    (110, 17, node-width("spatial_index.py")),
+  )
+  connect(64, contracts-y, node-width("contracts/"), contracts, 49, 37)
+  connect(64, geospatial-y, node-width("geospatial/"), geospatial, 26, 17)
+  for (y, label) in ((49, "observation.py"), (46, "ais.py"), (43, "map_input.py"), (40, "estimate.py"), (37, "truth.py"), (26, "water_mask.py"), (23, "raster_los.py"), (20, "vector_los.py"), (17, "spatial_index.py")) {
     box(110, y, label)
   }
 })

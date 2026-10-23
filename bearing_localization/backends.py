@@ -94,9 +94,7 @@ def angular_cost_cupy(
             device_ais[None, :, 1] - device_poses[:, None, 1],
         )
     )
-    residual = cp.abs(
-        (absolute[:, None, :] - device_obs[None, :, None] + 180.0) % 360.0 - 180.0
-    )
+    residual = cp.abs((absolute[:, None, :] - device_obs[None, :, None] + 180.0) % 360.0 - 180.0)
     cp.cuda.Stream.null.synchronize()
     return cp.asnumpy(residual)
 
@@ -154,11 +152,7 @@ def benchmark_backends(
     try:
         cp = import_module("cupy")
     except ImportError as exc:
-        results.append(
-            BackendTiming(
-                "cupy", False, *shape, None, None, None, str(exc), None, None
-            )
-        )
+        results.append(BackendTiming("cupy", False, *shape, None, None, None, str(exc), None, None))
         return results
 
     try:

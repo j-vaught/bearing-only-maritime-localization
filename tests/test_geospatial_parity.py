@@ -22,9 +22,7 @@ def test_raster_and_vector_visibility_agree_for_cell_aligned_land(
     start: tuple[float, float], end: tuple[float, float], expected_clear: bool
 ) -> None:
     # The central cell is land. Its polygon is the exact unit-square footprint.
-    water = tuple(
-        tuple(not (row == 1 and col == 2) for col in range(5)) for row in range(3)
-    )
+    water = tuple(tuple(not (row == 1 and col == 2) for col in range(5)) for row in range(3))
     map_input = MapInput(
         crs="local-metre-grid",
         west_m=0.0,
