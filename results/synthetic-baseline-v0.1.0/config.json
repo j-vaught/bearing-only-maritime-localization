@@ -1,0 +1,19 @@
+{
+  "date_utc": "2026-10-23",
+  "trials": 10,
+  "seed": 20261023,
+  "ranges_km": [10, 5, 1],
+  "features": [3, 4, 6, 8, 12],
+  "scene_km": 40,
+  "object_count": 350,
+  "ais_fraction": 0.7,
+  "noise_deg": 0.5,
+  "grid_km": 1,
+  "refine_starts": 8,
+  "success_position_m": 250,
+  "target_success_rate": 0.95,
+  "backend_candidates": 512,
+  "backend_repeats": 5,
+  "backend": "NumPy CPU; optional CuPy unavailable",
+  "description": "Synthetic uniform 2D scene baseline. Not based on historical AIS."
+}

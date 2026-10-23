@@ -1,10 +1,28 @@
 # Bearing-only maritime localization
 
-This project simulates a vessel observing object types and bearings measured clockwise from north while its position is unknown. The sensor is assumed to have a calibrated global bearing reference. Ship orientation is randomized in the scene but does not enter the estimator. A scene contains charted or AIS-listed objects with coordinates, as well as objects whose coordinates are hidden from the estimator. The estimator receives a candidate AIS object list and the complete sensor detections, then searches for the vessel position and object correspondences. It does not receive observation identities, ranges, or non-AIS object coordinates.
+This repository is a reproducible simulation study for locating a vessel from globally referenced object bearings and a catalog of AIS coordinates. Bearings are measured clockwise from north. The estimator receives object types when enabled, but it does not receive object identities, ranges, non-AIS coordinates, or the vessel's position.
 
-The simulator treats the maximum sensor range as an experiment parameter rather than a universal physical constant. The initial configuration uses a 5 km range cap in a larger synthetic scene and sweeps visibility down to 1 km. It assumes a flat 2D map, stationary objects at each observation instant, known object types in the primary experiment, complete detection inside the range cap, and Gaussian bearing noise. Type reporting can be switched off to measure its effect on runtime, localization success, and the minimum number of detections required.
+Each simulated sensor report includes every object inside the selected visibility radius. Some objects have AIS coordinates available to the estimator; other detections are deliberately unmatched. Objects are stationary during a simulated instant, the map is two-dimensional, and bearing error is Gaussian. The synthetic scenes do not yet model coastlines, navigable water, receiver coverage, or realistic traffic density.
 
-Each trial keeps the true vessel position and hidden object identities out of the estimator. Evaluation records position error, association quality, success rate, feature counts, and runtime. Non-AIS observations count as unmatched detections and therefore test outlier handling; they do not directly provide a map-relative position constraint. The minimum-feature report counts total detections and requires at least three correctly associated AIS objects for a successful position fix.
+## What a range limit changes
+
+The maximum visibility range filters which AIS records can match an observation at each candidate vessel location. It does **not** limit the measured bearing angles, which still span 360°. With an infinite visibility range, distant AIS records remain eligible and compete in data association. The diagram shows the distinction.
+
+![A 10 km visibility radius excludes distant AIS candidates, while infinite visibility keeps them eligible.](docs/figures/range-constraint.png)
+
+## Initial benchmark
+
+The checked-in baseline runs ten seeded trials with 350 random objects in a 40 km square, 70% AIS availability, and 0.5° bearing noise. It compares a 1 km position grid with and without multi-start refinement, with type labels enabled and disabled. Each run is evaluated at 10 km, 5 km, and 1 km visibility. The full configuration, trial CSV, summaries, and rerun script are under [`results/synthetic-baseline-v0.1.0/`](results/synthetic-baseline-v0.1.0/).
+
+![Median search time and successful-fix rate for the synthetic baseline.](docs/figures/benchmark-performance.png)
+
+At 10 km visibility, type-aware refined grid search had a 50% fix rate and 154 ms median search time. At 5 km it had a 70% fix rate and 84 ms median search time. None of the tested settings achieved the 95% success target. The 1 km scenes had too few detections to estimate a position. The figure and detailed results show why median error alone is insufficient.
+
+The example below is the largest-error full-feature trial at 10 km. The estimator selected 35 AIS associations, but none matched the true observed vessels; its estimated position was 22.53 km from the simulated observer. This is a deliberately visible failure case from the seeded benchmark.
+
+![A 10 km synthetic trial where all predicted AIS matches are wrong and the estimated position is 22.53 km from truth.](docs/figures/failure-case.png)
+
+These results are an initial software baseline, not a real-waterway performance claim. Ten trials do not establish operational reliability. The current search is not yet accurate or fast enough for the coast-wide 10 FPS objective.
 
 ## Install and run
 
@@ -15,12 +33,22 @@ uv sync
 uv run bearing-localization
 ```
 
-The benchmark uses randomized trials and writes `trials.csv`, `summary.csv`, `minimum_features.csv`, and `backend_profile.csv` under `results/`. It compares exhaustive position-grid scoring with multi-start least-squares refinement. Both approaches run with type labels enabled and disabled on the same observations. The summary reports feature availability separately from localization success, plus median, 95th-percentile, and 99th-percentile latency. The minimum-feature table uses a 95% success target by default. Ten frames per second corresponds to a 100 ms frame budget; reserve some of that time for sensor input and output.
+The command writes `trials.csv`, `summary.csv`, `minimum_features.csv`, and `backend_profile.csv` to `results/`. The backend profile measures a batched angular-residual kernel separately from full data association. It includes transfer time when an optional CuPy backend is available, but it is not an end-to-end GPU localization benchmark.
 
-For a more informative minimum-feature estimate, increase the number of trials, for example with `--trials 100`. Adjust object density, range, bearing noise, grid resolution, and success thresholds to test other conditions. Trials for a requested feature count are marked unavailable when too few objects were visible, so scarcity is represented as a failure to form a fix rather than silently substituting fewer observations.
+To reproduce the checked-in results and explanatory figures, run:
 
-## Performance direction
+```sh
+sh tools/run_release_benchmark.sh
+```
 
-Position hypotheses are independent and can be scored in batches, which makes grid and hypothesis search suitable for CPU vectorization and potentially GPU execution. `backend_profile.csv` measures the batched angular-residual kernel separately on NumPy and, when available, CuPy. It includes transfer timing but excludes Hungarian assignment and is not an end-to-end GPU localization result. A regional index and a previous-frame motion prior are likely necessary before scaling from a local scene to a coastline-wide catalogue.
+The benchmark takes approximately half a minute on the development machine. It requires Typst to compile the Typst figure sources. The PNG outputs are committed under `docs/figures/`; the editable sources are in `figures/` and use CeTZ or Lilaq.
 
-The 10 FPS target is a future system-level requirement. Synthetic benchmark results establish algorithm and scaling behavior; they do not alone establish a real-time guarantee for an entire coastline or a live sensor pipeline.
+## Next validation stage
+
+Historical AIS broadcasts can provide realistic vessel layouts for selected dates and coastal regions. The repository documents the data sources, archive sizes, coverage limits, preprocessing steps, and chart-data plan in [`docs/experiment-design.md`](docs/experiment-design.md). The proposed first study uses a short Mid-Atlantic UTC time slice, a water-only observer sampling mask, and NOAA ENC features for aids to navigation. Raw AIS records are not included in this repository.
+
+For coast-wide scale, exhaustive position-grid work grows with map area divided by grid-cell area, then incurs assignment cost at every candidate. The next algorithm comparison should add sampled AIS-pair geometry, hierarchical search, and prior-guided local tracking. Ten frames per second allows 100 ms total per update; the current 10 km median search time already exceeds that budget.
+
+## Citation and reuse
+
+The repository includes `CITATION.cff` for software citation. No software license has been selected yet, so the source is publicly viewable but is not currently granted an open-source reuse license. Choose and add a license before redistributing or incorporating the code into another project.

@@ -1,0 +1,3 @@
+backend,available,candidates,observations,ais_objects,kernel_s,transfer_s,end_to_end_s,error
+numpy,True,512,61,245,0.03626108300522901,0.0,0.03626108300522901,
+cupy,False,512,61,245,,,,No module named 'cupy'

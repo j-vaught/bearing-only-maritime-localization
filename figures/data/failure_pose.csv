@@ -1,0 +1,2 @@
+trial,truth_east_km,truth_north_km,estimate_east_km,estimate_north_km,position_error_km,visibility_radius_km,observed_features,observed_ais_features,correct_associations,predicted_associations
+5,-4.170207882034755,-8.715590375363021,-13.290003182342046,11.8849785222302,22.528961476818946,10,48,28,0,35

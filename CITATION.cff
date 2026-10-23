@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use this software, cite it as below."
+title: "Bearing-Only Maritime Localization"
+type: software
+authors:
+  - given-names: "J.C."
+    family-names: Vaught
+version: 0.1.0
+date-released: 2026-10-23
+repository-code: "https://github.com/j-vaught/bearing-only-maritime-localization"
+keywords:
+  - maritime localization
+  - bearing-only localization
+  - AIS
+  - simulation

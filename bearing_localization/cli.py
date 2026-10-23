@@ -32,6 +32,10 @@ RAW_FIELDS = [
     "status",
     "observed_features",
     "observed_ais_features",
+    "truth_east_m",
+    "truth_north_m",
+    "estimate_east_m",
+    "estimate_north_m",
     "position_error_m",
     "correct_associations",
     "predicted_associations",
@@ -133,6 +137,10 @@ def _evaluate_search(
     recall = correct / len(observed_ais_ids) if observed_ais_ids else 0.0
     success = position_error <= position_threshold_m and correct >= 3
     metrics: dict[str, object] = {
+        "truth_east_m": truth_ship.east_m,
+        "truth_north_m": truth_ship.north_m,
+        "estimate_east_m": result.east_m,
+        "estimate_north_m": result.north_m,
         "position_error_m": position_error,
         "correct_associations": correct,
         "predicted_associations": predicted,
@@ -286,6 +294,10 @@ def run_benchmark(args: argparse.Namespace) -> Path:
                             "status": status,
                             "observed_features": len(selected_observations),
                             "observed_ais_features": true_ais_features,
+                            "truth_east_m": "",
+                            "truth_north_m": "",
+                            "estimate_east_m": "",
+                            "estimate_north_m": "",
                             "position_error_m": "",
                             "correct_associations": 0,
                             "predicted_associations": 0,
