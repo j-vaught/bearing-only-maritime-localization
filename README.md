@@ -8,11 +8,19 @@ Each simulated sensor report includes every object inside the selected visibilit
 
 The target design keeps the simulator and position search as separate programs. The simulator writes sensor measurements and a separate truth file; the search program receives measurements, an AIS catalogue, and map inputs, while only the evaluator reads simulator truth. A standalone map and visibility component supplies land-water and line-of-sight queries to both programs. The figures show the proposed component boundaries and file responsibilities; these names describe the intended structure and are not all implemented in the current prototype.
 
-![Architecture diagram showing independent simulator, search, shared geospatial visibility, and evaluation components.](docs/figures/software-architecture-1.png)
+The five-page figure uses connected boxes and arrows throughout. Its overview places external ingestion beside the `main.py` trunk, then splits into shared utilities, the simulator, search, and evaluation. The four detail pages expand those branches into 39 file-level leaves. No dataset or output folders appear in the software tree.
 
-![Proposed module and file layout with each component's responsibilities.](docs/figures/software-architecture-2.png)
+![Overview of the connected software package tree, with external ingestion feeding main.py and four independent software branches.](docs/figures/software-architecture-1.png)
 
-The [two-page PDF](docs/figures/software-architecture.pdf) and editable [Typst source](docs/figures/software-architecture.typ) are also available.
+![Shared contracts and geospatial module tree expanded to file-level leaves.](docs/figures/software-architecture-2.png)
+
+![Simulator module tree expanded to file-level leaves.](docs/figures/software-architecture-3.png)
+
+![Search module tree expanded to file-level leaves.](docs/figures/software-architecture-4.png)
+
+![Evaluation module tree expanded to file-level leaves.](docs/figures/software-architecture-5.png)
+
+The [five-page zoomable PDF](docs/figures/software-architecture.pdf) and editable [Typst source](docs/figures/software-architecture.typ) are also available.
 
 ## What a range limit changes
 

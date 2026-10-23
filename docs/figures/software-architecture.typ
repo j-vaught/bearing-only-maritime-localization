@@ -1,159 +1,170 @@
 #import "@preview/cetz:0.5.2"
 
-#set page(width: 360mm, height: 240mm, margin: 10mm, fill: white)
+#set page(width: 440mm, height: 297mm, margin: 12mm, fill: white)
 #set text(font: "Arial", size: 9pt, fill: rgb("#000000"))
 
-#let garnet = rgb("#73000A")
 #let ink = rgb("#000000")
 #let muted = rgb("#53606A")
-#let sim-bg = rgb("#F8ECEC")
-#let search-bg = rgb("#EAF2F7")
-#let shared-bg = rgb("#EAF3ED")
-#let neutral-bg = rgb("#F1F3F5")
+#let garnet = rgb("#73000A")
+#let green = rgb("#EAF3ED")
+#let rose = rgb("#F8ECEC")
+#let blue = rgb("#EAF2F7")
+#let gray = rgb("#F1F3F5")
 
-#let panel(title, body, fill, edge: ink) = block(
-  width: 100%, fill: fill, stroke: (paint: edge, thickness: 0.9pt), inset: 3.5mm,
-)[
-  #text(weight: "bold", size: 10pt, fill: edge)[#title]
-  #v(1.3mm)
-  #body
+#let box(cx, y, w, h, label, fill: white, edge: ink, size: 8pt) = {
+  cetz.draw.rect((cx - w / 2, y), (cx + w / 2, y + h), fill: fill, stroke: (paint: edge, thickness: 1pt))
+  cetz.draw.content((cx, y + h / 2), [#align(center)[#text(size: size, weight: "bold", fill: edge)[#label]]])
+}
+
+#let tree(parent, parent_bottom, children, child_top, bus_y) = {
+  cetz.draw.line((parent, parent_bottom), (parent, bus_y), stroke: (paint: ink, thickness: 0.9pt))
+  cetz.draw.line((children.at(0), bus_y), (children.at(children.len() - 1), bus_y), stroke: (paint: ink, thickness: 0.9pt))
+  for child in children {
+    cetz.draw.line((child, bus_y), (child, child_top), stroke: (paint: ink, thickness: 0.9pt), mark: (end: "stealth", fill: ink))
+  }
+}
+
+#let titled_page(title, subtitle) = align(center)[
+  #text(size: 22pt, weight: "bold")[#title]
+  #v(2mm)
+  #text(size: 11pt, fill: muted)[#subtitle]
 ]
 
-#let item(path, role) = [#text(font: "Menlo", size: 7.5pt, weight: "bold")[#path] — #role]
+#titled_page([Software package tree], [Boxes are software modules. External ingestion is outside the package; every package node connects to its parent.])
+#v(5mm)
 
-#align(center)[
-  #text(size: 18pt, weight: "bold")[A rooted software package tree]
-  #v(1mm)
-  #text(size: 9pt, fill: muted)[One top-level entry point coordinates independent branches; sibling programs exchange files, not each other's internal code.]
-]
-#v(4mm)
+#cetz.canvas({
+  import cetz.draw: *
 
-#panel([main.py — package trunk / orchestrator], [
-  Parses the command, loads configuration, selects a run mode, starts the appropriate branch, and records run metadata. It passes versioned files and shared-service handles between branches; it does not contain sensor simulation or localization algorithms.
-], neutral-bg)
-#v(1mm)
-#align(center)[
-  #cetz.canvas({
-    import cetz.draw: *
-    let xs = (1.8, 6.1, 10.4, 14.7, 19.0, 23.3)
-    line((12.55, 3.0), (12.55, 2.3), stroke: (paint: ink, thickness: 1pt))
-    line((xs.at(0), 2.3), (xs.at(5), 2.3), stroke: (paint: ink, thickness: 1pt))
-    for x in xs {
-      line((x, 2.3), (x, 1.5), stroke: (paint: ink, thickness: 0.9pt), mark: (end: "stealth", fill: ink))
-    }
-  })
-]
-#v(0mm)
-#grid(
-  columns: (1fr, 1fr, 1fr, 1fr, 1fr, 1fr),
-  gutter: 3mm,
-  panel([ingest/], [
-    #item([scenario.py], [synthetic scene + sensor config])\
-    #item([ais.py], [real / simulated AIS catalogue])\
-    #item([map.py], [shoreline / hydrography input])
-  ], neutral-bg),
-  panel([shared/], [
-    #item([schemas/], [file contracts])\
-    #item([geo/], [projection, land-water, LOS])\
-    Public API only; no feature-branch imports.
-  ], shared-bg, edge: muted),
-  panel([simulator/], [
-    #item([main.py], [standalone simulate command])\
-    #item([scene.py], [place objects + hidden truth])\
-    #item([detect.py], [range, LOS, angular merge])\
-    #item([bearing.py], [center + uncertainty])
-  ], sim-bg, edge: garnet),
-  panel([search/], [
-    #item([main.py], [standalone search command])\
-    #item([candidates.py], [water-only hypotheses])\
-    #item([associate.py], [unknown object identity])\
-    #item([algorithms/], [grid, RANSAC, refine])
-  ], search-bg, edge: rgb("#006BA4")),
-  panel([evaluation/], [
-    #item([run.py], [trial orchestration])\
-    #item([metrics.py], [error + feature count])\
-    #item([timing.py], [stage + total latency])\
-    #item([report.py], [tables + figures])
-  ], neutral-bg),
-  panel([artifacts/], [
-    #item([inputs/], [scenario, AIS, map refs])\
-    #item([measurements/], [sensor reports])\
-    #item([truth/], [evaluator-only truth])\
-    #item([results/], [estimates + metrics])
-  ], neutral-bg),
-)
-#v(3mm)
-#panel([Branch boundaries], [
-  The simulator branch never imports search internals, and search never imports simulator internals. Both may call the stable shared/geo API; they do not call one another. The simulator writes observations and hidden truth to separate artifacts. Main passes observations and AIS to search, then passes estimate plus truth to evaluation.
-], white)
+  // Outside source connects to the main software entry point.
+  box(5.2, 24.2, 8.8, 1.5, [External ingestion / providers], fill: gray, edge: muted, size: 9pt)
+  box(19.0, 24.2, 7.2, 1.5, [main.py], fill: gray, size: 10pt)
+  content((5.2, 23.4), [#text(size: 8pt, fill: muted)[AIS • charts • scene / sensor settings]])
+  line((9.7, 24.95), (15.3, 24.95), stroke: (paint: garnet, thickness: 1.2pt), mark: (end: "stealth", fill: garnet))
+
+  // Main package branches.
+  tree(19.0, 24.2, (4.2, 13.4, 26.0, 36.0), 19.3, 21.0)
+  box(4.2, 17.9, 7.0, 1.4, [shared/], fill: green, edge: muted, size: 10pt)
+  box(13.4, 17.9, 7.0, 1.4, [simulator/], fill: rose, edge: garnet, size: 10pt)
+  box(26.0, 17.9, 7.0, 1.4, [search/], fill: blue, edge: rgb("#006BA4"), size: 10pt)
+  box(36.0, 17.9, 7.0, 1.4, [evaluation/], fill: gray, size: 10pt)
+
+  // Recursive package branches.
+  tree(4.2, 17.9, (2.5, 5.9), 14.2, 15.8)
+  box(2.5, 12.8, 3.8, 1.4, [contracts/], fill: green, edge: muted)
+  box(5.9, 12.8, 4.0, 1.4, [geospatial/], fill: green, edge: muted)
+
+  tree(13.4, 17.9, (10.0, 13.4, 16.8), 14.2, 15.8)
+  box(10.0, 12.8, 3.7, 1.4, [scene/], fill: rose, edge: garnet)
+  box(13.4, 12.8, 3.7, 1.4, [sensing/], fill: rose, edge: garnet)
+  box(16.8, 12.8, 3.7, 1.4, [reports/], fill: rose, edge: garnet)
+
+  tree(26.0, 17.9, (21.5, 24.5, 27.5, 30.5), 14.2, 15.8)
+  box(21.5, 12.8, 4.4, 1.4, [candidates/], fill: blue, edge: rgb("#006BA4"), size: 7.5pt)
+  box(24.5, 12.8, 4.4, 1.4, [association/], fill: blue, edge: rgb("#006BA4"), size: 7.5pt)
+  box(27.5, 12.8, 4.4, 1.4, [scoring/], fill: blue, edge: rgb("#006BA4"), size: 7.5pt)
+  box(30.5, 12.8, 4.4, 1.4, [algorithms/], fill: blue, edge: rgb("#006BA4"), size: 7.5pt)
+
+  tree(36.0, 17.9, (34.0, 38.0), 14.2, 15.8)
+  box(34.0, 12.8, 3.8, 1.4, [metrics/], fill: gray)
+  box(38.0, 12.8, 3.8, 1.4, [timing + reporting/], fill: gray, size: 7pt)
+
+  content((20.0, 10.8), [#align(center)[#text(size: 10pt, weight: "bold")[No simulator ↔ search imports. Both may call shared/ contracts and geospatial APIs.]]])
+})
 
 #pagebreak()
-#set page(width: 360mm, height: 240mm, margin: 10mm, fill: white)
-#align(center)[
-  #text(size: 18pt, weight: "bold")[Expanded branch tree and file roles]
-  #v(1mm)
-  #text(size: 9pt, fill: muted)[Proposed directory and file names. Each branch has its own entry point and owns its implementation.]
-]
-#v(4mm)
+#titled_page([shared/ expanded], [Neutral contracts and geometry. This branch is the only reusable software dependency between simulator and search.])
+#v(5mm)
+#cetz.canvas({
+  import cetz.draw: *
+  box(20, 24, 7, 1.4, [shared/], fill: green, edge: muted, size: 10pt)
+  tree(20, 24, (10, 30), 20.2, 22.0)
+  box(10, 18.8, 7, 1.4, [contracts/], fill: green, edge: muted)
+  box(30, 18.8, 7, 1.4, [geospatial/], fill: green, edge: muted)
 
-#grid(
-  columns: (1fr, 1fr), gutter: 5mm,
-  panel([main.py → ingest/], [
-    #item([ingest/main.py], [entry point for ingestion commands])\
-    #item([ingest/scenario.py], [load configuration; generate object inventory with AIS-present flags])\
-    #item([ingest/ais.py], [read records; normalize time, position, type, dimensions, and AtoN type])\
-    #item([ingest/map.py], [load coastline / hydrography, CRS, and source metadata])\
-    Main chooses the ingest operation and writes normalized inputs for the later branch.
-  ], neutral-bg),
-  panel([main.py → shared/], [
-    #item([shared/schemas/observation.py], [type label, global bearing, optional bearing sigma and apparent width])\
-    #item([shared/schemas/truth.py], [true boat pose and hidden scene IDs; evaluator only])\
-    #item([shared/schemas/estimate.py], [estimated pose, confidence, optional associations])\
-    #item([shared/geo/project.py], [convert lat/lon to local metric coordinates])\
-    #item([shared/geo/land_water.py], [build and query versioned land-water mask])\
-    #item([shared/geo/line_of_sight.py], [ray / segment test; same API for both programs])
-  ], shared-bg, edge: muted),
-  panel([main.py → simulator/], [
-    #item([simulator/main.py], [standalone simulation command])\
-    #item([simulator/scene.py], [place boat and objects; preserve hidden truth])\
-    #item([simulator/visibility.py], [apply range gate, then shared land-occlusion query])\
-    #item([simulator/detection.py], [merge angularly close detections; select reported type])\
-    #item([simulator/bearing.py], [center of object's angular extent; add noise / uncertainty])\
-    #item([simulator/write.py], [write measurements, truth, and scenario AIS catalogue separately])
-  ], sim-bg, edge: garnet),
-  panel([main.py → search/], [
-    #item([search/main.py], [standalone localization command])\
-    #item([search/inputs.py], [read measurements + AIS; reject truth input])\
-    #item([search/candidates.py], [generate coarse candidates on water])\
-    #item([search/association.py], [compare reported type / bearing to unknown AIS identity])\
-    #item([search/scoring.py], [bearing residual, uncertainty weight, LOS consistency])\
-    #item([search/algorithms/grid.py], [exhaustive or hierarchical grid])\
-    #item([search/algorithms/ransac.py], [sample correspondence hypotheses])\
-    #item([search/algorithms/refine.py], [refine best candidate positions])\
-    #item([search/write.py], [write estimate + diagnostics])
-  ], search-bg, edge: rgb("#006BA4")),
-  panel([main.py → evaluation/], [
-    #item([evaluation/main.py], [standalone evaluation / benchmark command])\
-    #item([evaluation/run.py], [run fixed cases across search methods])\
-    #item([evaluation/metrics.py], [position error, success, minimum features])\
-    #item([evaluation/timing.py], [per-stage, end-to-end, CPU / GPU timing])\
-    #item([evaluation/report.py], [write CSV / JSON and publication figures])
-  ], neutral-bg),
-  panel([main.py → artifacts/], [
-    #item([inputs/scene.json], [simulator scene configuration])\
-    #item([inputs/ais.json], [AIS catalogue passed to search])\
-    #item([inputs/map/], [versioned map/mask data])\
-    #item([runs/<id>/measurements.json], [search input])\
-    #item([runs/<id>/truth.json], [evaluation input only])\
-    #item([runs/<id>/estimate.json], [search output])\
-    #item([runs/<id>/metrics.json], [evaluation output])
-  ], neutral-bg),
-)
-#v(4mm)
-#panel([Execution path], [
-  #text(font: "Menlo", size: 8pt, weight: "bold")[main.py → ingest → simulator → measurements.json → search → estimate.json → evaluation]
-  #linebreak()
-  #text(font: "Menlo", size: 8pt, weight: "bold")[simulator → truth.json → evaluation only]
-  #linebreak()
-  The map and AIS inputs are passed as data; search does not reach into simulator to get them.
-], white)
+  tree(10, 18.8, (2, 6, 10, 14, 18), 14.8, 16.5)
+  tree(30, 18.8, (22, 26, 30, 34, 38), 14.8, 16.5)
+  box(2, 13.4, 3.5, 1.4, [observation.py], fill: white, edge: muted, size: 7pt)
+  box(6, 13.4, 3.5, 1.4, [ais.py], fill: white, edge: muted)
+  box(10, 13.4, 3.5, 1.4, [truth.py], fill: white, edge: muted)
+  box(14, 13.4, 3.5, 1.4, [estimate.py], fill: white, edge: muted, size: 7pt)
+  box(18, 13.4, 3.5, 1.4, [validation.py], fill: white, edge: muted, size: 7pt)
+
+  box(22, 13.4, 3.5, 1.4, [projection.py], fill: white, edge: muted, size: 7pt)
+  box(26, 13.4, 3.5, 1.4, [land_water.py], fill: white, edge: muted, size: 7pt)
+  box(30, 13.4, 3.5, 1.4, [line_of_sight.py], fill: white, edge: muted, size: 6.7pt)
+  box(34, 13.4, 3.5, 1.4, [spatial_index.py], fill: white, edge: muted, size: 6.7pt)
+  box(38, 13.4, 3.5, 1.4, [bearing_math.py], fill: white, edge: muted, size: 6.7pt)
+})
+
+#pagebreak()
+#titled_page([simulator/ expanded], [Scene construction, range and land visibility, angular detection, and separate measurement / truth reports.])
+#v(5mm)
+#cetz.canvas({
+  import cetz.draw: *
+  box(20, 24, 7, 1.4, [simulator/], fill: rose, edge: garnet, size: 10pt)
+  tree(20, 24, (4, 11, 18, 25, 35), 20.2, 22.0)
+  box(4, 18.8, 5.6, 1.4, [scene/], fill: rose, edge: garnet)
+  box(11, 18.8, 5.6, 1.4, [visibility/], fill: rose, edge: garnet)
+  box(18, 18.8, 5.6, 1.4, [detection/], fill: rose, edge: garnet)
+  box(25, 18.8, 5.6, 1.4, [reports/], fill: rose, edge: garnet)
+  box(35, 18.8, 5.6, 1.4, [config/], fill: rose, edge: garnet)
+
+  tree(4, 18.8, (2, 4, 6), 14.8, 16.5)
+  tree(11, 18.8, (9, 11, 13), 14.8, 16.5)
+  tree(18, 18.8, (15, 17, 19, 21), 14.8, 16.5)
+  tree(25, 18.8, (23, 25, 27), 14.8, 16.5)
+  tree(35, 18.8, (33, 37), 14.8, 16.5)
+
+  for (x, label) in ((2, [builder.py]), (4, [object_model.py]), (6, [observer.py]), (9, [range_filter.py]), (11, [land_blocking.py]), (13, [spatial_query.py]), (15, [geometry.py]), (17, [clustering.py]), (19, [merging.py]), (21, [noise.py]), (23, [observation.py]), (25, [truth.py]), (27, [schema.py]), (33, [settings.py]), (37, [random_state.py])) {
+    box(x, 13.4, 1.85, 1.4, label, fill: white, edge: garnet, size: 6.8pt)
+  }
+})
+
+#pagebreak()
+#titled_page([search/ expanded], [Candidate generation, object association, scoring, and swappable search algorithms. All feature nodes are separate and connected to their parent.])
+#v(5mm)
+#cetz.canvas({
+  import cetz.draw: *
+  box(20, 24, 7, 1.4, [search/], fill: blue, edge: rgb("#006BA4"), size: 10pt)
+  tree(20, 24, (3, 9, 15, 21, 29, 37), 20.2, 22.0)
+  box(3, 18.8, 4.8, 1.4, [inputs/], fill: blue, edge: rgb("#006BA4"))
+  box(9, 18.8, 4.8, 1.4, [candidates/], fill: blue, edge: rgb("#006BA4"))
+  box(15, 18.8, 4.8, 1.4, [association/], fill: blue, edge: rgb("#006BA4"))
+  box(21, 18.8, 4.8, 1.4, [scoring/], fill: blue, edge: rgb("#006BA4"))
+  box(29, 18.8, 4.8, 1.4, [algorithms/], fill: blue, edge: rgb("#006BA4"))
+  box(37, 18.8, 4.8, 1.4, [output/], fill: blue, edge: rgb("#006BA4"))
+
+  tree(3, 18.8, (2, 4), 14.8, 16.5)
+  tree(9, 18.8, (7, 9, 11), 14.8, 16.5)
+  tree(15, 18.8, (13, 15, 17), 14.8, 16.5)
+  tree(21, 18.8, (19, 21, 23), 14.8, 16.5)
+  tree(29, 18.8, (25, 27, 29, 31, 33), 14.8, 16.5)
+  tree(37, 18.8, (35, 37, 39), 14.8, 16.5)
+
+  for (x, label) in ((2, [obs_io.py]), (4, [ais_io.py]), (7, [water_grid.py]), (9, [bounds.py]), (11, [range.py]), (13, [type_match.py]), (15, [bearing_gate.py]), (17, [assign.py]), (19, [likelihood.py]), (21, [visibility.py]), (23, [ranking.py]), (25, [grid.py]), (27, [ransac.py]), (29, [branch_bound.py]), (31, [refine.py]), (33, [gpu_batch.py]), (35, [estimate.py]), (37, [confidence.py]), (39, [diagnostics.py])) {
+    box(x, 13.4, 1.8, 1.4, label, fill: white, edge: rgb("#006BA4"), size: 6.8pt)
+  }
+})
+
+#pagebreak()
+#titled_page([evaluation/ expanded], [The evaluator receives estimated pose and simulator truth, and reports localization accuracy, feature requirements, and runtime.])
+#v(5mm)
+#cetz.canvas({
+  import cetz.draw: *
+  box(20, 24, 7, 1.4, [evaluation/], fill: gray, size: 10pt)
+  tree(20, 24, (3.5, 12, 20.5, 29), 20.2, 22.0)
+  box(3.5, 18.8, 5.3, 1.4, [runner/], fill: gray)
+  box(12, 18.8, 5.3, 1.4, [metrics/], fill: gray)
+  box(20.5, 18.8, 5.3, 1.4, [timing/], fill: gray)
+  box(29, 18.8, 5.3, 1.4, [reporting/], fill: gray)
+
+  tree(3.5, 18.8, (2, 4, 6), 14.8, 16.5)
+  tree(12, 18.8, (8, 10, 12, 14), 14.8, 16.5)
+  tree(20.5, 18.8, (17, 19, 21, 23), 14.8, 16.5)
+  tree(29, 18.8, (26, 28, 30, 32), 14.8, 16.5)
+
+  for (x, label) in ((2, [trials.py]), (4, [repeat.py]), (6, [runner.py]), (8, [position_error.py]), (10, [success_rate.py]), (12, [feature_count.py]), (14, [association.py]), (17, [stage_timer.py]), (19, [end_to_end.py]), (21, [cpu_scale.py]), (23, [gpu_scale.py]), (26, [summary.py]), (28, [tables.py]), (30, [figures.py]), (32, [export.py])) {
+    box(x, 13.4, 1.85, 1.4, label, fill: white, edge: ink, size: 6.8pt)
+  }
+})
