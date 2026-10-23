@@ -1,12 +1,14 @@
 """Tests for bounded coarse-to-fine localization search."""
 
+from dataclasses import dataclass
+
 import numpy as np
 import pytest
 
 from bearing_localization.search.hierarchical import hierarchical_search
 
 
-def _example() -> tuple[list[tuple[str, float]], np.ndarray, list[str]]:
+def _example() -> tuple[list[tuple[str | None, float]], np.ndarray, list[str | None]]:
     true_position = np.asarray([1_234.0, 2_345.0])
     ais_xy = np.asarray(
         [[9_000.0, 1_000.0], [5_000.0, 10_000.0], [-6_000.0, 7_000.0]],
@@ -15,7 +17,9 @@ def _example() -> tuple[list[tuple[str, float]], np.ndarray, list[str]]:
     bearings = np.degrees(
         np.arctan2(ais_xy[:, 0] - true_position[0], ais_xy[:, 1] - true_position[1])
     )
-    observations = [("ship", float(bearing)) for bearing in bearings]
+    observations: list[tuple[str | None, float]] = [
+        ("ship", float(bearing)) for bearing in bearings
+    ]
     return observations, ais_xy, ["ship"] * len(ais_xy)
 
 
@@ -59,16 +63,31 @@ def test_water_predicate_excludes_land_candidates() -> None:
 
 def test_search_is_deterministic() -> None:
     observations, ais_xy, ais_types = _example()
-    args = (
+    bounds_xy = (
+        0.0,
+        4_000.0,
+        0.0,
+        4_000.0,
+    )
+
+    first = hierarchical_search(
         observations,
         ais_xy,
         ais_types,
-        (0.0, 4_000.0, 0.0, 4_000.0),
+        bounds_xy,
+        coarse_spacing_m=1_000.0,
+        refinement_levels=3,
+        beam_width=8,
     )
-    kwargs = {"coarse_spacing_m": 1_000.0, "refinement_levels": 3, "beam_width": 8}
-
-    first = hierarchical_search(*args, **kwargs)
-    second = hierarchical_search(*args, **kwargs)
+    second = hierarchical_search(
+        observations,
+        ais_xy,
+        ais_types,
+        bounds_xy,
+        coarse_spacing_m=1_000.0,
+        refinement_levels=3,
+        beam_width=8,
+    )
 
     assert (first.east_m, first.north_m, first.score_sigma, first.matches) == (
         second.east_m,
@@ -93,25 +112,35 @@ def test_search_fails_if_water_mask_rejects_every_candidate() -> None:
         )
 
 
+@dataclass(frozen=True)
+class _InvalidSearchConfig:
+    coarse_spacing_m: float = 1_000.0
+    refinement_levels: int = 2
+    refinement_factor: float = 2.0
+    beam_width: int = 8
+    message: str = ""
+
+
 @pytest.mark.parametrize(
-    "kwargs, message",
+    "config",
     [
-        ({"coarse_spacing_m": 0.0}, "coarse_spacing_m"),
-        ({"refinement_levels": -1}, "refinement_levels"),
-        ({"refinement_factor": 1.0}, "refinement_factor"),
-        ({"beam_width": 0}, "beam_width"),
+        _InvalidSearchConfig(coarse_spacing_m=0.0, message="coarse_spacing_m"),
+        _InvalidSearchConfig(refinement_levels=-1, message="refinement_levels"),
+        _InvalidSearchConfig(refinement_factor=1.0, message="refinement_factor"),
+        _InvalidSearchConfig(beam_width=0, message="beam_width"),
     ],
 )
-def test_invalid_refinement_configuration_is_rejected(
-    kwargs: dict[str, float | int], message: str
-) -> None:
+def test_invalid_refinement_configuration_is_rejected(config: _InvalidSearchConfig) -> None:
     observations, ais_xy, ais_types = _example()
 
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(ValueError, match=config.message):
         hierarchical_search(
             observations,
             ais_xy,
             ais_types,
             (0.0, 4_000.0, 0.0, 4_000.0),
-            **kwargs,
+            coarse_spacing_m=config.coarse_spacing_m,
+            refinement_levels=config.refinement_levels,
+            refinement_factor=config.refinement_factor,
+            beam_width=config.beam_width,
         )

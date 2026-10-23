@@ -8,7 +8,7 @@ and matching semantics stay comparable with :mod:`bearing_localization.algorithm
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from time import perf_counter
 
 import numpy as np
@@ -20,9 +20,9 @@ LineOfSightPredicate = Callable[[tuple[float, float], tuple[float, float]], bool
 
 
 def hierarchical_search(
-    observations: list[tuple[str | None, float]],
+    observations: Sequence[tuple[str | None, float]],
     ais_xy: np.ndarray,
-    ais_types: list[str | None],
+    ais_types: Sequence[str | None],
     bounds_xy: tuple[float, float, float, float],
     sigma_deg: float = 0.5,
     coarse_spacing_m: float = 5_000.0,
@@ -68,8 +68,10 @@ def hierarchical_search(
     xmin, xmax, ymin, ymax = bounds_xy
     if not all(np.isfinite(bounds_xy)) or xmin >= xmax or ymin >= ymax:
         raise ValueError("Search bounds must be finite and have positive width and height.")
+    observation_list = list(observations)
+    ais_type_list = list(ais_types)
     xy = np.asarray(ais_xy, dtype=float).reshape((-1, 2))
-    if len(ais_types) != len(xy):
+    if len(ais_type_list) != len(xy):
         raise ValueError("ais_types must have one entry per AIS coordinate.")
 
     # Candidate -> score and assignment. Rounding suppresses floating point
@@ -106,9 +108,9 @@ def hierarchical_search(
                 )
             score, matches = associate(
                 np.asarray([x, y]),
-                observations,
+                observation_list,
                 xy[candidate_indices],
-                [ais_types[index] for index in candidate_indices],
+                [ais_type_list[int(index)] for index in candidate_indices],
                 sigma_deg,
                 unmatched_penalty_deg,
                 use_types,
