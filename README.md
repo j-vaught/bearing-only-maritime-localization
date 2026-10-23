@@ -4,6 +4,16 @@ This repository is a reproducible simulation study for locating a vessel from gl
 
 Each simulated sensor report includes every object inside the selected visibility radius. Some objects have AIS coordinates available to the estimator; other detections are deliberately unmatched. Objects are stationary during a simulated instant, the map is two-dimensional, and bearing error is Gaussian. The synthetic scenes do not yet model coastlines, navigable water, receiver coverage, or realistic traffic density.
 
+## Proposed software architecture
+
+The target design keeps the simulator and position search as separate programs. The simulator writes sensor measurements and a separate truth file; the search program receives measurements, an AIS catalogue, and map inputs, while only the evaluator reads simulator truth. A standalone map and visibility component supplies land-water and line-of-sight queries to both programs. The figures show the proposed component boundaries and file responsibilities; these names describe the intended structure and are not all implemented in the current prototype.
+
+![Architecture diagram showing independent simulator, search, shared geospatial visibility, and evaluation components.](docs/figures/software-architecture-1.png)
+
+![Proposed module and file layout with each component's responsibilities.](docs/figures/software-architecture-2.png)
+
+The [two-page PDF](docs/figures/software-architecture.pdf) and editable [Typst source](docs/figures/software-architecture.typ) are also available.
+
 ## What a range limit changes
 
 The maximum visibility range filters which AIS records can match an observation at each candidate vessel location. It does **not** limit the measured bearing angles, which still span 360°. With an infinite visibility range, distant AIS records remain eligible and compete in data association. The diagram shows the distinction.
