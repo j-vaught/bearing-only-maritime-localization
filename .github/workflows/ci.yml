@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: uv sync --locked --all-groups
+      - run: uv run pytest
+      - name: Check installed command entry points
+        run: |
+          uv run bearing-localization --help
+          uv run bearing-localization-search --help
+          uv run bearing-localization-evaluate --help
+          uv run bearing-simulator --help
+          uv run bearing-benchmark --help
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run ty check .
+
+  typst:
+    name: Typst figure builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: typst-community/setup-typst@v5
+      - name: Compile every figure source
+        shell: bash
+        run: |
+          set -euo pipefail
+          output_dir="${RUNNER_TEMP}/typst-figures"
+          mkdir -p "${output_dir}"
+          while IFS= read -r source; do
+            output="${output_dir}/$(basename "${source%.typ}").pdf"
+            typst compile "${source}" "${output}"
+          done < <(find docs/figures figures -type f -name '*.typ' -print | sort)

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "bearing-only-maritime-localization"
 version = "0.1.0"
@@ -8,9 +12,18 @@ dependencies = ["numpy>=2.0", "scipy>=1.14"]
 
 [project.scripts]
 bearing-localization = "bearing_localization.cli:main"
+bearing-localization-search = "bearing_localization.search_cli:main"
+bearing-localization-evaluate = "bearing_localization.evaluate_cli:main"
+bearing-simulator = "bearing_localization.simulator.cli:main"
+bearing-benchmark = "bearing_localization.benchmark_cli:main"
 
 [dependency-groups]
-dev = ["ruff>=0.9", "ty>=0.0.1a0"]
+dev = ["pytest>=8.0", "ruff>=0.9", "ty>=0.0.1a0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bearing_localization*", "maritime_localization_shared*"]
+namespaces = false
 
 [tool.uv]
 package = true

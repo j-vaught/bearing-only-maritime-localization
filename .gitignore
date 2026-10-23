@@ -3,6 +3,9 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .pytest_cache/
+.hypothesis/
+.coverage
+.tox/
 dist/
 build/
 *.egg-info/
