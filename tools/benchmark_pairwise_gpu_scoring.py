@@ -6,9 +6,11 @@ import csv
 import os
 import platform
 import time
+from importlib import import_module
 
 import numpy as np
-import torch
+
+torch = import_module("torch")
 
 
 def make_scene(seed, m, k):

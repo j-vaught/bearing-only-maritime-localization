@@ -24,6 +24,7 @@ from bearing_localization.search.hierarchical import (
 from bearing_localization.search.hierarchical import (
     hierarchical_search as hierarchical_search_core,
 )
+from bearing_localization.search.pairwise import PairwiseSearchConfig, run_pairwise_search
 from bearing_localization.search.randomized import (
     RandomizedSearchConfig,
     randomized_search,
@@ -131,6 +132,7 @@ __all__ = [
     "HierarchicalSearchConfig",
     "LineOfSightQuery",
     "MapVisibility",
+    "PairwiseSearchConfig",
     "RandomizedSearchConfig",
     "WaterMaskProtocol",
     "WaterPredicate",
@@ -143,4 +145,5 @@ __all__ = [
     "randomized_search",
     "run_grid_search",
     "run_hierarchical_search",
+    "run_pairwise_search",
 ]

@@ -84,15 +84,27 @@ The next figure zooms in on B1 and B5 for the first paired 10 km trial. Each pan
 
 ![B1 and B5 true locations and search estimates, with local ±2 km views.](docs/figures/b1-b5-estimate-comparison.png)
 
-The vessel layout and chart features are real, while the observer bearings are simulated. The 500 m land/water mask was classified from a rendered electronic chart and is approximate. Raw AIS rows and map imagery are not included in the repository.
+The vessel layout and chart features are real, while the observer bearings are simulated. The 500 m land/water mask was classified from a rendered electronic chart and is approximate. The exact selected AIS vessel records, chart-aid coordinates, B1–B5 sites, and mask used in these experiments are now committed under [`data/`](data/), with source manifests and checksums. The full national AIS archive is not committed.
 
 A follow-up adds known NOAA chart-aid coordinates to the search catalog while keeping the same simulated bearings. Hierarchical search then reached a 51.8 m median error with 9/15 successes. A 250 m exhaustive grid reached 81 m at B1 and 65 m at B5, but took about 43 seconds per search. The per-seed results and assumptions are in [`results/ais-b1-b5-pilot-v1/with-chart-aids/`](results/ais-b1-b5-pilot-v1/with-chart-aids/).
 
+### Pairwise geometric hypotheses
+
+The next search method intersects pairs of bearing rays with pairs of candidate AIS or chart-aid coordinates, then scores the resulting positions using the complete observation set. It rejects negative and out-of-range intersections, land candidates, and line-of-sight-blocked matches. On the 12 matched B1, B2, B4, and B5 trials where both methods returned estimates, pairwise search had 25.9 m median position error and 782 ms median latency, compared with 49.0 m and 2,000 ms for hierarchical search. Both methods met the full benchmark in 9/12 matched trials. Across all 15 attempts, both methods recorded 9 successes; pairwise search correctly returned no estimate for B3 because its simulated observation contained only one bearing. B4 estimates are typically within 50 m, but only one AIS vessel is visible, so the site does not meet the requirement for three correct AIS matches.
+
+![Pairwise and hierarchical median position errors at B1–B5.](docs/figures/pairwise-search-comparison.png)
+
+The [zoomable PDF](docs/figures/pairwise-search-comparison.pdf), [Typst source](figures/pairwise-search-comparison.typ), paired trial file, per-site summary, matched-case summary, and full configuration are in [`results/ais-b1-b5-pilot-v2-pairwise/`](results/ais-b1-b5-pilot-v2-pairwise/). Reproduce the trial data with `uv run python tools/run_ais_enc_pilot.py --replicates 3`.
+
+### GPU scoring feasibility
+
+On `comech-2080`, a GPU benchmark evaluated many independent candidate-to-object bearing scores. For 32,768 candidates, 800 catalog objects, and 10 observations, the RTX 6000 Ada took 10.8–17.5 ms end to end, versus 2.1–2.35 s for a chunked NumPy baseline. CPU and GPU selected the same best candidate in all 12 tested cases, with maximum score differences below 0.0004°. This isolates score evaluation; it does not include hypothesis generation, map visibility, or full search orchestration, so it does not demonstrate 10 FPS end to end. The script and raw results are in [`results/ais-b1-b5-pilot-v2-pairwise/gpu-benchmark.md`](results/ais-b1-b5-pilot-v2-pairwise/gpu-benchmark.md).
+
 ## Next validation stage
 
-Historical AIS broadcasts can provide realistic vessel layouts for selected dates and coastal regions. A first Chesapeake pilot has now been extracted from NOAA's July 15, 2023 daily archive. It contains 372 unique AIS vessels in a one-minute UTC window and demonstrates the bounded extraction workflow in [`tools/extract_ais_snapshot.py`](tools/extract_ais_snapshot.py). The full national archive and the extracted vessel records remain outside this repository while data-sharing terms are reviewed. The processing details and next steps are in [`docs/experiment-design.md`](docs/experiment-design.md).
+Historical AIS broadcasts can provide realistic vessel layouts for selected dates and coastal regions. The Chesapeake pilot extracts 372 unique AIS vessels from NOAA's July 15, 2023 daily archive in a one-minute UTC window. The selected rows and processing metadata are committed under [`data/ais/`](data/ais/); the full national archive remains external. The extraction workflow is in [`tools/extract_ais_snapshot.py`](tools/extract_ais_snapshot.py), and processing details are in [`docs/experiment-design.md`](docs/experiment-design.md).
 
-This pilot supplies a real vessel layout, but it is not a real visual-observation dataset. The next integration step will convert positions to a local metric frame, sample hypothetical observers over navigable water, and generate global-bearing observations. NOAA Electronic Navigational Chart features will be needed to add buoys and other fixed aids to navigation.
+This pilot supplies a real vessel layout and NOAA ENC chart-aid coordinates, but it is not a real visual-observation dataset. The current experiment projects the positions into a local metric frame, uses fixed water-only B1–B5 observer locations, and generates synthetic global-bearing observations. Broader spatial coverage, a higher-resolution authoritative shoreline mask, and measured visual detections remain future validation stages.
 
 For coast-wide scale, exhaustive position-grid work grows with map area divided by grid-cell area, then incurs assignment cost at every candidate. The next algorithm comparison should add sampled AIS-pair geometry, hierarchical search, and prior-guided local tracking. Ten frames per second allows 100 ms total per update; the current 10 km median search time already exceeds that budget.
 
