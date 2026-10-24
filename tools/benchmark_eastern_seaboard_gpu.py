@@ -106,14 +106,15 @@ def run_gpu_grid(
     target_type = torch.as_tensor(object_types, dtype=torch.int64, device=device)
     obs_bearing = torch.as_tensor(observations[:, 0], dtype=torch.float32, device=device)
     obs_type = torch.as_tensor(observations[:, 1], dtype=torch.int64, device=device)
-    scores = np.empty(len(latitudes), dtype=np.float32)
-
     torch.cuda.synchronize(device)
     started = time.perf_counter()
+    candidate_lat = candidate_lat.to(device)
+    candidate_lon = candidate_lon.to(device)
+    scores_device = torch.empty((len(latitudes),), dtype=torch.float32, device=device)
     for lo in range(0, len(latitudes), batch_size):
         hi = min(lo + batch_size, len(latitudes))
-        lat1 = candidate_lat[lo:hi].to(device).deg2rad()[:, None]
-        lon1 = candidate_lon[lo:hi].to(device).deg2rad()[:, None]
+        lat1 = candidate_lat[lo:hi].deg2rad()[:, None]
+        lon1 = candidate_lon[lo:hi].deg2rad()[:, None]
         dlat = target_lat[None, :] - lat1
         dlon = target_lon[None, :] - lon1
         haversine = (
@@ -138,7 +139,9 @@ def run_gpu_grid(
                 torch.clamp(best, max=UNMATCHED_PENALTY_DEG),
                 UNMATCHED_PENALTY_DEG,
             )
-        scores[lo:hi] = score.cpu().numpy()
+        scores_device[lo:hi] = score
+    torch.cuda.synchronize(device)
+    scores = scores_device.cpu().numpy()
     torch.cuda.synchronize(device)
     elapsed_ms = (time.perf_counter() - started) * 1000.0
     return scores, elapsed_ms
