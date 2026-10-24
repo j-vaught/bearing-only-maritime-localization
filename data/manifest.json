@@ -1,5 +1,5 @@
 {
-  "experiment": "B1-B5 Chesapeake AIS plus NOAA ENC aid input bundle",
+  "experiment": "Chesapeake B1-B5 pilot and Eastern Seaboard GPU scaling inputs",
   "snapshot_utc": "2023-07-15T12:00:00Z",
   "region_wgs84": {
     "longitude_min": -76.8,
@@ -51,6 +51,27 @@
       "path": "data/sites/b1-b5.csv",
       "sha256": "19766d582314e8263ce7613200b02606a243d5ef5c39b582cbc8ae4534f4f61b",
       "bytes": 161
+    },
+    "eastern-seaboard_2023-07-15T1200Z.csv": {
+      "path": "data/ais/eastern-seaboard_2023-07-15T1200Z.csv",
+      "sha256": "8fb341c12f8f4f4351669223bd12442e9ee5c3ec096218aa3a73b1bcc3cf65d1",
+      "bytes": 130106
+    },
+    "eastern-seaboard_2023-07-15T1200Z.manifest.json": {
+      "path": "data/ais/eastern-seaboard_2023-07-15T1200Z.manifest.json",
+      "sha256": "08a3410afc1c2f4925e31778e98d2198987afcb1652088e1263efd58d53857f8",
+      "bytes": 799
     }
+  },
+  "eastern_seaboard_snapshot": {
+    "timestamp_utc": "2023-07-15T12:00Z",
+    "bounding_box_wgs84": {
+      "min_latitude": 24.5,
+      "max_latitude": 45.5,
+      "min_longitude": -82.0,
+      "max_longitude": -66.0
+    },
+    "unique_ais_positions": 2268,
+    "chart_aids_in_full_region": false
   }
 }
