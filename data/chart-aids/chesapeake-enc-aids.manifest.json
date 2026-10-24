@@ -1,0 +1,23 @@
+{
+  "source": "NOAA Electronic Navigational Chart (ENC) GIS layers",
+  "source_reference": "https://nauticalcharts.noaa.gov/learn/encdirect/",
+  "retrieved_utc": "2026-10-23",
+  "geometry": "Point features only",
+  "object_layer_codes": [7, 9, 17],
+  "object_layer_names": {
+    "7": "Beacon",
+    "9": "Buoy",
+    "17": "Landmark"
+  },
+  "bounding_box_wgs84": {
+    "min_latitude": 36.5,
+    "max_latitude": 39.5,
+    "min_longitude": -76.8,
+    "max_longitude": -75.5
+  },
+  "selection": "Exported ENC point features intersecting the bounding box; retained OBJL 7, 9, and 17.",
+  "deduplication": "Deduplicated exact coordinates rounded to seven decimal places, preserving first source record.",
+  "features_before_deduplication": 427,
+  "features_after_deduplication": 427,
+  "note": "This snapshot records the pilot input bundle and is not a live or navigation-grade chart service response."
+}

@@ -1,0 +1,41 @@
+{
+  "experiment": "B1-B5 Chesapeake AIS plus NOAA ENC aid input bundle",
+  "snapshot_utc": "2023-07-15T12:00:00Z",
+  "region_wgs84": {
+    "longitude_min": -76.8,
+    "longitude_max": -75.5,
+    "latitude_min": 36.5,
+    "latitude_max": 39.5
+  },
+  "sources": [
+    "NOAA Office for Coastal Management Nationwide AIS Broadcast Points",
+    "NOAA Electronic Navigational Charts ENC Direct to GIS"
+  ],
+  "counts": {
+    "ais_vessels": 372,
+    "chart_aids": 427,
+    "observer_sites": 5
+  },
+  "files": {
+    "chesapeake_2023-07-15T1200Z.csv": {
+      "path": "data/ais/chesapeake_2023-07-15T1200Z.csv",
+      "sha256": "e97b2f6701db67c7884942ed080814aaccd4bea1a32319a656fb25c2ca55c682",
+      "bytes": 21102
+    },
+    "chesapeake-enc-aids.csv": {
+      "path": "data/chart-aids/chesapeake-enc-aids.csv",
+      "sha256": "8695f76a76197a72a1209ebdb63f58ef25f1246a27e7079622badc6eeabdb475",
+      "bytes": 35806
+    },
+    "chesapeake-water-mask-500m.npz": {
+      "path": "data/maps/chesapeake-water-mask-500m.npz",
+      "sha256": "319d4f7cbaa6f634bdfc68f6341f2dc498a21c7459869ea93ef21a5401fdf53e",
+      "bytes": 13109
+    },
+    "b1-b5.csv": {
+      "path": "data/sites/b1-b5.csv",
+      "sha256": "19766d582314e8263ce7613200b02606a243d5ef5c39b582cbc8ae4534f4f61b",
+      "bytes": 161
+    }
+  }
+}

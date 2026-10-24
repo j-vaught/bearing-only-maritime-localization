@@ -1,0 +1,19 @@
+{
+  "source": "NOAA Office for Coastal Management, Nationwide AIS Broadcast Points",
+  "source_url": "https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2023/AIS_2023_07_15.zip",
+  "source_csv_member": "AIS_2023_07_15.csv",
+  "time_start_utc": "2023-07-15T12:00:00Z",
+  "time_end_utc_exclusive": "2023-07-15T12:01:00Z",
+  "selection": "For each MMSI in the area and time window, retain the report nearest the window midpoint.",
+  "bounding_box_wgs84": {
+    "min_latitude": 36.5,
+    "max_latitude": 39.5,
+    "min_longitude": -76.8,
+    "max_longitude": -75.5
+  },
+  "source_rows_scanned": 10068463,
+  "rows_in_time_and_area": 373,
+  "unique_vessels_selected": 372,
+  "mmsi_and_vessel_names_in_output": false,
+  "output_rows_are_ais_vessels_only": true
+}
