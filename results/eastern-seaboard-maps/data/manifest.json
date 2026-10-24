@@ -1,0 +1,38 @@
+{
+  "ais_source": "data/ais/eastern-seaboard_2023-07-15T1200Z.csv",
+  "ais_window_utc": "2023-07-15T12:00:00Z to 12:01:00Z",
+  "chart_aid_source": "data/chart-aids/eastern-seaboard-enc-aids.csv",
+  "chart_aid_deduplication": "feature family and coordinates rounded to five decimal degrees; prefer largest ENC scale band",
+  "site_source": "data/sites/b1-b5.csv",
+  "basemap_source": "https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_land.zip",
+  "basemap_citation": "Natural Earth 5.1.1, 1:10m land vectors, public domain",
+  "basemap_scale_note": "Open vector land/water context; not a street-level OpenStreetMap rendering.",
+  "counts": {
+    "AIS / Sailing": 192,
+    "AIS / Service / special craft": 99,
+    "AIS / Unknown / other": 212,
+    "AIS / Cargo": 155,
+    "AIS / Tanker": 39,
+    "AIS / Pleasure craft": 745,
+    "AIS / Special operations": 27,
+    "AIS / Passenger": 213,
+    "AIS / Towing": 384,
+    "AIS / Fishing": 194,
+    "AIS / High-speed craft": 8,
+    "Aid / Beacon": 15561,
+    "Aid / Buoy": 10705,
+    "Aid / Daymark": 11811,
+    "Aid / Fog": 577,
+    "Aid / Light": 9420,
+    "Aid / Radar": 30,
+    "Aid / Radio": 200,
+    "Aid / Retro": 2970,
+    "Aid / Topmark": 125,
+    "AIS total": 2268,
+    "chart aids deduplicated total": 51399
+  },
+  "land_polygon_vertices": {
+    "east_coast": 6010,
+    "chesapeake": 1382
+  }
+}
