@@ -86,6 +86,8 @@ The next figure zooms in on B1 and B5 for the first paired 10 km trial. Each pan
 
 The vessel layout and chart features are real, while the observer bearings are simulated. The 500 m land/water mask was classified from a rendered electronic chart and is approximate. Raw AIS rows and map imagery are not included in the repository.
 
+A follow-up adds known NOAA chart-aid coordinates to the search catalog while keeping the same simulated bearings. Hierarchical search then reached a 51.8 m median error with 9/15 successes. A 250 m exhaustive grid reached 81 m at B1 and 65 m at B5, but took about 43 seconds per search. The per-seed results and assumptions are in [`results/ais-b1-b5-pilot-v1/with-chart-aids/`](results/ais-b1-b5-pilot-v1/with-chart-aids/).
+
 ## Next validation stage
 
 Historical AIS broadcasts can provide realistic vessel layouts for selected dates and coastal regions. A first Chesapeake pilot has now been extracted from NOAA's July 15, 2023 daily archive. It contains 372 unique AIS vessels in a one-minute UTC window and demonstrates the bounded extraction workflow in [`tools/extract_ais_snapshot.py`](tools/extract_ais_snapshot.py). The full national archive and the extracted vessel records remain outside this repository while data-sharing terms are reviewed. The processing details and next steps are in [`docs/experiment-design.md`](docs/experiment-design.md).

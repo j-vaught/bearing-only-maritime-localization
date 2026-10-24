@@ -1,0 +1,35 @@
+{
+  "experiment": "B1-B5 search with known ENC chart-aid coordinates",
+  "parent_experiment": "../config.json",
+  "ais_snapshot": "NOAA 2023-07-15 12:00-12:01 UTC, 372 vessels",
+  "chart_aid_source": "NOAA ENC layers OBJL 7, 9, and 17",
+  "chart_aid_count": 427,
+  "catalog": "AIS vessel records plus typed ENC aid records",
+  "measurement_model": {
+    "visibility_range_km": 10,
+    "bearing_noise_sigma_deg": 0.5,
+    "angular_resolution_deg": 0.1,
+    "global_bearings": true,
+    "type_labels": true,
+    "land_occlusion": true,
+    "water_mask_cell_size_m": 500
+  },
+  "search_region_lon_lat": [-76.8, -75.5, 36.5, 39.5],
+  "main_algorithms": [
+    "1 km grid",
+    "500-iteration randomized hypotheses",
+    "1 km hierarchical grid with four refinement levels and beam width 8"
+  ],
+  "high_resolution_comparison": {
+    "algorithm": "full-region exhaustive grid",
+    "spacing_m": 250,
+    "sites": ["B1", "B5"],
+    "replicates": 1
+  },
+  "paired_seed_base": 20262023,
+  "replicates_per_site": 3,
+  "success_criterion": "position error <= 250 m and at least 3 correct AIS associations",
+  "association_reporting": "Known chart-aid matches are counted separately; success association counts include AIS matches only.",
+  "timing_scope": "CPU search stage only",
+  "raw_data_policy": "Raw AIS rows, ENC point coordinates, and rendered map imagery are not included."
+}

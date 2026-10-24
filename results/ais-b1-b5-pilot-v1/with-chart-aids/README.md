@@ -1,0 +1,11 @@
+# Search with NOAA chart-aid coordinates
+
+This follow-up repeats the 10 km simulated observations from the parent pilot, then adds the known NOAA Electronic Navigational Chart aid-to-navigation coordinates to the estimator's candidate object catalog. The candidate catalog contains the same 372 AIS vessel locations and 427 deduplicated chart aids from ENC object layers 7, 9, and 17. Search still receives no observer location, no object ranges, and no identity labels on the observed objects. Type labels, when enabled, distinguish broad `vessel` and `aid` classes.
+
+`trials.csv` contains three paired seeds at each of B1 through B5 for the 1 km grid, 500-hypothesis randomized search, and 1 km coarse-to-fine hierarchical search. `high-resolution-grid.csv` contains one paired seed each at B1 and B5 for a full-area 250 m grid. `summary.csv` and `overall-summary.csv` report per-site and aggregate results. Correct association counts in these files refer only to true AIS matches; chart-aid matches are reported separately because the original success metric requires three correct AIS associations.
+
+With chart-aid coordinates available, hierarchical search had 9 successes in 15 cases and 51.8 m median error. By site its median errors were 121 m at B1, 49 m at B2, 3,385 m at B3, 14 m at B4, and 60 m at B5. B4 does not satisfy the original success rule despite its close position estimate because only one AIS-bearing object was visible. The 1 km grid's median error was 757 m and it had no successes; randomized search had 92.3 km median error and no successes.
+
+The 250 m full-region grid reached 81 m error at B1 and 65 m at B5, and both met the original success rule. Each search took about 43 seconds on this CPU run, compared with roughly 2.0–2.2 seconds for hierarchical search at 1 km coarse spacing. This is the same exhaustive grid family at finer spacing, not a new algorithm family. Grid positions can be scored independently, so this slower approach is a strong candidate for later GPU batching; the current measurements are CPU-only.
+
+All bearings remain simulated from the same AIS and chart-feature layout. The chart aids are known to the estimator only in this follow-up. The experiment demonstrates the value of having chart coordinates; it does not establish performance with real sensor bearings or a production chart pipeline.
