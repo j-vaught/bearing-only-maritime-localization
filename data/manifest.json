@@ -19,18 +19,33 @@
   "files": {
     "chesapeake_2023-07-15T1200Z.csv": {
       "path": "data/ais/chesapeake_2023-07-15T1200Z.csv",
-      "sha256": "e97b2f6701db67c7884942ed080814aaccd4bea1a32319a656fb25c2ca55c682",
-      "bytes": 21102
+      "sha256": "acb3202809fdaa8bdf424e2f6a9420a04e2e63f0c3cf1bd1505803363674a1f8",
+      "bytes": 21474
+    },
+    "chesapeake_2023-07-15T1200Z.manifest.json": {
+      "path": "data/ais/chesapeake_2023-07-15T1200Z.manifest.json",
+      "sha256": "0c5832d98c991ed728e9fccb492f47cdfc81082844a0591768ca0814d1272adf",
+      "bytes": 755
     },
     "chesapeake-enc-aids.csv": {
       "path": "data/chart-aids/chesapeake-enc-aids.csv",
       "sha256": "8695f76a76197a72a1209ebdb63f58ef25f1246a27e7079622badc6eeabdb475",
       "bytes": 35806
     },
+    "chesapeake-enc-aids.manifest.json": {
+      "path": "data/chart-aids/chesapeake-enc-aids.manifest.json",
+      "sha256": "3bc9363543ad2a1e35a0a7a40974ef5d861ebccff4be6d3af65c2cfe41502cd8",
+      "bytes": 898
+    },
     "chesapeake-water-mask-500m.npz": {
       "path": "data/maps/chesapeake-water-mask-500m.npz",
       "sha256": "319d4f7cbaa6f634bdfc68f6341f2dc498a21c7459869ea93ef21a5401fdf53e",
       "bytes": 13109
+    },
+    "chesapeake-water-mask-500m.json": {
+      "path": "data/maps/chesapeake-water-mask-500m.json",
+      "sha256": "b8492259eacfaf311392d6d1c0779d664d882f54fe9bc2ba243bf47ee0bbe76a",
+      "bytes": 575
     },
     "b1-b5.csv": {
       "path": "data/sites/b1-b5.csv",
