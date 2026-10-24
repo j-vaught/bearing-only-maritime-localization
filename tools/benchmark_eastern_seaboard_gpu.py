@@ -14,12 +14,14 @@ import csv
 import math
 import platform
 import runpy
+import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 MIN_LAT, MAX_LAT = 24.5, 45.5
 MIN_LON, MAX_LON = -82.0, -66.0
 R_EARTH_M = 6_371_008.8
