@@ -100,9 +100,17 @@ The [zoomable PDF](docs/figures/pairwise-search-comparison.pdf), [Typst source](
 
 On `comech-2080`, a GPU benchmark evaluated many independent candidate-to-object bearing scores. For 32,768 candidates, 800 catalog objects, and 10 observations, the RTX 6000 Ada took 10.8–17.5 ms end to end, versus 2.1–2.35 s for a chunked NumPy baseline. CPU and GPU selected the same best candidate in all 12 tested cases, with maximum score differences below 0.0004°. This isolates score evaluation; it does not include hypothesis generation, map visibility, or full search orchestration, so it does not demonstrate 10 FPS end to end. The script and raw results are in [`results/ais-b1-b5-pilot-v2-pairwise/gpu-benchmark.md`](results/ais-b1-b5-pilot-v2-pairwise/gpu-benchmark.md).
 
+### Eastern Seaboard scale
+
+The next run used 2,268 AIS positions from the same July 2023 minute across a Florida-to-Maine bounding box, plus 427 Chesapeake chart aids and 23 simulated B1 reports. Exhaustive scoring took 163 ms for 33,901 candidates at 10 km grid spacing and 18.3 s for 3.38 million candidates at 1 km spacing. Even the 10 km grid exceeded the 100 ms update budget. The chart aids and water mask still cover only Chesapeake, and this timing excludes water filtering, land ray checks, one-to-one assignment, and pairwise hypothesis generation. It measures coast-wide GPU candidate scoring, not a complete whole-coast localization run.
+
+![GPU score time as the coast-wide candidate grid gets denser.](docs/figures/eastern-seaboard-gpu-scaling.png)
+
+The [scaling results and configuration](results/eastern-seaboard-gpu/) include repeated timings and exact counts. The complete one-minute AIS snapshot is committed under [`data/ais/`](data/ais/), and the run is reproducible with [`tools/benchmark_eastern_seaboard_gpu.py`](tools/benchmark_eastern_seaboard_gpu.py).
+
 ## Next validation stage
 
-Historical AIS broadcasts can provide realistic vessel layouts for selected dates and coastal regions. The Chesapeake pilot extracts 372 unique AIS vessels from NOAA's July 15, 2023 daily archive in a one-minute UTC window. The selected rows and processing metadata are committed under [`data/ais/`](data/ais/); the full national archive remains external. The extraction workflow is in [`tools/extract_ais_snapshot.py`](tools/extract_ais_snapshot.py), and processing details are in [`docs/experiment-design.md`](docs/experiment-design.md).
+Historical AIS broadcasts can provide realistic vessel layouts for selected dates and coastal regions. The committed one-minute samples contain 372 Chesapeake vessels and 2,268 AIS positions across the Eastern Seaboard from NOAA's July 15, 2023 daily archive; the full national archive remains external. The selected rows and processing metadata are under [`data/ais/`](data/ais/). The extraction workflow is in [`tools/extract_ais_snapshot.py`](tools/extract_ais_snapshot.py), and processing details are in [`docs/experiment-design.md`](docs/experiment-design.md).
 
 This pilot supplies a real vessel layout and NOAA ENC chart-aid coordinates, but it is not a real visual-observation dataset. The current experiment projects the positions into a local metric frame, uses fixed water-only B1–B5 observer locations, and generates synthetic global-bearing observations. Broader spatial coverage, a higher-resolution authoritative shoreline mask, and measured visual detections remain future validation stages.
 

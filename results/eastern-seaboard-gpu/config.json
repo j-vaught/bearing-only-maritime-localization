@@ -1,0 +1,62 @@
+{
+  "benchmark_date": "2026-10-24",
+  "hardware": {
+    "host": "comech-2080",
+    "gpu": "NVIDIA RTX 6000 Ada Generation",
+    "visible_physical_gpu": 3,
+    "gpu_is_shared": true
+  },
+  "region": {
+    "min_latitude_deg": 24.5,
+    "max_latitude_deg": 45.5,
+    "min_longitude_deg": -82.0,
+    "max_longitude_deg": -66.0,
+    "candidate_domain": "rectangular; land cells are included"
+  },
+  "ais": {
+    "snapshot_start_utc": "2023-07-15T12:00:00Z",
+    "snapshot_duration_seconds": 60,
+    "unique_vessels": 2268,
+    "source_rows_scanned": 10068463
+  },
+  "catalog": {
+    "ais_positions": 2268,
+    "enc_chart_aids": 427,
+    "enc_chart_aid_coverage": "Chesapeake pilot area only",
+    "total_objects": 2695
+  },
+  "reports": {
+    "source": "Seeded B1 synthetic simulator trial",
+    "seed": 20262023,
+    "report_count": 23,
+    "bearing_reference": "global, clockwise from north",
+    "visibility_range_m": 10000,
+    "type_labels": true
+  },
+  "scoring": {
+    "bearing_model": "spherical initial bearing and haversine range",
+    "range_gate_m": 10000,
+    "unmatched_penalty_deg": 12,
+    "candidate_batch_size": 512,
+    "repeats_per_grid": 3,
+    "catalog_resident_on_gpu_between_runs": true,
+    "timed_operations": [
+      "candidate grid upload",
+      "candidate-to-catalog bearing and range scoring",
+      "GPU synchronization",
+      "score vector copy to host"
+    ],
+    "excluded_operations": [
+      "candidate grid generation",
+      "land/water masking",
+      "line-of-sight ray checks",
+      "pairwise hypothesis generation",
+      "one-to-one assignment"
+    ]
+  },
+  "cpu_gpu_validation": {
+    "candidate_sample_size": 128,
+    "best_candidate_agreement": true,
+    "maximum_score_difference_deg": 0.010711669921875
+  }
+}
