@@ -18,9 +18,50 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from maritime_localization_shared.contracts import AISSnapshot, MeasurementSet, PositionEstimate
+from maritime_localization_shared.geospatial.spatial_index import SpatialIndex2D
 
 from ..algorithms import SearchResult, associate, wrap_deg
 from .association import compatible_types
+
+
+def _spread_sources(
+    source_indices: np.ndarray,
+    points: np.ndarray,
+    bounds: tuple[float, float, float, float],
+    limit: int,
+) -> np.ndarray:
+    """Choose a stable sample spread across the search rectangle."""
+    if len(source_indices) <= limit:
+        return source_indices
+    xmin, xmax, ymin, ymax = bounds
+    aspect = (xmax - xmin) / (ymax - ymin)
+    grid_x = max(1, int(np.sqrt(limit * aspect)))
+    grid_y = max(1, int(np.ceil(limit / grid_x)))
+    coordinates = points[source_indices]
+    cell_x = np.clip(
+        ((coordinates[:, 0] - xmin) / (xmax - xmin) * grid_x).astype(int), 0, grid_x - 1
+    )
+    cell_y = np.clip(
+        ((coordinates[:, 1] - ymin) / (ymax - ymin) * grid_y).astype(int), 0, grid_y - 1
+    )
+    cell_id = cell_x * grid_y + cell_y
+    centers_x = xmin + (cell_x + 0.5) * (xmax - xmin) / grid_x
+    centers_y = ymin + (cell_y + 0.5) * (ymax - ymin) / grid_y
+    center_distance = (coordinates[:, 0] - centers_x) ** 2 + (coordinates[:, 1] - centers_y) ** 2
+    order = np.lexsort((source_indices, center_distance, cell_id))
+    ordered_cells = cell_id[order]
+    first_in_cell = np.concatenate(([True], ordered_cells[1:] != ordered_cells[:-1]))
+    selected = source_indices[order[first_in_cell]]
+    if len(selected) > limit:
+        selected = selected[np.linspace(0, len(selected) - 1, limit, dtype=np.int64)]
+    elif len(selected) < limit:
+        chosen = set(selected.tolist())
+        remaining = np.asarray([index for index in source_indices if index not in chosen])
+        needed = min(limit - len(selected), len(remaining))
+        if needed:
+            fill = remaining[np.linspace(0, len(remaining) - 1, needed, dtype=np.int64)]
+            selected = np.concatenate((selected, fill))
+    return selected
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +77,8 @@ class PairwiseSearchConfig:
     max_hypotheses: int = 20_000
     max_visibility_hypotheses: int = 128
     refine_starts: int = 32
+    max_pair_sources: int = 5_000
+    max_neighbors_per_source: int = 64
 
     def __post_init__(self) -> None:
         if not isfinite(self.sigma_deg) or self.sigma_deg <= 0:
@@ -46,7 +89,16 @@ class PairwiseSearchConfig:
             raise ValueError("visibility_radius_m must be positive.")
         if not isfinite(self.min_crossing_angle_deg) or not 0 <= self.min_crossing_angle_deg < 90:
             raise ValueError("min_crossing_angle_deg must be in [0, 90).")
-        if min(self.max_hypotheses, self.max_visibility_hypotheses, self.refine_starts) < 1:
+        if (
+            min(
+                self.max_hypotheses,
+                self.max_visibility_hypotheses,
+                self.refine_starts,
+                self.max_pair_sources,
+                self.max_neighbors_per_source,
+            )
+            < 1
+        ):
             raise ValueError("Hypothesis limits and refine_starts must be positive.")
 
 
@@ -117,16 +169,20 @@ def pairwise_hypothesis_search(
         )
         eligible.append(np.flatnonzero(possible))
 
-    # Build a spatially pruned, vectorized list of target pairs. If both targets
-    # are within range of a common observer, their separation cannot exceed
-    # twice the visibility radius.
-    upper_i, upper_j = np.triu_indices(len(points), 1)
+    # A finite sensor range bounds the separation of two targets that can share
+    # an observer position. Use a spatial index so the algorithm never allocates
+    # the full O(N^2) catalog pair matrix for a coast-wide catalog.
     if isfinite(cfg.visibility_radius_m):
-        close = (
-            np.sum((points[upper_i] - points[upper_j]) ** 2, axis=1)
-            <= (2.0 * cfg.visibility_radius_m) ** 2
-        )
-        upper_i, upper_j = upper_i[close], upper_j[close]
+        target_index = SpatialIndex2D(points, cell_size_m=max(cfg.visibility_radius_m, 1.0))
+        pair_radius_m = 2.0 * cfg.visibility_radius_m
+    else:
+        if len(points) > 5_000:
+            raise ValueError(
+                "Pairwise search on more than 5,000 catalog objects requires a finite "
+                "visibility_radius_m to prune target pairs."
+            )
+        target_index = None
+        pair_radius_m = float("inf")
 
     observation_pairs = list(combinations(range(len(obs)), 2))
     pair_quota = max(1, cfg.max_hypotheses // len(observation_pairs))
@@ -144,16 +200,47 @@ def pairwise_hypothesis_search(
         determinant = u_i[1] * u_j[0] - u_i[0] * u_j[1]
         if abs(determinant) < minimum_sine:
             continue
-        allowed_i = np.zeros(len(points), dtype=bool)
         allowed_j = np.zeros(len(points), dtype=bool)
-        allowed_i[eligible[obs_i]] = True
         allowed_j[eligible[obs_j]] = True
-        order_ij = allowed_i[upper_i] & allowed_j[upper_j]
-        order_ji = allowed_i[upper_j] & allowed_j[upper_i]
-        if not np.any(order_ij) and not np.any(order_ji):
+        source_indices = eligible[obs_i]
+        if len(source_indices) > cfg.max_pair_sources:
+            source_indices = _spread_sources(
+                source_indices, points, (xmin, xmax, ymin, ymax), cfg.max_pair_sources
+            )
+        pair_i_parts: list[np.ndarray] = []
+        pair_j_parts: list[np.ndarray] = []
+        for ais_i in source_indices:
+            if target_index is None:
+                nearby = np.arange(len(points), dtype=np.int64)
+            else:
+                nearby = np.asarray(
+                    target_index.query_radius(
+                        float(points[ais_i, 0]), float(points[ais_i, 1]), pair_radius_m
+                    ),
+                    dtype=np.int64,
+                )
+            neighbors = nearby[allowed_j[nearby] & (nearby != ais_i)]
+            if len(neighbors) > cfg.max_neighbors_per_source:
+                offsets = points[neighbors] - points[ais_i]
+                angles = np.arctan2(offsets[:, 0], offsets[:, 1])
+                distance_squared = np.einsum("ij,ij->i", offsets, offsets)
+                neighbor_order = np.lexsort((neighbors, distance_squared, angles))
+                neighbors = neighbors[neighbor_order]
+                neighbors = neighbors[
+                    np.linspace(
+                        0,
+                        len(neighbors) - 1,
+                        cfg.max_neighbors_per_source,
+                        dtype=np.int64,
+                    )
+                ]
+            if len(neighbors):
+                pair_i_parts.append(np.full(len(neighbors), ais_i, dtype=np.int64))
+                pair_j_parts.append(neighbors)
+        if not pair_i_parts:
             continue
-        ais_i = np.concatenate((upper_i[order_ij], upper_j[order_ji]))
-        ais_j = np.concatenate((upper_j[order_ij], upper_i[order_ji]))
+        ais_i = np.concatenate(pair_i_parts)
+        ais_j = np.concatenate(pair_j_parts)
         delta = points[ais_i] - points[ais_j]
         range_i = (-delta[:, 0] * u_j[1] + u_j[0] * delta[:, 1]) / determinant
         range_j = (u_i[0] * delta[:, 1] - delta[:, 0] * u_i[1]) / determinant
@@ -347,6 +434,8 @@ def run_pairwise_search(
         max_hypotheses=cfg.max_hypotheses,
         max_visibility_hypotheses=cfg.max_visibility_hypotheses,
         refine_starts=cfg.refine_starts,
+        max_pair_sources=cfg.max_pair_sources,
+        max_neighbors_per_source=cfg.max_neighbors_per_source,
     )
     water_predicate = visibility.is_water if visibility is not None else None
     los_predicate = None

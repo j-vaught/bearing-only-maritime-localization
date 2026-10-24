@@ -64,6 +64,29 @@ def test_pairwise_search_recovers_exact_position_and_matches() -> None:
     }
 
 
+def test_pairwise_search_prunes_large_catalog_before_building_target_pairs() -> None:
+    measurements, ais = _fixture()
+    distractors = tuple(
+        AISRecord(f"far-{index}", 50_000.0 + index * 10.0, 60_000.0, "ship")
+        for index in range(6_000)
+    )
+    large_catalog = AISSnapshot(
+        records=ais.records + distractors,
+        timestamp_utc=ais.timestamp_utc,
+        crs=ais.crs,
+        snapshot_id="large-pairwise-catalog",
+    )
+
+    estimate = run_pairwise_search(
+        measurements,
+        large_catalog,
+        (-500.0, 500.0, -500.0, 500.0),
+        PairwiseSearchConfig(visibility_radius_m=10_000.0, max_hypotheses=1_000),
+    )
+
+    assert np.hypot(estimate.east_m - 120.0, estimate.north_m + 80.0) < 1e-5
+
+
 def test_pairwise_search_respects_types_or_can_disable_them() -> None:
     measurements, ais = _fixture()
     wrong_types = AISSnapshot(

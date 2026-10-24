@@ -1,0 +1,145 @@
+{
+  "source": "NOAA ENC Direct to GIS",
+  "source_info_url": "https://www.nauticalcharts.noaa.gov/learn/encdirect/",
+  "retrieved_utc": "2026-10-24T15:41:47+00:00",
+  "region": "Eastern Seaboard bounding box, Florida Keys to Maine and adjacent waters",
+  "bbox_wgs84": {
+    "west": -82.0,
+    "south": 24.5,
+    "east": -66.0,
+    "north": 45.5
+  },
+  "scale_bands": {
+    "overview": {
+      "service_url": "https://gis.charttools.noaa.gov/arcgis/rest/services/encdirect/enc_overview/MapServer",
+      "feature_layers": 11,
+      "feature_count": 337,
+      "counts_by_layer": {
+        "Beacon_Lateral_point": 4,
+        "Beacon_Special_Purpose_General_point": 71,
+        "Buoy_Lateral_point": 8,
+        "Buoy_Safe_Water_point": 10,
+        "Buoy_Special_Purpose_General_point": 20,
+        "Daymark_point": 6,
+        "Fog_Signal_point": 16,
+        "Light_point": 174,
+        "Radar_Transponder_Beacon_point": 2,
+        "Radio_Station_point": 20,
+        "Topmark_point": 6
+      }
+    },
+    "general": {
+      "service_url": "https://gis.charttools.noaa.gov/arcgis/rest/services/encdirect/enc_general/MapServer",
+      "feature_layers": 13,
+      "feature_count": 1067,
+      "counts_by_layer": {
+        "Beacon_Lateral_point": 9,
+        "Beacon_Special_Purpose_General_point": 81,
+        "Buoy_Cardinal_point": 0,
+        "Buoy_Isolated_Danger_point": 4,
+        "Buoy_Lateral_point": 37,
+        "Buoy_Safe_Water_point": 22,
+        "Buoy_Special_Purpose_General_point": 144,
+        "Daymark_point": 19,
+        "Fog_Signal_point": 120,
+        "Light_point": 552,
+        "Radar_Transponder_Beacon_point": 9,
+        "Radio_Station_point": 49,
+        "Topmark_point": 21
+      }
+    },
+    "coastal": {
+      "service_url": "https://encdirect.noaa.gov/arcgis/rest/services/encdirect/enc_coastal/MapServer",
+      "feature_layers": 15,
+      "feature_count": 2923,
+      "counts_by_layer": {
+        "Beacon_Lateral_point": 102,
+        "Beacon_Safe_Water_point": 1,
+        "Beacon_Special_Purpose_General_point": 186,
+        "Buoy_Isolated_Danger_point": 19,
+        "Buoy_Lateral_point": 532,
+        "Buoy_Safe_Water_point": 75,
+        "Buoy_Special_Purpose_General_point": 244,
+        "Daymark_point": 154,
+        "Fog_Signal_point": 209,
+        "Light_Float_point": 0,
+        "Light_point": 1240,
+        "Radar_Transponder_Beacon_point": 16,
+        "Radio_Station_point": 62,
+        "Retro_Reflector_point": 0,
+        "Topmark_point": 83
+      }
+    },
+    "approach": {
+      "service_url": "https://encdirect.noaa.gov/arcgis/rest/services/encdirect/enc_approach/MapServer",
+      "feature_layers": 18,
+      "feature_count": 11507,
+      "counts_by_layer": {
+        "Beacon_Cardinal_point": 0,
+        "Beacon_Isolated_Danger_point": 0,
+        "Beacon_Lateral_point": 3354,
+        "Beacon_Safe_Water_point": 4,
+        "Beacon_Special_Purpose_General_point": 1185,
+        "Buoy_Cardinal_point": 0,
+        "Buoy_Isolated_Danger_point": 0,
+        "Buoy_Lateral_point": 734,
+        "Buoy_Safe_Water_point": 18,
+        "Buoy_Special_Purpose_General_point": 256,
+        "Daymark_point": 3628,
+        "Fog_Signal_point": 63,
+        "Light_Float_point": 7,
+        "Light_point": 1624,
+        "Radar_Transponder_Beacon_point": 5,
+        "Radio_Station_point": 55,
+        "Retro_Reflector_point": 555,
+        "Topmark_point": 19
+      }
+    },
+    "harbour": {
+      "service_url": "https://encdirect.noaa.gov/arcgis/rest/services/encdirect/enc_harbour/MapServer",
+      "feature_layers": 16,
+      "feature_count": 48515,
+      "counts_by_layer": {
+        "Beacon_Lateral_point": 9923,
+        "Beacon_Safe_Water_point": 1,
+        "Beacon_Special_Purpose_General_point": 4142,
+        "Buoy_Cardinal_point": 7,
+        "Buoy_Isolated_Danger_point": 21,
+        "Buoy_Lateral_point": 9263,
+        "Buoy_Safe_Water_point": 109,
+        "Buoy_Special_Purpose_General_point": 1176,
+        "Daymark_point": 10759,
+        "Fog_Signal_point": 530,
+        "Light_Float_point": 17,
+        "Light_point": 9409,
+        "Radar_Transponder_Beacon_point": 25,
+        "Radio_Station_point": 187,
+        "Retro_Reflector_point": 2838,
+        "Topmark_point": 108
+      }
+    },
+    "berthing": {
+      "service_url": "https://encdirect.noaa.gov/arcgis/rest/services/encdirect/enc_berthing/MapServer",
+      "feature_layers": 7,
+      "feature_count": 51,
+      "counts_by_layer": {
+        "Beacon_Lateral_point": 8,
+        "Beacon_Special_Purpose_General_point": 3,
+        "Buoy_Lateral_point": 10,
+        "Daymark_point": 8,
+        "Fog_Signal_point": 0,
+        "Light_point": 22,
+        "Retro_Reflector_point": 0
+      }
+    }
+  },
+  "feature_count_rows_including_cross_scale_repeats": 64400,
+  "file": "data/chart-aids/eastern-seaboard-enc-aids.csv",
+  "sha256": "674c5fe1bffd06dd3ff9001f8eec6ebd06500565de125efb24f48f5b8ca4ffff",
+  "notes": [
+    "All features are point aids in the NOAA ENC AidsToNavigationP group.",
+    "Cross-scale duplicate aids are retained with source scale-band metadata.",
+    "Coordinates and chart attributes reflect the live NOAA ENC Direct GIS services at retrieval time.",
+    "ENC Direct to GIS is a research GIS extract and is not certified for navigation."
+  ]
+}
