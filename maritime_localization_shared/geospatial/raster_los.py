@@ -6,10 +6,11 @@ from collections.abc import Sequence
 from math import floor, isfinite
 
 from maritime_localization_shared.contracts.map_input import MapInput
+from maritime_localization_shared.geospatial.water_mask import WaterMask
 
 
 def raster_line_of_sight(
-    map_input: MapInput,
+    map_input: MapInput | WaterMask,
     start_xy_m: tuple[float, float],
     end_xy_m: tuple[float, float],
     *,
@@ -61,8 +62,13 @@ def raster_line_of_sight(
             return True
         if nodata_mask is not None and nodata_mask[cell_y][cell_x]:
             return True
+        valid = getattr(map_input, "valid", None)
+        if valid is not None and not valid[cell_y][cell_x]:
+            return True
         is_endpoint_cell = (cell_x, cell_y) in endpoint_cells
-        return not is_endpoint_cell and not map_input.water_mask[cell_y][cell_x]
+        if is_endpoint_cell:
+            return False
+        return not map_input.water_mask[cell_y][cell_x]
 
     if blocked(ix, iy) or blocked(end_ix, end_iy):
         return False

@@ -144,3 +144,55 @@ def test_invalid_refinement_configuration_is_rejected(config: _InvalidSearchConf
             refinement_factor=config.refinement_factor,
             beam_width=config.beam_width,
         )
+
+
+def test_missing_penalty_counts_unreported_visible_targets() -> None:
+    from bearing_localization.algorithms import associate
+
+    score, matches = associate(
+        np.asarray([0.0, 0.0]),
+        [],
+        np.asarray([[0.0, 100.0], [100.0, 0.0]]),
+        ["aid", "vessel"],
+        sigma_deg=0.5,
+        unmatched_penalty_deg=12.0,
+        penalize_missing_ais=True,
+    )
+
+    assert score == pytest.approx(48.0)
+    assert matches == ()
+
+
+def test_missing_penalty_respects_angularly_merged_catalog_targets() -> None:
+    observations = [("aid", 0.0)]
+    ais_xy = np.asarray([[0.0, 100.0], [0.05, 100.0]])
+    ais_types = ["aid", "aid"]
+    bounds = (0.0, 1.0, 0.0, 1.0)
+
+    unmerged = hierarchical_search(
+        observations,
+        ais_xy,
+        ais_types,
+        bounds,
+        sigma_deg=0.5,
+        coarse_spacing_m=10.0,
+        refinement_levels=0,
+        visibility_radius_m=1_000.0,
+        penalize_missing_ais=True,
+    )
+    merged = hierarchical_search(
+        observations,
+        ais_xy,
+        ais_types,
+        bounds,
+        sigma_deg=0.5,
+        coarse_spacing_m=10.0,
+        refinement_levels=0,
+        visibility_radius_m=1_000.0,
+        penalize_missing_ais=True,
+        angular_resolution_deg=0.1,
+    )
+
+    assert unmerged.score_sigma > 20.0
+    assert merged.score_sigma < 1.0
+    assert merged.matches == ((0, 0),)

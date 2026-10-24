@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from bearing_localization.geospatial.raster_los import raster_line_of_sight
 from maritime_localization_shared.contracts.map_input import MapInput
+from maritime_localization_shared.geospatial.water_mask import WaterMask
 
 
 def make_map(mask: tuple[tuple[bool, ...], ...]) -> MapInput:
@@ -88,3 +90,26 @@ def test_endpoint_on_east_or_north_edge_is_outside() -> None:
 
     assert not raster_line_of_sight(grid, (0.5, 0.5), (2.0, 1.5))
     assert not raster_line_of_sight(grid, (0.5, 0.5), (1.5, 2.0))
+
+
+def test_water_mask_can_back_raster_ray_traversal() -> None:
+    mask = WaterMask(
+        water=np.asarray([[True, False, True]], dtype=bool),
+        west_m=0.0,
+        south_m=0.0,
+        cell_size_m=1.0,
+    )
+
+    assert not raster_line_of_sight(mask, (0.5, 0.5), (2.5, 0.5))
+
+
+def test_invalid_water_mask_endpoint_is_not_visible() -> None:
+    mask = WaterMask(
+        water=np.asarray([[True, True]], dtype=bool),
+        west_m=0.0,
+        south_m=0.0,
+        cell_size_m=1.0,
+        valid=np.asarray([[False, True]], dtype=bool),
+    )
+
+    assert not raster_line_of_sight(mask, (0.5, 0.5), (1.5, 0.5))

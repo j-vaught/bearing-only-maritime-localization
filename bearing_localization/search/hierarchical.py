@@ -13,6 +13,12 @@ from time import perf_counter
 
 import numpy as np
 
+from maritime_localization_shared.geometry.angular_grouping import (
+    DetectedObject,
+    group_angular_detections,
+)
+from maritime_localization_shared.geospatial.spatial_index import SpatialIndex2D
+
 from ..algorithms import SearchResult, associate
 
 WaterPredicate = Callable[[float, float], bool]
@@ -33,6 +39,7 @@ def hierarchical_search(
     unmatched_penalty_deg: float = 12.0,
     visibility_radius_m: float = float("inf"),
     penalize_missing_ais: bool = False,
+    angular_resolution_deg: float | None = None,
     water_predicate: WaterPredicate | None = None,
     line_of_sight_predicate: LineOfSightPredicate | None = None,
 ) -> SearchResult:
@@ -64,6 +71,10 @@ def hierarchical_search(
         raise ValueError("refinement_factor must be finite and greater than one.")
     if beam_width < 1:
         raise ValueError("beam_width must be positive.")
+    if angular_resolution_deg is not None and (
+        not np.isfinite(angular_resolution_deg) or not 0.0 <= angular_resolution_deg < 180.0
+    ):
+        raise ValueError("angular_resolution_deg must be finite and in [0, 180).")
 
     xmin, xmax, ymin, ymax = bounds_xy
     if not all(np.isfinite(bounds_xy)) or xmin >= xmax or ymin >= ymax:
@@ -73,6 +84,15 @@ def hierarchical_search(
     xy = np.asarray(ais_xy, dtype=float).reshape((-1, 2))
     if len(ais_type_list) != len(xy):
         raise ValueError("ais_types must have one entry per AIS coordinate.")
+
+    spatial_index = (
+        SpatialIndex2D(
+            [(float(point[0]), float(point[1])) for point in xy],
+            cell_size_m=max(1_000.0, visibility_radius_m),
+        )
+        if np.isfinite(visibility_radius_m) and len(xy)
+        else None
+    )
 
     # Candidate -> score and assignment. Rounding suppresses floating point
     # duplicates when neighboring beam cells generate the same point.
@@ -88,11 +108,10 @@ def hierarchical_search(
             if water_predicate is not None and not water_predicate(x, y):
                 continue
             candidate_indices = np.arange(len(xy))
-            if np.isfinite(visibility_radius_m):
-                offsets = xy - np.asarray([x, y])
-                candidate_indices = candidate_indices[
-                    np.einsum("ij,ij->i", offsets, offsets) <= visibility_radius_m**2
-                ]
+            if spatial_index is not None:
+                candidate_indices = np.asarray(
+                    spatial_index.query_radius(x, y, visibility_radius_m), dtype=int
+                )
             if line_of_sight_predicate is not None and len(candidate_indices):
                 observer_xy = (x, y)
                 candidate_indices = np.asarray(
@@ -106,11 +125,45 @@ def hierarchical_search(
                     ],
                     dtype=int,
                 )
+            candidate_xy = xy[candidate_indices]
+            candidate_types = [ais_type_list[int(index)] for index in candidate_indices]
+            candidate_observations = observation_list
+            if (
+                penalize_missing_ais
+                and angular_resolution_deg is not None
+                and len(candidate_indices)
+            ):
+                delta = candidate_xy - np.asarray([x, y])
+                ranges = np.hypot(delta[:, 0], delta[:, 1])
+                bearings = np.degrees(np.arctan2(delta[:, 0], delta[:, 1]))
+                expected = [
+                    DetectedObject(
+                        object_id=str(int(index)),
+                        object_type=candidate_types[local_index] or "unknown",
+                        bearing_deg=float(bearings[local_index]),
+                        range_m=float(ranges[local_index]),
+                    )
+                    for local_index, index in enumerate(candidate_indices)
+                ]
+                grouped = group_angular_detections(expected, angular_resolution_deg)
+                index_to_local = {
+                    int(index): local for local, index in enumerate(candidate_indices)
+                }
+                representative_local = [
+                    min(
+                        (index_to_local[int(member)] for member in group),
+                        key=lambda local: (float(ranges[local]), int(candidate_indices[local])),
+                    )
+                    for group in grouped.truth_groups
+                ]
+                candidate_indices = candidate_indices[representative_local]
+                candidate_xy = xy[candidate_indices]
+                candidate_types = [ais_type_list[int(index)] for index in candidate_indices]
             score, matches = associate(
                 np.asarray([x, y]),
-                observation_list,
-                xy[candidate_indices],
-                [ais_type_list[int(index)] for index in candidate_indices],
+                candidate_observations,
+                candidate_xy,
+                candidate_types,
                 sigma_deg,
                 unmatched_penalty_deg,
                 use_types,
@@ -138,7 +191,14 @@ def hierarchical_search(
     step = coarse_spacing_m
     for _ in range(refinement_levels):
         step /= refinement_factor
-        leaders = sorted(scored.items(), key=lambda item: item[1][0])[:beam_width]
+        leader_cell_m = max(coarse_spacing_m * 4.0, 50_000.0)
+        leaders = _select_diverse_leaders(
+            scored,
+            beam_width,
+            xmin=xmin,
+            ymin=ymin,
+            cell_size_m=leader_cell_m,
+        )
         next_points: set[tuple[float, float]] = set()
         for (x, y), _ in leaders:
             for dx in (-step, 0.0, step):
@@ -157,6 +217,38 @@ def hierarchical_search(
         elapsed_s=perf_counter() - started,
         evaluations=evaluations,
     )
+
+
+def _select_diverse_leaders(
+    scored: dict[tuple[float, float], tuple[float, tuple[tuple[int, int], ...]]],
+    beam_width: int,
+    *,
+    xmin: float,
+    ymin: float,
+    cell_size_m: float,
+) -> list[tuple[tuple[float, float], tuple[float, tuple[tuple[int, int], ...]]]]:
+    """Retain low-cost seeds across the map before filling remaining beam slots."""
+    ordered = sorted(scored.items(), key=lambda item: (item[1][0], item[0]))
+    global_count = max(1, (beam_width * 3) // 4)
+    leaders = ordered[:global_count]
+    selected = {item[0] for item in leaders}
+    occupied = {
+        (int((x - xmin) // cell_size_m), int((y - ymin) // cell_size_m)) for (x, y), _ in leaders
+    }
+    for item in ordered[global_count:]:
+        x, y = item[0]
+        cell = (int((x - xmin) // cell_size_m), int((y - ymin) // cell_size_m))
+        if item[0] in selected or cell in occupied:
+            continue
+        leaders.append(item)
+        selected.add(item[0])
+        occupied.add(cell)
+        if len(leaders) == beam_width:
+            return leaders
+    if len(leaders) < beam_width:
+        remaining = [item for item in ordered if item[0] not in selected]
+        leaders.extend(remaining[: beam_width - len(leaders)])
+    return leaders
 
 
 __all__ = ["LineOfSightPredicate", "WaterPredicate", "hierarchical_search"]

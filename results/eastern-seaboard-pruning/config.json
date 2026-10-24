@@ -1,0 +1,102 @@
+{
+  "catalog_records": 53684,
+  "catalog_chart_aids_deduplicated": 51416,
+  "ais_timestamp_utc": "2023-07-15T12:00:00Z",
+  "visibility_range_m": 10000.0,
+  "angular_resolution_deg": 0.1,
+  "water_mask_cell_size_m": 500.0,
+  "water_mask_source": "Natural Earth 1:10m coastline polygons rasterized at 500 m",
+  "search": {
+    "algorithm": "water-constrained coarse-to-fine hierarchical search",
+    "coarse_spacing_m": 10000,
+    "refinement_levels": 6,
+    "beam_width": 256,
+    "ray_tracing": "supercover raster traversal through water cells",
+    "complete_report_assumption": "Every in-range catalog angular group with clear land LOS generates a report; extra reports may be unmatched.",
+    "catalog_angular_merging": "same 0.1 degree circular rule as simulator; nearest object represents each group"
+  },
+  "search_bounds_projected_m": [
+    -508212.93003867957,
+    893753.7735162992,
+    -1501133.5831526942,
+    833963.1017514968
+  ],
+  "input_sha256": {
+    "data/ais/eastern-seaboard_2023-07-15T1200Z.csv": "8fb341c12f8f4f4351669223bd12442e9ee5c3ec096218aa3a73b1bcc3cf65d1",
+    "data/chart-aids/eastern-seaboard-enc-aids.csv": "674c5fe1bffd06dd3ff9001f8eec6ebd06500565de125efb24f48f5b8ca4ffff",
+    "data/maps/eastern-seaboard-water-mask-500m.manifest.json": "fbf9872176ef670e044755e2f43c4822514a85faa56fdab41ba4dd9353b19516",
+    "data/maps/eastern-seaboard-water-mask-500m.npz": "e8f99df2f09338a30f3f1aa603b49d31d4a16c2cdca00815582b94976a1a18c4"
+  },
+  "rows": [
+    {
+      "site": "B1",
+      "catalog_records": 53684,
+      "simulated_reports": 138,
+      "catalog_objects_in_range_and_los_before_merge": 276,
+      "expected_catalog_reports_after_merge": 138,
+      "position_error_m": 89.09140203939877,
+      "oracle_window_error_m_diagnostic_only": 44.19417382402803,
+      "success_250m": true,
+      "search_ms": 28401.074627880007,
+      "score": 479.6885358689012,
+      "estimate_east_m": -25087.93003868,
+      "estimate_north_m": 132772.666847306
+    },
+    {
+      "site": "B2",
+      "catalog_records": 53684,
+      "simulated_reports": 10,
+      "catalog_objects_in_range_and_los_before_merge": 16,
+      "expected_catalog_reports_after_merge": 10,
+      "position_error_m": 60.62299002251468,
+      "oracle_window_error_m_diagnostic_only": 44.19417382449621,
+      "success_250m": true,
+      "search_ms": 3881.297556683421,
+      "score": 17.2448593744802,
+      "estimate_east_m": -18837.93003868,
+      "estimate_north_m": 48553.916847306
+    },
+    {
+      "site": "B3",
+      "catalog_records": 53684,
+      "simulated_reports": 38,
+      "catalog_objects_in_range_and_los_before_merge": 81,
+      "expected_catalog_reports_after_merge": 38,
+      "position_error_m": 49.14959404425815,
+      "oracle_window_error_m_diagnostic_only": 128.84705080056733,
+      "success_250m": true,
+      "search_ms": 11171.025029849261,
+      "score": 94.86500069278424,
+      "estimate_east_m": -21494.18003868,
+      "estimate_north_m": 12928.916847306
+    },
+    {
+      "site": "B4",
+      "catalog_records": 53684,
+      "simulated_reports": 20,
+      "catalog_objects_in_range_and_los_before_merge": 44,
+      "expected_catalog_reports_after_merge": 20,
+      "position_error_m": 169173.3982473089,
+      "oracle_window_error_m_diagnostic_only": 44.19417382384024,
+      "success_250m": false,
+      "search_ms": 7193.1537496857345,
+      "score": 259.2104196536141,
+      "estimate_east_m": 2724.56996132,
+      "estimate_north_m": 113553.916847306
+    },
+    {
+      "site": "B5",
+      "catalog_records": 53684,
+      "simulated_reports": 15,
+      "catalog_objects_in_range_and_los_before_merge": 27,
+      "expected_catalog_reports_after_merge": 15,
+      "position_error_m": 854667.8188251114,
+      "oracle_window_error_m_diagnostic_only": 44.19417382426726,
+      "success_250m": false,
+      "search_ms": 5230.548839084804,
+      "score": 235.46997790560863,
+      "estimate_east_m": -441025.43003868,
+      "estimate_north_m": -850508.583152694
+    }
+  ]
+}

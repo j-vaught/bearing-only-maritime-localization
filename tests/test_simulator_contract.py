@@ -6,7 +6,6 @@ import json
 from dataclasses import fields
 
 import numpy as np
-from bearing_localization.simulator.runner import run_simulator
 
 from bearing_localization.scene import (
     Scene,
@@ -14,6 +13,7 @@ from bearing_localization.scene import (
     ShipPose,
     generate_scene,
 )
+from bearing_localization.simulator.runner import run_simulator
 from maritime_localization_shared.contracts import EvaluationTruth, MeasurementSet
 from maritime_localization_shared.serialization import read_contract
 

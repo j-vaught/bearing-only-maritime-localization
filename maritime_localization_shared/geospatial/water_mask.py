@@ -79,6 +79,11 @@ class WaterMask:
         object.__setattr__(self, "valid", valid_copy)
 
     @property
+    def water_mask(self) -> NDArray[np.bool_]:
+        """Boolean raster values; use ``valid`` to identify unknown cells."""
+        return self.water
+
+    @property
     def width_cells(self) -> int:
         """Number of columns in the raster."""
 

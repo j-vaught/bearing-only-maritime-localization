@@ -50,6 +50,7 @@ class HierarchicalSearchConfig:
     visibility_radius_m: float = float("inf")
     use_types: bool = True
     penalize_missing_ais: bool = False
+    angular_resolution_deg: float | None = None
 
 
 def run_hierarchical_search(
@@ -110,6 +111,7 @@ def run_hierarchical_search(
         unmatched_penalty_deg=config.unmatched_penalty_deg,
         visibility_radius_m=config.visibility_radius_m,
         penalize_missing_ais=config.penalize_missing_ais,
+        angular_resolution_deg=config.angular_resolution_deg,
         water_predicate=water_predicate,
         line_of_sight_predicate=line_of_sight_predicate,
     )

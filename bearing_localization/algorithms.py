@@ -57,12 +57,15 @@ def associate(
     xy = np.asarray(ais_xy, dtype=float).reshape((-1, 2))
     if len(ais_types) != len(xy):
         raise ValueError("ais_types must have one entry per AIS coordinate.")
-    if xy.size == 0 or not observations:
+    if xy.size == 0:
         return float(len(observations) * unmatched_penalty_deg / sigma_deg), ()
     distance = np.linalg.norm(xy - np.asarray(position, dtype=float)[None, :], axis=1)
     candidate_indices = np.flatnonzero(distance <= visibility_radius_m)
     if not len(candidate_indices):
         return float(len(observations) * unmatched_penalty_deg / sigma_deg), ()
+    if not observations:
+        missing = len(candidate_indices) if penalize_missing_ais else 0
+        return float(missing * unmatched_penalty_deg / sigma_deg), ()
     xy = xy[candidate_indices]
     candidate_types = [ais_types[i] for i in candidate_indices]
     obs_b = np.asarray([o[1] for o in observations], dtype=float)

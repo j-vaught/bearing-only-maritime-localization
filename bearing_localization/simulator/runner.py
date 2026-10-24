@@ -28,6 +28,7 @@ from maritime_localization_shared.geospatial import (
     line_of_sight_clear,
     raster_line_of_sight,
 )
+from maritime_localization_shared.geospatial.water_mask import WaterMask
 from maritime_localization_shared.serialization import write_contract
 
 
@@ -48,7 +49,7 @@ def run_simulator(
     trial_id: str | None = None,
     timestamp_utc: str | None = None,
     angular_resolution_deg: float = 0.0,
-    map_input: MapInput | None = None,
+    map_input: MapInput | WaterMask | None = None,
     land_polygons: Iterable[LandPolygon] = (),
     measurements_path: str | Path | None = None,
     truth_path: str | Path | None = None,
@@ -189,13 +190,14 @@ def run_simulator(
     return result
 
 
-def _is_water(map_input: MapInput, point: tuple[float, float]) -> bool:
+def _is_water(map_input: MapInput | WaterMask, point: tuple[float, float]) -> bool:
     column = int(np.floor((point[0] - map_input.west_m) / map_input.cell_size_m))
     row = int(np.floor((point[1] - map_input.south_m) / map_input.cell_size_m))
     return (
         0 <= row < map_input.height_cells
         and 0 <= column < map_input.width_cells
         and map_input.water_mask[row][column]
+        and (not isinstance(map_input, WaterMask) or map_input.valid[row][column])
     )
 
 

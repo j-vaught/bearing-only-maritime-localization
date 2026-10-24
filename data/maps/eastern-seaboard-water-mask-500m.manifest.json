@@ -1,0 +1,23 @@
+{
+  "source": "results/eastern-seaboard-maps/data/land-east_coast.json",
+  "source_citation": "Natural Earth 5.1.1 1:10m land polygons, public domain",
+  "raster_cell_size_m": 500.0,
+  "raster_shape_rows_south_to_north": [
+    4671,
+    2804
+  ],
+  "crs": "local-equirectangular-origin-38N-76.2W",
+  "bounds_projected_m": [
+    -508212.93003867957,
+    -1501133.5831526942,
+    893787.0699613204,
+    834366.4168473058
+  ],
+  "water_cell_count": 8697598,
+  "land_cell_count": 4399886,
+  "limitations": [
+    "Coastline detail is limited by Natural Earth 1:10m source geometry.",
+    "500 m cells are for experimental search pruning, not navigation.",
+    "The local equirectangular projection is a coast-wide diagnostic approximation."
+  ]
+}
