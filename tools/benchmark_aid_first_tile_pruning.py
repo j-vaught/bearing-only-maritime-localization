@@ -134,7 +134,7 @@ def main():
     out = OUT_ROOT / f"top{keep_tiles}"
     pilot = runpy.run_path(str(ROOT / "tools/run_ais_enc_pilot.py"))
     bench = runpy.run_path(str(ROOT / "tools/benchmark_eastern_seaboard_search.py"))
-    _, map_input, sites, _ = pilot["load_inputs"]()
+    _, _, sites, _ = pilot["load_inputs"]()
     _, _, snapshots, bounds, _ = bench["build_inputs"]()
     catalog: AISSnapshot = snapshots["all_scales_deduplicated"]
     aids = tuple(r for r in catalog.records if r.ais_class == "aid")
@@ -187,7 +187,7 @@ def main():
             seed=pilot["SEED_BASE"] + si * 100,
             trial_id=f"{site}-coast-pruning",
             angular_resolution_deg=ANGULAR_DEG,
-            map_input=map_input,
+            map_input=mask,
         )
         aid_obs = [
             (o.object_type, o.bearing_deg)
