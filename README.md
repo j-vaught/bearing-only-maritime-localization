@@ -70,6 +70,14 @@ The benchmark takes approximately half a minute on the development machine. It r
 
 Run the automated checks with `uv run pytest`, `uv run ruff format --check .`, `uv run ruff check .`, and `uv run ty check .`. The continuous-integration workflow also builds the package and compiles the figures.
 
+## Major-port zoom maps
+
+The multi-page [East Coast port map PDF](docs/figures/east-coast-port-zooms.pdf) gives each of the 24 observer sites its own 30 km view. Each page shows the selected water-cell center, the local shoreline, AIS vessels grouped by type, and NOAA ENC chart aids grouped by aid type. The AIS layer is the July 15, 2023 snapshot; the source data and prepared map windows are included in the repository.
+
+![Boston port zoom showing the observer site, AIS vessels, chart aids, and shoreline.](docs/figures/east-coast-port-zooms-boston.png)
+
+The editable [Typst source](figures/east-coast-port-zooms.typ) draws the pages from the prepared data. Regenerate the local windows with `uv run python tools/prepare_port_zoom_data.py`, then compile the PDF with `typst compile --root . figures/east-coast-port-zooms.typ docs/figures/east-coast-port-zooms.pdf`.
+
 ## B1–B5 AIS-layout pilot
 
 The first location-specific run uses five water sites, a July 2023 Chesapeake AIS snapshot, charted aids to navigation, and a 10 km visibility limit. The simulator generates synthetic global bearings with 0.5° Gaussian noise and applies land occlusion. The search region is 114 × 333 km. Three paired noise seeds were run per site with AIS type labels enabled and disabled.
