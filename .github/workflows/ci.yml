@@ -48,5 +48,5 @@ jobs:
           mkdir -p "${output_dir}"
           while IFS= read -r source; do
             output="${output_dir}/$(basename "${source%.typ}").pdf"
-            typst compile "${source}" "${output}"
+            typst compile --root . "${source}" "${output}"
           done < <(find docs/figures figures -type f -name '*.typ' -print | sort)
