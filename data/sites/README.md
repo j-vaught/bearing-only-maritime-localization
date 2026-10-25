@@ -15,11 +15,11 @@ Port names and regions follow the U.S. Army Corps of Engineers North Atlantic Di
 
 ## Atlantic Coast major-port set
 
-east-coast-major-ports-top150-2023.csv contains one synthetic observer position for each Atlantic-coast entry in the U.S. Army Corps of Engineers 2023 Leading U.S. Ports table ranked in its top 150 by total tonnage. The set contains 22 port areas from Searsport, Maine, to PortMiami. The B1–B22 identifiers are local to this file and are independent of the B1–B10 IDs in the earlier test set.
+east-coast-major-ports-top150-2024.csv contains one synthetic observer position for each Atlantic-coast entry in the U.S. Army Corps of Engineers 2024 Leading U.S. Ports table ranked in its top 150 by total tonnage. The set contains 24 port areas from Searsport, Maine, to PortMiami. Albany is excluded because its port is far up the Hudson River and the project mask does not resolve that inland channel. The B1–B24 identifiers are local to this file and are independent of the B1–B10 IDs in the earlier test set.
 
 Each point is the nearest water-cell center to an approximate port-area anchor in the project's 500 m Natural Earth mask. The CSV includes the anchor, separation, and placement note so the choice is auditable. Boston through Philadelphia and the other harbor sites use their nearby harbor water. The Delaware and Cape Fear River ports, Savannah, Brunswick, and Jacksonville use nearby approaches when the coarse mask does not represent all inland channels.
 
-The companion full-size map is docs/figures/east-coast-major-ports.pdf. The port list comes from the USACE 2023 fact card and its leading-port table.
+The companion full-size map is docs/figures/east-coast-major-ports.pdf. The port list comes from the USACE 2024 fact card and its leading-port table.
 
-- https://publibrary.sec.usace.army.mil/api/download?filename=FactCard2023.pdf&id=0aab3c03-f568-4c93-a08c-1e681954fa84&preview=true
+- https://publibrary.sec.usace.army.mil/api/download?filename=FactCard2024.pdf&id=3dfa3db1-63b9-4510-9bab-ca4b1ba2ca41&preview=true
 - https://www.nad.usace.army.mil/Missions/Civil-Works/Navigation/

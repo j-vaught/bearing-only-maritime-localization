@@ -1,6 +1,6 @@
 #import "@preview/cetz:0.5.3" as cetz
 
-#let sites = csv("../data/sites/east-coast-major-ports-top150-2023.csv").slice(1)
+#let sites = csv("../data/sites/east-coast-major-ports-top150-2024.csv").slice(1)
 #let all_land = json("../results/eastern-seaboard-maps/data/land-east_coast.json")
 
 #set page(width: 460mm, height: 650mm, margin: 8mm, fill: white)
@@ -14,7 +14,7 @@
   "#332288", "#56B4E9", "#CC79A7", "#117733", "#444444",
   "#0072B2", "#D55E00", "#009E73", "#AA4499", "#E69F00",
   "#332288", "#56B4E9", "#CC79A7", "#117733", "#444444",
-  "#0072B2", "#D55E00",
+  "#0072B2", "#D55E00", "#009E73", "#AA4499",
 )
 
 #let xy(lon, lat) = {
@@ -56,7 +56,7 @@
 
   for (index, row) in sites.enumerate() {
     let (x, y) = xy(float(row.at(4)), float(row.at(3)))
-    let (dx, dy) = if row.at(0) == "B8" { (-4.5, 4.5) } else if row.at(0) == "B9" { (4.5, -4.5) } else { (0.0, 0.0) }
+    let (dx, dy) = if row.at(0) == "B10" { (-4.5, 4.5) } else if row.at(0) == "B11" { (4.5, -4.5) } else { (0.0, 0.0) }
     let color = rgb(site_colors.at(index))
     if dx != 0.0 or dy != 0.0 {
       line((x, y), (x + dx, y + dy), stroke: (paint: rgb("#111111"), thickness: 0.35pt))
@@ -70,11 +70,11 @@
 #align(center)[
   #text(size: 19pt, weight: "bold")[Atlantic Coast major port observer sites]
   #linebreak()
-  #text(size: 9pt)[One synthetic water position for each of 22 East Coast ports in the 2023 USACE top 150]
+  #text(size: 9pt)[One synthetic water position for each of 24 East Coast ports in the 2024 USACE top 150]
 ]
 #v(4mm)
 #grid(columns: (325mm, 100mm), gutter: 7mm, coast-map, [
-  #text(size: 10pt, weight: "bold")[Port · 2023 rank]
+  #text(size: 10pt, weight: "bold")[Port · 2024 rank]
   #v(2mm)
   #for (index, row) in sites.enumerate() {
     rect(width: 3mm, height: 2.5mm, fill: rgb(site_colors.at(index)), stroke: (paint: rgb("#111111"), thickness: 0.2pt))
@@ -86,4 +86,4 @@
   }
 ])
 #v(3mm)
-#text(size: 7pt)[Port scope follows the U.S. Army Corps of Engineers 2023 Leading U.S. Ports table: all Atlantic-coast ports ranked in the top 150 by total tonnage. Site coordinates are the nearest water-cell centers to the listed approximate port-area anchors in the project’s 500 m Natural Earth mask. River-port points are harbor or entrance approaches where the coarse mask does not resolve every inland channel. This map is for experiment planning, not navigation.]
+#text(size: 7pt)[Port scope follows the U.S. Army Corps of Engineers 2024 Leading U.S. Ports table: mainland Atlantic seaports ranked in the top 150, excluding Albany because the current coarse water mask does not resolve the Hudson River port reach by total tonnage. Site coordinates are the nearest water-cell centers to the listed approximate port-area anchors in the project’s 500 m Natural Earth mask. River-port points are harbor or entrance approaches where the coarse mask does not resolve every inland channel. This map is for experiment planning, not navigation.]
