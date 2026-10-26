@@ -608,7 +608,7 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             refine_iterations=args.refine_iterations,
             telemetry_path=args.telemetry_output,
         )
-    except (OSError, TypeError, ValueError, RuntimeError) as exc:
+    except (OSError, TypeError, ValueError, RuntimeError, KeyError) as exc:
         parser.error(str(exc))
     print(
         json.dumps(
@@ -633,7 +633,7 @@ def evaluate_v2_main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         result = evaluate_v2_files(args.estimate, args.truth, args.support, args.output)
-    except (OSError, TypeError, ValueError) as exc:
+    except (OSError, TypeError, ValueError, KeyError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, sort_keys=True))
     return 0
@@ -659,7 +659,7 @@ def simulator_v2_main(argv: Sequence[str] | None = None) -> int:
             seed=args.seed,
             trial_id=args.trial_id,
         )
-    except (OSError, TypeError, ValueError) as exc:
+    except (OSError, TypeError, ValueError, KeyError) as exc:
         parser.error(str(exc))
     print(
         json.dumps(
