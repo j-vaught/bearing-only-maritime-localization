@@ -10,17 +10,17 @@ Set `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, and `NUMEXPR_N
 
 ```sh
 cd /home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/assigned-bearing-refinement
-PYTHONPATH=. .venv/bin/python tools/run_assigned_refinement_diagnostic.py \
-  --a20 .agent-work/outputs/a20-cached-refinement-v2 \
-  --attempt .agent-work/outputs/a26-cached-exact-full-1002d73 \
-  --static .agent-work/outputs/a26-screened-cache-diagnostic-v4/static-inputs \
+PYTHONPATH=. /home/jvaught2/projects/bearing-only-maritime-localization/.venv/bin/python tools/run_assigned_refinement_diagnostic.py \
+  --a20 ../../outputs/a20-cached-refinement-v2 \
+  --attempt ../../outputs/a26-cached-exact-full-1002d73 \
+  --static ../../outputs/a26-screened-cache-diagnostic-v4/static-inputs \
   --config /home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/a26-scoring-0d34a17/data/accuracy/diagnostics/2026-10-26/a26-wedge-geodesic/search-config.json \
-  --output .agent-work/outputs/assigned-bearing-refinement-diagnostic \
-  --lock .agent-work/outputs/canonicalbenchmark.lock \
+  --output ../../outputs/assigned-bearing-refinement-diagnostic \
+  --lock ../../benchmark.lock \
   --timeout-s 1800
 ```
 
-The output is bounded to 5 MiB and checks the 40 GiB free-space floor before each mode. The lock is exclusive for the whole run. A checkpoint is fsynced after every completed mode. An interrupted run preserves its completed rows and records `interrupted`; it is not a completed comparison.
+The output is bounded to 5 MiB and checks the 40 GiB free-space floor before each mode. The only accepted lock path is the repository canonical `.agent-work/benchmark.lock`, passed as `../../benchmark.lock` from this worktree. The only accepted lock path is the repository canonical `.agent-work/benchmark.lock`, passed as `../../benchmark.lock` from this worktree. The lock is exclusive for the whole run. A checkpoint is fsynced after every completed mode. An interrupted run preserves its completed rows and records `interrupted`; it is not a completed comparison.
 
 ## Per-mode procedure
 

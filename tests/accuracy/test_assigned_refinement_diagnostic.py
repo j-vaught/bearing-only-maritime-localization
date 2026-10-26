@@ -13,6 +13,7 @@ from tools.run_assigned_refinement_diagnostic import (
     DiagnosticInputError,
     _hypothesis,
     _row_from_dict,
+    canonical_lock_path,
     load_a20_bundle,
     run_start,
 )
@@ -90,6 +91,21 @@ def test_invalid_rows_hash_is_rejected(tmp_path: Path) -> None:
         load_a20_bundle(tmp_path)
 
 
+def test_rows_file_must_be_a_single_safe_basename(tmp_path: Path) -> None:
+    make_bundle(tmp_path)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["rows_file"] = "nested/rows.jsonl"
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(DiagnosticInputError, match="basename"):
+        load_a20_bundle(tmp_path)
+
+
+def test_canonical_lock_is_repository_benchmark_lock() -> None:
+    lock = canonical_lock_path()
+    assert lock.name == "benchmark.lock"
+    assert lock.parent.name == ".agent-work"
+
+
 def test_stale_source_row_and_status_boolean_are_rejected() -> None:
     source, selected = row()
     source["candidate_id"] = "cell:cell:stale"
@@ -115,16 +131,26 @@ class FakeScorer:
         return CandidateEvaluation("scored", self.exact, object(), object())
 
 
-def test_interrupted_proposal_is_retained_as_explicit_partial_step() -> None:
+def test_solver_exception_is_retained_as_explicit_partial_step() -> None:
     source = hypothesis()
 
-    def interrupted(_scorer, _hypothesis):
-        raise TimeoutError("interrupted")
+    def failed(_scorer, _hypothesis):
+        raise RuntimeError("solver failed")
 
-    result = run_start(FakeScorer(source), source, "cached_hypothesis", proposer=interrupted)
+    result = run_start(FakeScorer(source), source, "cached_hypothesis", proposer=failed)
     assert result.stop_reason == "proposal_exception"
     assert result.steps[0]["status"] == "proposal_exception"
     assert result.final_hypothesis == source
+
+
+def test_timeout_propagates_to_outer_interrupted_state() -> None:
+    source = hypothesis()
+
+    def interrupted(_scorer, _hypothesis):
+        raise TimeoutError("deadline")
+
+    with pytest.raises(TimeoutError, match="deadline"):
+        run_start(FakeScorer(source), source, "cached_hypothesis", proposer=interrupted)
 
 
 def test_max_nfev_is_a_failure_stop_and_not_an_accepted_step() -> None:
