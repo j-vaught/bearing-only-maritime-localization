@@ -317,14 +317,26 @@ def _v2_split(
         ):
             if key in row and row[key] != expected:
                 raise ValueError(f"V2 input mixes {key} operating conditions.")
-        if type(row.get("supported")) is not bool:
-            raise ValueError("Every v2 all_trials row must have an explicit supported flag.")
-        if row["supported"]:
-            supported_ids.add(trial_id)
+        supported = row.get("supported")
         if sensor_condition == "nominal":
+            if type(supported) is not bool:
+                raise ValueError("Nominal rows must have an explicit boolean supported flag.")
             nominal_rows.append(row)
         else:
+            if supported is not None and type(supported) is not bool:
+                raise ValueError("Stress supported must be boolean or null.")
+            if supported is None and (
+                row.get("eligibility_status") != "unresolved"
+                or not isinstance(row.get("eligibility_reason"), str)
+                or not row["eligibility_reason"].strip()
+                or row.get("preparation_status") != "failed"
+            ):
+                raise ValueError(
+                    "Unresolved stress rows require failed preparation and eligibility evidence."
+                )
             stress_rows.append(row)
+        if supported is True:
+            supported_ids.add(trial_id)
 
     if not nominal_rows:
         raise ValueError("V2 input has no explicitly labeled nominal trials.")

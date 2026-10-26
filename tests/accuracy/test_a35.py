@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import tempfile
+from pathlib import Path
 from typing import Literal
 
 import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.search.calibration import DecisionCalibration
+from bearing_localization.search.calibration import (
+    CalibrationContext,
+    CalibrationOperatingCondition,
+    DecisionCalibration,
+    canonical_json,
+    load_frozen_calibration,
+)
 from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.decision import CompetitorCoverageEvidence, decide_localization
 from bearing_localization.search.grid import run_grid_search_v2
@@ -172,17 +181,83 @@ def test_distant_unsupported_catalog_geometry_does_not_block_local_scoring() -> 
 
 
 def _calibration(gap: float = 2.0, radius: float | None = 100.0) -> DecisionCalibration:
-    return DecisionCalibration(
-        min_score_gap=gap,
-        max_95_radius_m=radius,
-        split="development",
-        status="PASS",
-        availability=0.95,
-        conditional_accuracy=0.96,
-        accepted_p95_error_m=30.0,
-        artifact_sha256=hashlib.sha256(b"test calibration").hexdigest(),
-        verified_frozen_artifact=True,
+    condition = CalibrationOperatingCondition(
+        range_m=5_000.0,
+        use_types=True,
+        objective_version="bearing_set_map_v1",
+        algorithm="pairwise",
     )
+    context = CalibrationContext(
+        catalog_sha256="a" * 64,
+        map_sha256="b" * 64,
+        scope_manifest_sha256="c" * 64,
+        search_execution_sha256="d" * 64,
+        implementation_sha256="e" * 64,
+    )
+    provenance = {
+        split: {
+            "plan_sha256": "1" * 64,
+            "trial_table_sha256": "2" * 64,
+            "run_manifest_sha256": "3" * 64,
+            "eligibility_manifest_sha256": "4" * 64,
+            "metrics_sha256": "5" * 64,
+        }
+        for split in ("development", "validation")
+    }
+    empty_ids_sha256 = hashlib.sha256(canonical_json([])).hexdigest()
+    trial_ids_sha256 = hashlib.sha256(canonical_json(["calibration-trial"])).hexdigest()
+    population = {
+        split: {
+            "included_nominal_supported": {
+                "count": 1,
+                "trial_ids_sha256": trial_ids_sha256,
+            },
+            "excluded_stress": {"count": 0, "trial_ids_sha256": empty_ids_sha256},
+            "excluded_nominal_unsupported": {
+                "count": 0,
+                "trial_ids_sha256": empty_ids_sha256,
+            },
+            "all_condition_trials": {
+                "count": 1,
+                "trial_ids_sha256": trial_ids_sha256,
+            },
+        }
+        for split in ("development", "validation")
+    }
+    payload = {
+        "schema_version": 2,
+        "split": "development",
+        "status": "PASS",
+        "thresholds": {"min_score_gap": gap, "max_95_radius_m": radius},
+        "metrics": {
+            "availability": 0.95,
+            "conditional_accuracy": 0.96,
+            "accepted_p95_error_m": 30.0,
+        },
+        "validation_metrics": {
+            "availability": 0.95,
+            "conditional_accuracy": 0.96,
+            "accepted_p95_error_m": 30.0,
+        },
+        "validation_confirmed": True,
+        "operating_condition": condition.as_dict(),
+        "context": context.as_dict(),
+        "provenance": provenance,
+        "population": population,
+    }
+    document = payload | {
+        "frozen": True,
+        "sha256": hashlib.sha256(canonical_json(payload)).hexdigest(),
+    }
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "frozen-v2-calibration.json"
+        path.write_text(json.dumps(document), encoding="utf-8")
+        return load_frozen_calibration(
+            path,
+            expected_condition=condition,
+            expected_context=context,
+            release_acceptance=True,
+        )
 
 
 def _hypothesis(east: float, score: float, *, radius: float = 20.0) -> Hypothesis:
