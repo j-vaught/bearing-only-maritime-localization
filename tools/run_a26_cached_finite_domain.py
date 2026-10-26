@@ -88,6 +88,7 @@ def write_candidate_dispositions(
     *,
     externally_interrupted: bool = False,
     failed_candidate_ids: list[str] | None = None,
+    not_dispatched_candidate_ids: list[str] | None = None,
     failed_count_unattributed: int = 0,
     selected_candidate_ids: set[str] | None = None,
     candidate_prefix_limit: int | None = None,
@@ -128,14 +129,20 @@ def write_candidate_dispositions(
         for chunk, candidate in committed_rows
     }
     failed_list = failed_candidate_ids or []
+    not_dispatched_list = not_dispatched_candidate_ids or []
     if len(failed_list) != len(set(failed_list)):
         raise ValueError("Worker failure list contains duplicate candidate IDs.")
+    if len(not_dispatched_list) != len(set(not_dispatched_list)):
+        raise ValueError("Not-dispatched list contains duplicate candidate IDs.")
     known_ids = set(candidate_ids)
-    if (set(committed_ids) | set(failed_list)) - known_ids:
+    if (set(committed_ids) | set(failed_list) | set(not_dispatched_list)) - known_ids:
         raise ValueError("Chunk or failure evidence refers to an ID outside the frozen inventory.")
     if failed_count_unattributed < 0 or failed_count_unattributed < len(failed_list):
         raise ValueError("Aggregate worker failure count is inconsistent with explicit failed IDs.")
     failed_ids = set(failed_list)
+    not_dispatched_ids = set(not_dispatched_list)
+    if failed_ids & not_dispatched_ids:
+        raise ValueError("A candidate cannot be both failed and not dispatched.")
     counts = {
         "committed": 0,
         "failed": 0,
@@ -162,6 +169,9 @@ def write_candidate_dispositions(
         elif candidate_id in failed_ids:
             status = "worker_reported_failure"
             counts["failed"] += 1
+        elif candidate_id in not_dispatched_ids:
+            status = "not_dispatched"
+            counts["not_dispatched"] += 1
         elif externally_interrupted:
             status = "worker_state_unknown_at_interruption"
             counts["dispatched_uncommitted_or_unknown"] += 1
@@ -495,7 +505,7 @@ def run_finite_domain(
     ParallelScreenedCandidatePool = getattr(parallel_api, "ParallelScreenedCandidatePool")
     ParallelScreenedError = getattr(parallel_api, "ParallelScreenedError")
 
-    from bearing_localization.search.config import SearchConfig
+    from bearing_localization.search.config_serialization import loads_search_config
     from bearing_localization.search.proposals.cache import (
         ProposalCacheContext,
         load_proposal_cache,
@@ -544,8 +554,7 @@ def run_finite_domain(
         ).read_text()
     )
     original_config.pop("proposal_cache_path", None)
-    original_config["bounds_xy"] = tuple(original_config["bounds_xy"])
-    config = SearchConfig(**original_config)
+    config = loads_search_config(json.dumps(original_config))
     validate_runtime_config_binding(
         config,
         cache_diag["generation_config"],
@@ -634,6 +643,7 @@ def run_finite_domain(
                     )
             except ParallelScreenedError as exc:
                 pool_error = {
+                    "disposition": asdict(exc.disposition),
                     "type": type(exc).__name__,
                     "message": str(exc),
                     "completed_count": exc.completed_count,
@@ -665,6 +675,9 @@ def run_finite_domain(
         output_root,
         externally_interrupted=pool_error is not None,
         failed_candidate_ids=(pool_error or {}).get("failed_candidate_ids", []),
+        not_dispatched_candidate_ids=(pool_error or {})
+        .get("disposition", {})
+        .get("not_dispatched_candidate_ids", []),
         failed_count_unattributed=(pool_error or {}).get("failed_count", 0),
         selected_candidate_ids=selected_ids,
         candidate_prefix_limit=candidate_prefix_limit,
@@ -885,6 +898,9 @@ def supervise_complete_request(args: argparse.Namespace) -> dict[str, Any]:
             output_root,
             externally_interrupted=True,
             failed_candidate_ids=worker_failures,
+            not_dispatched_candidate_ids=(worker_manifest.get("pool_error") or {})
+            .get("disposition", {})
+            .get("not_dispatched_candidate_ids", []),
             candidate_prefix_limit=args.candidate_prefix_limit,
             failed_count_unattributed=(worker_manifest.get("pool_error") or {}).get(
                 "failed_count", len(worker_failures)
