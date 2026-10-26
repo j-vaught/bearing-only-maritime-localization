@@ -233,3 +233,12 @@ The serial diagnostic at executed commit 6f7cdf4354fddbc7237625bde2d82763362068c
 The raw manifest, checkpoint, rows, and events are retained under reports/experiments/assignment-expansion-diagnostic-v1. The manifest hash is 290c2645f8252a951491a99e2fa6bca6b29d2222d04cec8c9935a75b27db5e23; row and event hashes match the producer. The final tracked files total 22,055,971 bytes. The manifest's earlier output_bytes field was sampled before its final atomic rewrite and is 288 bytes smaller; no file is missing.
 
 Decision remains ambiguous, search status remains budget_exhausted, and certificate scope remains none. The unfinished mode's event tail remains preserved but does not become a fabricated completed-mode hypothesis. Independent evaluation is checking the returned results. The parallel runner remains under review, including partial process-start failure cleanup, before any actual execution.
+
+
+## Provisional recovery and reviewed four-worker implementation
+
+At integration 94c0c7b, the independently validated pass-one result places the best of 60 completed selected modes 11.127008 m from truth with five of five correct associations. Score is 5.026904167180264. The serial run remains interrupted at 1,800.016071 seconds with four pending modes and incomplete global coverage. Full branch replay remains in progress; acceptance and certification are not claimed.
+
+A35's immutable source and checkpoint-prefix validation fixes are integrated as 4ad2709. The CPU pool and runner are integrated as 2862818 and a9e9dea. Independent review commits 82d18c2 and 94c0c7b clear the earlier startup failures. The combined root integration check passes 43 tests, Ruff and ty. Actual four-worker execution waits for the 40 GiB disk reserve. A39 is adding a clearly provisional fourth stage to the zoomable progress figure.
+
+The existing success criteria, supported denominators, calibrated acceptance requirements, split manifests and held-out isolation remain unchanged. Calibration, the six release decisions, clean GPU scaling measurements and measured-bearing field validation remain unfinished.

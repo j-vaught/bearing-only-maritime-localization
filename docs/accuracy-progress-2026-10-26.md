@@ -211,3 +211,14 @@ The serial diagnostic at executed commit 6f7cdf4354fddbc7237625bde2d82763362068c
 The raw manifest, checkpoint, rows, and events are retained under reports/experiments/assignment-expansion-diagnostic-v1. The manifest hash is 290c2645f8252a951491a99e2fa6bca6b29d2222d04cec8c9935a75b27db5e23; row and event hashes match the producer. The final tracked files total 22,055,971 bytes. The manifest's earlier output_bytes field was sampled before its final atomic rewrite and is 288 bytes smaller; no file is missing.
 
 Decision remains ambiguous, search status remains budget_exhausted, and certificate scope remains none. The unfinished mode's event tail remains preserved but does not become a fabricated completed-mode hypothesis. Independent evaluation is checking the returned results. The parallel runner remains under review, including partial process-start failure cleanup, before any actual execution.
+
+
+## Provisional recovery and parallel execution gate
+
+Independent pass-one evaluation verifies the lowest-objective returned expansion hypothesis at 11.127008 m from truth, with all five assignments correct and objective 5.026904167180264. The earlier first-ranked assignment-fit result was 853,439.8 m away with zero of four correct assignments. The expansion changes proposal exploration while retaining the complete scoring objective and all input observations. It finds the nearby five-match basin without receiving truth.
+
+This result covers 60 completed modes out of the same 64 selected alternatives. Four modes remain pending after the serial 1,800-second deadline, and the complete coast-wide domain remains unresolved. Pass one checks immutable inputs, event integrity, all returned seed and best hypotheses, and evaluator-only truth separation. Full replay of the 20,435 branch results is still running. The provisional evaluator artifact hash is b7e3541a77a86943e5553f449769cdc12329696a3c3b96cf69d4199e54f279a5. This is one development diagnostic, not a release accuracy rate or an accepted fix.
+
+The four-worker CPU pool and runner are integrated from b76deb56626e8b5d2a908b748ac80689ca66f77c and a41570c525f4da6b801622366c5a601bfba09c22. Independent review cleared the four reported startup defects. The coordinator's combined pool, runner, and evaluator gate passes 43 tests in 15.24 seconds, with scoped Ruff and ty passing. Whole-mode jobs retain the same 22,000 planned branches and canonical objective; dispatch order prioritizes larger branch inventories and does not use truth. Actual parallel execution has not started.
+
+Server free space has fallen to 41,636,933,632 bytes, below the 42,949,672,960-byte reserve. New downloads and large artifact generation are paused. A storage audit is checking reproducible duplicate worktrees and disposable caches while preserving frozen data, active environments, and experiment evidence. The small evaluator audit and code reviews continue.
