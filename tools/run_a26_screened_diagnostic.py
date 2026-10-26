@@ -25,7 +25,7 @@ MEASUREMENTS_SHA256 = "ed1145cee93d4f06ffa983f671319dee49e9a95cb4692a2dd14a44c4a
 SCOPE_SHA256 = "d32e42622c7d959a26009bb23b5c5ea8336d4b13329f59e3fffb8e3f25e175e1"
 CATALOG_ARCHIVE_SHA256 = "cef2b3dec757983c8a026caeff98e1ba42c164660f32a34915594e1443ac5472"
 MAP_ARCHIVE_SHA256 = "fda522364582a20d74a643e7e854844b2ce2490a45e469cb210fd9a8babd13de"
-RUN_ID = "a26-screened-cachegen-port001-placement001-r0-10km-typesoff-v1"
+RUN_ID = "a26-screened-cachegen-port001-placement001-r0-10km-typesoff-v2"
 TIMEOUT_S = 1800.0
 EXECUTION_PROTOCOL = {
     "schema": "accuracy-execution-protocol-v1",
@@ -186,6 +186,7 @@ def build_cache_generation_plan(
     run_root = output_root / "cache-build"
     if cache_path.exists() or cache_path.is_symlink():
         raise FileExistsError(f"Fresh cache destination required: {cache_path}")
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
     static_inputs = _frozen_inputs(repo_root, static_root)
     config_path, config_sha256 = _make_generation_config(repo_root, run_root, cache_path)
     input_hashes = {name: sha256_file(path) for name, path in static_inputs.items()}

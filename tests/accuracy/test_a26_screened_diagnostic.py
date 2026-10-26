@@ -49,6 +49,7 @@ def test_frozen_cache_build_plan_uses_only_search_inputs(tmp_path: Path) -> None
     config = json.loads(config_path.read_text())
     assert config["candidate_budget"] == 1
     assert Path(config["proposal_cache_path"]) == Path(plan["cache_path"])
+    assert Path(plan["cache_path"]).parent.is_dir()
     assert config["max_range_m"] == 10000.0
     assert config["use_types"] is False
 
