@@ -269,3 +269,37 @@ The largest unique-link UV cache files retained for possible later cache-only re
 | 1,232,904 | Type-checker index database | .agent-work/cache/uv/simple-v22/pypi/ty.rkyv |
 
 No UV cache file was deleted or modified. Branch refs and all unique data and evidence remain preserved in the common repository or retained paths.
+
+## Cross-host archive triage on 2026-10-26
+
+The archive destination was inspected before any transfer. On comech-1176, the login account is jvaught; /home/jvaught2/projects is absent, while /home/jvaught is writable. The approved destination for a future transfer is comech-1176:/home/jvaught/bearing-only-maritime-localization-archive. The host reported 179689734144 available bytes during inspection. On comech-2422, the login account is j-vaught; /home/jvaught2/projects is absent and no equivalent project archive directory was selected. That host reported 165053140992 available bytes. No SSHFS or other network mount preserving the original project paths was present. No archive directory was created and no source was copied or removed.
+
+The source project on comech-2080 reported 44392919040 available bytes at the corresponding audit reading. The large output trees were excluded from migration. outputs/a38-corrected-dev had files written at the audit time, outputs/a38-anchor-corrected-dev-hardlinked is referenced by A26 invocation manifests, and outputs/a38-anchor-corrected-validation is referenced by validation and A26 manifests. Their original paths must remain readable.
+
+The following clean, pushed source checkouts had no direct process pathname reference in the bounded /proc scan. They remain triage candidates only because recent commit times and current assignment ownership prevent proving inactivity from filesystem state alone. Their exact allocated bytes are recorded for owner review.
+
+| Checkout | Allocated bytes | Branch and HEAD | External dependency evidence |
+| --- | ---: | --- | --- |
+| .agent-work/worktrees/a06-prelos-caller-review | 195424256 | accuracy/a06-prelos-caller-review, ef3363df0e35bce5492827db7fb8f40228c2ac8c, pushed | no direct report/output path reference or process pathname found; recent commit at 07:55 EDT requires owner inactivity confirmation |
+| .agent-work/worktrees/a06-prelos-review | 493068288 | accuracy/a06-prelos-review, 6e8c497a5d53b021872d15f163171505c5f1, pushed | no direct report/output path reference or process pathname found; recent commit at 07:26 EDT requires owner inactivity confirmation |
+| .agent-work/worktrees/a08-coast-base | 444063744 | accuracy/a08-coast-base, b61e694c9d1765dbca3f20f1a028bfadd95d60d5, pushed | archive map-manifest references were found; excluded |
+| .agent-work/worktrees/a14-exact-next-step | 190169088 | accuracy/a14-exact-next-step, acad75d69ae865702e45745b7c0647d5d897014a, pushed | A14 assignment scope; excluded |
+| .agent-work/worktrees/a14-pre-los-preparation | 492937216 | accuracy/a14-pre-los-preparation, 80870845d337b5e26c947da0a2d85fba3925e5c8, pushed | A14 preparation scope; excluded |
+| .agent-work/worktrees/a14-prepared | 433377280 | accuracy/a14-prepared, a2545cd63664d1ebc560a12bcce4cf9ab570e440, pushed | A14 prepared context; excluded |
+| .agent-work/worktrees/a14-screen | 478785536 | accuracy/a14-screen, 9feab8cad1c01c3806cf85a2698a9c35363d5475, pushed | A14 screening scope; excluded |
+| .agent-work/worktrees/a20 | 323960832 | accuracy/a20, 955c502445ae416d55d6e5d29fae4dc8f0b74d12, pushed | A20 scope; excluded |
+| .agent-work/worktrees/a21-prelos-review | 193753088 | accuracy/a21-prelos-review, 0ace4e87c515cfcac8658066c6db701ad61cde19, pushed | A21 review scope; excluded |
+| .agent-work/worktrees/a21-prelos-vector-plan | 200503296 | accuracy/a21-prelos-vector-plan, ad2d4e6f8eb11d38643f4ecdc79bb7f9da7264ae, pushed | A21 analysis scope; excluded |
+| .agent-work/worktrees/a27 | 26038272 | accuracy/a27, 172e960c45b4b2eb7e0d4e691899c64d60110e2e, pushed | A27 scope; excluded |
+| .agent-work/worktrees/a29 | 323952640 | accuracy/a29, 5213b4ec5fae16899ce340e11e4c563b0c7702ba, pushed | assignment profiling scope; excluded |
+| .agent-work/worktrees/a34 | 137420800 | accuracy/a34, 29f71a6690b3b9fdd671feaafcbef5afe0c5dda0, pushed | A34 scope; excluded |
+| .agent-work/worktrees/a37-parallel-driver-review | 191164416 | accuracy/a37-parallel-driver-review, d12fd69883a68b9d774cdac87ed77b55c5bee909, pushed | A37 scope; excluded |
+| .agent-work/worktrees/a38-provenance-strict | 476635136 | accuracy/a38-protocol-row, 7b13f9cae4408e5585ad276a3b8ccb7b82ea78e8, pushed | A38 provenance scope; excluded |
+| .agent-work/worktrees/a39-a45-map-diagnostic | 166031360 | accuracy/a39-a45-map-diagnostic, 28599e9bb60f6e3869841f30622f46aacd30c3b3, pushed | A39 map scope; excluded |
+| .agent-work/worktrees/a39-cached-progress | 193953792 | accuracy/a39-cached-progress, dd76259969dfcf9e6800ce583d77cf8fbee9cadf, pushed | A39 cached scope; excluded |
+| .agent-work/worktrees/a39-development-geometry | 166387712 | accuracy/a39-development-geometry, ea7118ba48dde48ac939ba40bbf32903f4281323, pushed | A39 geometry scope; excluded |
+| .agent-work/worktrees/a39-publication | 165691392 | accuracy/a39-publication, 94a056a8cbbc0522dfebfeea7944eda18398c6c0, pushed | publication input scope; excluded |
+| .agent-work/worktrees/a39-repair-checkpoint | 167104512 | accuracy/a39-repair-checkpoint, f3c2d84e5ec81a3d778e45f7e9e4bea4a92e15a7, pushed | A39 checkpoint scope; excluded |
+| .agent-work/worktrees/a41 | 488939520 | accuracy/a41, c2ebc7e0402a3a45bf86241985ae006f79392401, pushed | validation/archive scope; excluded |
+
+The only direct live worktree references in the bounded process scan were an A26 command-line reference and A37 current working directories. Those worktrees remain protected. Because no candidate has passed the inactive-owner check and no original path can be replaced by a mounted archive, no transfer was authorized by this audit. Consequently, no source or destination SHA-256 manifest exists, no bytes were reclaimed, and the source free-space reading is unchanged by this pass. A future transfer must first preserve a per-file SHA-256 manifest, copy to the approved 1176 destination, verify destination hashes and byte counts, and only then remove an explicitly approved inactive checkout while retaining its branch ref and a retrieval manifest.
