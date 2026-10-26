@@ -15,6 +15,12 @@
     "{projected_crs}",
     "--scope-manifest",
     "{search_scope_manifest_path}",
+    "--expansion-local-radius-m",
+    "1000",
+    "--expansion-max-nfev",
+    "100",
+    "--expansion-max-branches",
+    "5000",
     "--output",
     "{estimate_path}"
   ],
