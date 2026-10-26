@@ -13,7 +13,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools import a38_archive
-from tools.build_a38_calibration_metrics import build_trial_metrics
+from tools.build_a38_calibration_metrics import (
+    build_trial_metrics,
+)
+from tools.build_a38_calibration_metrics import (
+    main as calibration_metrics_main,
+)
 from tools.compact_a38_audit import compact_audits
 from tools.run_a38_execution import compact_truth, evaluator_parity
 from tools.run_a38_parallel_prep import (
@@ -282,3 +287,44 @@ def test_missing_or_failed_trial_is_preserved_as_ineligible() -> None:
     assert row["error_m"] is None
     assert row["supported"] is True
     assert row["evidence_status"] == "estimate_missing"
+
+
+def test_calibration_metrics_cli_writes_parseable_json_with_newline(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(
+        json.dumps({"trial_table": "trials.csv", "trial_table_sha256": "fixture"}),
+        encoding="utf-8",
+    )
+    (tmp_path / "trials.csv").write_text("split,trial_id\n", encoding="utf-8")
+    input_root = tmp_path / "inputs"
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    output = tmp_path / "metrics.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_a38_calibration_metrics.py",
+            "--plan",
+            str(plan_path),
+            "--input-root",
+            str(input_root),
+            "--run-root",
+            str(run_root),
+            "--split",
+            "development",
+            "--output",
+            str(output),
+        ],
+    )
+
+    calibration_metrics_main()
+
+    raw = output.read_bytes()
+    decoded = json.loads(raw)
+    assert decoded["split"] == "development"
+    assert decoded["trial_count"] == 0
+    assert raw.endswith(b"\n")
+    assert not raw.endswith(b"\\n")
+    assert json.loads(capsys.readouterr().out)["trial_count"] == 0
