@@ -353,7 +353,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                             "exception_type": type(exc).__name__,
                             "message": str(exc),
                         }
-                        record(mode_index, "failure", failure)
+                        # Preserve the failure even when the resource check that
+                        # triggered it exhausted the output cap.
+                        try:
+                            _append_event(events_stream, state, mode_index, "failure", failure)
+                        except OSError:
+                            pass
                         _checkpoint(
                             checkpoint_path,
                             "interrupted" if isinstance(exc, TimeoutError) else "failed",
@@ -436,6 +441,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if manifest["output_bytes"] > MAX_OUTPUT_BYTES:
             manifest["status"] = "failed"
             manifest["error"] = "diagnostic output exceeded 20 MiB"
+        if not checkpoint_path.exists():
+            _checkpoint(
+                checkpoint_path,
+                manifest["status"],
+                completed,
+                rows_path,
+                events_path,
+                state,
+                manifest.get("error"),
+            )
         _write_json(manifest_path, manifest)
     return manifest
 
