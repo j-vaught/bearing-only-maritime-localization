@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from collections.abc import Sequence
-from dataclasses import asdict, fields
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass, fields
 from math import hypot, isfinite
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Literal, cast
 
 import numpy as np
@@ -28,7 +29,10 @@ from bearing_localization.search.calibration import (
     search_execution_sha256,
 )
 from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.config_serialization import read_search_config
+from bearing_localization.search.config_serialization import (
+    loads_search_config,
+    read_search_config,
+)
 from bearing_localization.search.decision import CompetitorCoverageEvidence, apply_accuracy_decision
 from bearing_localization.search.grid import run_grid_search_v2
 from bearing_localization.search.hierarchical import run_hierarchical_search_v2
@@ -59,6 +63,7 @@ from maritime_localization_shared.geospatial.coordinates import LocalFrame
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 from maritime_localization_shared.serialization import (
     contract_from_dict,
+    loads_contract,
     read_contract,
     write_contract,
 )
@@ -538,7 +543,110 @@ def _validate_scope_manifest(
         raise ValueError("Scope manifest bounds_xy_m must exactly match SearchConfig.bounds_xy.")
 
 
-def search_v2_files(
+@dataclass(frozen=True, slots=True)
+class _StaticSearchSnapshot:
+    catalog_sha256: str
+    map_sha256: str
+    catalog: CatalogV2
+    map_input: MapV2
+    vector_map: VectorMap
+    projected_crs: str
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class SearchV2Session:
+    """Reuse validated catalog, map, and projection across independent requests.
+
+    Static contracts are parsed from the exact byte strings whose hashes are
+    retained. Requests fail explicitly if either source file changes.
+    """
+
+    catalog_path: Path
+    map_path: Path
+    projected_crs: str
+    _snapshot: _StaticSearchSnapshot
+    _clock: Callable[[], float]
+    startup_elapsed_s: float
+
+    def __init__(
+        self,
+        catalog_path: str | Path,
+        map_path: str | Path,
+        projected_crs: str,
+        *,
+        clock: Callable[[], float] = perf_counter,
+    ) -> None:
+        if not callable(clock):
+            raise TypeError("clock must be callable.")
+        started = clock()
+        normalized_catalog_path = Path(catalog_path).expanduser().resolve()
+        normalized_map_path = Path(map_path).expanduser().resolve()
+        normalized_crs = CRS.from_user_input(projected_crs).to_string()
+        catalog_bytes = normalized_catalog_path.read_bytes()
+        map_bytes = normalized_map_path.read_bytes()
+        catalog = loads_contract(catalog_bytes.decode("utf-8"), CatalogV2)
+        map_input = loads_contract(map_bytes.decode("utf-8"), MapV2)
+        vector_map = VectorMap.from_map_v2(map_input, target_crs=normalized_crs)
+        snapshot = _StaticSearchSnapshot(
+            hashlib.sha256(catalog_bytes).hexdigest(),
+            hashlib.sha256(map_bytes).hexdigest(),
+            catalog,
+            map_input,
+            vector_map,
+            normalized_crs,
+        )
+        startup_elapsed = clock() - started
+        if startup_elapsed < 0:
+            raise ValueError("Session clock must be monotonic.")
+        object.__setattr__(self, "catalog_path", normalized_catalog_path)
+        object.__setattr__(self, "map_path", normalized_map_path)
+        object.__setattr__(self, "projected_crs", normalized_crs)
+        object.__setattr__(self, "_snapshot", snapshot)
+        object.__setattr__(self, "_clock", clock)
+        object.__setattr__(self, "startup_elapsed_s", startup_elapsed)
+
+    def _verify_static_inputs(self) -> None:
+        current_catalog = _file_sha256(self.catalog_path)
+        current_map = _file_sha256(self.map_path)
+        if current_catalog != self._snapshot.catalog_sha256:
+            raise ValueError("CatalogV2 changed after SearchV2Session initialization.")
+        if current_map != self._snapshot.map_sha256:
+            raise ValueError("MapV2 changed after SearchV2Session initialization.")
+
+    def run_request(
+        self,
+        measurements_path: str | Path,
+        config_path: str | Path,
+        output_path: str | Path,
+        *,
+        projected_crs: str | None = None,
+        batch_preflight_s: float = 0.0,
+        **options: Any,
+    ) -> LocalizationResult:
+        """Run a full independent search while reusing only the static snapshot."""
+        started = self._clock()
+        if projected_crs is not None and not CRS.from_user_input(projected_crs).equals(
+            CRS.from_user_input(self.projected_crs)
+        ):
+            raise ValueError("Request projection does not match SearchV2Session.")
+        return _search_v2_request(
+            measurements_path,
+            self.catalog_path,
+            self.map_path,
+            config_path,
+            self.projected_crs,
+            output_path,
+            _session=self,
+            _clock=self._clock,
+            _timing_started=started,
+            _session_startup_s=self.startup_elapsed_s,
+            _timing_scope="warm_session_request",
+            _batch_preflight_s=batch_preflight_s,
+            **options,
+        )
+
+
+def _search_v2_request(
     measurements_path: str | Path,
     catalog_path: str | Path,
     map_path: str | Path,
@@ -562,8 +670,21 @@ def search_v2_files(
     refine_iterations: int = 50,
     telemetry_path: str | Path | None = None,
     device_ids: Sequence[int] | None = None,
+    _session: SearchV2Session,
+    _clock: Callable[[], float],
+    _timing_started: float,
+    _session_startup_s: float,
+    _timing_scope: str,
+    _batch_preflight_s: float,
 ) -> LocalizationResult:
-    """Execute one truth-free v2 search and write result plus telemetry sidecar."""
+    """Execute one request against a validated immutable static-input snapshot."""
+    if Path(catalog_path).expanduser().resolve() != _session.catalog_path:
+        raise ValueError("Request catalog path does not match SearchV2Session.")
+    if Path(map_path).expanduser().resolve() != _session.map_path:
+        raise ValueError("Request map path does not match SearchV2Session.")
+    if not CRS.from_user_input(projected_crs).equals(CRS.from_user_input(_session.projected_crs)):
+        raise ValueError("Request projection does not match SearchV2Session.")
+    _session._verify_static_inputs()
     out = Path(output_path).expanduser().resolve()
     inputs = [
         Path(item).expanduser().resolve()
@@ -581,7 +702,9 @@ def search_v2_files(
     if telemetry_target.expanduser().resolve() in set(inputs) | {out}:
         raise ValueError("Telemetry output must be separate from search inputs and result.")
 
-    config = read_search_config(config_path)
+    config_bytes = Path(config_path).read_bytes()
+    config = loads_search_config(config_bytes.decode("utf-8"))
+    config_sha256 = hashlib.sha256(config_bytes).hexdigest()
     selected_algorithm = algorithm or config.algorithm
     if selected_algorithm != config.algorithm:
         raise ValueError("CLI algorithm must match SearchConfig.algorithm.")
@@ -597,48 +720,56 @@ def search_v2_files(
         raise ValueError("--device-id can only be used with a GPU SearchConfig.")
     if config.bounds_xy is None:
         raise ValueError("SearchConfig.bounds_xy is required for v2 CLI search.")
-    scope_verified = False
-    if scope_manifest_path is not None:
-        _validate_scope_manifest(
-            scope_manifest_path,
-            catalog_path=catalog_path,
-            map_path=map_path,
-            projected_crs=projected_crs,
-            bounds_xy=config.bounds_xy,
-        )
-        scope_verified = True
-
-    condition, calibration_context = _calibration_binding(
-        config=config,
-        algorithm=selected_algorithm,
-        projected_crs=projected_crs,
-        catalog_path=catalog_path,
-        map_path=map_path,
-        scope_manifest_path=scope_manifest_path,
-        spacing_m=spacing_m,
-        seed=seed,
-        seed_policy=seed_policy,
-        wedge_error_deg=wedge_error_deg,
-        wedge_tolerance_deg=wedge_tolerance_deg,
-        wedge_cell_size_m=wedge_cell_size_m,
-        branch_max_regions=branch_max_regions,
-        refine=refine,
-        refine_modes_count=refine_modes_count,
-        refine_initial_step_m=refine_initial_step_m,
-        refine_iterations=refine_iterations,
-        device_ids=selected_devices,
-    )
     telemetry = SearchTelemetry(
         objective_version=config.objective_version,
         backend=config.backend,
         device_ids=selected_devices,
+        clock=_clock,
     )
+    scope_verified = False
     with telemetry.stage("load_inputs"):
-        measurements = read_contract(measurements_path, MeasurementSetV2)
-        catalog = read_contract(catalog_path, CatalogV2)
-        map_input = read_contract(map_path, MapV2)
-    with telemetry.stage("project_map"):
-        vector_map = VectorMap.from_map_v2(map_input, target_crs=projected_crs)
+        if scope_manifest_path is not None:
+            _validate_scope_manifest(
+                scope_manifest_path,
+                catalog_path=catalog_path,
+                map_path=map_path,
+                projected_crs=projected_crs,
+                bounds_xy=config.bounds_xy,
+            )
+            scope_verified = True
+        condition, calibration_context = _calibration_binding(
+            config=config,
+            algorithm=selected_algorithm,
+            projected_crs=projected_crs,
+            catalog_path=catalog_path,
+            map_path=map_path,
+            scope_manifest_path=scope_manifest_path,
+            spacing_m=spacing_m,
+            seed=seed,
+            seed_policy=seed_policy,
+            wedge_error_deg=wedge_error_deg,
+            wedge_tolerance_deg=wedge_tolerance_deg,
+            wedge_cell_size_m=wedge_cell_size_m,
+            branch_max_regions=branch_max_regions,
+            refine=refine,
+            refine_modes_count=refine_modes_count,
+            refine_initial_step_m=refine_initial_step_m,
+            refine_iterations=refine_iterations,
+            device_ids=selected_devices,
+        )
+        if (
+            calibration_context.catalog_sha256 != _session._snapshot.catalog_sha256
+            or calibration_context.map_sha256 != _session._snapshot.map_sha256
+        ):
+            raise ValueError(
+                "Static CatalogV2 or MapV2 changed while request context was being bound."
+            )
+        measurement_bytes = Path(measurements_path).read_bytes()
+        measurements = loads_contract(measurement_bytes.decode("utf-8"), MeasurementSetV2)
+        measurement_sha256 = hashlib.sha256(measurement_bytes).hexdigest()
+    catalog = _session._snapshot.catalog
+    map_input = _session._snapshot.map_input
+    vector_map = _session._snapshot.vector_map
     if config.backend == "gpu":
         from bearing_localization.search.gpu.search_adapter import GpuCandidateScorer
 
@@ -753,7 +884,7 @@ def search_v2_files(
         "calibration_context_schema": "calibration-context-v2",
         "calibration_condition": condition.as_dict(),
         "calibration_context": calibration_context.as_dict(),
-        "search_config_sha256": _file_sha256(config_path),
+        "search_config_sha256": config_sha256,
         "seed_policy": seed_policy,
         "seed": seed,
         "calibration_binding_status": "not_requested",
@@ -829,20 +960,189 @@ def search_v2_files(
                 if calibration_path is not None
                 else "missing_frozen_calibration"
             )
+    _session._verify_static_inputs()
+    if _file_sha256(config_path) != config_sha256:
+        raise ValueError("SearchConfig changed during the request.")
+    if _file_sha256(measurements_path) != measurement_sha256:
+        raise ValueError("MeasurementSetV2 changed during the request.")
+    if (
+        scope_manifest_path is not None
+        and _file_sha256(scope_manifest_path) != calibration_context.scope_manifest_sha256
+    ):
+        raise ValueError("Scope manifest changed during the request.")
     with telemetry.stage("serialize_result"):
         out.parent.mkdir(parents=True, exist_ok=True)
         write_contract(out, result)
+    request_elapsed_s = _clock() - _timing_started
+    if request_elapsed_s < 0:
+        raise ValueError("Request clock must be monotonic.")
     _write_json(
         telemetry_target,
         {
+            "request_timing": {
+                "scope": _timing_scope,
+                "request_elapsed_s": request_elapsed_s,
+                "session_startup_s": _session_startup_s,
+                "batch_preflight_s": _batch_preflight_s,
+                "batch_preflight_included": _timing_scope != "warm_session_request",
+                "includes_static_session_startup": _timing_scope == "cold_one_shot",
+                "result_serialization_completed": True,
+                "measurement_boundary": (
+                    "request_entry_through_result_file_serialization_before_sidecar_write"
+                ),
+                "session_reuse_policy": "catalog_map_projection_only",
+            },
             "telemetry": telemetry.as_dict(),
             "diagnostics": diagnostics,
-            "catalog_sha256": hashlib.sha256(Path(catalog_path).read_bytes()).hexdigest(),
-            "map_sha256": hashlib.sha256(Path(map_path).read_bytes()).hexdigest(),
-            "measurement_sha256": hashlib.sha256(Path(measurements_path).read_bytes()).hexdigest(),
+            "catalog_sha256": _session._snapshot.catalog_sha256,
+            "map_sha256": _session._snapshot.map_sha256,
+            "measurement_sha256": measurement_sha256,
         },
     )
     return result
+
+
+def _preflight_search_config(
+    config_path: str | Path,
+    *,
+    algorithm: str | None,
+    device_ids: Sequence[int] | None,
+) -> SearchConfig:
+    config = read_search_config(config_path)
+    if algorithm is not None and algorithm != config.algorithm:
+        raise ValueError("CLI algorithm must match SearchConfig.algorithm.")
+    selected_devices = tuple(device_ids or ())
+    if config.backend == "gpu":
+        if not selected_devices:
+            raise ValueError("GPU search requires one or more explicit --device-id values.")
+        if any(type(device_id) is not int or device_id < 0 for device_id in selected_devices):
+            raise ValueError("GPU device IDs must be nonnegative integers.")
+        if len(set(selected_devices)) != len(selected_devices):
+            raise ValueError("GPU device IDs must be distinct.")
+    elif selected_devices:
+        raise ValueError("--device-id can only be used with a GPU SearchConfig.")
+    if config.bounds_xy is None:
+        raise ValueError("SearchConfig.bounds_xy is required for v2 CLI search.")
+    return config
+
+
+def search_v2_files(
+    measurements_path: str | Path,
+    catalog_path: str | Path,
+    map_path: str | Path,
+    config_path: str | Path,
+    projected_crs: str,
+    output_path: str | Path,
+    *,
+    calibration_path: str | Path | None = None,
+    scope_manifest_path: str | Path | None = None,
+    algorithm: str | None = None,
+    spacing_m: float = 250.0,
+    seed: int = 0,
+    seed_policy: Literal["fixed", "per_trial_variable"] = "fixed",
+    wedge_error_deg: float | None = None,
+    wedge_tolerance_deg: float = 0.5,
+    wedge_cell_size_m: float = 250.0,
+    branch_max_regions: int = 999,
+    refine: bool = True,
+    refine_modes_count: int = 8,
+    refine_initial_step_m: float = 100.0,
+    refine_iterations: int = 50,
+    telemetry_path: str | Path | None = None,
+    device_ids: Sequence[int] | None = None,
+) -> LocalizationResult:
+    """Run one cold v2 request, preserving the historical file API."""
+    clock = perf_counter
+    started = clock()
+    _preflight_search_config(config_path, algorithm=algorithm, device_ids=device_ids)
+    session = SearchV2Session(catalog_path, map_path, projected_crs, clock=clock)
+    return _search_v2_request(
+        measurements_path,
+        session.catalog_path,
+        session.map_path,
+        config_path,
+        session.projected_crs,
+        output_path,
+        calibration_path=calibration_path,
+        scope_manifest_path=scope_manifest_path,
+        algorithm=algorithm,
+        spacing_m=spacing_m,
+        seed=seed,
+        seed_policy=seed_policy,
+        wedge_error_deg=wedge_error_deg,
+        wedge_tolerance_deg=wedge_tolerance_deg,
+        wedge_cell_size_m=wedge_cell_size_m,
+        branch_max_regions=branch_max_regions,
+        refine=refine,
+        refine_modes_count=refine_modes_count,
+        refine_initial_step_m=refine_initial_step_m,
+        refine_iterations=refine_iterations,
+        telemetry_path=telemetry_path,
+        device_ids=device_ids,
+        _session=session,
+        _clock=clock,
+        _timing_started=started,
+        _session_startup_s=session.startup_elapsed_s,
+        _timing_scope="cold_one_shot",
+        _batch_preflight_s=0.0,
+    )
+
+
+def _read_jsonl_requests(path: str | Path) -> tuple[dict[str, Path], ...]:
+    source = Path(path).expanduser().resolve()
+    requests: list[dict[str, Path]] = []
+    allowed = {"measurements", "config", "output", "telemetry_output"}
+    for line_number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            raise ValueError(f"JSONL request line {line_number} is blank.")
+        try:
+            raw = json.loads(line, parse_constant=_reject_constant)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSONL request on line {line_number}.") from exc
+        if not isinstance(raw, dict):
+            raise ValueError(f"JSONL request line {line_number} must be an object.")
+        if set(raw) - allowed or not {"measurements", "config", "output"} <= set(raw):
+            raise ValueError(
+                f"JSONL request line {line_number} must contain measurements, config, output, "
+                "and optional telemetry_output only."
+            )
+        if any(not isinstance(raw[key], str) or not raw[key] for key in raw):
+            raise ValueError(f"JSONL request line {line_number} paths must be nonempty strings.")
+        if len(requests) == 256:
+            raise ValueError("JSONL batch exceeds the 256-request limit.")
+        requests.append({key: (source.parent / value).resolve() for key, value in raw.items()})
+    if not requests:
+        raise ValueError("JSONL request file must contain at least one request.")
+    for request in requests:
+        request.setdefault(
+            "telemetry_output",
+            request["output"].with_suffix(request["output"].suffix + ".telemetry.json"),
+        )
+    return tuple(requests)
+
+
+def _validate_jsonl_paths(
+    requests: Sequence[dict[str, Path]],
+    *,
+    request_file: str | Path,
+    static_inputs: Sequence[str | Path],
+    shared_inputs: Sequence[str | Path | None],
+) -> None:
+    inputs = {Path(request_file).expanduser().resolve()}
+    inputs.update(Path(path).expanduser().resolve() for path in static_inputs)
+    inputs.update(Path(path).expanduser().resolve() for path in shared_inputs if path is not None)
+    for request in requests:
+        inputs.add(request["measurements"].resolve())
+        inputs.add(request["config"].resolve())
+    outputs = [
+        path.resolve()
+        for request in requests
+        for path in (request["output"], request["telemetry_output"])
+    ]
+    if len(outputs) != len(set(outputs)):
+        raise ValueError("Every JSONL request must have distinct result and telemetry outputs.")
+    if set(outputs) & inputs:
+        raise ValueError("JSONL outputs must be separate from every request and shared input.")
 
 
 def evaluate_v2_files(
@@ -941,14 +1241,61 @@ def simulate_v2_files(
     return diagnostics
 
 
+def _run_jsonl_searches(
+    request_file: str | Path,
+    catalog_path: str | Path,
+    map_path: str | Path,
+    projected_crs: str,
+    *,
+    options: dict[str, Any],
+) -> tuple[LocalizationResult, ...]:
+    batch_preflight_started = perf_counter()
+    requests = _read_jsonl_requests(request_file)
+    _validate_jsonl_paths(
+        requests,
+        request_file=request_file,
+        static_inputs=(catalog_path, map_path),
+        shared_inputs=(options.get("calibration_path"), options.get("scope_manifest_path")),
+    )
+    # Validate every request document before the first output is created. Each
+    # request is read and validated again inside its own timed execution.
+    for request in requests:
+        read_contract(request["measurements"], MeasurementSetV2)
+        _preflight_search_config(
+            request["config"],
+            algorithm=options.get("algorithm"),
+            device_ids=options.get("device_ids"),
+        )
+    batch_preflight_s = perf_counter() - batch_preflight_started
+    session = SearchV2Session(catalog_path, map_path, projected_crs)
+    results = []
+    for request in requests:
+        results.append(
+            session.run_request(
+                request["measurements"],
+                request["config"],
+                request["output"],
+                telemetry_path=request["telemetry_output"],
+                batch_preflight_s=batch_preflight_s,
+                **options,
+            )
+        )
+    return tuple(results)
+
+
 def search_v2_main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Standalone truth-free v2 search.")
-    parser.add_argument("--measurements", type=Path, required=True)
+    parser.add_argument("--measurements", type=Path)
     parser.add_argument("--catalog", type=Path, required=True)
     parser.add_argument("--map", dest="map_path", type=Path, required=True)
-    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--config", type=Path)
     parser.add_argument("--projected-crs", required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--requests-jsonl",
+        type=Path,
+        help="Run up to 256 independent requests from JSONL using one static-input session.",
+    )
     parser.add_argument("--calibration", type=Path)
     parser.add_argument("--scope-manifest", type=Path)
     parser.add_argument(
@@ -1000,7 +1347,44 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
         or len(set(args.device_id)) != len(args.device_id)
     ):
         parser.error("device IDs must be distinct nonnegative integers")
+    single_request = all(
+        value is not None for value in (args.measurements, args.config, args.output)
+    )
+    if args.requests_jsonl is not None:
+        if any(value is not None for value in (args.measurements, args.config, args.output)):
+            parser.error("--requests-jsonl cannot be combined with single-request paths.")
+        if args.telemetry_output is not None:
+            parser.error("--telemetry-output is available only for a single request.")
+    elif not single_request:
+        parser.error("Provide --requests-jsonl or all of --measurements, --config, and --output.")
     try:
+        options = {
+            "calibration_path": args.calibration,
+            "scope_manifest_path": args.scope_manifest,
+            "algorithm": args.algorithm,
+            "spacing_m": args.spacing_m,
+            "seed": args.seed,
+            "seed_policy": args.seed_policy,
+            "wedge_error_deg": args.max_grid_bearing_error_deg,
+            "wedge_tolerance_deg": args.wedge_tolerance_deg,
+            "wedge_cell_size_m": args.wedge_cell_size_m,
+            "branch_max_regions": args.branch_max_regions,
+            "refine": not args.no_refine,
+            "refine_modes_count": args.refine_modes,
+            "refine_initial_step_m": args.refine_initial_step_m,
+            "refine_iterations": args.refine_iterations,
+            "device_ids": args.device_id,
+        }
+        if args.requests_jsonl is not None:
+            results = _run_jsonl_searches(
+                args.requests_jsonl,
+                args.catalog,
+                args.map_path,
+                args.projected_crs,
+                options=options,
+            )
+            print(json.dumps({"requests_completed": len(results)}, sort_keys=True))
+            return 0
         result = search_v2_files(
             args.measurements,
             args.catalog,
@@ -1008,22 +1392,8 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             args.config,
             args.projected_crs,
             args.output,
-            calibration_path=args.calibration,
-            scope_manifest_path=args.scope_manifest,
-            algorithm=args.algorithm,
-            spacing_m=args.spacing_m,
-            seed=args.seed,
-            seed_policy=args.seed_policy,
-            wedge_error_deg=args.max_grid_bearing_error_deg,
-            wedge_tolerance_deg=args.wedge_tolerance_deg,
-            wedge_cell_size_m=args.wedge_cell_size_m,
-            branch_max_regions=args.branch_max_regions,
-            refine=not args.no_refine,
-            refine_modes_count=args.refine_modes,
-            refine_initial_step_m=args.refine_initial_step_m,
-            refine_iterations=args.refine_iterations,
             telemetry_path=args.telemetry_output,
-            device_ids=args.device_id,
+            **options,
         )
     except (OSError, TypeError, ValueError, RuntimeError, KeyError) as exc:
         parser.error(str(exc))
