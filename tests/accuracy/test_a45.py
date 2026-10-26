@@ -5,7 +5,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from shapely.geometry import box
+import pytest
+from shapely.geometry import MultiPolygon, Polygon, box
 
 from maritime_localization_shared.geospatial.vector_los import line_of_sight_clear
 from maritime_localization_shared.geospatial.vector_map import VectorMap
@@ -77,3 +78,58 @@ def test_reference_los_keeps_shoreline_and_narrow_interval_rules() -> None:
         [narrow_land],
         tolerance_m=0.0001,
     )
+
+
+def test_direct_single_polygon_and_multipolygon_fast_path_preserves_identity() -> None:
+    import maritime_localization_shared.geospatial.vector_map as vector_map_module
+
+    polygon = box(0.0, 0.0, 2.0, 2.0)
+    multipolygon = MultiPolygon((box(4.0, 0.0, 6.0, 2.0), box(8.0, 0.0, 10.0, 2.0)))
+
+    assert vector_map_module._polygonal_geometry(polygon, "geometry") is polygon
+    assert vector_map_module._polygonal_geometry(multipolygon, "geometry") is multipolygon
+    first = box(0.0, 0.0, 2.0, 2.0)
+    second = box(1.0, 0.0, 3.0, 2.0)
+    merged = vector_map_module._polygonal_geometry((first, second), "geometry")
+    assert merged is not first
+    assert merged is not None
+    assert merged.area == 6.0
+
+
+def test_single_geometry_fast_path_preserves_queries_and_sequence_normalization() -> None:
+    coverage = box(0.0, 0.0, 10.0, 10.0)
+    land = box(2.0, 2.0, 8.0, 8.0)
+    unknown = box(6.0, 6.0, 7.0, 7.0)
+    direct = VectorMap(
+        land,
+        crs="EPSG:32618",
+        coverage_geometry=coverage,
+        unknown_geometry=unknown,
+    )
+    sequence = VectorMap(
+        (land,),
+        crs="EPSG:32618",
+        coverage_geometry=coverage,
+        unknown_geometry=unknown,
+    )
+
+    points = ((1.0, 1.0), (3.0, 3.0), (6.5, 6.5), (10.0, 5.0), (11.0, 5.0))
+    for point in points:
+        assert direct.point_water_status(point) == sequence.point_water_status(point)
+    rays = (((1.0, 1.0), (9.0, 9.0)), ((1.0, 5.0), (2.0, 5.0)))
+    for observer, target in rays:
+        assert direct.line_visibility(observer, target) == sequence.line_visibility(
+            observer, target
+        )
+
+
+def test_polygonal_geometry_rejects_empty_and_invalid_direct_geometry() -> None:
+    import maritime_localization_shared.geospatial.vector_map as vector_map_module
+
+    with pytest.raises(ValueError, match="must not contain empty"):
+        vector_map_module._polygonal_geometry(Polygon(), "geometry")
+    with pytest.raises(ValueError, match="must not be empty"):
+        vector_map_module._polygonal_geometry((), "geometry")
+    invalid = Polygon(((0.0, 0.0), (1.0, 1.0), (1.0, 0.0), (0.0, 1.0)))
+    with pytest.raises(ValueError, match="must contain valid"):
+        vector_map_module._polygonal_geometry(invalid, "geometry")
