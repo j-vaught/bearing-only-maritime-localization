@@ -10,9 +10,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
+import signal
 import statistics
-from collections.abc import Callable
-from dataclasses import asdict
+import subprocess
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass
 from math import floor, radians
 from pathlib import Path
 from time import perf_counter
@@ -49,6 +52,62 @@ LOCAL_CRS = CRS.from_proj4(
     "+proj=eqc +lat_ts=38 +lat_0=38 +lon_0=-76.2 +a=6371008.8 +b=6371008.8 +units=m +no_defs"
 )
 GEOD = Geod(ellps="WGS84")
+
+
+@dataclass(frozen=True, slots=True)
+class BoundedProcessResult:
+    returncode: int | None
+    stdout: str
+    stderr: str
+    timed_out: bool
+    elapsed_s: float
+
+
+def run_bounded_process(
+    argv: Sequence[str],
+    *,
+    timeout_s: float,
+    cwd: str | Path | None = None,
+    env: dict[str, str] | None = None,
+    terminate_grace_s: float = 2.0,
+) -> BoundedProcessResult:
+    """Run a subprocess in its own process group and reap the group on timeout."""
+    if timeout_s <= 0.0 or terminate_grace_s < 0.0:
+        raise ValueError("timeout_s must be positive and terminate_grace_s nonnegative.")
+    started = perf_counter()
+    process = subprocess.Popen(
+        list(argv),
+        cwd=cwd,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    timed_out = False
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            stdout, stderr = process.communicate(timeout=terminate_grace_s)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            stdout, stderr = process.communicate()
+    return BoundedProcessResult(
+        returncode=process.returncode,
+        stdout=stdout,
+        stderr=stderr,
+        timed_out=timed_out,
+        elapsed_s=perf_counter() - started,
+    )
 
 
 def project(lon_deg: float, lat_deg: float) -> tuple[float, float]:
