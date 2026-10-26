@@ -15,6 +15,7 @@ from bearing_localization.accuracy_cli import (
     _candidate_outcome_evidence,
     _distant_region_bound_evidence,
     _run_jsonl_searches,
+    evaluate_v2_files,
     evaluate_v2_main,
     search_v2_files,
     search_v2_main,
@@ -690,3 +691,75 @@ def test_jsonl_cli_runs_multiple_requests_with_distinct_outputs(tmp_path, capsys
         == sidecar_a["request_timing"]["session_startup_s"]
     )
     assert sidecar_b["diagnostics"]["declared_bounds_xy_m"] == [30.0, 40.0, 30.0, 40.0]
+
+
+def _write_evaluation_handoff(tmp_path, support_payload):
+    estimate = tmp_path / "estimate-support.json"
+    truth = tmp_path / "truth-support.json"
+    support = tmp_path / "prepared-support.json"
+    output = tmp_path / "metrics-support.json"
+    write_contract(
+        estimate,
+        LocalizationResult(
+            hypotheses=(Hypothesis(0.0, 0.0, 0.0),),
+            elapsed_s=0.1,
+            decision_status="ambiguous",
+            search_status="completed",
+        ),
+    )
+    write_contract(truth, EvaluationTruth(0.0, 0.0, 0.0, ()))
+    support.write_text(json.dumps(support_payload), encoding="utf-8")
+    return estimate, truth, support, output
+
+
+def test_evaluator_accepts_actual_prepared_support_manifest_shape(tmp_path):
+    payload = {
+        "valid_reference_water": True,
+        "detected_physical_catalog_matched_groups": 3,
+        "port_id": "port-001",
+        "placement_id": "placement-001",
+        "supported": True,
+    }
+    estimate, truth, support, output = _write_evaluation_handoff(tmp_path, payload)
+    result = evaluate_v2_files(estimate, truth, support, output)
+    assert result["supported"] is True
+    assert json.loads(output.read_text(encoding="utf-8"))["supported"] is True
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ({"supported": False}, "disagrees"),
+        ({"supported": "true"}, "must be bool"),
+        ({"unexpected": "field"}, "Unexpected SupportManifest fields"),
+        ({"detected_physical_catalog_matched_groups": -1}, "nonnegative integer"),
+        ({"detected_physical_catalog_matched_groups": True}, "nonnegative integer"),
+    ],
+)
+def test_evaluator_rejects_invalid_prepared_support_fields_without_output(
+    tmp_path, mutation, message
+):
+    payload = {
+        "valid_reference_water": True,
+        "detected_physical_catalog_matched_groups": 3,
+        "port_id": "port-001",
+        "placement_id": "placement-001",
+        "supported": True,
+    }
+    payload.update(mutation)
+    estimate, truth, support, output = _write_evaluation_handoff(tmp_path, payload)
+    with pytest.raises((TypeError, ValueError), match=message):
+        evaluate_v2_files(estimate, truth, support, output)
+    assert not output.exists()
+
+
+def test_evaluator_accepts_prepared_support_without_derived_flag(tmp_path):
+    payload = {
+        "valid_reference_water": True,
+        "detected_physical_catalog_matched_groups": 3,
+        "port_id": "port-001",
+        "placement_id": "placement-001",
+    }
+    estimate, truth, support, output = _write_evaluation_handoff(tmp_path, payload)
+    result = evaluate_v2_files(estimate, truth, support, output)
+    assert result["supported"] is True

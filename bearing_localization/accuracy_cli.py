@@ -266,6 +266,20 @@ def _construct_dataclass(model: type, payload: object, *, name: str):
     return model(**payload)
 
 
+def _read_support_manifest(path: str | Path) -> SupportManifest:
+    """Read producer support JSON with an optional, verified derived flag."""
+    payload = _load_json(path)
+    derived_marker = object()
+    derived_supported = payload.pop("supported", derived_marker)
+    manifest = _construct_dataclass(SupportManifest, payload, name="SupportManifest")
+    if derived_supported is not derived_marker:
+        if type(derived_supported) is not bool:
+            raise TypeError("SupportManifest supported must be bool when present.")
+        if derived_supported != manifest.supported:
+            raise ValueError("SupportManifest supported disagrees with its source fields.")
+    return manifest
+
+
 def _search_dispatch(
     scorer: CandidateScorer,
     *,
@@ -1164,9 +1178,7 @@ def evaluate_v2_files(
         )
     estimate = read_contract(estimate_path, LocalizationResult)
     truth = read_contract(truth_path, EvaluationTruth)
-    manifest = _construct_dataclass(
-        SupportManifest, _load_json(support_path), name="SupportManifest"
-    )
+    manifest = _read_support_manifest(support_path)
     metrics = evaluate_localization(estimate, truth, manifest, coordinate_crs=coordinate_crs)
     document = asdict(metrics)
     document["supported"] = manifest.supported
