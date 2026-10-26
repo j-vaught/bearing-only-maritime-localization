@@ -22,6 +22,7 @@ from bearing_localization.evaluation.metrics import (
     SupportManifest,
     evaluate_localization,
 )
+from bearing_localization.search.assignment_expansion import ExpansionConfig, expand_assignments
 from bearing_localization.search.bounds import BoundsResult
 from bearing_localization.search.branch_bound import BranchBoundContext, branch_and_bound_search
 from bearing_localization.search.calibration import (
@@ -92,6 +93,10 @@ from maritime_localization_shared.serialization import (
     read_contract,
     write_contract,
 )
+
+
+class _AssignmentExpansionDeadline(RuntimeError):
+    """Internal signal used to stop one expansion at a branch boundary."""
 
 
 def _effective_proposal_sigma_deg(sigma_deg: float | None, config: SearchConfig) -> float:
@@ -314,7 +319,12 @@ def _calibration_binding(
     refine_modes_count: int,
     refine_initial_step_m: float,
     refine_iterations: int,
-    device_ids: Sequence[int],
+    expand_assignments_enabled: bool = False,
+    expansion_local_radius_m: float = 1_000.0,
+    expansion_max_nfev: int = 100,
+    expansion_max_branches: int = 5_000,
+    expansion_request_timeout_s: float = 1_800.0,
+    device_ids: Sequence[int] = (),
 ) -> tuple[CalibrationOperatingCondition, CalibrationContext]:
     """Bind frozen release decisions to the exact context and execution."""
     if seed_policy not in ("fixed", "per_trial_variable"):
@@ -345,6 +355,13 @@ def _calibration_binding(
         "backend": config_fields["backend"],
         "device_ids": list(device_ids),
     }
+    if expand_assignments_enabled:
+        execution_settings["assignment_expansion"] = {
+            "local_radius_m": expansion_local_radius_m,
+            "max_nfev": expansion_max_nfev,
+            "max_branches": expansion_max_branches,
+            "expansion_request_timeout_s": expansion_request_timeout_s,
+        }
     scope_sha256 = (
         _file_sha256(scope_manifest_path)
         if scope_manifest_path is not None
@@ -607,6 +624,7 @@ def _search_dispatch(
                 budget_limit=run.localization.budget_limit,
                 budget_used=run.localization.budget_used,
                 report_count=run.localization.report_count,
+                budget_exhaustion_reason=run.localization.budget_exhaustion_reason,
                 objective_version=run.localization.objective_version,
             )
             complete = counts.unevaluated == 0
@@ -1627,6 +1645,11 @@ def _search_v2_request(
     refine_modes_count: int = 8,
     refine_initial_step_m: float = 100.0,
     refine_iterations: int = 50,
+    expand_assignments_enabled: bool = False,
+    expansion_local_radius_m: float = 1_000.0,
+    expansion_max_nfev: int = 100,
+    expansion_max_branches: int = 5_000,
+    expansion_request_timeout_s: float = 1_800.0,
     telemetry_path: str | Path | None = None,
     device_ids: Sequence[int] | None = None,
     _session: SearchV2Session,
@@ -1643,6 +1666,22 @@ def _search_v2_request(
         raise ValueError("Request map path does not match SearchV2Session.")
     if not CRS.from_user_input(projected_crs).equals(CRS.from_user_input(_session.projected_crs)):
         raise ValueError("Request projection does not match SearchV2Session.")
+    expansion_config = ExpansionConfig(
+        local_radius_m=expansion_local_radius_m,
+        max_nfev=expansion_max_nfev,
+        max_branches=expansion_max_branches,
+    )
+    if not isfinite(expansion_request_timeout_s) or expansion_request_timeout_s <= 0.0:
+        raise ValueError("expansion_request_timeout_s must be finite and positive.")
+    expansion_deadline = (
+        _timing_started + expansion_request_timeout_s if expand_assignments_enabled else None
+    )
+
+    def deadline_reached() -> bool:
+        return expansion_deadline is not None and _clock() >= expansion_deadline
+
+    if expand_assignments_enabled and not refine:
+        raise ValueError("Assignment expansion requires continuous mode refinement.")
     _session._verify_static_inputs()
     out = Path(output_path).expanduser().resolve()
     inputs = [
@@ -1667,6 +1706,8 @@ def _search_v2_request(
     selected_algorithm = algorithm or config.algorithm
     if selected_algorithm != config.algorithm:
         raise ValueError("CLI algorithm must match SearchConfig.algorithm.")
+    if expand_assignments_enabled and config.backend != "cpu":
+        raise ValueError("Assignment expansion currently supports only the CPU backend.")
     if config.proposal_cache_path is not None:
         if selected_algorithm not in ("wedge_geodesic", "wedge_geodesic_seeded"):
             raise ValueError("proposal_cache_path is only valid for geodesic wedge algorithms.")
@@ -1721,6 +1762,11 @@ def _search_v2_request(
             refine_modes_count=refine_modes_count,
             refine_initial_step_m=refine_initial_step_m,
             refine_iterations=refine_iterations,
+            expand_assignments_enabled=expand_assignments_enabled,
+            expansion_local_radius_m=expansion_config.local_radius_m,
+            expansion_max_nfev=expansion_config.max_nfev,
+            expansion_max_branches=expansion_config.max_branches,
+            expansion_request_timeout_s=expansion_request_timeout_s,
             device_ids=selected_devices,
         )
         if (
@@ -1750,24 +1796,53 @@ def _search_v2_request(
     else:
         scorer = CandidateScorer(measurements, catalog, vector_map, config)
     telemetry.record_memory()
+    deadline_before_candidate_search = expand_assignments_enabled and deadline_reached()
+    diagnostics: dict[str, Any]
     with telemetry.stage("candidate_search"):
-        result, diagnostics, candidate_count, coverage_complete = _search_dispatch(
-            scorer,
-            algorithm=selected_algorithm,
-            spacing_m=spacing_m,
-            seed=seed,
-            wedge_error_deg=wedge_error_deg,
-            wedge_tolerance_deg=wedge_tolerance_deg,
-            wedge_cell_size_m=wedge_cell_size_m,
-            branch_max_regions=branch_max_regions,
-            telemetry=telemetry,
-            proposal_cache_input_hashes={
-                "measurement_sha256": measurement_sha256,
-                "catalog_sha256": _session._snapshot.catalog_sha256,
-                "map_sha256": _session._snapshot.map_sha256,
-            },
-        )
+        if deadline_before_candidate_search:
+            result = LocalizationResult(
+                hypotheses=(),
+                elapsed_s=0.0,
+                decision_status="ambiguous",
+                search_status="budget_exhausted",
+                certificate_scope="none",
+                budget_limit=None,
+                budget_used=None,
+                report_count=len(measurements.measurements),
+                objective_version=config.objective_version,
+                budget_exhaustion_reason="request_deadline",
+            )
+            diagnostics = {
+                "candidate_search_status": "not_started_due_to_request_deadline",
+                "candidate_budget_limit": config.candidate_budget,
+                "outcome_counts": None,
+                "candidate_count": 0,
+            }
+            candidate_count = 0
+            coverage_complete = False
+        else:
+            result, diagnostics, candidate_count, coverage_complete = _search_dispatch(
+                scorer,
+                algorithm=selected_algorithm,
+                spacing_m=spacing_m,
+                seed=seed,
+                wedge_error_deg=wedge_error_deg,
+                wedge_tolerance_deg=wedge_tolerance_deg,
+                wedge_cell_size_m=wedge_cell_size_m,
+                branch_max_regions=branch_max_regions,
+                telemetry=telemetry,
+                proposal_cache_input_hashes={
+                    "measurement_sha256": measurement_sha256,
+                    "catalog_sha256": _session._snapshot.catalog_sha256,
+                    "map_sha256": _session._snapshot.map_sha256,
+                },
+            )
     diagnostics["algorithm"] = selected_algorithm
+    diagnostics["assignment_expansion_config"] = (
+        {"enabled": True, **asdict(expansion_config)}
+        if expand_assignments_enabled
+        else {"enabled": False}
+    )
     if selected_algorithm in ("wedge_geodesic", "wedge_geodesic_seeded"):
         diagnostics["elapsed_time_semantics"] = {
             "localization_result_elapsed_s": (
@@ -1806,7 +1881,8 @@ def _search_v2_request(
     )
     candidate_result = result
     mode_evidence: tuple[SearchModeEvidence, ...] = ()
-    if refine and result.hypotheses:
+    deadline_before_refinement = expand_assignments_enabled and deadline_reached()
+    if refine and result.hypotheses and not deadline_before_refinement:
         with telemetry.stage("continuous_refinement"):
             seeds = []
             min_separation = max(25.0, refine_initial_step_m)
@@ -1846,22 +1922,246 @@ def _search_v2_request(
                 }
             )
             ranked = tuple(sorted(merged.values(), key=lambda item: item.score))
+            diagnostics["refinement"] = {
+                "mode_count": len(refined.modes),
+                "stop_reasons": [mode.stop_reason for mode in refined.modes],
+            }
+            if expand_assignments_enabled:
+                expansion_records: list[dict[str, Any]] = []
+                expanded_hypotheses = []
+                expansion_started = perf_counter()
+                deadline_stopped = False
+                branch_budget_exhausted = False
+                with telemetry.stage("assignment_expansion"):
+                    for mode_index, mode in enumerate(refined.modes):
+                        if deadline_reached():
+                            deadline_stopped = True
+                            break
+                        seed_hypothesis = mode.hypothesis
+                        if seed_hypothesis is None:
+                            expansion_records.append(
+                                {
+                                    "mode_index": mode_index,
+                                    "status": "no_refined_hypothesis",
+                                    "completed": True,
+                                    "budget_exhausted": False,
+                                    "pending_mode": False,
+                                    "counters": {},
+                                    "elapsed_s": 0.0,
+                                }
+                            )
+                            continue
+                        mode_started = perf_counter()
+                        branch_callbacks = {"started": 0, "completed": 0}
+
+                        def check_branch_deadline(_event: dict[str, Any]) -> None:
+                            if deadline_reached():
+                                raise _AssignmentExpansionDeadline
+                            branch_callbacks["started"] += 1
+
+                        def record_completed_branch(_event: dict[str, Any]) -> None:
+                            branch_callbacks["completed"] += 1
+
+                        try:
+                            expanded = expand_assignments(
+                                scorer,
+                                seed_hypothesis,
+                                config=expansion_config,
+                                progress_callback=check_branch_deadline,
+                                result_callback=record_completed_branch,
+                            )
+                        except _AssignmentExpansionDeadline:
+                            elapsed = perf_counter() - mode_started
+                            expansion_records.append(
+                                {
+                                    "mode_index": mode_index,
+                                    "seed_east_m": seed_hypothesis.east_m,
+                                    "seed_north_m": seed_hypothesis.north_m,
+                                    "seed_score": seed_hypothesis.score,
+                                    "status": "request_deadline_exhausted",
+                                    "completed": False,
+                                    "budget_exhausted": True,
+                                    "pending_mode": True,
+                                    "counters": {
+                                        "started_branch_callbacks": branch_callbacks["started"],
+                                        "completed_branch_callbacks": branch_callbacks["completed"],
+                                        "pending_branch_count": None,
+                                    },
+                                    "elapsed_s": elapsed,
+                                }
+                            )
+                            deadline_stopped = True
+                            break
+                        branch_budget_exhausted |= expanded.budget_exhausted
+                        expansion_records.append(
+                            {
+                                "mode_index": mode_index,
+                                "seed_east_m": seed_hypothesis.east_m,
+                                "seed_north_m": seed_hypothesis.north_m,
+                                "seed_score": expanded.original_score,
+                                "best_score": expanded.best_score,
+                                "improved": expanded.improved,
+                                "status": expanded.status,
+                                "completed": expanded.completed,
+                                "budget_exhausted": expanded.budget_exhausted,
+                                "pending_mode": expanded.budget_exhausted,
+                                "counters": expanded.counters,
+                                "elapsed_s": expanded.elapsed_s,
+                            }
+                        )
+                        if expanded.improved:
+                            expanded_hypotheses.append(expanded.best_hypothesis)
+                merged_expanded = {
+                    (round(item.east_m, 8), round(item.north_m, 8)): item
+                    for item in result.hypotheses
+                }
+                merged_expanded.update(
+                    {
+                        (round(item.east_m, 8), round(item.north_m, 8)): item
+                        for item in refined_hypotheses
+                    }
+                )
+                merged_expanded.update(
+                    {
+                        (round(item.east_m, 8), round(item.north_m, 8)): item
+                        for item in expanded_hypotheses
+                    }
+                )
+                if deadline_stopped:
+                    pending_start = len(expansion_records)
+                    for pending_index in range(pending_start, len(refined.modes)):
+                        expansion_records.append(
+                            {
+                                "mode_index": pending_index,
+                                "status": "not_started_due_to_request_deadline",
+                                "completed": False,
+                                "budget_exhausted": True,
+                                "pending_mode": True,
+                                "counters": {},
+                                "elapsed_s": 0.0,
+                            }
+                        )
+                pending_mode_count = sum(
+                    bool(item.get("pending_mode", False)) for item in expansion_records
+                )
+                expansion_elapsed = perf_counter() - expansion_started
+                # Preserve domain budgets; record postprocessing interruption explicitly.
+                final_search_status = (
+                    "budget_exhausted"
+                    if deadline_stopped or branch_budget_exhausted
+                    else result.search_status
+                )
+                exhaustion_reason = (
+                    "request_deadline"
+                    if deadline_stopped
+                    else (
+                        "assignment_branch_limit"
+                        if branch_budget_exhausted
+                        else result.budget_exhaustion_reason
+                    )
+                )
+                result = LocalizationResult(
+                    hypotheses=tuple(sorted(merged_expanded.values(), key=lambda item: item.score)),
+                    elapsed_s=result.elapsed_s + refined.elapsed_s + expansion_elapsed,
+                    decision_status="ambiguous",
+                    search_status=final_search_status,
+                    certificate_scope="none",
+                    budget_limit=result.budget_limit,
+                    budget_used=result.budget_used,
+                    report_count=result.report_count,
+                    objective_version=result.objective_version,
+                    bound_gap=None,
+                    budget_exhaustion_reason=exhaustion_reason,
+                )
+                diagnostics["assignment_expansion"] = {
+                    "enabled": True,
+                    "config": asdict(expansion_config),
+                    "status": (
+                        "request_deadline_exhausted"
+                        if deadline_stopped
+                        else (
+                            "completed_with_branch_budget_exhaustion"
+                            if branch_budget_exhausted
+                            else "completed"
+                        )
+                    ),
+                    "request_timeout_s": expansion_request_timeout_s,
+                    "selected_mode_count": len(refined.modes),
+                    "pending_mode_count": pending_mode_count,
+                    "completed_mode_count": sum(
+                        bool(item.get("completed")) and not bool(item.get("pending_mode", False))
+                        for item in expansion_records
+                    ),
+                    "calibration_gate": "not_calibrated_for_assignment_expansion",
+                    "mode_results": expansion_records,
+                }
+                mode_evidence = ()
+            else:
+                result = LocalizationResult(
+                    hypotheses=ranked,
+                    elapsed_s=result.elapsed_s + refined.elapsed_s,
+                    decision_status=result.decision_status,
+                    search_status=result.search_status,
+                    certificate_scope="none",
+                    budget_limit=result.budget_limit,
+                    budget_used=result.budget_used,
+                    report_count=result.report_count,
+                    objective_version=result.objective_version,
+                    bound_gap=None,
+                    budget_exhaustion_reason=result.budget_exhaustion_reason,
+                )
+    if expand_assignments_enabled and "assignment_expansion" not in diagnostics:
+        if deadline_before_refinement:
+            pending_count = (
+                None
+                if deadline_before_candidate_search
+                else min(refine_modes_count, len(result.hypotheses))
+            )
             result = LocalizationResult(
-                hypotheses=ranked,
-                elapsed_s=result.elapsed_s + refined.elapsed_s,
-                decision_status=result.decision_status,
-                search_status=result.search_status,
+                hypotheses=result.hypotheses,
+                elapsed_s=result.elapsed_s,
+                decision_status="ambiguous",
+                search_status="budget_exhausted",
                 certificate_scope="none",
                 budget_limit=result.budget_limit,
                 budget_used=result.budget_used,
                 report_count=result.report_count,
                 objective_version=result.objective_version,
                 bound_gap=None,
+                budget_exhaustion_reason="request_deadline",
             )
-            diagnostics["refinement"] = {
-                "mode_count": len(refined.modes),
-                "stop_reasons": [mode.stop_reason for mode in refined.modes],
-            }
+            pending_records = [
+                {
+                    "mode_index": index,
+                    "status": "not_started_due_to_request_deadline",
+                    "completed": False,
+                    "budget_exhausted": True,
+                    "pending_mode": True,
+                    "counters": {},
+                    "elapsed_s": 0.0,
+                }
+                for index in range(pending_count or 0)
+            ]
+            status = (
+                "request_deadline_before_candidate_search"
+                if deadline_before_candidate_search
+                else "request_deadline_before_refinement"
+            )
+        else:
+            pending_records = []
+            pending_count = 0
+            status = "no_refined_modes"
+        diagnostics["assignment_expansion"] = {
+            "enabled": True,
+            "config": asdict(expansion_config),
+            "status": status,
+            "request_timeout_s": expansion_request_timeout_s,
+            "pending_mode_count": pending_count,
+            "pending_candidate_search": deadline_before_candidate_search,
+            "completed_mode_count": 0,
+            "calibration_gate": "not_calibrated_for_assignment_expansion",
+            "mode_results": pending_records,
+        }
     outcome_counts, unresolved_count = _candidate_outcome_evidence(diagnostics)
     unresolved_region_count = diagnostics.get("unresolved_region_count", 0)
     global_bound_excludes_outside = diagnostics.get("global_bound_excludes_outside", False)
@@ -1892,6 +2192,13 @@ def _search_v2_request(
         "seed_policy": seed_policy,
         "seed": seed,
         "calibration_binding_status": "not_requested",
+        "assignment_expansion_enabled": expand_assignments_enabled,
+        "assignment_expansion_config": asdict(expansion_config)
+        if expand_assignments_enabled
+        else None,
+        "assignment_expansion_request_timeout_s": expansion_request_timeout_s
+        if expand_assignments_enabled
+        else None,
         "search_status": candidate_result.search_status,
         "scope_manifest_verified": scope_verified,
         "mode_source": "refined_local_modes" if decision_modes else "none",
@@ -1915,7 +2222,7 @@ def _search_v2_request(
         "candidate_bound_gap": candidate_result.bound_gap,
         "raw_distant_hypothesis_veto_evidence": _raw_distant_hypothesis_evidence(result),
     }
-    if calibration_path is not None and scope_verified:
+    if calibration_path is not None and scope_verified and not expand_assignments_enabled:
         with telemetry.stage("calibrated_decision"):
             calibration = load_frozen_calibration(
                 calibration_path,
@@ -1955,14 +2262,21 @@ def _search_v2_request(
                     report_count=result.report_count,
                     objective_version=result.objective_version,
                     bound_gap=result.bound_gap,
+                    budget_exhaustion_reason=result.budget_exhaustion_reason,
                 )
             diagnostics["public_evidence"]["calibration_binding_status"] = (
-                "not_requested" if calibration_path is None else "scope_not_verified"
+                "assignment_expansion_not_calibrated"
+                if expand_assignments_enabled
+                else ("not_requested" if calibration_path is None else "scope_not_verified")
             )
             diagnostics["decision_reason"] = (
-                "missing_full_coast_scope_manifest"
-                if calibration_path is not None
-                else "missing_frozen_calibration"
+                "assignment_expansion_not_calibrated"
+                if expand_assignments_enabled
+                else (
+                    "missing_full_coast_scope_manifest"
+                    if calibration_path is not None
+                    else "missing_frozen_calibration"
+                )
             )
     _session._verify_static_inputs()
     if _file_sha256(config_path) != config_sha256:
@@ -2052,12 +2366,18 @@ def search_v2_files(
     refine_modes_count: int = 8,
     refine_initial_step_m: float = 100.0,
     refine_iterations: int = 50,
+    expand_assignments_enabled: bool = False,
+    expansion_local_radius_m: float = 1_000.0,
+    expansion_max_nfev: int = 100,
+    expansion_max_branches: int = 5_000,
+    expansion_request_timeout_s: float = 1_800.0,
     telemetry_path: str | Path | None = None,
     device_ids: Sequence[int] | None = None,
+    _request_started_at: float | None = None,
 ) -> LocalizationResult:
     """Run one cold v2 request, preserving the historical file API."""
     clock = perf_counter
-    started = clock()
+    started = clock() if _request_started_at is None else _request_started_at
     _preflight_search_config(config_path, algorithm=algorithm, device_ids=device_ids)
     session = SearchV2Session(catalog_path, map_path, projected_crs, clock=clock)
     return _search_v2_request(
@@ -2081,6 +2401,11 @@ def search_v2_files(
         refine_modes_count=refine_modes_count,
         refine_initial_step_m=refine_initial_step_m,
         refine_iterations=refine_iterations,
+        expand_assignments_enabled=expand_assignments_enabled,
+        expansion_local_radius_m=expansion_local_radius_m,
+        expansion_max_nfev=expansion_max_nfev,
+        expansion_max_branches=expansion_max_branches,
+        expansion_request_timeout_s=expansion_request_timeout_s,
         telemetry_path=telemetry_path,
         device_ids=device_ids,
         _session=session,
@@ -2286,6 +2611,7 @@ def _run_jsonl_searches(
 
 
 def search_v2_main(argv: Sequence[str] | None = None) -> int:
+    request_started_at = perf_counter()
     parser = argparse.ArgumentParser(description="Standalone truth-free v2 search.")
     parser.add_argument("--measurements", type=Path)
     parser.add_argument("--catalog", type=Path, required=True)
@@ -2331,6 +2657,13 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--refine-modes", type=int, default=8)
     parser.add_argument("--refine-initial-step-m", type=float, default=100.0)
     parser.add_argument("--refine-iterations", type=int, default=50)
+    parser.add_argument("--expand-assignments", action="store_true")
+    parser.add_argument("--expansion-local-radius-m", type=float, default=1_000.0)
+    parser.add_argument("--expansion-max-nfev", type=int, default=100)
+    parser.add_argument("--expansion-max-branches", type=int, default=5_000)
+    parser.add_argument(
+        "--request-timeout-s", dest="expansion_request_timeout_s", type=float, default=1_800.0
+    )
     parser.add_argument(
         "--device-id",
         type=int,
@@ -2345,8 +2678,15 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
         or args.refine_modes < 1
         or args.refine_iterations < 1
         or args.branch_max_regions < 1
+        or args.expansion_local_radius_m <= 0
+        or not 1 <= args.expansion_max_nfev <= 100
+        or not 1 <= args.expansion_max_branches <= 5_000
+        or not isfinite(args.expansion_request_timeout_s)
+        or args.expansion_request_timeout_s <= 0
     ):
-        parser.error("spacing, cell size, refinement, and region budgets must be positive")
+        parser.error("search and assignment-expansion budgets are outside their valid bounds")
+    if args.expand_assignments and args.no_refine:
+        parser.error("--expand-assignments requires continuous refinement")
     if args.device_id is not None and (
         any(device_id < 0 for device_id in args.device_id)
         or len(set(args.device_id)) != len(args.device_id)
@@ -2378,6 +2718,11 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             "refine_modes_count": args.refine_modes,
             "refine_initial_step_m": args.refine_initial_step_m,
             "refine_iterations": args.refine_iterations,
+            "expand_assignments_enabled": args.expand_assignments,
+            "expansion_local_radius_m": args.expansion_local_radius_m,
+            "expansion_max_nfev": args.expansion_max_nfev,
+            "expansion_max_branches": args.expansion_max_branches,
+            "expansion_request_timeout_s": args.expansion_request_timeout_s,
             "device_ids": args.device_id,
         }
         if args.requests_jsonl is not None:
@@ -2398,6 +2743,7 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             args.projected_crs,
             args.output,
             telemetry_path=args.telemetry_output,
+            _request_started_at=request_started_at,
             **options,
         )
     except (OSError, TypeError, ValueError, RuntimeError, KeyError) as exc:
