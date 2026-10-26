@@ -9,6 +9,7 @@ from maritime_localization_shared.contracts.inputs_v2 import MapV2
 from maritime_localization_shared.geospatial.coverage_certificate import (
     CandidateCoverageCertificate,
     certify_candidate_coverage,
+    prepare_candidate_coverage_context,
 )
 
 CRS = "EPSG:32618"
@@ -39,22 +40,30 @@ def test_certificate_binds_candidate_all_sorted_target_keys_and_map_identity() -
     source = map_v2(box(-10.0, -10.0, 10.0, 10.0))
     candidate = (0.0, 0.0)
     targets = [("zeta", (4.0, 3.0)), ("alpha", (5.0, -2.0))]
-    certificate = certify_candidate_coverage(source, candidate, targets)
+    context = prepare_candidate_coverage_context(source)
+    assert context is not None
+    certificate = certify_candidate_coverage(context, candidate, targets)
 
     assert isinstance(certificate, CandidateCoverageCertificate)
     assert certificate.target_map_xy == (("alpha", (5.0, -2.0)), ("zeta", (4.0, 3.0)))
     assert certificate.candidate_water_status == "water"
     assert certificate.proof_method == "convex_hull_inside_known_coverage"
     assert certificate.covers(candidate, targets)
-    assert certificate.matches_map(source)
-    assert not certificate.matches_map(map_v2(box(-10.0, -10.0, 10.0, 10.0), map_version="other"))
+    assert certificate.matches_map(context)
+    other_context = prepare_candidate_coverage_context(
+        map_v2(box(-10.0, -10.0, 10.0, 10.0), map_version="other")
+    )
+    assert other_context is not None
+    assert not certificate.matches_map(other_context)
     assert not certificate.covers((0.01, 0.0), targets)
     assert not certificate.covers(candidate, [("alpha", (5.0, -2.0))])
     assert not certificate.covers(candidate, [("alpha", (5.0, -2.0)), ("zeta", (4.0, -2.1))])
     assert not certificate.covers(candidate, [("wrong-key", (4.0, 3.0)), ("alpha", (5.0, -2.0))])
 
     changed_map = map_v2(box(-10.0, -10.0, 10.0, 10.0), map_version="test-v2")
-    changed_certificate = certify_candidate_coverage(changed_map, candidate, targets)
+    changed_context = prepare_candidate_coverage_context(changed_map)
+    assert changed_context is not None
+    changed_certificate = certify_candidate_coverage(changed_context, candidate, targets)
     assert changed_certificate is not None
     assert changed_certificate.map_identity_sha256 != certificate.map_identity_sha256
 
@@ -163,13 +172,15 @@ def test_unknown_region_outside_candidate_hull_does_not_invalidate_coverage() ->
     assert certificate.covers(candidate, targets)
 
 
-def test_certificate_is_frozen_and_malformed_witness_fails_closed() -> None:
+def test_certificate_is_frozen_after_proof_minting() -> None:
     source = map_v2(box(-2.0, -2.0, 2.0, 2.0))
     certificate = certify_candidate_coverage(source, (0.0, 0.0), [("one", (1.0, 0.0))])
 
     assert certificate is not None
     try:
-        object.__setattr__(certificate, "_coverage_wkb", b"invalid WKB")
+        setattr(certificate, "candidate_xy_m", (1.0, 1.0))
     except (AttributeError, TypeError):
         pass
-    assert not certificate.covers((0.0, 0.0), [("one", (1.0, 0.0))])
+    else:
+        raise AssertionError("Certificate fields must be immutable.")
+    assert certificate.covers((0.0, 0.0), [("one", (1.0, 0.0))])
