@@ -56,10 +56,11 @@ def main() -> None:
         default=128,
         help="Number of saved hypotheses to profile, in saved order; use 0 for all.",
     )
+    parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--repeats", type=int, default=2)
     args = parser.parse_args()
-    if args.limit < 0 or args.repeats < 1:
-        parser.error("--limit must be nonnegative and --repeats must be positive.")
+    if args.limit < 0 or args.offset < 0 or args.repeats < 1:
+        parser.error("--limit and --offset must be nonnegative; --repeats must be positive.")
 
     paths = {
         "catalog": STATIC_DIR / "catalog.json",
@@ -78,7 +79,9 @@ def main() -> None:
         "hypotheses"
     ]
     if args.limit:
-        hypotheses = hypotheses[: args.limit]
+        hypotheses = hypotheses[args.offset : args.offset + args.limit]
+    else:
+        hypotheses = hypotheses[args.offset :]
     positions = [(float(row["east_m"]), float(row["north_m"])) for row in hypotheses]
 
     vector_map = VectorMap.from_map_v2(map_v2, target_crs="EPSG:32618")
@@ -119,7 +122,7 @@ def main() -> None:
         batch_ms = statistics.median(times[index]["batch"]) * 1e3
         rows.append(
             {
-                "rank": index + 1,
+                "rank": args.offset + index + 1,
                 "east_m": float(hypothesis["east_m"]),
                 "north_m": float(hypothesis["north_m"]),
                 "ray_count": ray_counts[index],
@@ -145,6 +148,7 @@ def main() -> None:
         "source": "saved estimate hypotheses in saved order; no truth input",
         "input_sha256": hashes,
         "catalog_records": len(catalog.records),
+        "candidate_offset": args.offset,
         "candidate_count": len(positions),
         "repeats_per_candidate": args.repeats,
         "exact_result_parity_pairs": len(positions) * args.repeats,
@@ -154,7 +158,7 @@ def main() -> None:
         "ray_threshold_summaries": thresholds,
     }
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / "profile_crossover.json"
+    output_path = OUTPUT_DIR / f"profile_crossover_offset{args.offset}_limit{args.limit}.json"
     output_path.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))
 
