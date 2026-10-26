@@ -113,6 +113,43 @@ def validate_objective_progress(
     )
 
 
+def validate_branch_score_sequence(
+    seed_score: float, branches: list[dict[str, Any]]
+) -> list[float]:
+    best_score = seed_score
+    improved: list[float] = []
+    for branch in branches:
+        exact_score = branch.get("exact_score")
+        status = branch.get("status")
+        if exact_score is None:
+            require(
+                status not in {"improved", "no_improvement"},
+                "scored branch status has no exact score",
+            )
+            continue
+        require(
+            type(exact_score) in (int, float) and math.isfinite(exact_score),
+            "branch exact score must be finite",
+        )
+        exact_score = float(exact_score)
+        if status == "improved":
+            require(
+                exact_score < best_score,
+                "branch marked improved without a strict best-score decrease",
+            )
+            best_score = exact_score
+            improved.append(exact_score)
+        else:
+            require(
+                status == "no_improvement", "exact-scored branch has an unsupported terminal status"
+            )
+            require(
+                exact_score >= best_score,
+                "branch marked no_improvement below the current best score",
+            )
+    return improved
+
+
 def validate_no_unmatched_mode(
     row: dict[str, Any],
     seed: Any,
@@ -485,6 +522,7 @@ def validate_expansion_bundle(
             for record in events
             if record["mode_index"] == index and record["phase"] == "branch_result"
         ]
+        improved_scores = validate_branch_score_sequence(seed.score, mode_results)
         exact_branch_hypotheses = []
         for branch in mode_results:
             exact_score = branch.get("exact_score")
@@ -521,11 +559,6 @@ def validate_expansion_bundle(
                 "branch assignment-retention flag differs from exact assignment",
             )
             exact_branch_hypotheses.append(branch_hypothesis)
-        improved_scores = [
-            float(branch["exact_score"])
-            for branch in mode_results
-            if branch.get("status") == "improved" and branch.get("exact_score") is not None
-        ]
         validate_objective_progress(seed.score, best.score, improved_scores)
         if best.score < seed.score:
             require(

@@ -22,6 +22,7 @@ from tools.evaluate_assignment_expansion import (
     canonical_hash,
     choose_start_label,
     evaluate_exact_position,
+    validate_branch_score_sequence,
     validate_mode_counts,
     validate_no_unmatched_mode,
     validate_objective_progress,
@@ -237,3 +238,25 @@ def test_exact_position_cache_does_not_round_coordinates() -> None:
     assert evaluate_exact_position(scorer, cache, first) == first
     assert evaluate_exact_position(scorer, cache, second) == second
     assert scorer.positions == [first, second]
+
+
+def test_branch_improvement_events_follow_strict_best_sequence() -> None:
+    branches = [
+        {"status": "no_improvement", "exact_score": 10.0},
+        {"status": "improved", "exact_score": 9.0},
+        {"status": "no_improvement", "exact_score": 9.0},
+        {"status": "improved", "exact_score": 8.5},
+    ]
+    assert validate_branch_score_sequence(10.0, branches) == [9.0, 8.5]
+    with pytest.raises(ValueError, match="strict best-score decrease"):
+        validate_branch_score_sequence(10.0, [{"status": "improved", "exact_score": 10.1}])
+    with pytest.raises(ValueError, match="below the current best"):
+        validate_branch_score_sequence(
+            10.0,
+            [
+                {"status": "improved", "exact_score": 9.0},
+                {"status": "no_improvement", "exact_score": 8.0},
+            ],
+        )
+    with pytest.raises(ValueError, match="has no exact score"):
+        validate_branch_score_sequence(10.0, [{"status": "improved", "exact_score": None}])
