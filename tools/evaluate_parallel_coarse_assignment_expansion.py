@@ -273,3 +273,78 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def validate_preparation_failure(output: Path) -> dict[str, Any]:
+    """Verify an eventless pre-dispatch failure without treating it as accuracy data."""
+    manifest = parallel_eval.read_json(output / "manifest.json")
+    checkpoint = parallel_eval.read_json(output / str(manifest.get("checkpoint_file")))
+    require(
+        manifest.get("schema") == "parallel-assignment-expansion-diagnostic-v1",
+        "unexpected failed-run schema",
+    )
+    require(manifest.get("seed_stage") == "coarse", "failed run is not coarse-stage")
+    require(manifest.get("status") == "failed", "artifact is not a failed attempt")
+    require(
+        manifest.get("completed_mode_count") == 0 and manifest.get("failed_mode_count") == 0,
+        "preparation failure unexpectedly has completed/failed modes",
+    )
+    require(
+        manifest.get("unknown_mode_count") == 64
+        and manifest.get("unknown_mode_indices") == list(range(64)),
+        "preparation failure does not retain 64 unknown modes",
+    )
+    require(
+        manifest.get("error") == checkpoint.get("error"),
+        "failure reason differs between manifest and checkpoint",
+    )
+    rows_path = output / str(manifest.get("rows_file"))
+    events_path = output / str(manifest.get("events_file"))
+    require(
+        parallel_eval.sha256_file(rows_path)
+        == manifest.get("rows_sha256")
+        == checkpoint.get("rows_sha256"),
+        "empty rows hash mismatch",
+    )
+    require(
+        parallel_eval.sha256_file(events_path)
+        == manifest.get("events_sha256")
+        == checkpoint.get("events_sha256"),
+        "empty events hash mismatch",
+    )
+    require(
+        rows_path.stat().st_size == 0 and events_path.stat().st_size == 0,
+        "preparation failure unexpectedly contains row/event data",
+    )
+    require(
+        manifest.get("event_count") == checkpoint.get("event_count") == 0,
+        "preparation failure unexpectedly records events",
+    )
+    require(
+        manifest.get("event_digest") == checkpoint.get("event_digest") == "",
+        "empty event digest mismatch",
+    )
+    require(
+        checkpoint.get("status") == "failed" and checkpoint.get("resume_supported") is False,
+        "checkpoint does not identify a terminal non-resumable failure",
+    )
+    return {
+        "schema": "parallel-coarse-assignment-expansion-evaluation-v1",
+        "evidence_status": "pre_dispatch_failure_verified",
+        "accuracy_status": "not_evaluated",
+        "producer_status": "failed",
+        "error": manifest.get("error"),
+        "mode_count": 64,
+        "completed_mode_count": 0,
+        "failed_mode_count": 0,
+        "unknown_mode_count": 64,
+        "event_count": 0,
+        "manifest_sha256": parallel_eval.sha256_file(output / "manifest.json"),
+        "checkpoint_sha256": parallel_eval.sha256_file(
+            output / str(manifest.get("checkpoint_file"))
+        ),
+        "rows_sha256": manifest.get("rows_sha256"),
+        "events_sha256": manifest.get("events_sha256"),
+        "truth_read": False,
+        "certificate_scope": "none",
+    }
