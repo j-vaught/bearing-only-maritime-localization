@@ -6,6 +6,8 @@ import argparse
 import hashlib
 import json
 import math
+from collections.abc import Sequence
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -21,17 +23,26 @@ def require(condition: bool, message: str) -> None:
         raise parallel_eval.EvaluationError(message)
 
 
+def _row_mapping(value: Any) -> dict[str, Any]:
+    if type(value) is dict:
+        return cast(dict[str, Any], value)
+    require(is_dataclass(value), "source mode row is not a mapping or dataclass")
+    converted = asdict(value)
+    require(type(converted) is dict, "source mode row dataclass did not serialize to object")
+    return converted
+
+
 def verify_coarse_selection(
     rows: list[dict[str, Any]],
-    a20_rows: list[dict[str, Any]],
-    assigned_rows: list[dict[str, Any]],
+    a20_rows: Sequence[Any],
+    assigned_rows: Sequence[Any],
 ) -> None:
     """Prove mode identities, original A20 seeds, and all three serialized starts."""
     require(len(a20_rows) == len(assigned_rows) == 64, "source bundles must each contain 64 modes")
     require(len(rows) <= 64, "coarse output has more than 64 rows")
     for index, row in enumerate(rows):
-        a20 = a20_rows[index]
-        assigned = assigned_rows[index]
+        a20 = _row_mapping(a20_rows[index])
+        assigned = _row_mapping(assigned_rows[index])
         require(row.get("mode_index") == index, f"row {index} mode order mismatch")
         require(
             row.get("input_index") == a20.get("input_index") == assigned.get("input_index"),
