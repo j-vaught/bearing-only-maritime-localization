@@ -246,8 +246,9 @@ def main() -> None:
         "rows_sha256": manifest.get("rows_sha256"),
         "events_sha256": manifest.get("events_sha256"),
         "coarse_seed_verified": True,
-        "all_three_starts_rescored": True,
-        "final_hypotheses_rescored": True,
+        "all_three_starts_rescored": bool(rows)
+        and all(len(row.get("start_alternatives", [])) == 3 for row in rows),
+        "final_hypotheses_rescored": bool(rows),
         "truth_used_for_search_or_proposal_selection": False,
         "certificate_scope": "none",
         "mode_rows": [
