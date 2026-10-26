@@ -124,18 +124,34 @@ def pre_los_catalog_row_min_bound(
         )
 
     detections = [DetectedObject(r.key, "unknown", r.bearing_deg, r.range_m) for r in prepared]
-    components = group_angular_detections(
+    grouped = group_angular_detections(
         detections, config.circular_merge_tolerance_deg, report_type_labels=False
-    ).truth_groups
+    )
+    components = grouped.truth_groups
     by_key = {r.key: r for r in prepared}
+    component_by_key = {
+        key: component_index
+        for component_index, component in enumerate(components)
+        for key in component
+    }
+    known_uncertainties_by_component = tuple(
+        tuple(
+            sorted(
+                {
+                    float(uncertainty)
+                    for key in component
+                    if (uncertainty := by_key[key].uncertainty_m) is not None
+                }
+            )
+        )
+        for component in components
+    )
     try:
         empty = build_likelihood_costs(measurements, [], [], config)
         baseline = float(empty.baseline_constant)
         nr = _report_count(measurements)
         clutter = (
-            float(
-                build_likelihood_costs(measurements, [0.0], [None], config).report_clutter_costs[0]
-            )
+            float(empty.report_clutter_costs[0])
             if nr
             else -log(config.expected_unmatched_reports / 360.0)
         )
@@ -144,23 +160,43 @@ def pre_los_catalog_row_min_bound(
     except (TypeError, ValueError) as exc:
         return _unresolved(f"Unsupported likelihood inputs: {exc}", numerical_margin)
 
-    columns: list[tuple[float, ...]] = []
-    for record in prepared:
-        component = next(g for g in components if record.key in g)
-        possible_u = _possible_uncertainties(record, component, by_key)
-        variants = []
-        for u in possible_u:
-            sigma = degrees(atan2(u, record.range_m))
-            try:
-                costs = build_likelihood_costs(
-                    measurements, [record.bearing_deg], [record.object_type], config, [sigma]
-                )
-            except NotImplementedError as exc:
-                return _unresolved(f"Unsupported likelihood model: {exc}", numerical_margin)
-            except (TypeError, ValueError) as exc:
-                return _unresolved(f"Unsupported likelihood inputs: {exc}", numerical_margin)
-            variants.append(costs.matched_costs[:, 0])
-        columns.append(tuple(float(min(v[i] for v in variants)) for i in range(nr)))
+    variant_bearings: list[float] = []
+    variant_types: list[str | int | None] = []
+    variant_sigmas: list[float] = []
+    owner_columns: list[list[int]] = [[] for _ in prepared]
+    for record_index, record in enumerate(prepared):
+        component_index = component_by_key[record.key]
+        possible_u = _possible_uncertainties(
+            record, known_uncertainties_by_component[component_index]
+        )
+        for uncertainty in possible_u:
+            owner_columns[record_index].append(len(variant_bearings))
+            variant_bearings.append(record.bearing_deg)
+            variant_types.append(record.object_type)
+            variant_sigmas.append(degrees(atan2(uncertainty, record.range_m)))
+
+    if variant_bearings and nr:
+        try:
+            batched = build_likelihood_costs(
+                measurements,
+                variant_bearings,
+                variant_types,
+                config,
+                variant_sigmas,
+            )
+        except NotImplementedError as exc:
+            return _unresolved(f"Unsupported likelihood model: {exc}", numerical_margin)
+        except (TypeError, ValueError) as exc:
+            return _unresolved(f"Unsupported likelihood inputs: {exc}", numerical_margin)
+        columns = [
+            tuple(
+                float(min(batched.matched_costs[i, column] for column in member_columns))
+                for i in range(nr)
+            )
+            for member_columns in owner_columns
+        ]
+    else:
+        columns = [tuple() for _ in prepared]
     edges = tuple(tuple(columns[j][i] for j in range(len(prepared))) for i in range(nr))
     terms, sources = [], []
     for row in edges:
@@ -199,12 +235,11 @@ def pre_los_catalog_row_min_bound(
     )
 
 
-def _possible_uncertainties(rep, component: tuple[str, ...], records) -> tuple[float, ...]:
+def _possible_uncertainties(rep, known: tuple[float, ...]) -> tuple[float, ...]:
     rep_u = rep.uncertainty_m
-    known = {records[k].uncertainty_m for k in component if records[k].uncertainty_m is not None}
     if rep_u is None:
-        return tuple(sorted({0.0, *(float(v) for v in known)}))
-    return tuple(sorted(float(v) for v in known if v >= rep_u))
+        return tuple(sorted({0.0, *known}))
+    return tuple(value for value in known if value >= rep_u)
 
 
 def _report_count(measurements) -> int:
