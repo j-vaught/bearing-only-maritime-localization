@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 import numpy as np
 
@@ -12,6 +13,7 @@ from maritime_localization_shared.contracts.estimate import PositionEstimate
 from maritime_localization_shared.contracts.observation import MeasurementSet
 
 from ..ransac import randomized_hypothesis_search
+from .scoring import CandidateScorer, CandidateSearchRun, score_candidate_positions
 
 
 class VisibilityProtocol(Protocol):
@@ -32,9 +34,8 @@ class VisibilityProtocol(Protocol):
 class RandomizedSearchConfig:
     """Configuration for the randomized search adapter.
 
-    If ``sigma_deg`` is omitted, the median positive per-observation standard
-    deviation is used. A small positive floor handles exact-zero contract
-    uncertainty because the underlying normalized residual requires sigma > 0.
+    If ``sigma_deg`` is omitted, each observation retains its own reported
+    standard deviation. A small positive floor handles exact-zero uncertainty.
     """
 
     bounds_xy: tuple[float, float, float, float]
@@ -83,17 +84,19 @@ def randomized_search(
         [(record.east_m, record.north_m) for record in ais.records], dtype=float
     ).reshape((-1, 2))
     if config.sigma_deg is None:
-        reported_sigmas = [
-            item.bearing_sigma_deg
-            for item in measurements.observations
-            if item.bearing_sigma_deg > 0.0
-        ]
-        sigma_deg = max(
-            float(np.median(reported_sigmas)) if reported_sigmas else config.min_sigma_deg,
-            config.min_sigma_deg,
+        report_sigmas_deg = np.asarray(
+            [
+                max(item.bearing_sigma_deg, config.min_sigma_deg)
+                if item.bearing_sigma_deg > 0.0
+                else config.min_sigma_deg
+                for item in measurements.observations
+            ],
+            dtype=float,
         )
+        sigma_deg = config.min_sigma_deg
     else:
         sigma_deg = config.sigma_deg
+        report_sigmas_deg = np.full(len(observations), sigma_deg, dtype=float)
 
     water_predicate = config.visibility.is_water if config.visibility is not None else None
     line_of_sight_predicate = None
@@ -121,6 +124,7 @@ def randomized_search(
         seed=config.seed,
         water_predicate=water_predicate,
         line_of_sight_predicate=line_of_sight_predicate,
+        report_sigmas_deg=report_sigmas_deg,
     )
     return PositionEstimate(
         east_m=result.east_m,
@@ -135,4 +139,27 @@ def randomized_search(
     )
 
 
-__all__ = ["RandomizedSearchConfig", "randomized_search"]
+def run_randomized_search_v2(
+    scorer: CandidateScorer,
+    candidate_positions: Iterable[tuple[float, float]],
+    *,
+    search_status: Literal["completed", "budget_exhausted"] = "completed",
+    budget_limit: int | None = None,
+    budget_used: int | None = None,
+) -> CandidateSearchRun:
+    """Dispatch caller-generated version-two candidates through the common scorer.
+
+    This adapter never converts a finite candidate minimum into a global
+    optimality certificate or an accepted fix. Candidate generation remains
+    owned by the associated grid, hierarchical, or randomized driver.
+    """
+    return score_candidate_positions(
+        scorer,
+        candidate_positions,
+        search_status=search_status,
+        budget_limit=budget_limit,
+        budget_used=budget_used,
+    )
+
+
+__all__ = ["RandomizedSearchConfig", "randomized_search", "run_randomized_search_v2"]

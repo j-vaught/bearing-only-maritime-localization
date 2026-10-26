@@ -8,8 +8,9 @@ and matching semantics stay comparable with :mod:`bearing_localization.algorithm
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from time import perf_counter
+from typing import Literal
 
 import numpy as np
 
@@ -20,6 +21,7 @@ from maritime_localization_shared.geometry.angular_grouping import (
 from maritime_localization_shared.geospatial.spatial_index import SpatialIndex2D
 
 from ..algorithms import SearchResult, associate
+from .scoring import CandidateScorer, CandidateSearchRun, score_candidate_positions
 
 WaterPredicate = Callable[[float, float], bool]
 LineOfSightPredicate = Callable[[tuple[float, float], tuple[float, float]], bool]
@@ -30,7 +32,7 @@ def hierarchical_search(
     ais_xy: np.ndarray,
     ais_types: Sequence[str | None],
     bounds_xy: tuple[float, float, float, float],
-    sigma_deg: float = 0.5,
+    sigma_deg: float | Sequence[float] | np.ndarray = 0.5,
     coarse_spacing_m: float = 5_000.0,
     refinement_levels: int = 4,
     refinement_factor: float = 2.0,
@@ -61,7 +63,7 @@ def hierarchical_search(
     between levels, trading compute for resilience to local score minima.
     """
     started = perf_counter()
-    if sigma_deg <= 0 or unmatched_penalty_deg <= 0 or visibility_radius_m <= 0:
+    if np.any(np.asarray(sigma_deg) <= 0) or unmatched_penalty_deg <= 0 or visibility_radius_m <= 0:
         raise ValueError("sigma, unmatched penalty, and visibility radius must be positive.")
     if coarse_spacing_m <= 0 or not np.isfinite(coarse_spacing_m):
         raise ValueError("coarse_spacing_m must be finite and positive.")
@@ -251,4 +253,32 @@ def _select_diverse_leaders(
     return leaders
 
 
-__all__ = ["LineOfSightPredicate", "WaterPredicate", "hierarchical_search"]
+def run_hierarchical_search_v2(
+    scorer: CandidateScorer,
+    candidate_positions: Iterable[tuple[float, float]],
+    *,
+    search_status: Literal["completed", "budget_exhausted"] = "completed",
+    budget_limit: int | None = None,
+    budget_used: int | None = None,
+) -> CandidateSearchRun:
+    """Dispatch caller-generated version-two candidates through the common scorer.
+
+    This adapter never converts a finite candidate minimum into a global
+    optimality certificate or an accepted fix. Candidate generation remains
+    owned by the associated grid, hierarchical, or randomized driver.
+    """
+    return score_candidate_positions(
+        scorer,
+        candidate_positions,
+        search_status=search_status,
+        budget_limit=budget_limit,
+        budget_used=budget_used,
+    )
+
+
+__all__ = [
+    "LineOfSightPredicate",
+    "WaterPredicate",
+    "hierarchical_search",
+    "run_hierarchical_search_v2",
+]

@@ -13,15 +13,19 @@ from dataclasses import dataclass
 from itertools import combinations
 from math import hypot, isfinite, radians
 from time import perf_counter
+from typing import Literal
 
 import numpy as np
+from pyproj import Transformer
 from scipy.optimize import least_squares
 
 from maritime_localization_shared.contracts import AISSnapshot, MeasurementSet, PositionEstimate
+from maritime_localization_shared.geospatial.coordinates import LocalFrame
 from maritime_localization_shared.geospatial.spatial_index import SpatialIndex2D
 
 from ..algorithms import SearchResult, associate, wrap_deg
-from .association import compatible_types
+from .proposals.pairwise import generate_geographic_pairwise_proposals
+from .scoring import CandidateScorer, CandidateSearchRun, score_candidate_positions
 
 
 def _spread_sources(
@@ -111,6 +115,7 @@ def pairwise_hypothesis_search(
     *,
     water_predicate=None,
     line_of_sight_predicate=None,
+    report_sigmas_deg: Sequence[float] | np.ndarray | None = None,
 ) -> SearchResult:
     """Estimate position by enumerating intersections of paired bearing lines.
 
@@ -142,6 +147,19 @@ def pairwise_hypothesis_search(
     obs = [(kind, float(bearing)) for kind, bearing in observations]
     if any(not isfinite(bearing) for _, bearing in obs):
         raise ValueError("Observation bearings must be finite.")
+    report_sigmas = np.asarray(
+        report_sigmas_deg if report_sigmas_deg is not None else cfg.sigma_deg, dtype=float
+    )
+    if report_sigmas.ndim == 0:
+        report_sigmas = np.full(len(obs), float(report_sigmas))
+    if (
+        report_sigmas.shape != (len(obs),)
+        or not np.isfinite(report_sigmas).all()
+        or np.any(report_sigmas <= 0)
+    ):
+        raise ValueError(
+            "report_sigmas_deg must contain one finite positive value per observation."
+        )
 
     half_diagonal = hypot((xmax - xmin) / 2.0, (ymax - ymin) / 2.0)
     center = np.asarray([(xmin + xmax) / 2.0, (ymin + ymax) / 2.0])
@@ -162,7 +180,7 @@ def pairwise_hypothesis_search(
         possible &= bearing_delta <= angular_radius + 6.0 * cfg.sigma_deg
         possible &= np.asarray(
             [
-                ais_kind is not None and compatible_types(kind, ais_kind, use_types=cfg.use_types)
+                ais_kind is not None and (not cfg.use_types or ais_kind == kind)
                 for ais_kind in kinds
             ],
             dtype=bool,
@@ -315,7 +333,7 @@ def pairwise_hypothesis_search(
             obs,
             points[indices],
             [kinds[index] for index in indices],
-            sigma_deg=cfg.sigma_deg,
+            sigma_deg=report_sigmas,
             unmatched_penalty_deg=cfg.unmatched_penalty_deg,
             use_types=cfg.use_types,
             penalize_missing_ais=penalize_missing_ais,
@@ -356,7 +374,10 @@ def pairwise_hypothesis_search(
             def residual(position_xy: np.ndarray) -> np.ndarray:
                 delta = matched_targets - position_xy[None, :]
                 predicted = np.degrees(np.arctan2(delta[:, 0], delta[:, 1]))
-                return np.asarray(wrap_deg(predicted - matched_observations)) / cfg.sigma_deg
+                return (
+                    np.asarray(wrap_deg(predicted - matched_observations))
+                    / report_sigmas[[oi for oi, _ in matches]]
+                )
 
             fit = least_squares(residual, initial_position.copy(), max_nfev=100)
             proposed = fit.x
@@ -370,7 +391,7 @@ def pairwise_hypothesis_search(
                         obs,
                         points[proposed_indices],
                         [kinds[index] for index in proposed_indices],
-                        sigma_deg=cfg.sigma_deg,
+                        sigma_deg=report_sigmas,
                         unmatched_penalty_deg=cfg.unmatched_penalty_deg,
                         use_types=cfg.use_types,
                         penalize_missing_ais=cfg.penalize_missing_ais,
@@ -418,12 +439,14 @@ def run_pairwise_search(
     if not ais.records:
         points = np.empty((0, 2), dtype=float)
     types = [record.ais_class for record in ais.records]
-    positive_sigmas = [
-        item.bearing_sigma_deg for item in measurements.observations if item.bearing_sigma_deg > 0.0
-    ]
-    sigma = (
-        float(np.sqrt(np.mean(np.square(positive_sigmas)))) if positive_sigmas else cfg.sigma_deg
+    report_sigmas = np.asarray(
+        [
+            item.bearing_sigma_deg if item.bearing_sigma_deg > 0.0 else cfg.sigma_deg
+            for item in measurements.observations
+        ],
+        dtype=float,
     )
+    sigma = cfg.sigma_deg
     effective = PairwiseSearchConfig(
         sigma_deg=sigma,
         unmatched_penalty_deg=cfg.unmatched_penalty_deg,
@@ -452,6 +475,7 @@ def run_pairwise_search(
         effective,
         water_predicate=water_predicate,
         line_of_sight_predicate=los_predicate,
+        report_sigmas_deg=report_sigmas,
     )
     return PositionEstimate(
         east_m=result.east_m,
@@ -466,4 +490,70 @@ def run_pairwise_search(
     )
 
 
-__all__ = ["PairwiseSearchConfig", "pairwise_hypothesis_search", "run_pairwise_search"]
+def run_pairwise_search_v2(
+    scorer: CandidateScorer,
+    *,
+    batch_size: int = 1_024,
+    max_proposals: int | None = None,
+    min_crossing_angle_deg: float = 0.1,
+) -> CandidateSearchRun:
+    """Score A19's streaming geographic proposals with the common V2 objective.
+
+    Proposal generation has no source or neighbor caps. The declared search
+    candidate budget is the default proposal limit; the terminal A19 stream
+    status is carried into the result. Local AEQD proposal coordinates are
+    converted to the VectorMap's projected metre CRS before scoring.
+    """
+    if not isinstance(scorer, CandidateScorer):
+        raise TypeError("scorer must be a CandidateScorer instance.")
+    bounds = scorer.config.bounds_xy
+    if bounds is None:
+        raise ValueError("V2 pairwise search requires config.bounds_xy.")
+    budget = scorer.config.candidate_budget if max_proposals is None else max_proposals
+    if type(budget) is not int or budget < 1 or budget > scorer.config.candidate_budget:
+        raise ValueError("max_proposals must be positive and no greater than candidate_budget.")
+    xmin, xmax, ymin, ymax = bounds
+    to_geographic = Transformer.from_crs(scorer.vector_map.crs, "EPSG:4326", always_xy=True)
+    origin_lon, origin_lat = to_geographic.transform((xmin + xmax) / 2.0, (ymin + ymax) / 2.0)
+    origin = (float(origin_lon), float(origin_lat))
+    proposal_frame = LocalFrame(origin)
+    to_map = Transformer.from_crs("EPSG:4326", scorer.vector_map.crs, always_xy=True)
+    batches = generate_geographic_pairwise_proposals(
+        scorer.measurements,
+        scorer.catalog,
+        output_origin_lonlat=origin,
+        max_range_m=scorer.config.max_range_m,
+        batch_size=batch_size,
+        max_proposals=budget,
+        min_crossing_angle_deg=min_crossing_angle_deg,
+    )
+    positions: list[tuple[float, float]] = []
+    terminal_status: Literal["generation_incomplete", "completed", "budget_exhausted"] = (
+        "generation_incomplete"
+    )
+    generated_count = 0
+    for batch in batches:
+        generated_count = batch.generated_count
+        terminal_status = batch.generation_status
+        for proposal in batch.proposals:
+            lon, lat = proposal_frame.to_geographic(proposal.east_m, proposal.north_m)
+            east_m, north_m = to_map.transform(lon, lat)
+            positions.append((float(east_m), float(north_m)))
+    if terminal_status == "generation_incomplete":
+        raise RuntimeError("The A19 proposal stream ended without a terminal status.")
+    search_status = "budget_exhausted" if terminal_status == "budget_exhausted" else "completed"
+    return score_candidate_positions(
+        scorer,
+        positions,
+        search_status=search_status,
+        budget_limit=budget,
+        budget_used=generated_count,
+    )
+
+
+__all__ = [
+    "PairwiseSearchConfig",
+    "pairwise_hypothesis_search",
+    "run_pairwise_search",
+    "run_pairwise_search_v2",
+]

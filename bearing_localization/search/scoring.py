@@ -1,13 +1,19 @@
+"""Common exact scorer for fixed geographic observer candidates."""
+
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from math import atan2, degrees, isfinite
+from time import perf_counter
 from typing import Literal
 
 from maritime_localization_shared.contracts.inputs_v2 import CatalogV2, MeasurementSetV2
 from maritime_localization_shared.contracts.localization import (
     Assignment,
     Hypothesis,
+    LocalizationResult,
     ScoreComponents,
 )
 from maritime_localization_shared.geospatial.spatial_index import GeographicSpatialIndex
@@ -19,6 +25,12 @@ from .likelihood import LikelihoodCostMatrix, build_likelihood_costs
 from .prediction import PredictedGroupSet, predict_visible_groups
 
 CandidateStatus = Literal["scored", "invalid_water", "unresolved_coverage", "unresolved_model"]
+_STATUS_ORDER: tuple[CandidateStatus, ...] = (
+    "scored",
+    "invalid_water",
+    "unresolved_coverage",
+    "unresolved_model",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +51,20 @@ class CandidateEvaluation:
                 )
         elif self.hypothesis is not None:
             raise ValueError("An unsupported candidate cannot carry a finite hypothesis.")
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateSearchRun:
+    """Ranked candidate results and explicit counts for non-scored outcomes."""
+
+    localization: LocalizationResult
+    candidate_count: int
+    outcome_counts: tuple[tuple[CandidateStatus, int], ...]
+
+    @property
+    def hypotheses(self) -> tuple[Hypothesis, ...]:
+        """Return ranked, complete scored candidates."""
+        return self.localization.hypotheses
 
 
 class CandidateScorer:
@@ -106,7 +132,7 @@ class CandidateScorer:
                 None,
                 predicted,
                 None,
-                "one or more nearby catalog feature models are unsupported",
+                "one or more catalog feature models are unsupported",
             )
         if predicted.coverage_status != "known":
             return CandidateEvaluation(
@@ -154,4 +180,60 @@ class CandidateScorer:
     __call__ = evaluate
 
 
-__all__ = ["CandidateEvaluation", "CandidateScorer", "CandidateStatus"]
+def score_candidate_positions(
+    scorer: CandidateScorer,
+    positions_xy: Iterable[tuple[float, float]],
+    *,
+    search_status: Literal["completed", "budget_exhausted"] = "completed",
+    budget_limit: int | None = None,
+    budget_used: int | None = None,
+) -> CandidateSearchRun:
+    """Score a candidate stream and report no global-optimality certificate.
+
+    The caller owns candidate generation and declares whether it exhausted its
+    stream or stopped at budget. Heuristic methods return ambiguous when they
+    have scored candidates; this routine never accepts a heuristic minimum.
+    """
+    if not isinstance(scorer, CandidateScorer):
+        raise TypeError("scorer must be a CandidateScorer instance.")
+    if search_status == "budget_exhausted":
+        if budget_limit is None or budget_used != budget_limit:
+            raise ValueError("budget_exhausted requires budget_used equal to budget_limit.")
+    elif (budget_limit is None) != (budget_used is None):
+        raise ValueError("budget_limit and budget_used must be provided together.")
+    started = perf_counter()
+    hypotheses: list[Hypothesis] = []
+    counts: Counter[CandidateStatus] = Counter()
+    candidate_count = 0
+    for position in positions_xy:
+        evaluation = scorer.evaluate(position)
+        candidate_count += 1
+        counts[evaluation.status] += 1
+        if evaluation.hypothesis is not None:
+            hypotheses.append(evaluation.hypothesis)
+    hypotheses.sort(key=lambda item: item.score)
+    localization = LocalizationResult(
+        hypotheses=tuple(hypotheses),
+        elapsed_s=perf_counter() - started,
+        decision_status="ambiguous" if hypotheses else "no_fix",
+        search_status=search_status,
+        certificate_scope="none",
+        budget_limit=budget_limit,
+        budget_used=budget_used,
+        report_count=len(scorer.measurements.measurements),
+        objective_version=scorer.config.objective_version,
+    )
+    return CandidateSearchRun(
+        localization=localization,
+        candidate_count=candidate_count,
+        outcome_counts=tuple((status, counts[status]) for status in _STATUS_ORDER),
+    )
+
+
+__all__ = [
+    "CandidateEvaluation",
+    "CandidateScorer",
+    "CandidateSearchRun",
+    "CandidateStatus",
+    "score_candidate_positions",
+]

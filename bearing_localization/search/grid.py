@@ -8,15 +8,18 @@ depend on a particular raster or vector implementation.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from math import isfinite, sqrt
+from math import isfinite
 from time import perf_counter
-from typing import Protocol
+from typing import Literal, Protocol
 
 import numpy as np
 
 from bearing_localization.algorithms import associate, grid_search
 from maritime_localization_shared.contracts import AISSnapshot, MeasurementSet, PositionEstimate
+
+from .scoring import CandidateScorer, CandidateSearchRun, score_candidate_positions
 
 
 class MapVisibility(Protocol):
@@ -68,7 +71,7 @@ def _inputs(
     measurements: MeasurementSet,
     ais: AISSnapshot,
     config: GridSearchConfig,
-) -> tuple[list[tuple[str | None, float]], np.ndarray, list[str | None], float]:
+) -> tuple[list[tuple[str | None, float]], np.ndarray, list[str | None], np.ndarray]:
     observations = [
         (observation.object_type, observation.bearing_deg)
         for observation in measurements.observations
@@ -78,18 +81,17 @@ def _inputs(
         ais_xy = np.empty((0, 2), dtype=float)
     ais_types: list[str | None] = [record.ais_class for record in ais.records]
 
-    # The baseline algorithm accepts a single noise scale. Use the RMS of the
-    # reported per-detection uncertainties, and fall back to the configured
-    # nominal scale when the set contains no positive uncertainty values.
-    uncertainty = [
-        observation.bearing_sigma_deg
-        for observation in measurements.observations
-        if observation.bearing_sigma_deg > 0
-    ]
-    if uncertainty:
-        sigma_deg = sqrt(sum(value * value for value in uncertainty) / len(uncertainty))
-    else:
-        sigma_deg = config.bearing_sigma_deg
+    # Retain each report's own sigma. The configured value is used only when
+    # a legacy measurement does not provide a positive report uncertainty.
+    sigma_deg = np.asarray(
+        [
+            observation.bearing_sigma_deg
+            if observation.bearing_sigma_deg > 0.0
+            else config.bearing_sigma_deg
+            for observation in measurements.observations
+        ],
+        dtype=float,
+    )
     return observations, ais_xy, ais_types, sigma_deg
 
 
@@ -203,4 +205,27 @@ def run_grid_search(
     )
 
 
-__all__ = ["GridSearchConfig", "MapVisibility", "run_grid_search"]
+def run_grid_search_v2(
+    scorer: CandidateScorer,
+    candidate_positions: Iterable[tuple[float, float]],
+    *,
+    search_status: Literal["completed", "budget_exhausted"] = "completed",
+    budget_limit: int | None = None,
+    budget_used: int | None = None,
+) -> CandidateSearchRun:
+    """Dispatch caller-generated version-two candidates through the common scorer.
+
+    This adapter never converts a finite candidate minimum into a global
+    optimality certificate or an accepted fix. Candidate generation remains
+    owned by the associated grid, hierarchical, or randomized driver.
+    """
+    return score_candidate_positions(
+        scorer,
+        candidate_positions,
+        search_status=search_status,
+        budget_limit=budget_limit,
+        budget_used=budget_used,
+    )
+
+
+__all__ = ["GridSearchConfig", "MapVisibility", "run_grid_search", "run_grid_search_v2"]
