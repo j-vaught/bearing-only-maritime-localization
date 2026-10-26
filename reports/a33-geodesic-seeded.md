@@ -16,10 +16,10 @@ After integrating A30 lifecycle repair prerequisite `a1f3df8` (upstream repair `
 
 Commands run from the isolated A33 worktree.
 
-- `uv run pytest -q tests/accuracy/test_a30_cpu.py tests/accuracy/test_a32.py tests/accuracy/test_a33.py tests/accuracy/test_a36.py`+ßuÁ‚ùÁT 66 passed, 6 skipped.
-- `uv run ruff format bearing_localization/accuracy_cli.py bearing_localization/search/config.py tests/accuracy/test_a33.py`"È›y¯ßy‘ passed.
-- `uv run ruff check bearing_localization/accuracy_cli.py bearing_localization/search/config.py tests/accuracy/test_a33.py --fix` ∫w^~)ﬁt passed.
-- `uv run ty check` ∫w^~)ﬁt passed.
-- `git diff --check`"È›y¯ßy‘ passed.
+- `uv run pytest -q tests/accuracy/test_a30_cpu.py tests/accuracy/test_a32.py tests/accuracy/test_a33.py tests/accuracy/test_a36.py`. 66 passed, 6 skipped.
+- `uv run ruff format bearing_localization/accuracy_cli.py bearing_localization/search/config.py tests/accuracy/test_a33.py`. passed.
+- `uv run ruff check bearing_localization/accuracy_cli.py bearing_localization/search/config.py tests/accuracy/test_a33.py --fix`. passed.
+- `uv run ty check`. passed.
+- `git diff --check`. passed.
 
 No held-out data or performance claims were used.
