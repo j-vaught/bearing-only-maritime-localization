@@ -281,7 +281,7 @@ The following clean, pushed source checkouts had no direct process pathname refe
 | Checkout | Allocated bytes | Branch and HEAD | External dependency evidence |
 | --- | ---: | --- | --- |
 | .agent-work/worktrees/a06-prelos-caller-review | 195424256 | accuracy/a06-prelos-caller-review, ef3363df0e35bce5492827db7fb8f40228c2ac8c, pushed | no direct report/output path reference or process pathname found; recent commit at 07:55 EDT requires owner inactivity confirmation |
-| .agent-work/worktrees/a06-prelos-review | 493068288 | accuracy/a06-prelos-review, 6e8c497a5d53b021872d15f163171505c5f1, pushed | no direct report/output path reference or process pathname found; recent commit at 07:26 EDT requires owner inactivity confirmation |
+| .agent-work/worktrees/a06-prelos-review | 493068288 | accuracy/a06-prelos-review, 6e8c497a5d53b021872d15f163171505447505f1, pushed | no direct report/output path reference or process pathname found; recent commit at 07:26 EDT requires owner inactivity confirmation |
 | .agent-work/worktrees/a08-coast-base | 444063744 | accuracy/a08-coast-base, b61e694c9d1765dbca3f20f1a028bfadd95d60d5, pushed | archive map-manifest references were found; excluded |
 | .agent-work/worktrees/a14-exact-next-step | 190169088 | accuracy/a14-exact-next-step, acad75d69ae865702e45745b7c0647d5d897014a, pushed | A14 assignment scope; excluded |
 | .agent-work/worktrees/a14-pre-los-preparation | 492937216 | accuracy/a14-pre-los-preparation, 80870845d337b5e26c947da0a2d85fba3925e5c8, pushed | A14 preparation scope; excluded |
