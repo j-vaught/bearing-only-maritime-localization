@@ -46,6 +46,7 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
     src_split = src / split
     dest_split = dest / split
     copied = 0
+    moved_trial_ids: set[str] = set()
     for directory in sorted(p for p in src_split.glob("port-*/*/r*/*m/*/*") if p.is_dir()):
         rel = directory.relative_to(src)
         target = dest / rel
@@ -54,6 +55,8 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
             raise FileExistsError(f"Refusing to merge over existing trial directory {target}")
         shutil.move(str(directory), str(target))
         copied += 1
+        moved_trial_ids.add("development/" + rel.as_posix().removeprefix("development/"))
+    merged_preparation_rows: list[dict[str, str]] = []
     for filename in (
         "preparation.csv",
         "preparation-attempts.csv",
@@ -66,6 +69,7 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
         old = _read_table(target) if target.exists() else []
         new = _read_table(source)
         if filename == "preparation.csv":
+            merged_preparation_rows = new
             indexed = {r["trial_id"]: r for r in old}
             indexed.update({r["trial_id"]: r for r in new})
         else:
@@ -75,6 +79,18 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
                     raise ValueError(f"Conflicting merged attempt {row['attempt_id']}")
                 indexed[row["attempt_id"]] = row
         _write_table(target, list(indexed.values()))
+    if not merged_preparation_rows:
+        raise RuntimeError(f"Worker {src} did not produce preparation rows")
+    expected_output_ids = {
+        row["trial_id"] for row in merged_preparation_rows if row.get("status") == "completed"
+    }
+    if moved_trial_ids != expected_output_ids:
+        missing = sorted(expected_output_ids - moved_trial_ids)
+        unexpected = sorted(moved_trial_ids - expected_output_ids)
+        raise RuntimeError(
+            f"Worker output directory mismatch; missing completed={missing}, "
+            f"unexpected={unexpected}"
+        )
     for filename, target in (
         ("worker-0-truth-compaction.csv", truth_manifest),
         ("identity-audit-compaction.csv", audit_manifest),
@@ -97,7 +113,9 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
                     row[field] = str(dest / split / Path(row[field]).relative_to(src / split))
             indexed[row["trial_id"]] = row
         _write_table(target, list(indexed.values()))
-    return copied
+    # Failed attempts are valid outcomes without trial directories. Count
+    # accounted attempt rows while still requiring every completed row's output.
+    return len(merged_preparation_rows)
 
 
 def validate_worker_ids(expected: list[str], observed: list[str]) -> None:
