@@ -1,4 +1,4 @@
-"""Typed, fail-closed proof that candidate rays stay in known map coverage."""
+"""Typed, fail-closed proofs for candidate ray coverage in a prepared map snapshot."""
 
 from __future__ import annotations
 
@@ -10,14 +10,15 @@ from math import isfinite
 from typing import Literal, cast
 
 from pyproj import CRS
-from shapely import from_geojson, from_wkb, to_wkb
+from pyproj.exceptions import CRSError
+from shapely import from_geojson, to_wkb
 from shapely.errors import GEOSException
 from shapely.geometry import MultiPoint, Point
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
+from shapely.prepared import PreparedGeometry, prep
 
 from maritime_localization_shared.contracts.inputs_v2 import MapV2
-from maritime_localization_shared.geospatial.vector_map import VectorMap
 
 Point2D = tuple[float, float]
 TargetMapPoint = tuple[str, Point2D]
@@ -25,13 +26,123 @@ CoverageProofMethod = Literal["convex_hull_inside_known_coverage"]
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class CandidateCoverageCertificate:
-    """Immutable evidence bound to one candidate, target set, and MapV2 snapshot.
+class PreparedCoverageMap:
+    """Reusable immutable geometry snapshot for per-candidate certificates."""
 
-    Instances are minted only by certify_candidate_coverage. The certificate
-    retains WKB witnesses and recomputes its proof in covers(), so callers do
-    not rely on a caller-supplied boolean. It proves known coverage and a known
-    water observer; it does not prove rays are free of land.
+    map_crs: str
+    map_source: str
+    map_version: str
+    map_coverage_status: str
+    map_identity_sha256: str
+    _coverage_wkb: bytes
+    _unknown_wkb: bytes | None
+    _land_wkb: bytes | None
+    _coverage: BaseGeometry
+    _unknown: BaseGeometry | None
+    _land: BaseGeometry | None
+    _prepared_coverage: PreparedGeometry
+    _prepared_unknown: PreparedGeometry | None
+    _prepared_land: PreparedGeometry | None
+
+    @classmethod
+    def _mint(
+        cls,
+        *,
+        map_v2: MapV2,
+        map_identity_sha256: str,
+        coverage_wkb: bytes,
+        unknown_wkb: bytes | None,
+        land_wkb: bytes | None,
+        coverage: BaseGeometry,
+        unknown: BaseGeometry | None,
+        land: BaseGeometry | None,
+    ) -> PreparedCoverageMap:
+        context = object.__new__(cls)
+        values = {
+            "map_crs": map_v2.crs,
+            "map_source": map_v2.source,
+            "map_version": map_v2.map_version,
+            "map_coverage_status": map_v2.coverage_status,
+            "map_identity_sha256": map_identity_sha256,
+            "_coverage_wkb": coverage_wkb,
+            "_unknown_wkb": unknown_wkb,
+            "_land_wkb": land_wkb,
+            "_coverage": coverage,
+            "_unknown": unknown,
+            "_land": land,
+            "_prepared_coverage": prep(coverage),
+            "_prepared_unknown": prep(unknown) if unknown is not None else None,
+            "_prepared_land": prep(land) if land is not None else None,
+        }
+        for name, value in values.items():
+            object.__setattr__(context, name, value)
+        return context
+
+    def _candidate_is_known_water(self, candidate_xy_m: Point2D) -> bool:
+        point = Point(candidate_xy_m)
+        if self._prepared_unknown is not None and self._prepared_unknown.covers(point):
+            return False
+        if not self._prepared_coverage.covers(point):
+            return False
+        return self._prepared_land is None or not self._prepared_land.contains(point)
+
+    def _envelope_is_known(self, hull: BaseGeometry) -> bool:
+        if not self._prepared_coverage.covers(hull):
+            return False
+        return self._prepared_unknown is None or not self._prepared_unknown.intersects(hull)
+
+
+def prepare_candidate_coverage_context(map_v2: MapV2) -> PreparedCoverageMap | None:
+    """Prepare one reusable exact MapV2 snapshot, or return None if unusable.
+
+    Preparation validates a projected metre CRS and polygonal coverage. The
+    candidate factory can then use this context for many candidates without
+    reparsing GeoJSON, rebuilding the map identity, or preparing geometries.
+    """
+    try:
+        if not isinstance(map_v2, MapV2) or map_v2.coverage_status not in {"known", "partial"}:
+            return None
+        crs = CRS.from_user_input(map_v2.crs)
+        _require_projected_metres(crs)
+        coverage = _geojson_polygon(map_v2.coverage_geometry_geojson)
+        unknown = _geojson_polygon(map_v2.unknown_geometry_geojson)
+        land = _geojson_polygon(map_v2.land_geometry_geojson)
+        if coverage is None:
+            return None
+        coverage_wkb = to_wkb(coverage, output_dimension=2, byte_order=1)
+        unknown_wkb = to_wkb(unknown, output_dimension=2, byte_order=1) if unknown else None
+        land_wkb = to_wkb(land, output_dimension=2, byte_order=1) if land else None
+        map_identity = _map_identity(
+            map_v2.schema_version,
+            map_v2.crs,
+            map_v2.source,
+            map_v2.map_version,
+            map_v2.coverage_status,
+            coverage_wkb,
+            unknown_wkb,
+            land_wkb,
+        )
+        return PreparedCoverageMap._mint(
+            map_v2=map_v2,
+            map_identity_sha256=map_identity,
+            coverage_wkb=coverage_wkb,
+            unknown_wkb=unknown_wkb,
+            land_wkb=land_wkb,
+            coverage=coverage,
+            unknown=unknown,
+            land=land,
+        )
+    except (TypeError, ValueError, CRSError, GEOSException):
+        return None
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class CandidateCoverageCertificate:
+    """Immutable evidence bound to one candidate, target set, and map snapshot.
+
+    Instances are minted only after the prepared context proves exact observer
+    water and a convex hull that contains every candidate ray within known
+    coverage. The certificate proves coverage, not that rays avoid land.
     """
 
     candidate_xy_m: Point2D
@@ -44,10 +155,6 @@ class CandidateCoverageCertificate:
     envelope_bounds_m: tuple[float, float, float, float]
     proof_method: CoverageProofMethod
     candidate_water_status: Literal["water"]
-    _coverage_wkb: bytes
-    _unknown_wkb: bytes | None
-    _land_wkb: bytes | None
-    _schema_version: int
 
     @classmethod
     def _mint(
@@ -55,173 +162,90 @@ class CandidateCoverageCertificate:
         *,
         candidate_xy_m: Point2D,
         target_map_xy: tuple[TargetMapPoint, ...],
-        map_crs: str,
-        map_source: str,
-        map_version: str,
-        map_coverage_status: str,
-        map_identity_sha256: str,
+        context: PreparedCoverageMap,
         envelope_bounds_m: tuple[float, float, float, float],
-        coverage_wkb: bytes,
-        unknown_wkb: bytes | None,
-        land_wkb: bytes | None,
-        schema_version: int,
     ) -> CandidateCoverageCertificate:
         certificate = object.__new__(cls)
-        object.__setattr__(certificate, "candidate_xy_m", candidate_xy_m)
-        object.__setattr__(certificate, "target_map_xy", target_map_xy)
-        object.__setattr__(certificate, "map_crs", map_crs)
-        object.__setattr__(certificate, "map_source", map_source)
-        object.__setattr__(certificate, "map_version", map_version)
-        object.__setattr__(certificate, "map_coverage_status", map_coverage_status)
-        object.__setattr__(certificate, "map_identity_sha256", map_identity_sha256)
-        object.__setattr__(certificate, "envelope_bounds_m", envelope_bounds_m)
-        object.__setattr__(certificate, "proof_method", "convex_hull_inside_known_coverage")
-        object.__setattr__(certificate, "candidate_water_status", "water")
-        object.__setattr__(certificate, "_coverage_wkb", coverage_wkb)
-        object.__setattr__(certificate, "_unknown_wkb", unknown_wkb)
-        object.__setattr__(certificate, "_land_wkb", land_wkb)
-        object.__setattr__(certificate, "_schema_version", schema_version)
+        values = {
+            "candidate_xy_m": candidate_xy_m,
+            "target_map_xy": target_map_xy,
+            "map_crs": context.map_crs,
+            "map_source": context.map_source,
+            "map_version": context.map_version,
+            "map_coverage_status": context.map_coverage_status,
+            "map_identity_sha256": context.map_identity_sha256,
+            "envelope_bounds_m": envelope_bounds_m,
+            "proof_method": "convex_hull_inside_known_coverage",
+            "candidate_water_status": "water",
+        }
+        for name, value in values.items():
+            object.__setattr__(certificate, name, value)
         return certificate
 
-    def matches_map(self, map_v2: MapV2) -> bool:
-        """Return whether this proof is bound to the exact MapV2 snapshot."""
-        try:
-            if not isinstance(map_v2, MapV2):
-                return False
-            coverage_wkb, unknown_wkb, land_wkb = _map_geometry_witnesses(map_v2)
-            return self.map_identity_sha256 == _map_identity(
-                map_v2.schema_version,
-                map_v2.crs,
-                map_v2.source,
-                map_v2.map_version,
-                map_v2.coverage_status,
-                coverage_wkb,
-                unknown_wkb,
-                land_wkb,
-            )
-        except (TypeError, ValueError, GEOSException):
-            return False
+    def matches_map(self, map_context: PreparedCoverageMap) -> bool:
+        """Return whether this proof matches the reusable prepared map identity."""
+        return (
+            isinstance(map_context, PreparedCoverageMap)
+            and self.map_identity_sha256 == map_context.map_identity_sha256
+            and self.map_crs == map_context.map_crs
+            and self.map_source == map_context.map_source
+            and self.map_version == map_context.map_version
+            and self.map_coverage_status == map_context.map_coverage_status
+        )
 
     def covers(
         self,
         candidate_xy_m: Point2D,
         target_map_xy: Sequence[TargetMapPoint],
     ) -> bool:
-        """Verify exact candidate/target binding and recompute the coverage proof."""
+        """Check exact candidate and complete key/coordinate tuple binding."""
         try:
-            candidate = _point_xy(candidate_xy_m)
-            targets = _canonical_targets(target_map_xy)
-            if candidate != self.candidate_xy_m or targets != self.target_map_xy:
-                return False
-            if self.proof_method != "convex_hull_inside_known_coverage":
-                return False
-            if self.candidate_water_status != "water":
-                return False
-            if self.map_coverage_status not in {"known", "partial"}:
-                return False
-            if (
-                _map_identity(
-                    self._schema_version,
-                    self.map_crs,
-                    self.map_source,
-                    self.map_version,
-                    self.map_coverage_status,
-                    self._coverage_wkb,
-                    self._unknown_wkb,
-                    self._land_wkb,
-                )
-                != self.map_identity_sha256
-            ):
-                return False
-            crs = CRS.from_user_input(self.map_crs)
-            _require_projected_metres(crs)
-            coverage = cast(BaseGeometry, from_wkb(self._coverage_wkb))
-            unknown = from_wkb(self._unknown_wkb) if self._unknown_wkb is not None else None
-            land = from_wkb(self._land_wkb) if self._land_wkb is not None else None
-            _validate_polygon(coverage)
-            if unknown is not None:
-                _validate_polygon(unknown)
-            if land is not None:
-                _validate_polygon(land)
-
-            candidate_point = Point(candidate)
-            if unknown is not None and unknown.covers(candidate_point):
-                return False
-            if not coverage.covers(candidate_point):
-                return False
-            if land is not None and land.contains(candidate_point):
-                return False
-
-            hull = _candidate_target_hull(candidate, targets)
-            if not coverage.covers(hull):
-                return False
-            if unknown is not None and unknown.intersects(hull):
-                return False
-            return _bounds(hull) == self.envelope_bounds_m
-        except (TypeError, ValueError, GEOSException):
+            return (
+                self.proof_method == "convex_hull_inside_known_coverage"
+                and self.candidate_water_status == "water"
+                and self.candidate_xy_m == _point_xy(candidate_xy_m)
+                and self.target_map_xy == _canonical_targets(target_map_xy)
+            )
+        except (TypeError, ValueError):
             return False
 
 
 def certify_candidate_coverage(
-    map_v2: MapV2,
+    map_or_context: MapV2 | PreparedCoverageMap,
     candidate_xy_m: Point2D,
     target_map_xy: Sequence[TargetMapPoint],
 ) -> CandidateCoverageCertificate | None:
-    """Mint a candidate coverage certificate, or return None when unproven.
+    """Mint a candidate certificate, or return None when any proof is missing.
 
-    Map coordinates, candidate coordinates, and target coordinates must all
-    already use MapV2.crs. The CRS must be projected with metre axes. The
-    convex hull of the candidate and all in-range targets is a conservative
-    superset of every candidate-to-target segment. Certification requires that
-    hull to be fully covered and disjoint from explicit unknown geometry.
-    The exact candidate must separately classify as known water. Land along
-    target rays is intentionally not tested by this coverage certificate.
+    A caller may pass a MapV2 for convenience or, for repeated candidates, a
+    PreparedCoverageMap made once by prepare_candidate_coverage_context. The
+    caller is responsible for passing every exact in-range offset-corrected
+    target. The factory binds all supplied keys and map coordinates. The CRS
+    must already be projected metres and shared by candidate, targets, and map.
     """
     try:
-        if not isinstance(map_v2, MapV2):
+        if isinstance(map_or_context, MapV2):
+            context = prepare_candidate_coverage_context(map_or_context)
+        elif isinstance(map_or_context, PreparedCoverageMap):
+            context = map_or_context
+        else:
+            return None
+        if context is None:
             return None
         candidate = _point_xy(candidate_xy_m)
         targets = _canonical_targets(target_map_xy)
-        vector_map = VectorMap.from_map_v2(map_v2)
-        if vector_map.point_water_status(candidate) != "water":
+        if not context._candidate_is_known_water(candidate):
             return None
-        coverage_wkb, unknown_wkb, land_wkb = _map_geometry_witnesses(map_v2)
-        if not coverage_wkb or map_v2.coverage_status not in {"known", "partial"}:
-            return None
-        coverage = cast(BaseGeometry, from_wkb(coverage_wkb))
-        unknown = from_wkb(unknown_wkb) if unknown_wkb is not None else None
-        if unknown is not None and unknown.is_empty:
-            unknown = None
         hull = _candidate_target_hull(candidate, targets)
-        if not coverage.covers(hull):
+        if not context._envelope_is_known(hull):
             return None
-        if unknown is not None and unknown.intersects(hull):
-            return None
-        map_identity = _map_identity(
-            map_v2.schema_version,
-            map_v2.crs,
-            map_v2.source,
-            map_v2.map_version,
-            map_v2.coverage_status,
-            coverage_wkb,
-            unknown_wkb,
-            land_wkb,
-        )
         return CandidateCoverageCertificate._mint(
             candidate_xy_m=candidate,
             target_map_xy=targets,
-            map_crs=map_v2.crs,
-            map_source=map_v2.source,
-            map_version=map_v2.map_version,
-            map_coverage_status=map_v2.coverage_status,
-            map_identity_sha256=map_identity,
+            context=context,
             envelope_bounds_m=_bounds(hull),
-            coverage_wkb=coverage_wkb,
-            unknown_wkb=unknown_wkb,
-            land_wkb=land_wkb,
-            schema_version=map_v2.schema_version,
         )
-    except (TypeError, ValueError, GEOSException):
+    except (TypeError, ValueError, CRSError, GEOSException):
         return None
 
 
@@ -261,16 +285,6 @@ def _candidate_target_hull(
 def _bounds(geometry: BaseGeometry) -> tuple[float, float, float, float]:
     west, south, east, north = geometry.bounds
     return float(west), float(south), float(east), float(north)
-
-
-def _map_geometry_witnesses(map_v2: MapV2) -> tuple[bytes, bytes | None, bytes | None]:
-    coverage = _geojson_polygon(map_v2.coverage_geometry_geojson)
-    unknown = _geojson_polygon(map_v2.unknown_geometry_geojson)
-    land = _geojson_polygon(map_v2.land_geometry_geojson)
-    coverage_wkb = to_wkb(coverage, output_dimension=2, byte_order=1) if coverage else b""
-    unknown_wkb = to_wkb(unknown, output_dimension=2, byte_order=1) if unknown else None
-    land_wkb = to_wkb(land, output_dimension=2, byte_order=1) if land else None
-    return coverage_wkb, unknown_wkb, land_wkb
 
 
 def _geojson_polygon(value: str | None) -> BaseGeometry | None:
