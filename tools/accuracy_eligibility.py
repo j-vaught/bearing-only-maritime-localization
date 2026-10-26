@@ -17,6 +17,16 @@ SCHEMA = "accuracy-eligibility-manifest-v1"
 EXPECTED_SPLIT_PORTS = {"development": 12, "validation": 4, "heldout": 8}
 RANGES_M = (1000, 5000, 10000)
 TYPE_LABELS = (True, False)
+PROFILE_ORDER = (
+    "nominal",
+    "miss",
+    "clutter",
+    "noise",
+    "label_error",
+    "heading_bias",
+    "catalog_displacement",
+    "map_buffer",
+)
 
 
 @dataclass(frozen=True)
@@ -142,8 +152,261 @@ def _support_count(support: Mapping[str, Any]) -> int:
     raise EligibilityError("Support JSON lacks a nonnegative physical matched-group count.")
 
 
+def _stable_seed(*parts: object) -> int:
+    encoded = "/".join(str(part) for part in parts).encode()
+    return int.from_bytes(hashlib.sha256(encoded).digest()[:4], "big")
+
+
+def _gate_key(range_m: int, report_types: str) -> str:
+    mode = "on" if report_types == "True" else "off"
+    return f"{float(range_m)}m/types{mode}"
+
+
+def _validate_extension_history(
+    config: Mapping[str, Any],
+    splits: Mapping[str, Any],
+    rows: list[dict[str, str]],
+    support_root: Path,
+    ports_by_id: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, int], list[dict[str, Any]]]:
+    initial = config.get("initial_placements_per_port")
+    maximum = config.get("maximum_placements_per_port")
+    if initial != 25 or maximum != 100:
+        raise EligibilityError(
+            "The frozen plan must use the authorized 25-to-100 placement limits."
+        )
+    if config.get("base_seed") != 20261025:
+        raise EligibilityError("Unexpected plan base seed.")
+    if config.get("seed_tuple") != [
+        20261025,
+        "split",
+        "port",
+        "placement",
+        "realization",
+        "range_m",
+    ] or config.get("seed_excludes") != ["algorithm", "report_types"]:
+        raise EligibilityError("Plan seed definition does not match the frozen benchmark.")
+    if config.get("ranges_m") != list(RANGES_M) or config.get("type_labels") != [True, False]:
+        raise EligibilityError("Plan range or type-label population is invalid.")
+    if config.get("realizations_per_placement") != 2:
+        raise EligibilityError("Plan realization population must contain two realizations.")
+    if config.get("stress_placements_per_port") != 5 or config.get("stress_realizations") != [0]:
+        raise EligibilityError("Plan stress population is invalid.")
+    profiles = config.get("stress_profiles")
+    if not isinstance(profiles, dict) or "nominal" not in profiles:
+        raise EligibilityError("Plan has no nominal profile.")
+    history = config.get("support_extension_batches", [])
+    if not isinstance(history, list):
+        raise EligibilityError("Plan support-extension history must be a list.")
+    if history and config.get("extension_rule") != (
+        "split-level support below 100 in any range/label gate; add deterministic 25-placement "
+        "batches to one port at a time, up to 100, and reevaluate from pre-search support"
+    ):
+        raise EligibilityError("Plan extension rule does not match the authorized rule.")
+    if not history and "extension_rule" in config:
+        raise EligibilityError("Plan declares an extension rule without extension batches.")
+
+    split_ports: dict[str, list[str]] = {
+        split: sorted(
+            port_id for port_id, port in ports_by_id.items() if port["effective_split"] == split
+        )
+        for split in EXPECTED_SPLIT_PORTS
+    }
+    max_placement = {
+        (split, port_id): initial for split, port_ids in split_ports.items() for port_id in port_ids
+    }
+    validated_history: list[dict[str, Any]] = []
+    evidence_by_split: dict[str, dict[tuple[int, str], int]] = {}
+    for batch_index, batch in enumerate(history, start=1):
+        if not isinstance(batch, dict):
+            raise EligibilityError(f"Malformed support-extension batch {batch_index}.")
+        split = batch.get("split")
+        port_id = batch.get("port_id")
+        if split not in {"development", "validation"} or port_id not in split_ports.get(split, []):
+            raise EligibilityError(f"Invalid split/port in support-extension batch {batch_index}.")
+        eligible_ports = [
+            pid for pid in split_ports[split] if max_placement[(split, pid)] < maximum
+        ]
+        expected_port = eligible_ports[0] if eligible_ports else None
+        first = max_placement[(split, port_id)] + 1
+        last = min(first + 24, maximum)
+        if (
+            expected_port != port_id
+            or batch.get("first_placement") != first
+            or batch.get("last_placement") != last
+            or last - first + 1 != 25
+        ):
+            raise EligibilityError(
+                f"Unauthorized placement batch boundaries at batch {batch_index}."
+            )
+        gates = batch.get("deficient_gates_before_batch")
+        counts = batch.get("supported_units_before_batch")
+        valid_gate_order = [(range_m, label) for range_m in RANGES_M for label in ("True", "False")]
+        if not isinstance(gates, list) or not gates or not isinstance(counts, dict):
+            raise EligibilityError(f"Missing deficient-gate evidence at batch {batch_index}.")
+        parsed_gates: list[tuple[int, str]] = []
+        for gate in gates:
+            if not isinstance(gate, dict):
+                raise EligibilityError(f"Malformed deficient gate at batch {batch_index}.")
+            range_m = gate.get("range_m")
+            labels = gate.get("report_types")
+            if range_m not in RANGES_M or labels not in {"True", "False"}:
+                raise EligibilityError(f"Invalid deficient gate at batch {batch_index}.")
+            parsed_gates.append((range_m, labels))
+        if len(parsed_gates) != len(set(parsed_gates)) or parsed_gates != [
+            gate for gate in valid_gate_order if gate in parsed_gates
+        ]:
+            raise EligibilityError(
+                f"Deficient gates are duplicated or out of order at batch {batch_index}."
+            )
+        expected_count_keys = {_gate_key(range_m, labels) for range_m, labels in parsed_gates}
+        if set(counts) != expected_count_keys:
+            raise EligibilityError(
+                f"Deficient-gate counts do not match gates at batch {batch_index}."
+            )
+        for key, count in counts.items():
+            if not isinstance(count, int) or isinstance(count, bool) or not 0 <= count < 100:
+                raise EligibilityError(f"Invalid support count in batch {batch_index}: {key}.")
+        if split not in evidence_by_split:
+            units: dict[tuple[int, str], set[tuple[str, str, str]]] = {}
+            for row in rows:
+                if (
+                    row["split"] != split
+                    or row["sensor_condition"] != "nominal"
+                    or int(row["placement_id"].rsplit("-", 1)[1]) > initial
+                ):
+                    continue
+                evidence_path = support_root / _support_relative_path(row)
+                if not evidence_path.is_file():
+                    raise EligibilityError(
+                        f"Cannot validate extension history; missing initial support "
+                        f"{evidence_path}."
+                    )
+                evidence = _read_json(evidence_path)
+                if evidence.get("supported") is True:
+                    gate = (int(row["range_m"]), row["report_types"])
+                    units.setdefault(gate, set()).add(
+                        (row["port_id"], row["placement_id"], row["realization"])
+                    )
+            evidence_by_split[split] = {gate: len(value) for gate, value in units.items()}
+        actual_units = evidence_by_split[split]
+        actual_deficient = [gate for gate in valid_gate_order if actual_units.get(gate, 0) < 100]
+        expected_batch_counts = {
+            _gate_key(range_m, labels): actual_units.get((range_m, labels), 0)
+            for range_m, labels in actual_deficient
+        }
+        if parsed_gates != actual_deficient or counts != expected_batch_counts:
+            raise EligibilityError(
+                f"Support-extension evidence does not match initial support at batch {batch_index}."
+            )
+        validated_history.append(batch)
+        max_placement[(split, port_id)] = last
+    return {
+        port_id: max_placement[(port["effective_split"], port_id)]
+        for port_id, port in ports_by_id.items()
+    }, validated_history
+
+
+def _expected_plan_rows(
+    config: Mapping[str, Any],
+    ports_by_id: Mapping[str, Mapping[str, Any]],
+    placements_per_port: Mapping[str, int],
+    extension_history: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    profiles = config["stress_profiles"]
+    ranges = config["ranges_m"]
+    labels = config["type_labels"]
+    expected: list[dict[str, str]] = []
+
+    def append_trial(
+        split: str,
+        port_id: str,
+        source_site_id: str,
+        placement_index: int,
+        realization: int,
+        range_m: int,
+        report_types: bool,
+        condition: str,
+    ) -> None:
+        range_value = int(range_m)
+        seed = _stable_seed(
+            config["base_seed"],
+            split,
+            port_id,
+            f"placement-{placement_index:03d}",
+            realization,
+            range_value,
+        )
+        type_name = "on" if report_types else "off"
+        trial_id = (
+            f"{split}/{port_id}/placement-{placement_index:03d}/r{realization}/"
+            f"range{range_value}m/types{type_name}/{condition}"
+        )
+        expected.append(
+            {
+                "trial_id": trial_id,
+                "split": split,
+                "port_id": port_id,
+                "source_site_id": source_site_id,
+                "placement_id": f"placement-{placement_index:03d}",
+                "realization": str(realization),
+                "range_m": str(range_value),
+                "report_types": str(report_types),
+                "physical_seed": str(seed),
+                "sensor_condition": condition,
+                "profile_parameters": json.dumps(profiles[condition], sort_keys=True),
+                "status": "planned",
+            }
+        )
+
+    initial = config["initial_placements_per_port"]
+    for port_id in sorted(ports_by_id):
+        port = ports_by_id[port_id]
+        split = port["effective_split"]
+        for placement_index in range(1, initial + 1):
+            for realization in range(config["realizations_per_placement"]):
+                for range_m in ranges:
+                    for condition in PROFILE_ORDER:
+                        if condition not in profiles:
+                            raise EligibilityError(f"Missing frozen stress profile {condition}.")
+                        if condition != "nominal" and (
+                            placement_index > config["stress_placements_per_port"]
+                            or realization not in config["stress_realizations"]
+                        ):
+                            continue
+                        for report_types in labels:
+                            append_trial(
+                                split,
+                                port_id,
+                                port["source_site_id"],
+                                placement_index,
+                                realization,
+                                range_m,
+                                report_types,
+                                condition,
+                            )
+    for batch in extension_history:
+        port = ports_by_id[batch["port_id"]]
+        split = batch["split"]
+        for placement_index in range(batch["first_placement"], batch["last_placement"] + 1):
+            for realization in range(config["realizations_per_placement"]):
+                for range_m in ranges:
+                    for report_types in labels:
+                        append_trial(
+                            split,
+                            batch["port_id"],
+                            port["source_site_id"],
+                            placement_index,
+                            realization,
+                            range_m,
+                            report_types,
+                            "nominal",
+                        )
+    return expected
+
+
 def _check_plan(
-    plan_dir: Path, split: str
+    plan_dir: Path, split: str, support_root: Path
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, str]], dict[str, Any]]:
     config_path = plan_dir / "config.json"
     splits_path = plan_dir / "splits.json"
@@ -155,7 +418,6 @@ def _check_plan(
     table_path = plan_dir / table_name
     rows = _read_csv(table_path)
     hashes: dict[str, Any] = {
-        "plan_sha256": _sha256(config_path),
         "config_sha256": _sha256(config_path),
         "splits_sha256": _sha256(splits_path),
         "trial_table_sha256": _sha256(table_path),
@@ -166,93 +428,89 @@ def _check_plan(
         raise EligibilityError("Plan trial-table hash does not match trials.csv.")
     if config.get("schema") != "accuracy-suite-plan-v1":
         raise EligibilityError("Unsupported accuracy plan schema.")
-    chosen = _split_name(split)
     ports = splits.get("ports")
-    if not isinstance(ports, list):
-        raise EligibilityError("Split manifest has no ports list.")
-    selected_ports = {
-        item.get("port_id")
-        for item in ports
-        if isinstance(item, dict) and item.get("effective_split") == chosen
-    }
-    expected_ports = EXPECTED_SPLIT_PORTS.get(chosen)
-    if expected_ports is None or len(selected_ports) != expected_ports:
-        raise EligibilityError(f"Unexpected port population for split {chosen!r}.")
-    if len(rows) != config.get("trial_count"):
-        raise EligibilityError("Trial table row count does not match the frozen plan.")
-    ids = [row.get("trial_id", "") for row in rows]
-    if not all(ids) or len(ids) != len(set(ids)):
-        raise EligibilityError("Trial table has missing or duplicate trial IDs.")
-    by_id = {row["trial_id"]: row for row in rows}
-    ports_by_split = {
-        name: {
-            item.get("port_id")
-            for item in ports
-            if isinstance(item, dict) and item.get("effective_split") == name
-        }
-        for name in EXPECTED_SPLIT_PORTS
-    }
-    for row in rows:
-        row_split = row.get("split")
-        if (
-            row_split not in EXPECTED_SPLIT_PORTS
-            or row.get("port_id") not in ports_by_split[row_split]
-        ):
-            raise EligibilityError(f"Trial has wrong split/port metadata: {row.get('trial_id')}.")
-        if row.get("sensor_condition") not in config.get("stress_profiles", {}):
-            raise EligibilityError(f"Trial has unknown sensor condition: {row.get('trial_id')}.")
-        expected_id = (
-            f"{row_split}/{row['port_id']}/{row['placement_id']}/r{row['realization']}/"
-            f"range{int(row['range_m'])}m/"
-            f"types{'on' if row['report_types'] == 'True' else 'off'}/"
-            f"{row['sensor_condition']}"
-        )
-        if row["trial_id"] != expected_id:
-            raise EligibilityError(f"Trial ID does not match its metadata: {row.get('trial_id')}.")
-        if row.get("profile_parameters") != json.dumps(
-            config["stress_profiles"][row["sensor_condition"]], sort_keys=True
-        ):
-            raise EligibilityError(f"Trial condition parameters mismatch: {row.get('trial_id')}.")
-        if row.get("range_m") not in {str(value) for value in RANGES_M}:
-            raise EligibilityError(f"Trial has an unexpected range: {row.get('trial_id')}.")
-        if row.get("report_types") not in {"True", "False"}:
-            raise EligibilityError(
-                f"Trial has invalid report-types metadata: {row.get('trial_id')}."
-            )
-        if row.get("status") != "planned":
-            raise EligibilityError(f"Expected planned trial row: {row.get('trial_id')}.")
+    if not isinstance(ports, list) or not all(isinstance(item, dict) for item in ports):
+        raise EligibilityError("Split manifest has no valid ports list.")
+    ports_by_id = {item.get("port_id"): item for item in ports}
+    if len(ports_by_id) != len(ports) or None in ports_by_id:
+        raise EligibilityError("Split manifest has missing or duplicate port IDs.")
+    for split_name, expected_count in EXPECTED_SPLIT_PORTS.items():
+        actual = sum(port.get("effective_split") == split_name for port in ports)
+        if actual != expected_count:
+            raise EligibilityError(f"Unexpected port population for split {split_name!r}.")
     moved = {
         decision.get("port_id")
         for decision in splits.get("overlap_decisions", [])
         if isinstance(decision, dict)
     }
-    for item in ports:
-        if not isinstance(item, dict):
-            raise EligibilityError("Malformed port split entry.")
-        pid = item.get("port_id")
-        if item.get("effective_split") != item.get("declared_split") and pid not in moved:
-            raise EligibilityError(f"Unrecorded split change for {pid}.")
+    for port in ports:
+        if (
+            port.get("effective_split") != port.get("declared_split")
+            and port.get("port_id") not in moved
+        ):
+            raise EligibilityError(f"Unrecorded split change for {port.get('port_id')}.")
+    if len(rows) != config.get("trial_count"):
+        raise EligibilityError("Trial table row count does not match the frozen plan.")
+    ids = [row.get("trial_id", "") for row in rows]
+    if not all(ids) or len(ids) != len(set(ids)):
+        raise EligibilityError("Trial table has missing or duplicate trial IDs.")
+
+    placements_by_port, extension_history = _validate_extension_history(
+        config, splits, rows, support_root, ports_by_id
+    )
+    expected_rows = _expected_plan_rows(config, ports_by_id, placements_by_port, extension_history)
+    if len(expected_rows) != len(rows):
+        raise EligibilityError(
+            f"Plan contains {len(rows)} rows; validated frozen plan requires {len(expected_rows)}."
+        )
+    for index, (actual, expected) in enumerate(zip(rows, expected_rows, strict=True)):
+        for field, value in expected.items():
+            if actual.get(field) != value:
+                raise EligibilityError(
+                    f"Trial {index} has invalid {field}: {actual.get(field)!r}, expected {value!r}."
+                )
+
+    chosen = _split_name(split)
+    if chosen not in EXPECTED_SPLIT_PORTS:
+        raise EligibilityError(f"Unknown split {chosen!r}.")
     expected = [
-        row for row in rows if row["split"] == chosen and row["sensor_condition"] == "nominal"
+        row
+        for row in expected_rows
+        if row["split"] == chosen and row["sensor_condition"] == "nominal"
     ]
     nominal_ids = [row["trial_id"] for row in expected]
-    expected_count = expected_ports * 25 * 2 * 3 * 2
+    expected_count = (
+        sum(
+            placements_by_port[port_id]
+            for port_id, port in ports_by_id.items()
+            if port["effective_split"] == chosen
+        )
+        * config["realizations_per_placement"]
+        * len(config["ranges_m"])
+        * len(config["type_labels"])
+    )
     if len(expected) != expected_count:
         raise EligibilityError(
             f"Nominal population for {chosen} is {len(expected)}, expected {expected_count}."
         )
-    if {row["port_id"] for row in expected} != selected_ports:
+    if {row["port_id"] for row in expected} != {
+        port_id for port_id, port in ports_by_id.items() if port["effective_split"] == chosen
+    }:
         raise EligibilityError(f"Nominal rows do not cover the complete {chosen} port set.")
-    split_ids = [row["trial_id"] for row in rows if row["split"] == chosen]
+    split_ids = [row["trial_id"] for row in expected_rows if row["split"] == chosen]
+    hashes["plan_sha256"] = hashlib.sha256(
+        (hashes["config_sha256"] + hashes["splits_sha256"] + hashes["trial_table_sha256"]).encode()
+    ).hexdigest()
     hashes["expected_trial_ids_sha256"] = _canonical_ids_sha256(split_ids)
     hashes["expected_trial_count"] = len(split_ids)
     hashes["expected_nominal_ids_sha256"] = _canonical_ids_sha256(nominal_ids)
     hashes["expected_nominal_count"] = expected_count
     hashes["selected_split"] = chosen
-    hashes["by_id"] = by_id
+    hashes["ports_by_id"] = ports_by_id
+    hashes["by_id"] = {row["trial_id"]: row for row in expected_rows}
     hashes["expected_trial_ids"] = split_ids
     hashes["expected_nominal_ids"] = nominal_ids
-    return config, splits, rows, hashes
+    return config, splits, expected_rows, hashes
 
 
 def _record_dict(record: EligibilityTrial) -> dict[str, Any]:
@@ -281,7 +539,7 @@ def _build_snapshot(
     *,
     frozen_records: list[dict[str, Any]] | None = None,
 ) -> EligibilitySnapshot:
-    _config, _splits, rows, hashes = _check_plan(plan_dir, split)
+    _config, _splits, rows, hashes = _check_plan(plan_dir, split, support_root)
     chosen = hashes["selected_split"]
     table_by_id = hashes["by_id"]
     expected_ids = hashes["expected_nominal_ids"]
@@ -426,7 +684,9 @@ def _build_snapshot(
         for range_m in RANGES_M
         for report_types in TYPE_LABELS
     }
-    expected_projection_count = EXPECTED_SPLIT_PORTS[chosen] * 25 * 2
+    expected_projection_count = hashes["expected_nominal_count"] // (
+        len(RANGES_M) * len(TYPE_LABELS)
+    )
     if any(len(projection) != expected_projection_count for projection in projections.values()):
         raise EligibilityError("One or more nominal condition projections are incomplete.")
     return EligibilitySnapshot(

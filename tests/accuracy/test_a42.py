@@ -276,3 +276,117 @@ def test_missing_preparation_ledger_trial_blocks_freeze(
         freeze_eligibility_manifest(
             PLAN_DIR, copied_support, tmp_path / "eligibility.json", "development"
         )
+
+
+def _run_extension_batches(plan: Path, support_root: Path, batch_count: int) -> list[str]:
+    from tools.run_accuracy_suite import _extend_nominal_plan_if_needed
+
+    added_ids: list[str] = []
+    ledger = support_root / "development" / "preparation.csv"
+    with ledger.open(newline="", encoding="utf-8") as stream:
+        reader = csv.DictReader(stream)
+        fields = list(reader.fieldnames or [])
+        preparation = list(reader)
+    plan_config = json.loads((plan / "config.json").read_text(encoding="utf-8"))
+    for _ in range(batch_count):
+        new_ids = _extend_nominal_plan_if_needed(
+            plan / "config.json", input_root=support_root, split="development"
+        )
+        if not new_ids:
+            break
+        with (plan / plan_config["trial_table"]).open(newline="", encoding="utf-8") as stream:
+            planned = {row["trial_id"]: row for row in csv.DictReader(stream)}
+        for trial_id in new_ids:
+            row = planned[trial_id]
+            support_path = support_root / _support_rel(row)
+            support_path.parent.mkdir(parents=True, exist_ok=True)
+            support_path.write_text(
+                json.dumps(
+                    {
+                        "detected_physical_catalog_matched_groups": 0,
+                        "placement_id": row["placement_id"],
+                        "port_id": row["port_id"],
+                        "supported": False,
+                        "valid_reference_water": False,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            preparation.append(
+                {
+                    "trial_id": trial_id,
+                    "status": "completed",
+                    "failure": "",
+                    "physical_seed": row["physical_seed"],
+                    "sensor_condition": row["sensor_condition"],
+                }
+            )
+        added_ids.extend(new_ids)
+        plan_config = json.loads((plan / "config.json").read_text(encoding="utf-8"))
+    ledger.unlink()
+    with ledger.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(preparation)
+    return added_ids
+
+
+@pytest.mark.parametrize("batch_count", [0, 1, 2, 3])
+def test_producer_extensions_25_50_75_are_plan_complete(
+    tmp_path: Path, complete_support: Path, batch_count: int
+) -> None:
+    plan = tmp_path / "plan"
+    shutil.copytree(PLAN_DIR, plan)
+    support = tmp_path / "support"
+    shutil.copytree(complete_support, support)
+    # Force the producer's initial support gate to remain deficient.
+    for row in _split_rows("nominal"):
+        path = support / _support_rel(row)
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["supported"] = False
+        document["valid_reference_water"] = False
+        path.write_text(json.dumps(document) + "\n", encoding="utf-8")
+
+    added = _run_extension_batches(plan, support, batch_count)
+    assert len(added) == 300 * batch_count
+    config = json.loads((plan / "config.json").read_text(encoding="utf-8"))
+    history = config.get("support_extension_batches", [])
+    assert len(history) == batch_count
+    assert [(batch["first_placement"], batch["last_placement"]) for batch in history] == [
+        (26 + 25 * index, 50 + 25 * index) for index in range(batch_count)
+    ]
+    manifest = tmp_path / "eligibility.json"
+    snapshot = freeze_eligibility_manifest(plan, support, manifest, "development")
+    assert snapshot.expected_nominal_count == 3600 + 300 * batch_count
+    assert len(snapshot.trials) == 6120 + 300 * batch_count
+
+
+@pytest.mark.parametrize("mutation", ["boundary", "count", "gate"])
+def test_invalid_extension_history_is_rejected(
+    tmp_path: Path, complete_support: Path, mutation: str
+) -> None:
+    plan = tmp_path / "plan"
+    shutil.copytree(PLAN_DIR, plan)
+    support = tmp_path / "support"
+    shutil.copytree(complete_support, support)
+    for row in _split_rows("nominal"):
+        path = support / _support_rel(row)
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["supported"] = False
+        document["valid_reference_water"] = False
+        path.write_text(json.dumps(document) + "\n", encoding="utf-8")
+    _run_extension_batches(plan, support, 1)
+    config_path = plan / "config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    batch = config["support_extension_batches"][0]
+    if mutation == "boundary":
+        batch["last_placement"] = 49
+    elif mutation == "count":
+        key = next(iter(batch["supported_units_before_batch"]))
+        batch["supported_units_before_batch"][key] = 99
+    else:
+        batch["deficient_gates_before_batch"].reverse()
+    config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(EligibilityError):
+        freeze_eligibility_manifest(plan, support, tmp_path / "eligibility.json", "development")
