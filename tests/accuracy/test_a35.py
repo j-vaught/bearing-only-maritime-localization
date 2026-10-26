@@ -15,6 +15,7 @@ from bearing_localization.search.calibration import (
     CalibrationOperatingCondition,
     DecisionCalibration,
     canonical_json,
+    execution_protocol_sha256,
     load_frozen_calibration,
 )
 from bearing_localization.search.config import SearchConfig
@@ -180,6 +181,23 @@ def test_distant_unsupported_catalog_geometry_does_not_block_local_scoring() -> 
     assert evaluation.predicted.unresolved_model_keys == ()
 
 
+def _execution_protocol() -> dict[str, object]:
+    return {
+        "schema": "accuracy-execution-protocol-v1",
+        "timeout_s": 300.0,
+        "timeout_scope": "per_command_subprocess",
+        "deadline_clock": "monotonic_wall_clock_from_spawn",
+        "timeout_status": "search_timeout",
+        "termination_policy": {
+            "start_new_session": True,
+            "timeout_signal": "SIGTERM",
+            "grace_s": 1.0,
+            "escalation_signal": "SIGKILL",
+            "reap_process_group": True,
+        },
+    }
+
+
 def _calibration(gap: float = 2.0, radius: float | None = 100.0) -> DecisionCalibration:
     condition = CalibrationOperatingCondition(
         range_m=5_000.0,
@@ -201,6 +219,7 @@ def _calibration(gap: float = 2.0, radius: float | None = 100.0) -> DecisionCali
             "run_manifest_sha256": "3" * 64,
             "eligibility_manifest_sha256": "4" * 64,
             "metrics_sha256": "5" * 64,
+            "execution_protocol_sha256": execution_protocol_sha256(_execution_protocol()),
         }
         for split in ("development", "validation")
     }
@@ -244,6 +263,7 @@ def _calibration(gap: float = 2.0, radius: float | None = 100.0) -> DecisionCali
         "context": context.as_dict(),
         "provenance": provenance,
         "population": population,
+        "execution_protocol": _execution_protocol(),
     }
     document = payload | {
         "frozen": True,

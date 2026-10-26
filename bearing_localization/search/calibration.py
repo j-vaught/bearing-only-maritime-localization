@@ -28,6 +28,8 @@ _PROVENANCE_KEYS = (
     "eligibility_manifest_sha256",
     "metrics_sha256",
 )
+_EXECUTION_PROTOCOL_HASH_KEY = "execution_protocol_sha256"
+_EXECUTION_PROTOCOL_SCHEMA = "accuracy-execution-protocol-v1"
 
 
 def canonical_json(value: Any) -> bytes:
@@ -37,6 +39,62 @@ def canonical_json(value: Any) -> bytes:
 def _validate_sha256(value: str, *, name: str) -> None:
     if not isinstance(value, str) or _SHA256_PATTERN.fullmatch(value) is None:
         raise ValueError(f"{name} must be a lowercase SHA-256 hex digest.")
+
+
+def validate_execution_protocol(value: object) -> dict[str, Any]:
+    """Validate the formal subprocess timeout and process-group termination contract."""
+    keys = {
+        "schema",
+        "timeout_s",
+        "timeout_scope",
+        "deadline_clock",
+        "timeout_status",
+        "termination_policy",
+    }
+    if not isinstance(value, dict) or set(value) != keys:
+        raise ValueError("execution_protocol must contain exactly the v1 protocol fields.")
+    timeout_s = value["timeout_s"]
+    if (
+        isinstance(timeout_s, bool)
+        or not isinstance(timeout_s, (int, float))
+        or not isfinite(float(timeout_s))
+        or timeout_s <= 0.0
+    ):
+        raise ValueError("execution_protocol.timeout_s must be finite and positive.")
+    constants = {
+        "schema": _EXECUTION_PROTOCOL_SCHEMA,
+        "timeout_scope": "per_command_subprocess",
+        "deadline_clock": "monotonic_wall_clock_from_spawn",
+        "timeout_status": "search_timeout",
+    }
+    for key, expected in constants.items():
+        if value[key] != expected:
+            raise ValueError(f"Unsupported execution_protocol.{key}.")
+    policy = value["termination_policy"]
+    expected_policy = {
+        "start_new_session": True,
+        "timeout_signal": "SIGTERM",
+        "grace_s": 1.0,
+        "escalation_signal": "SIGKILL",
+        "reap_process_group": True,
+    }
+    if not isinstance(policy, dict) or set(policy) != set(expected_policy):
+        raise ValueError("Unsupported execution_protocol termination policy.")
+    if any(
+        type(policy[key]) is not type(expected) or policy[key] != expected
+        for key, expected in expected_policy.items()
+    ):
+        raise ValueError("Unsupported execution_protocol process-group termination policy.")
+    return {
+        **value,
+        "termination_policy": dict(policy),
+    }
+
+
+def execution_protocol_sha256(value: object) -> str:
+    """Return the canonical hash used by formal run manifests and trial rows."""
+    protocol = validate_execution_protocol(value)
+    return hashlib.sha256(canonical_json(protocol)).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +181,7 @@ class DecisionCalibration:
     provenance: dict[str, Any] | None = None
     population: dict[str, Any] | None = None
     release_eligible: bool = False
+    execution_protocol: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if self.schema_version not in (1, 2) or self.split != "development":
@@ -131,6 +190,10 @@ class DecisionCalibration:
             self.release_eligible and self.schema_version != 2
         ):
             raise ValueError("Only a schema-v2 calibration may be release eligible.")
+        if self.execution_protocol is not None:
+            validate_execution_protocol(self.execution_protocol)
+        if self.release_eligible and self.execution_protocol is None:
+            raise ValueError("Release-eligible calibration requires a formal execution protocol.")
         if self.min_score_gap not in SCORE_GAPS or self.max_95_radius_m not in RADIUS_LIMITS:
             raise ValueError("Calibration thresholds are outside the frozen grid.")
         if self.status not in ("PASS", "FAIL"):
@@ -180,6 +243,10 @@ def calibration_payload(calibration: DecisionCalibration) -> dict[str, Any]:
             provenance=calibration.provenance,
             population=calibration.population,
         )
+        if calibration.execution_protocol is not None:
+            payload["execution_protocol"] = validate_execution_protocol(
+                calibration.execution_protocol
+            )
     return payload
 
 
@@ -276,17 +343,36 @@ def implementation_sha256(project_root: str | Path | None = None) -> str:
     return digest.hexdigest()
 
 
-def _validate_v2_provenance(provenance: object) -> dict[str, Any]:
+def _validate_v2_provenance(
+    provenance: object, *, require_execution_protocol: bool = False
+) -> dict[str, Any]:
     if not isinstance(provenance, dict) or set(provenance) != {"development", "validation"}:
         raise ValueError("v2 provenance must contain development and validation entries.")
     normalized: dict[str, Any] = {}
+    protocol_presence: set[bool] = set()
     for split in ("development", "validation"):
         record = provenance[split]
-        if not isinstance(record, dict) or set(record) != set(_PROVENANCE_KEYS):
-            raise ValueError(f"{split} provenance must contain the four source hashes.")
+        if not isinstance(record, dict):
+            raise ValueError(f"{split} provenance must be an object.")
+        has_protocol_hash = _EXECUTION_PROTOCOL_HASH_KEY in record
+        protocol_presence.add(has_protocol_hash)
+        expected_keys = set(_PROVENANCE_KEYS)
+        if has_protocol_hash:
+            expected_keys.add(_EXECUTION_PROTOCOL_HASH_KEY)
+        if set(record) != expected_keys:
+            raise ValueError(f"{split} provenance has missing or unsupported source hashes.")
         for key in _PROVENANCE_KEYS:
             _validate_sha256(record[key], name=f"{split}.{key}")
+        if has_protocol_hash:
+            _validate_sha256(
+                record[_EXECUTION_PROTOCOL_HASH_KEY],
+                name=f"{split}.{_EXECUTION_PROTOCOL_HASH_KEY}",
+            )
         normalized[split] = dict(record)
+    if len(protocol_presence) != 1:
+        raise ValueError("Both splits must carry the same execution protocol provenance.")
+    if require_execution_protocol and protocol_presence != {True}:
+        raise ValueError("V2 release provenance requires execution_protocol_sha256 per split.")
     return normalized
 
 
@@ -354,6 +440,7 @@ def load_frozen_calibration(
     version = document.get("schema_version")
     condition: CalibrationOperatingCondition | None = None
     context: CalibrationContext | None = None
+    execution_protocol: dict[str, Any] | None = None
     provenance = None
     population = None
     release_eligible = False
@@ -363,14 +450,39 @@ def load_frozen_calibration(
     elif version == 2:
         condition = CalibrationOperatingCondition.from_dict(document.get("operating_condition"))
         context = CalibrationContext.from_dict(document.get("context"))
-        provenance = _validate_v2_provenance(document.get("provenance"))
+        protocol_value = document.get("execution_protocol")
+        protocol_hashes_present = (
+            any(
+                isinstance(record, dict) and _EXECUTION_PROTOCOL_HASH_KEY in record
+                for record in document.get("provenance", {}).values()
+            )
+            if isinstance(document.get("provenance"), dict)
+            else False
+        )
+        if protocol_value is None:
+            if protocol_hashes_present:
+                raise ValueError("V2 provenance declares a missing execution protocol.")
+            if release_acceptance:
+                raise ValueError("Schema-v2 release use requires a formal execution protocol.")
+            provenance = _validate_v2_provenance(document.get("provenance"))
+        else:
+            execution_protocol = validate_execution_protocol(protocol_value)
+            protocol_digest = execution_protocol_sha256(execution_protocol)
+            provenance = _validate_v2_provenance(
+                document.get("provenance"), require_execution_protocol=True
+            )
+            if any(
+                record[_EXECUTION_PROTOCOL_HASH_KEY] != protocol_digest
+                for record in provenance.values()
+            ):
+                raise ValueError("Frozen execution protocol hash does not match its provenance.")
         population = _validate_v2_population(document.get("population"))
         if expected_condition is None or expected_context is None:
             if release_acceptance:
                 raise ValueError("Schema-v2 release use requires expected condition and context.")
         elif condition != expected_condition or context != expected_context:
             raise ValueError("Calibration operating condition or execution context mismatch.")
-        else:
+        elif protocol_value is not None:
             release_eligible = True
     else:
         raise ValueError("Unsupported frozen calibration schema version.")
@@ -393,4 +505,5 @@ def load_frozen_calibration(
         provenance=provenance,
         population=population,
         release_eligible=release_eligible,
+        execution_protocol=execution_protocol,
     )

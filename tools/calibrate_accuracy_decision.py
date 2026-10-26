@@ -7,7 +7,7 @@ import hashlib
 import json
 from math import isfinite
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, overload
 
 from bearing_localization.search.calibration import (
     RADIUS_LIMITS,
@@ -17,6 +17,8 @@ from bearing_localization.search.calibration import (
     _validate_sha256,
     _validate_v2_provenance,
     canonical_json,
+    execution_protocol_sha256,
+    validate_execution_protocol,
 )
 from bearing_localization.search.decision import (
     CompetitorCoverageEvidence,
@@ -256,23 +258,53 @@ def _trial_id_hash(rows: list[dict[str, Any]]) -> str:
     return hashlib.sha256(canonical_json(sorted(identifiers))).hexdigest()
 
 
+@overload
 def _v2_split(
     document: dict[str, Any],
     split: str,
     *,
     metrics_sha256: str | None,
+    include_execution_protocol: Literal[False] = False,
 ) -> tuple[
     list[dict[str, Any]],
     CalibrationOperatingCondition,
     CalibrationContext,
     dict[str, Any],
     dict[str, Any],
-]:
+]: ...
+
+
+@overload
+def _v2_split(
+    document: dict[str, Any],
+    split: str,
+    *,
+    metrics_sha256: str | None,
+    include_execution_protocol: Literal[True],
+) -> tuple[
+    list[dict[str, Any]],
+    CalibrationOperatingCondition,
+    CalibrationContext,
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+]: ...
+
+
+def _v2_split(
+    document: dict[str, Any],
+    split: str,
+    *,
+    metrics_sha256: str | None,
+    include_execution_protocol: bool = False,
+) -> tuple[Any, ...]:
     if document.get("schema_version") != 2:
         raise ValueError("Development and validation inputs must both use schema v2.")
     _check_trials(document, split)
     condition = CalibrationOperatingCondition.from_dict(document.get("operating_condition"))
     context = CalibrationContext.from_dict(document.get("context"))
+    execution_protocol = validate_execution_protocol(document.get("execution_protocol"))
+    protocol_digest = execution_protocol_sha256(execution_protocol)
     all_trials = document.get("all_trials")
     if not isinstance(all_trials, list) or not all_trials:
         raise ValueError(f"Schema-v2 {split} input requires all_trials.")
@@ -295,6 +327,10 @@ def _v2_split(
         all_ids.add(trial_id)
         if row.get("split", split) != split:
             raise ValueError(f"Every {split} all_trials row must match its split.")
+        if row.get("execution_protocol_sha256") != protocol_digest:
+            raise ValueError(
+                "A v2 trial row execution protocol hash does not match the run protocol."
+            )
         if "sensor_condition" not in row or not isinstance(row["sensor_condition"], str):
             raise ValueError("Every v2 trial must carry an explicit sensor_condition label.")
         sensor_condition = row["sensor_condition"].strip()
@@ -360,13 +396,17 @@ def _v2_split(
         "run_manifest_sha256": provenance_input.get("run_manifest_sha256"),
         "eligibility_manifest_sha256": provenance_input.get("eligibility_manifest_sha256"),
         "metrics_sha256": metrics_digest,
+        "execution_protocol_sha256": provenance_input.get("execution_protocol_sha256"),
     }
     _validate_v2_provenance(
         {
             split: source_record,
             "validation" if split == "development" else "development": source_record,
-        }
+        },
+        require_execution_protocol=True,
     )
+    if source_record["execution_protocol_sha256"] != protocol_digest:
+        raise ValueError("Metrics provenance execution protocol hash does not match its protocol.")
     expected_population = document.get("population")
     population_keys = {
         "condition_wide_planned",
@@ -411,7 +451,10 @@ def _v2_split(
             "trial_ids_sha256": _trial_id_hash(all_trials),
         },
     }
-    return included, condition, context, source_record, population
+    legacy_result = (included, condition, context, source_record, population)
+    if include_execution_protocol:
+        return (*legacy_result, execution_protocol)
+    return legacy_result
 
 
 def calibrate(
@@ -429,16 +472,32 @@ def calibrate(
     if version == 2 or validation_version == 2:
         if version != 2 or validation_version != 2 or validation_document is None:
             raise ValueError("Schema-v2 calibration requires v2 development and validation inputs.")
-        trials, condition, context, dev_source, dev_population = _v2_split(
-            document, "development", metrics_sha256=development_metrics_sha256
+        trials, condition, context, dev_source, dev_population, dev_protocol = _v2_split(
+            document,
+            "development",
+            metrics_sha256=development_metrics_sha256,
+            include_execution_protocol=True,
         )
-        validation_trials, val_condition, val_context, val_source, val_population = _v2_split(
-            validation_document, "validation", metrics_sha256=validation_metrics_sha256
+        (
+            validation_trials,
+            val_condition,
+            val_context,
+            val_source,
+            val_population,
+            val_protocol,
+        ) = _v2_split(
+            validation_document,
+            "validation",
+            metrics_sha256=validation_metrics_sha256,
+            include_execution_protocol=True,
         )
         if condition != val_condition:
             raise ValueError("Development and validation operating conditions differ.")
         if context != val_context:
             raise ValueError("Development and validation execution contexts differ.")
+        if execution_protocol_sha256(dev_protocol) != execution_protocol_sha256(val_protocol):
+            raise ValueError("Development and validation execution protocols differ.")
+        execution_protocol = dev_protocol
         provenance = {
             "development": dev_source,
             "validation": val_source,
@@ -459,6 +518,7 @@ def calibrate(
         context = None
         provenance = None
         population = None
+        execution_protocol = None
         schema_version = 1
 
     candidates: list[dict[str, Any]] = []
@@ -526,6 +586,7 @@ def calibrate(
             context=context.as_dict(),
             provenance=provenance,
             population=population,
+            execution_protocol=execution_protocol,
         )
     return {
         **payload,
