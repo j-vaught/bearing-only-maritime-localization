@@ -16,6 +16,7 @@ from tools.run_assigned_refinement_diagnostic import (
     canonical_lock_path,
     load_a20_bundle,
     run_start,
+    verify_a20_package_pin,
 )
 
 
@@ -106,6 +107,13 @@ def test_canonical_lock_is_repository_benchmark_lock() -> None:
     assert lock.parent.name == ".agent-work"
 
 
+def test_a20_package_commit_is_pinned_to_scoring_source() -> None:
+    identity = {"scoring_source_sha": "source-commit"}
+    verify_a20_package_pin({"package_commit": "source-commit"}, identity)
+    with pytest.raises(DiagnosticInputError, match="package commit"):
+        verify_a20_package_pin({"package_commit": "other-commit"}, identity)
+
+
 def test_stale_source_row_and_status_boolean_are_rejected() -> None:
     source, selected = row()
     source["candidate_id"] = "cell:cell:stale"
@@ -181,3 +189,10 @@ def test_stale_initial_score_is_rejected() -> None:
     canonical = hypothesis(score=3.0)
     with pytest.raises(DiagnosticInputError, match="score"):
         run_start(FakeScorer(canonical), source, "cached_hypothesis")
+
+
+def test_ranking_schema_names_selected_mode_scope() -> None:
+    source = Path(__file__).parents[2] / "tools" / "run_assigned_refinement_diagnostic.py"
+    text = source.read_text()
+    assert 'manifest["ranked_selected_modes"]' in text
+    assert "ranked_global_best" not in text

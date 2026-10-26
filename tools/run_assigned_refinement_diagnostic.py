@@ -209,6 +209,11 @@ def load_a20_bundle(root: Path) -> tuple[list[ModeRow], dict[str, Any]]:
     return rows, manifest
 
 
+def verify_a20_package_pin(a20_manifest: dict[str, Any], identity: dict[str, Any]) -> None:
+    if a20_manifest.get("package_commit") != identity.get("scoring_source_sha"):
+        raise DiagnosticInputError("A20 package commit differs from frozen scoring source")
+
+
 def verify_source_pins(
     a20_manifest: dict[str, Any],
     a20_root: Path,
@@ -221,6 +226,7 @@ def verify_source_pins(
         raise DiagnosticInputError("A20 source attempt path differs from requested attempt")
     seeds, bindings = load_committed(attempt)
     identity = bindings["identity"]
+    verify_a20_package_pin(a20_manifest, identity)
     if a20_manifest.get("supervisor_sha256") != sha256(attempt / "supervisor-manifest.json"):
         raise DiagnosticInputError("Original supervisor manifest hash differs from A20")
     if a20_manifest.get("identity") != identity:
@@ -545,7 +551,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     if _output_bytes(args.output) > MAX_OUTPUT_BYTES:
                         raise OSError("diagnostic output exceeded 5 MiB")
             manifest["status"] = "completed"
-            manifest["ranked_global_best"] = [
+            manifest["ranked_selected_modes"] = [
                 {
                     "mode_index": item["mode_index"],
                     "candidate_id": item["candidate_id"],
