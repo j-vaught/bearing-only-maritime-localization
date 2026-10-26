@@ -328,7 +328,9 @@ def test_parallel_worker_uses_requested_validation_split(
         _allow_extension: bool,
     ) -> None:
         observed["split"] = split
+        observed["placements_per_port"] = placements_per_port
         assert split == "validation"
+        assert placements_per_port == 50
         assert only_trial_ids == {
             "validation/port-002/placement-015/r0/range5000m/typesoff/nominal"
         }
@@ -342,10 +344,21 @@ def test_parallel_worker_uses_requested_validation_split(
     monkeypatch.setattr(run_a38_parallel_prep, "prepare_inputs", fake_prepare_inputs)
     monkeypatch.setattr(run_a38_parallel_prep, "compact_split", lambda *_args: 0)
 
+    plan_dir = tmp_path / "plan"
+    plan_dir.mkdir()
+    with (plan_dir / "trials.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=["split", "placement_id"])
+        writer.writeheader()
+        writer.writerow({"split": "validation", "placement_id": "placement-001"})
+        writer.writerow({"split": "validation", "placement_id": "placement-050"})
+    (plan_dir / "config.json").write_text(
+        json.dumps({"trial_table": "trials.csv"}), encoding="utf-8"
+    )
+
     trial_id = "validation/port-002/placement-015/r0/range5000m/typesoff/nominal"
     result = _worker(
         (
-            "plan.json",
+            str(plan_dir / "config.json"),
             "catalog.json",
             "map.json",
             str(tmp_path / "worker"),
@@ -357,6 +370,7 @@ def test_parallel_worker_uses_requested_validation_split(
     )
 
     assert observed["split"] == "validation"
+    assert observed["placements_per_port"] == 50
     assert result["trial_ids"] == [trial_id]
     assert _trial_output_relative_path(trial_id, "validation") == (
         "validation/port-002/placement-015/r0/5000m/types-off/nominal"
@@ -1626,3 +1640,44 @@ def test_v2_metrics_cli_writes_parseable_newline_terminated_json(
     assert parsed["trial_count"] == 4
     assert parsed["supported_trial_count"] == 2
     assert run_path.is_file()
+
+
+def test_sampling_extended_plan_preserves_original_placement_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools import run_accuracy_suite
+
+    class AllWater:
+        @staticmethod
+        def point_water_status(_point: tuple[float, float]) -> str:
+            return "water"
+
+    class IdentityTransformer:
+        @staticmethod
+        def transform(longitude: float, latitude: float) -> tuple[float, float]:
+            return longitude, latitude
+
+    monkeypatch.setattr(
+        run_accuracy_suite,
+        "_water_sampler",
+        lambda *_args: (AllWater(), IdentityTransformer(), None),
+    )
+    map_path = tmp_path / "reference.map"
+    map_path.write_bytes(b"fixed reference map bytes")
+    port = {
+        "port_id": "port-002",
+        "anchor_longitude_deg": -70.0,
+        "anchor_latitude_deg": 43.0,
+    }
+
+    original = run_accuracy_suite._sample_placements(
+        port, map_path, count=25, port_split="validation"
+    )
+    extended = run_accuracy_suite._sample_placements(
+        port, map_path, count=50, port_split="validation"
+    )
+
+    assert extended[:25] == original
+    assert [item["placement_id"] for item in extended[:25]] == [
+        f"placement-{index:03d}" for index in range(1, 26)
+    ]
