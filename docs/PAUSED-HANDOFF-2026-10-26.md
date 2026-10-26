@@ -6,7 +6,7 @@ J.C. Vaught.
 
 Work is paused at the user's request for travel. The recurring implementation heartbeat is PAUSED. All active specialists saved and pushed their work, then stopped. The final owned server diagnostic completed naturally; no owned benchmark or worker remains active and the benchmark lock is free. Automated repository CI may finish unattended. No new benchmark or download is scheduled.
 
-Main is the consolidated working branch. Historical specialist branches remain as recoverable provenance; they are not competing current versions. Their commit inventory is saved in branch-heads-at-pause-2026-10-26.tsv. Frozen execution worktrees and input paths remain in place because their hashes and paths are used by audit tools.
+Main is the only branch. Historical specialist commits are preserved in main's ancestry through an archival merge that retains the consolidated implementation. The deleted branch-name to commit mapping is saved in branch-heads-before-single-main-2026-10-26.tsv; the earlier pause inventory remains available. Frozen execution worktrees and input paths remain in place because their hashes and paths are used by audit tools.
 
 ## Results and figures
 
@@ -55,3 +55,7 @@ The active project remains on comech-2080 at /home/jvaught2/projects/bearing-onl
 [Storage manifests and restoration record](storage-audit-worktree-removal-2026-10-26.md). [Full chronological progress](accuracy-progress-2026-10-26.md). [Implementation ledger](accuracy-implementation-ledger.md).
 
 When the user returns, inspect main and this report before starting agents. Confirm CI outcomes and disk reserve, finish the direct-coarse audit, then profile selected-mode costs and resume the full-domain plan. Keep the heartbeat paused until the user asks to resume. Do not rerun held-out work or alter frozen manifests to compensate for a failed result.
+
+## Single-branch cleanup
+
+The user requested one branch after the pause. All remote and local branch tips were inventoried and preserved as ancestors of main before branch-name deletion. The archival merge deliberately preserves the current consolidated source tree. Only this handoff and the branch inventory change. Frozen worktrees retain their original commits as detached checkouts, with their files preserved. The implementation and recurring continuation remain paused.
