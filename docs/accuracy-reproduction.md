@@ -2,7 +2,7 @@
 
 The packaged map inputs preserve the exact NOAA Electronic Navigational Chart (ENC) data used by the Eastern Seaboard accuracy work. The indexed inventory is in `data/maps/accuracy-inputs/manifest.json`. It records source, version, retrieval time, coverage status, original byte counts, SHA-256 hashes, archive hashes, and the provenance manifest hash. NOAA ENC Direct provides the chart source, and NOAA attribution is retained in the inventory and bibliography. The coast collection has incomplete scale bands, nineteen port maps have known coverage, and five port maps have partial coverage. The derived coast mosaic remains partial and marks unknown regions explicitly.
 
-Each compressed archive is below 100 MB. The 269 MB GeoJSON collection compresses to about 61 MB, the partial coast MapV2 compresses to about 23 MB, and the 24 port maps compress to about 19 MB as one tar archive. These archives preserve original bytes and filenames. The archive index preserves the SHA-256 of every uncompressed input and every archive.
+Each compressed archive is below 100 MB. The 268.6 MB GeoJSON collection compresses to 63.7 MB (60.8 MiB), the partial coast MapV2 compresses to 23.1 MB (22.0 MiB), and the 24 port maps compress to 19.0 MB (18.1 MiB) as one tar archive. These archives preserve original bytes and filenames. The archive index preserves the SHA-256 of every uncompressed input and every archive.
 
 ## Verify and restore map files
 
@@ -26,7 +26,7 @@ After extraction, rerun the verifier to validate the committed archives. The che
 
 ## Reproduction scope and limits
 
-The map package supports reconstruction of the saved partial map inputs without contacting a live chart service. The exact service acquisition manifest is retained at `data/maps/accuracy-east-coast-enc.manifest.json`, while the compressed archives avoid dependence on its former server cache paths. The search experiment uses the full-coast catalog and full-coast map with explicit unknown coverage. The current spatial study uses a single chart epoch and partial ENC coverage, so its map results do not establish continuous coast coverage or field accuracy.
+The map package supports reconstruction of the saved partial map inputs without contacting a live chart service. The exact service acquisition manifest is retained at `data/maps/accuracy-east-coast-enc.manifest.json`, while the compressed archives avoid dependence on its former server cache paths. The search experiment uses the full-coast catalog and full-coast map with explicit unknown coverage. The current spatial study uses a single AIS snapshot with mixed chart vintages and partial ENC coverage, so its map results do not establish continuous coast coverage or field accuracy.
 
 ## Field replay interface and collection protocol
 
@@ -34,4 +34,4 @@ The field replay interface accepts a version 2 measurement set through the searc
 
 For each field sequence, retain the original image or video timestamps and the independently measured observer position, observer heading, and sensor calibration records. Generate a timestamped bearing measurement for each detected feature with its angular uncertainty and any optional type label or angular extent supported by the input contract. Record observer pose and truth on a separate evaluator-only channel. Preserve acquisition time, sensor calibration version, feature-selection procedure, map/catalog hashes, and the full command configuration with every replay. Use independent position truth, such as surveyed or RTK-backed ground truth, to evaluate the resulting estimate. Do not substitute AIS positions for observer truth or report synthetic bearings as field measurements.
 
-The current evidence is a synthetic, single-epoch spatial evaluation with incomplete coast coverage. Field trials using measured bearings and independent truth, including correct-port and wrong-port examples, remain unvalidated until those observations are collected and evaluated. Benchmark outcome tables, ambiguity examples, difficulty strata, scaling plots, and error summaries are added only after the finalized trial outputs and independent review are available.
+The current evidence is a synthetic spatial evaluation using one AIS snapshot, mixed chart vintages, and incomplete coast coverage. Field trials using measured bearings and independent truth, including correct-port and wrong-port examples, remain unvalidated until those observations are collected and evaluated. Benchmark outcome tables, ambiguity examples, difficulty strata, scaling plots, and error summaries are added only after the finalized trial outputs and independent review are available.
