@@ -10,11 +10,14 @@ import sys
 import pytest
 
 from bearing_localization.accuracy_cli import (
+    SearchV2Session,
     _calibration_binding,
     _candidate_outcome_evidence,
     _distant_region_bound_evidence,
+    _run_jsonl_searches,
     evaluate_v2_main,
     search_v2_files,
+    search_v2_main,
 )
 from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.config_serialization import (
@@ -513,3 +516,177 @@ def test_v2_pipeline_forwards_each_gpu_device_id_and_keeps_truth_out_of_search(
     assert pipeline.run_pipeline_v2(args) == {"status": "ok"}
     default_search_command = commands[0]
     assert default_search_command[default_search_command.index("--seed-policy") + 1] == "fixed"
+
+
+def _write_session_inputs(tmp_path, *, trial_id="session-trial", bounds=(10.0, 20.0, 10.0, 20.0)):
+    timestamp = "2026-10-25T12:00:00Z"
+    measurements = tmp_path / f"{trial_id}-measurements.json"
+    catalog = tmp_path / "catalog-session.json"
+    map_path = tmp_path / "map-session.json"
+    config_path = tmp_path / f"{trial_id}-config.json"
+    write_contract(measurements, MeasurementSetV2((), trial_id=trial_id))
+    write_contract(catalog, CatalogV2((), timestamp, "session-test", "1", "session-catalog"))
+    ring = [[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0], [0.0, 0.0]]
+    write_contract(
+        map_path,
+        MapV2(
+            crs="EPSG:32618",
+            source="session-test",
+            map_version="1",
+            coverage_status="known",
+            coverage_geometry_geojson=json.dumps(
+                {"type": "Polygon", "coordinates": [ring]}, separators=(",", ":")
+            ),
+        ),
+    )
+    write_search_config(
+        config_path,
+        SearchConfig(algorithm="grid", bounds_xy=bounds, candidate_budget=4),
+    )
+    return measurements, catalog, map_path, config_path
+
+
+def test_search_v2_session_matches_cold_search_and_isolates_requests(tmp_path):
+    measurements_a, catalog, map_path, config_a = _write_session_inputs(tmp_path, trial_id="a")
+    measurements_b, _, _, config_b = _write_session_inputs(
+        tmp_path, trial_id="b", bounds=(30.0, 40.0, 30.0, 40.0)
+    )
+    cold_a = tmp_path / "cold-a.json"
+    warm_a = tmp_path / "warm-a.json"
+    warm_b = tmp_path / "warm-b.json"
+    cold_result = search_v2_files(
+        measurements_a,
+        catalog,
+        map_path,
+        config_a,
+        "EPSG:32618",
+        cold_a,
+        spacing_m=5.0,
+        refine=False,
+    )
+    session = SearchV2Session(catalog, map_path, "EPSG:32618")
+    warm_result = session.run_request(
+        measurements_a,
+        config_a,
+        warm_a,
+        spacing_m=5.0,
+        refine=False,
+    )
+    second_result = session.run_request(
+        measurements_b,
+        config_b,
+        warm_b,
+        spacing_m=5.0,
+        refine=False,
+    )
+    assert warm_result.hypotheses == cold_result.hypotheses
+    assert warm_result.search_status == cold_result.search_status
+    assert warm_result.decision_status == cold_result.decision_status
+    assert warm_result.budget_used == cold_result.budget_used
+    assert second_result.hypotheses != warm_result.hypotheses
+    warm_telemetry = json.loads(warm_a.with_suffix(".json.telemetry.json").read_text())
+    second_telemetry = json.loads(warm_b.with_suffix(".json.telemetry.json").read_text())
+    assert warm_telemetry["request_timing"]["scope"] == "warm_session_request"
+    assert warm_telemetry["request_timing"]["result_serialization_completed"] is True
+    assert warm_telemetry["request_timing"]["session_reuse_policy"] == "catalog_map_projection_only"
+    assert second_telemetry["diagnostics"]["declared_bounds_xy_m"] == [30.0, 40.0, 30.0, 40.0]
+
+
+@pytest.mark.parametrize("changed_static", ["catalog", "map"])
+def test_search_v2_session_rejects_changed_static_inputs_before_output(tmp_path, changed_static):
+    measurements, catalog, map_path, config = _write_session_inputs(tmp_path)
+    session = SearchV2Session(catalog, map_path, "EPSG:32618")
+    changed = catalog if changed_static == "catalog" else map_path
+    changed.write_bytes(changed.read_bytes() + b" ")
+    output = tmp_path / "must-not-exist.json"
+    with pytest.raises(ValueError, match="changed after SearchV2Session"):
+        session.run_request(measurements, config, output, spacing_m=5.0, refine=False)
+    assert not output.exists()
+
+
+def test_search_v2_session_rejects_changed_crs_and_times_full_result_serialization(tmp_path):
+    measurements, catalog, map_path, config = _write_session_inputs(tmp_path)
+    ticks = iter(float(i) / 10 for i in range(10000))
+    session = SearchV2Session(catalog, map_path, "EPSG:32618", clock=lambda: next(ticks))
+    output = tmp_path / "timed.json"
+    with pytest.raises(ValueError, match="projection does not match"):
+        session.run_request(measurements, config, output, projected_crs="EPSG:32617", refine=False)
+    assert not output.exists()
+    session.run_request(measurements, config, output, spacing_m=5.0, refine=False)
+    report = json.loads(output.with_suffix(".json.telemetry.json").read_text())
+    timing = report["request_timing"]
+    assert timing["request_elapsed_s"] > 0
+    assert timing["session_startup_s"] > 0
+    assert timing["includes_static_session_startup"] is False
+    assert timing["measurement_boundary"].endswith("before_sidecar_write")
+
+
+def test_jsonl_batch_rejects_malformed_records_before_any_output(tmp_path):
+    _, catalog, map_path, _ = _write_session_inputs(tmp_path)
+    request_file = tmp_path / "requests.jsonl"
+    output = tmp_path / "must-not-exist.json"
+    request_file.write_text(
+        json.dumps({"measurements": "missing.json", "config": "config.json", "output": str(output)})
+        + "\n"
+        + json.dumps({"measurements": "x", "config": "y", "output": "z", "future": True})
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="optional telemetry_output only"):
+        _run_jsonl_searches(
+            request_file,
+            catalog,
+            map_path,
+            "EPSG:32618",
+            options={"refine": False},
+        )
+    assert not output.exists()
+
+
+def test_jsonl_cli_runs_multiple_requests_with_distinct_outputs(tmp_path, capsys):
+    measurements_a, catalog, map_path, config_a = _write_session_inputs(
+        tmp_path, trial_id="jsonl-a"
+    )
+    measurements_b, _, _, config_b = _write_session_inputs(
+        tmp_path, trial_id="jsonl-b", bounds=(30.0, 40.0, 30.0, 40.0)
+    )
+    request_file = tmp_path / "requests.jsonl"
+    output_a = tmp_path / "request-a.json"
+    output_b = tmp_path / "request-b.json"
+    records = [
+        {"measurements": measurements_a.name, "config": config_a.name, "output": output_a.name},
+        {"measurements": measurements_b.name, "config": config_b.name, "output": output_b.name},
+    ]
+    request_file.write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8"
+    )
+    assert (
+        search_v2_main(
+            [
+                "--requests-jsonl",
+                str(request_file),
+                "--catalog",
+                str(catalog),
+                "--map",
+                str(map_path),
+                "--projected-crs",
+                "EPSG:32618",
+                "--spacing-m",
+                "5",
+                "--no-refine",
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out) == {"requests_completed": 2}
+    assert output_a.exists() and output_b.exists()
+    sidecar_a = json.loads(output_a.with_suffix(".json.telemetry.json").read_text())
+    sidecar_b = json.loads(output_b.with_suffix(".json.telemetry.json").read_text())
+    assert sidecar_a["request_timing"]["scope"] == "warm_session_request"
+    assert sidecar_a["request_timing"]["batch_preflight_included"] is False
+    assert sidecar_a["request_timing"]["batch_preflight_s"] > 0
+    assert (
+        sidecar_b["request_timing"]["session_startup_s"]
+        == sidecar_a["request_timing"]["session_startup_s"]
+    )
+    assert sidecar_b["diagnostics"]["declared_bounds_xy_m"] == [30.0, 40.0, 30.0, 40.0]
