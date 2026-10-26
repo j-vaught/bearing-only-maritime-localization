@@ -8,7 +8,7 @@ The bound also requires the configured variance model to be supported. Diagonal 
 
 ## Prepared-request API
 
-The preparation function computes the canonical baseline, clutter cost, group-miss cost, and global report match floors once. Its frozen result contains only scalar values, tuples, and the immutable SearchConfig; it retains no aliases to caller-owned arrays or metadata. Call the prepared result's bound method for each candidate K. The existing one-shot function delegates through this API, and the cardinality formula and numerical margin remain the same. Certification and variance-support flags must be actual booleans; other values return unresolved.
+The preparation function computes the canonical baseline, clutter cost, group-miss cost, and global report match floors once. Its frozen result contains only scalar values, tuples, and the immutable SearchConfig; it retains no aliases to caller-owned arrays or metadata. Call the prepared result's bound method for each candidate K. The existing one-shot function delegates through this API, and the cardinality formula and numerical margin remain the same. Both visibility certification and variance-support default to false and must be explicitly enabled by the caller; they must be actual booleans, and other values return unresolved.
 
 ## Objective and derivation
 

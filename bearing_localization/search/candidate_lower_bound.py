@@ -162,7 +162,7 @@ def prepare_candidate_objective_bound(
     measurements: MeasurementSetV2 | Sequence[float] | np.ndarray,
     config: SearchConfig,
     *,
-    variance_model_supported: bool = True,
+    variance_model_supported: bool = False,
     observation_types: Sequence[str | int | None] | None = None,
     observation_sigmas_deg: Sequence[float | None] | np.ndarray | None = None,
 ) -> PreparedCandidateObjectiveBound:
@@ -243,7 +243,7 @@ def candidate_objective_lower_bound(
     config: SearchConfig,
     *,
     visibility_count_certified: bool = False,
-    variance_model_supported: bool = True,
+    variance_model_supported: bool = False,
     observation_types: Sequence[str | int | None] | None = None,
     observation_sigmas_deg: Sequence[float | None] | np.ndarray | None = None,
     numerical_margin: float = 1e-10,
