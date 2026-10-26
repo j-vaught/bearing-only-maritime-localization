@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
 from pyproj import Transformer
@@ -271,7 +273,14 @@ def test_pilot_executes_truth_free_search_and_separates_counters(
                 }
             )
         )
-        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+        return {
+            "status": "completed",
+            "returncode": 0,
+            "stdout": "ok",
+            "stderr": "",
+            "elapsed_s": 0.1,
+            "process_group_terminated": False,
+        }
 
     from tools.accuracy_eligibility import EligibilityTrial
 
@@ -344,6 +353,7 @@ def test_pilot_executes_truth_free_search_and_separates_counters(
         ),
     )
     monkeypatch.setattr(pilot.subprocess, "run", fake_subprocess)
+    monkeypatch.setattr(pilot, "_run_search_process", fake_subprocess)
     output_root = tmp_path / "pilot-output"
     result_path = pilot.run_pilot(
         trial_table_path=plan_path,
@@ -418,3 +428,41 @@ def test_pilot_executes_truth_free_search_and_separates_counters(
             eligibility_manifest_path=eligibility_path,
             resume=True,
         )
+
+
+def test_pilot_timeout_reaps_search_grandchild_before_return(tmp_path: Path) -> None:
+    from tools.run_accuracy_pilot import _run_search_process
+
+    child_pid_path = tmp_path / "child.pid"
+    script = (
+        "import pathlib, subprocess, sys, time; "
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); "
+        "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(30)"
+    )
+    outcome = _run_search_process(
+        [sys.executable, "-c", script, str(child_pid_path)],
+        cwd=tmp_path,
+        timeout_s=0.5,
+        grace_s=0.2,
+    )
+    assert outcome["status"] == "timeout"
+    assert outcome["process_group_terminated"] is True
+    child_pid = int(child_pid_path.read_text())
+
+    def child_is_running() -> bool:
+        try:
+            os.kill(child_pid, 0)
+        except ProcessLookupError:
+            return False
+        stat_path = Path(f"/proc/{child_pid}/stat")
+        return not stat_path.exists() or stat_path.read_text().split()[2] != "Z"
+
+    deadline = time.monotonic() + 2.0
+    while child_is_running() and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert not child_is_running(), "timed-out search descendant remains active"
+    next_case = _run_search_process(
+        [sys.executable, "-c", "print('next case')"], cwd=tmp_path, timeout_s=2.0
+    )
+    assert next_case["status"] == "completed"
+    assert next_case["stdout"].strip() == "next case"
