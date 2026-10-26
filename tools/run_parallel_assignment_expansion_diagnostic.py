@@ -16,6 +16,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +34,8 @@ MAX_OUTPUT_BYTES = serial.MAX_OUTPUT_BYTES
 DEFAULT_TIMEOUT_S = serial.DEFAULT_TIMEOUT_S
 WORKER_COUNT = 4
 OUTPUT_NAME = "parallel-assignment-expansion-diagnostic-v1"
+SEED_STAGES = ("coarse", "best_saved")
+DEFAULT_SEED_STAGE = "best_saved"
 
 
 def _canonical(value: Any) -> bytes:
@@ -209,6 +212,7 @@ def _input_digest(
     seed: Hypothesis,
     pins: dict[str, Any],
     candidate_branch_count: int,
+    seed_stage: str,
 ) -> str:
     return hashlib.sha256(
         _canonical(
@@ -216,6 +220,7 @@ def _input_digest(
                 "mode_index": mode_index,
                 "candidate_id": row.get("candidate_id"),
                 "selected_start_label": label,
+                "seed_stage": seed_stage,
                 "seed": serial.asdict(seed),
                 "source_pins": pins,
                 "local_radius_m": 1000.0,
@@ -233,16 +238,36 @@ def prepare_mode_tasks(
     identity: dict[str, str],
     expansion_config: Any,
     scorer: Any,
+    *,
+    seed_stage: str = DEFAULT_SEED_STAGE,
+    a20_rows: Sequence[Any] | None = None,
 ) -> tuple[list[Any], dict[int, dict[str, Any]]]:
-    """Choose and revalidate the same two-start inputs as the serial runner."""
+    """Revalidate both saved starts and select the configured seed stage."""
+    if seed_stage not in SEED_STAGES:
+        raise ValueError(f"seed_stage must be one of {SEED_STAGES}")
     from bearing_localization.search.parallel_assignment_expansion import ModeTask
     from bearing_localization.search.assignment_expansion import _candidate_pool
 
     tasks, selected_starts = [], {}
     for mode_index, row in enumerate(rows):
-        label, _saved_seed = serial.choose_best_start(row)
+        starts = serial._start_hypotheses(row)
+        a20_coarse_source = None
+        if seed_stage == "coarse":
+            if a20_rows is None or len(a20_rows) != len(rows):
+                raise serial.DiagnosticInputError("coarse seed requires the matching A20 mode rows")
+            a20_row = a20_rows[mode_index]
+            if a20_row.get("candidate_id") != row.get("candidate_id") or a20_row.get(
+                "input_index"
+            ) != row.get("input_index"):
+                raise serial.DiagnosticInputError("assigned mode does not match its A20 origin")
+            label = "a20.cached_hypothesis"
+            a20_coarse_source = serial._hypothesis(
+                a20_row.get("cached_hypothesis"), "A20 cached_hypothesis"
+            )
+        else:
+            label, _saved_seed = serial.choose_best_start(row)
         exact_by_label, alternatives = {}, []
-        for start_label, source_hypothesis in serial._start_hypotheses(row):
+        for start_label, source_hypothesis in starts:
             exact = serial._revalidate(scorer, source_hypothesis)
             exact_by_label[start_label] = exact
             alternatives.append(
@@ -254,17 +279,50 @@ def prepare_mode_tasks(
                     "canonical_match": True,
                 }
             )
+        if a20_coarse_source is not None:
+            exact_by_label[label] = serial._revalidate(scorer, a20_coarse_source)
+            alternatives.append(
+                {
+                    "label": label,
+                    "selected": True,
+                    "origin": "A20.cached_hypothesis",
+                    "saved_hypothesis": serial.asdict(a20_coarse_source),
+                    "canonical_hypothesis": serial.asdict(exact_by_label[label]),
+                    "canonical_match": True,
+                }
+            )
         selected = exact_by_label[label]
         _eligible, pool_counts, _pool_digest = _candidate_pool(scorer, selected, expansion_config)
-        candidate_branch_count = int(pool_counts["eligible_records"]) * int(
-            pool_counts["unmatched_reports"]
+        pool_counts = {key: int(value) for key, value in pool_counts.items()}
+        candidate_branch_count = pool_counts["eligible_records"] * pool_counts["unmatched_reports"]
+        best_saved_label, _best_saved_seed = serial.choose_best_start(row)
+        if seed_stage == "coarse":
+            _eligible, best_saved_pool_counts, _pool_digest = _candidate_pool(
+                scorer, exact_by_label[best_saved_label], expansion_config
+            )
+            best_saved_pool_counts = {
+                key: int(value) for key, value in best_saved_pool_counts.items()
+            }
+        else:
+            best_saved_pool_counts = pool_counts
+        best_saved_branch_count = best_saved_pool_counts["eligible_records"] * int(
+            best_saved_pool_counts["unmatched_reports"]
         )
         selected_starts[mode_index] = {
             "input_index": row.get("input_index"),
             "candidate_id": row.get("candidate_id"),
+            "seed_stage": seed_stage,
             "selected_start_label": label,
+            "selected_start_source": (
+                "A20.cached_hypothesis" if seed_stage == "coarse" else "assigned.saved_start"
+            ),
             "start_alternatives": alternatives,
             "candidate_branch_count": candidate_branch_count,
+            "candidate_pool_counts": pool_counts,
+            "best_saved_candidate_pool_counts": best_saved_pool_counts,
+            "candidate_branch_count_delta_vs_best_saved": (
+                candidate_branch_count - best_saved_branch_count
+            ),
         }
         tasks.append(
             ModeTask(
@@ -272,9 +330,11 @@ def prepare_mode_tasks(
                 seed=selected,
                 config=expansion_config,
                 package_commit=identity["package_commit"],
-                source_digest=hashlib.sha256(_canonical(pins)).hexdigest(),
+                source_digest=hashlib.sha256(
+                    _canonical({"source_pins": pins, "seed_stage": seed_stage})
+                ).hexdigest(),
                 input_digest=_input_digest(
-                    mode_index, row, label, selected, pins, candidate_branch_count
+                    mode_index, row, label, selected, pins, candidate_branch_count, seed_stage
                 ),
                 candidate_branch_count=candidate_branch_count,
             )
@@ -368,6 +428,9 @@ def _dispatch_order(tasks: list[Any]) -> list[Any]:
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     started = time.perf_counter()
+    seed_stage = getattr(args, "seed_stage", DEFAULT_SEED_STAGE)
+    if seed_stage not in SEED_STAGES:
+        raise ValueError(f"seed_stage must be one of {SEED_STAGES}")
     if not math.isfinite(args.timeout_s) or not 0.0 < args.timeout_s <= DEFAULT_TIMEOUT_S:
         raise ValueError("timeout must be finite and in (0, 1800]")
     if getattr(args, "worker_count", WORKER_COUNT) != WORKER_COUNT:
@@ -396,6 +459,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "status": "started",
         "mode_count": MODE_COUNT,
         "worker_count": WORKER_COUNT,
+        "seed_stage": seed_stage,
+        "seed_selection_rule": (
+            "original A20 cached_hypothesis for the matching assigned mode"
+            if seed_stage == "coarse"
+            else "lower canonical score of cached_hypothesis and refined_mode.hypothesis"
+        ),
+        "candidate_count_semantics": (
+            "recomputed from each selected seed; counts may differ by seed_stage"
+        ),
         "completed_mode_count": 0,
         "failed_mode_count": 0,
         "unknown_mode_count": MODE_COUNT,
@@ -455,15 +527,24 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 local_radius_m=1000.0, max_nfev=100, max_branches=5000
             )
             tasks, selected_starts = prepare_mode_tasks(
-                assigned_rows, pins, identity, expansion_config, scorer
+                assigned_rows,
+                pins,
+                identity,
+                expansion_config,
+                scorer,
+                seed_stage=seed_stage,
+                a20_rows=a20_rows if seed_stage == "coarse" else None,
             )
             tasks = _dispatch_order(tasks)
             validation_elapsed = time.perf_counter() - validation_started
             del scorer
+            seed_stage_identity = hashlib.sha256(
+                _canonical({"source_pins": pins, "seed_stage": seed_stage})
+            ).hexdigest()
             factory = FixedScorerFactory(
                 str(static.resolve()),
                 str(config_path.resolve()),
-                hashlib.sha256(_canonical(pins)).hexdigest(),
+                seed_stage_identity,
             )
             manifest.update(
                 {
@@ -473,6 +554,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "a20_manifest_sha256": _sha256(args.a20 / "manifest.json"),
                     "a20_rows_sha256": a20_manifest["rows_sha256"],
                     "source_pins": pins,
+                    "seed_stage": seed_stage,
+                    "seed_stage_identity": seed_stage_identity,
                     "harness_commit": identity["package_commit"],
                     "input_assigned_package_commit": assigned_manifest["package_commit"],
                     "frozen_scoring_source_sha": pins["frozen_scoring_source_sha"],
@@ -485,6 +568,29 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "preflight_branch_counts": {
                         str(task.mode_index): task.candidate_branch_count for task in tasks
                     },
+                    "preflight_candidate_branch_count_total": sum(
+                        task.candidate_branch_count for task in tasks
+                    ),
+                    "candidate_pool_counts_by_mode": {
+                        str(mode_index): selected_starts[mode_index]["candidate_pool_counts"]
+                        for mode_index in sorted(selected_starts)
+                    },
+                    "best_saved_candidate_pool_counts_by_mode": {
+                        str(mode_index): selected_starts[mode_index][
+                            "best_saved_candidate_pool_counts"
+                        ]
+                        for mode_index in sorted(selected_starts)
+                    },
+                    "candidate_branch_count_delta_vs_best_saved_by_mode": {
+                        str(mode_index): selected_starts[mode_index][
+                            "candidate_branch_count_delta_vs_best_saved"
+                        ]
+                        for mode_index in sorted(selected_starts)
+                    },
+                    "candidate_branch_count_delta_vs_best_saved_total": sum(
+                        item["candidate_branch_count_delta_vs_best_saved"]
+                        for item in selected_starts.values()
+                    ),
                     "dispatch_count_source": (
                         "eligible records times unmatched reports from _candidate_pool"
                     ),
@@ -715,6 +821,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, default=Path(".agent-work/outputs") / OUTPUT_NAME)
     parser.add_argument("--lock", type=Path, default=serial.canonical_lock_path())
     parser.add_argument("--timeout-s", type=float, default=DEFAULT_TIMEOUT_S)
+    parser.add_argument("--seed-stage", choices=SEED_STAGES, default=DEFAULT_SEED_STAGE)
     args = parser.parse_args(argv)
     result = run(args)
     print(
