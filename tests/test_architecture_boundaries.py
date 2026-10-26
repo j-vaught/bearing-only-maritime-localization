@@ -11,15 +11,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SEARCH_ROOTS = (
-    "bearing_localization.search",
-    "bearing_localization.search_cli",
-    "bearing_localization.algorithms",
-    "bearing_localization.ransac",
-    "bearing_localization.backends",
+    "maritime.search",
+    "maritime.search_cli",
+    "maritime.algorithms",
+    "maritime.ransac",
+    "maritime.backends",
 )
-SIMULATOR_ROOTS = ("bearing_localization.simulator",)
-EVALUATION_ROOTS = ("bearing_localization.evaluation", "bearing_localization.evaluate_cli")
-SHARED_ROOTS = ("maritime_localization_shared",)
+SIMULATOR_ROOTS = ("maritime.simulator",)
+EVALUATION_ROOTS = ("maritime.evaluation", "maritime.evaluate_cli")
+COMMON_ROOTS = ("maritime.schemas", "maritime.geometry", "maritime.serialization")
+IMPORTER_ROOTS = ("maritime.importers",)
 
 
 def _python_sources(root: Path = ROOT) -> dict[str, tuple[Path, ast.Module]]:
@@ -50,8 +51,8 @@ def _python_sources(root: Path = ROOT) -> dict[str, tuple[Path, ast.Module]]:
 
 
 def test_python_source_discovery_prunes_agent_workarea(tmp_path: Path) -> None:
-    source = tmp_path / "maritime_localization_shared" / "example.py"
-    source.parent.mkdir()
+    source = tmp_path / "maritime" / "schemas" / "example.py"
+    source.parent.mkdir(parents=True)
     source.write_text("value = 1\n", encoding="utf-8")
     generated = tmp_path / ".agent-work" / "cache" / "generated.py"
     generated.parent.mkdir(parents=True)
@@ -59,7 +60,7 @@ def test_python_source_discovery_prunes_agent_workarea(tmp_path: Path) -> None:
 
     sources = _python_sources(tmp_path)
 
-    assert set(sources) == {"maritime_localization_shared.example"}
+    assert set(sources) == {"maritime.schemas.example"}
 
 
 def _program_for(module: str) -> str | None:
@@ -67,21 +68,20 @@ def _program_for(module: str) -> str | None:
         ("search", SEARCH_ROOTS),
         ("simulator", SIMULATOR_ROOTS),
         ("evaluation", EVALUATION_ROOTS),
-        ("shared", SHARED_ROOTS),
+        ("common", COMMON_ROOTS),
+        ("importers", IMPORTER_ROOTS),
     ):
         if any(module == root or module.startswith(root + ".") for root in roots):
             return label
     return None
 
 
-def _resolved_imports(module: str, tree: ast.Module) -> list[tuple[str, ast.AST, tuple[str, ...]]]:
+def _resolved_imports(
+    module: str, tree: ast.Module, *, is_package: bool = False
+) -> list[tuple[str, ast.AST, tuple[str, ...]]]:
     """Return absolute module targets, including relative imports, with from-names."""
     found: list[tuple[str, ast.AST, tuple[str, ...]]] = []
-    package = (
-        module
-        if module in {"bearing_localization", "maritime_localization_shared"}
-        else module.rpartition(".")[0]
-    )
+    package = module if is_package else module.rpartition(".")[0]
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found.extend((alias.name, node, ()) for alias in node.names)
@@ -140,22 +140,24 @@ def _dynamic_import_calls(tree: ast.Module) -> list[ast.Call]:
 def test_program_packages_do_not_import_other_program_internals() -> None:
     sources = _python_sources()
     violations: list[str] = []
-    for module, (_, tree) in sources.items():
+    for module, (path, tree) in sources.items():
         program = _program_for(module)
-        for target, node, names in _resolved_imports(module, tree):
+        for target, node, names in _resolved_imports(
+            module, tree, is_package=path.name == "__init__.py"
+        ):
             forbidden = False
             if program == "search":
                 forbidden = _is_under(target, (*SIMULATOR_ROOTS, *EVALUATION_ROOTS))
-                forbidden |= target == "maritime_localization_shared.contracts.truth"
+                forbidden |= target == "maritime.schemas.truth"
                 forbidden |= "EvaluationTruth" in names or "TrueObject" in names
             elif program == "simulator":
                 forbidden = _is_under(target, (*SEARCH_ROOTS, *EVALUATION_ROOTS))
             elif program == "evaluation":
                 forbidden = _is_under(target, (*SIMULATOR_ROOTS, *SEARCH_ROOTS))
-            elif program == "shared":
-                forbidden = target == "bearing_localization" or target.startswith(
-                    "bearing_localization."
-                )
+            elif program in {"common", "importers"}:
+                forbidden = _is_under(target, (*SEARCH_ROOTS, *SIMULATOR_ROOTS, *EVALUATION_ROOTS))
+                if program == "common":
+                    forbidden |= _is_under(target, IMPORTER_ROOTS)
             if forbidden:
                 if not isinstance(node, (ast.Import, ast.ImportFrom)):
                     raise TypeError("Import collector returned a non-import AST node.")
@@ -180,7 +182,7 @@ def test_search_has_no_dynamic_import_escape_hatches() -> None:
             forbidden = not isinstance(target, str)
             if isinstance(target, str):
                 forbidden = _is_under(target, forbidden_roots) or target == (
-                    "maritime_localization_shared.contracts.truth"
+                    "maritime.schemas.truth"
                 )
             if forbidden:
                 violations.append(f"{module}:{call.lineno} has an unsafe dynamic import")
@@ -190,7 +192,7 @@ def test_search_has_no_dynamic_import_escape_hatches() -> None:
 
 
 def test_estimator_observation_contract_is_truth_free_allowlist() -> None:
-    from maritime_localization_shared.contracts.observation import MeasurementSet, Observation
+    from maritime.schemas.observation import MeasurementSet, Observation
 
     assert {field.name for field in dataclasses.fields(Observation)} == {
         "bearing_deg",
@@ -228,60 +230,60 @@ import sys
 original_import = builtins.__import__
 original_import_module = importlib.import_module
 blocked = (
-    "bearing_localization.simulator",
-    "bearing_localization.evaluation",
-    "bearing_localization.search",
+    "maritime.simulator",
+    "maritime.evaluation",
+    "maritime.search",
 )
 
 def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
     caller = (globals or {}).get("__package__") or ""
     is_search = (
-        caller == "bearing_localization.search"
-        or caller.startswith("bearing_localization.search.")
-        or caller == "bearing_localization.search_cli"
+        caller == "maritime.search"
+        or caller.startswith("maritime.search.")
+        or caller == "maritime.search_cli"
         or caller in {
-            "bearing_localization.algorithms",
-            "bearing_localization.ransac",
-            "bearing_localization.backends",
+            "maritime.algorithms",
+            "maritime.ransac",
+            "maritime.backends",
         }
     )
     if is_search:
         if any(name == prefix or name.startswith(prefix + ".") for prefix in blocked[:2]):
             raise AssertionError(f"search attempted forbidden import: {name}")
         imports_truth = {"EvaluationTruth", "TrueObject"}.intersection(fromlist or ())
-        if name == "maritime_localization_shared.contracts.truth" or imports_truth:
+        if name == "maritime.schemas.truth" or imports_truth:
             raise AssertionError(f"search attempted truth import: {name} {fromlist}")
     return original_import(name, globals, locals, fromlist, level)
 
 def guarded_import_module(name, package=None):
     caller = inspect.currentframe().f_back.f_globals.get("__package__") or ""
     is_search = (
-        caller == "bearing_localization.search"
-        or caller.startswith("bearing_localization.search.")
-        or caller == "bearing_localization.search_cli"
+        caller == "maritime.search"
+        or caller.startswith("maritime.search.")
+        or caller == "maritime.search_cli"
         or caller in {
-            "bearing_localization.algorithms",
-            "bearing_localization.ransac",
-            "bearing_localization.backends",
+            "maritime.algorithms",
+            "maritime.ransac",
+            "maritime.backends",
         }
     )
     if is_search and (
         any(name == prefix or name.startswith(prefix + ".") for prefix in blocked[:2])
-        or name == "maritime_localization_shared.contracts.truth"
+        or name == "maritime.schemas.truth"
     ):
         raise AssertionError(f"search dynamically imported forbidden module: {name}")
     return original_import_module(name, package)
 
 builtins.__import__ = guarded_import
 importlib.import_module = guarded_import_module
-import bearing_localization.search as package
+import maritime.search as package
 for entry in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
     importlib.import_module(entry.name)
-importlib.import_module("bearing_localization.search_cli")
+importlib.import_module("maritime.search_cli")
 legacy_search_modules = (
-    "bearing_localization.algorithms",
-    "bearing_localization.ransac",
-    "bearing_localization.backends",
+    "maritime.algorithms",
+    "maritime.ransac",
+    "maritime.backends",
 )
 for name in legacy_search_modules:
     importlib.import_module(name)

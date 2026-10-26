@@ -5,8 +5,8 @@ from typing import Any, cast
 
 import pytest
 
-from bearing_localization.search import assignment_expansion as expansion
-from bearing_localization.search.assignment_expansion import (
+from maritime.search import assignment_expansion as expansion
+from maritime.search.assignment_expansion import (
     ExpansionConfig,
     expand_assignments,
 )

@@ -5,9 +5,9 @@ from math import log
 import numpy as np
 import pytest
 
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.likelihood import build_likelihood_costs
-from maritime_localization_shared.contracts.inputs_v2 import MeasurementSetV2, MeasurementV2
+from maritime.schemas.inputs_v2 import MeasurementSetV2, MeasurementV2
+from maritime.search.config import SearchConfig
+from maritime.search.likelihood import build_likelihood_costs
 
 
 def measurement_set(*measurements: MeasurementV2) -> MeasurementSetV2:

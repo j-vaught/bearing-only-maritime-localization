@@ -7,9 +7,9 @@ from pyproj import CRS, Transformer
 from shapely import to_geojson
 from shapely.geometry import Polygon, box
 
-from maritime_localization_shared.contracts.inputs_v2 import MapV2
-from maritime_localization_shared.geospatial.vector_los import line_of_sight_clear
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.geometry.vector_los import line_of_sight_clear
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import MapV2
 
 CRS_METRES = "EPSG:32618"
 COVERAGE = box(-20.0, -20.0, 20.0, 20.0)

@@ -9,21 +9,21 @@ from pathlib import Path
 import pytest
 from pyproj import Geod, Transformer
 
-import bearing_localization.accuracy_cli as cli
-from bearing_localization.accuracy_cli import search_v2_files
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.config_serialization import write_search_config
-from bearing_localization.search.proposals.geodesic_wedge import (
-    generate_geographic_reverse_wedge_proposals_geodesic,
-)
-from maritime_localization_shared.contracts import CatalogV2, MapV2
-from maritime_localization_shared.contracts.inputs_v2 import (
+import maritime.accuracy_cli as cli
+from maritime.accuracy_cli import search_v2_files
+from maritime.geometry.coordinates import LocalFrame
+from maritime.schemas import CatalogV2, MapV2
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.geospatial.coordinates import LocalFrame
-from maritime_localization_shared.serialization import read_contract, write_contract
+from maritime.search.config import SearchConfig
+from maritime.search.config_serialization import write_search_config
+from maritime.search.proposals.geodesic_wedge import (
+    generate_geographic_reverse_wedge_proposals_geodesic,
+)
+from maritime.serialization import read_contract, write_contract
 
 _TIMESTAMP = "2026-10-25T12:00:00Z"
 
@@ -279,10 +279,10 @@ def test_proposal_implementation_hash_tracks_generation_source_only(tmp_path: Pa
     root = Path(__file__).resolve().parents[2]
     target = tmp_path / "source"
     relative_paths = (
-        "bearing_localization/search/proposals/geodesic_wedge.py",
-        "bearing_localization/search/proposals/wedge.py",
-        "maritime_localization_shared/geospatial/coordinates.py",
-        "maritime_localization_shared/geospatial/reverse_bearing.py",
+        "maritime/search/proposals/geodesic_wedge.py",
+        "maritime/search/proposals/wedge.py",
+        "maritime/geometry/coordinates.py",
+        "maritime/geometry/reverse_bearing.py",
         "uv.lock",
     )
     for relative in relative_paths:

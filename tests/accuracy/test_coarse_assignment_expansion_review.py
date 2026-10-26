@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from bearing_localization.accuracy_cli import search_v2_files
+from maritime.accuracy_cli import search_v2_files
 
 from .test_standalone_cli import _v2_fixture
 

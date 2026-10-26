@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from bearing_localization.geospatial.vector_los import line_of_sight_clear
+from maritime.geometry.vector_los import line_of_sight_clear
 
 RECTANGLE = ((4.0, -1.0), (6.0, -1.0), (6.0, 1.0), (4.0, 1.0))
 

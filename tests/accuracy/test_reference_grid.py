@@ -5,22 +5,22 @@ from math import isclose
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.reference_grid import (
-    CandidateCounts,
-    enumerate_grid_points,
-    grid_shape,
-    search_reference_grid,
-)
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.contracts.localization import Hypothesis
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.schemas.localization import Hypothesis
+from maritime.search.config import SearchConfig
+from maritime.search.reference_grid import (
+    CandidateCounts,
+    enumerate_grid_points,
+    grid_shape,
+    search_reference_grid,
+)
+from maritime.search.scoring import CandidateScorer
 
 CRS_UTM = CRS.from_epsg(32618)
 _TO_XY = Transformer.from_crs("EPSG:4326", CRS_UTM, always_xy=True)
@@ -94,7 +94,7 @@ def test_full_grid_matches_direct_scorer_and_counts_all_points():
 
 
 def test_tied_spatial_modes_preserved_without_acceptance(monkeypatch):
-    import bearing_localization.search.reference_grid as module
+    import maritime.search.reference_grid as module
 
     class FakeScorer:
         def __init__(self, *_args):

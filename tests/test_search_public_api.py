@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from bearing_localization.search import (
+from maritime.schemas import (
+    AISRecord,
+    AISSnapshot,
+    MeasurementSet,
+    Observation,
+    PositionEstimate,
+)
+from maritime.search import (
     GridSearchConfig,
     HierarchicalSearchConfig,
     RandomizedSearchConfig,
@@ -12,13 +19,6 @@ from bearing_localization.search import (
     randomized_search,
     run_grid_search,
     run_hierarchical_search,
-)
-from maritime_localization_shared.contracts import (
-    AISRecord,
-    AISSnapshot,
-    MeasurementSet,
-    Observation,
-    PositionEstimate,
 )
 
 

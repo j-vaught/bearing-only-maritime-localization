@@ -5,13 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bearing_localization.search.randomized import RandomizedSearchConfig, randomized_search
-from maritime_localization_shared.contracts import (
+from maritime.schemas import (
     AISRecord,
     AISSnapshot,
     MeasurementSet,
     Observation,
 )
+from maritime.search.randomized import RandomizedSearchConfig, randomized_search
 
 
 def _fixture() -> tuple[MeasurementSet, AISSnapshot]:

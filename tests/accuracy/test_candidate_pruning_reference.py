@@ -12,13 +12,13 @@ from typing import cast
 
 import pytest
 
-pytest.importorskip("bearing_localization.search.candidate_lower_bound")
+pytest.importorskip("maritime.search.candidate_lower_bound")
 
-from bearing_localization.search.candidate_lower_bound import (  # noqa: E402
+from maritime.search.candidate_lower_bound import (  # noqa: E402
     candidate_objective_lower_bound,
 )
-from bearing_localization.search.config import SearchConfig  # noqa: E402
-from bearing_localization.search.likelihood import build_likelihood_costs  # noqa: E402
+from maritime.search.config import SearchConfig  # noqa: E402
+from maritime.search.likelihood import build_likelihood_costs  # noqa: E402
 
 from .reference_assignment import optimal_assignments  # noqa: E402
 

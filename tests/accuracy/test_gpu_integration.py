@@ -9,24 +9,24 @@ from pathlib import Path
 import pytest
 from pyproj import Geod, Transformer
 
-from bearing_localization.accuracy_cli import SearchV2Session, search_v2_files
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.config_serialization import write_search_config
-from bearing_localization.search.gpu.search_adapter import (
-    GpuCandidateScorer,
-    score_candidate_positions_batched,
-)
-from bearing_localization.search.scoring import CandidateScorer, score_candidate_positions
-from bearing_localization.search.telemetry import SearchTelemetry
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.accuracy_cli import SearchV2Session, search_v2_files
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MapV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.geospatial.vector_map import VectorMap
-from maritime_localization_shared.serialization import write_contract
+from maritime.search.config import SearchConfig
+from maritime.search.config_serialization import write_search_config
+from maritime.search.gpu.search_adapter import (
+    GpuCandidateScorer,
+    score_candidate_positions_batched,
+)
+from maritime.search.scoring import CandidateScorer, score_candidate_positions
+from maritime.search.telemetry import SearchTelemetry
+from maritime.serialization import write_contract
 
 
 def _fixture() -> tuple[
@@ -98,7 +98,7 @@ def guarded(name, *args, **kwargs):
         raise AssertionError('CuPy imported during CPU-only module import')
     return real_import(name, *args, **kwargs)
 builtins.__import__ = guarded
-from bearing_localization.search.gpu.search_adapter import GpuCandidateScorer
+from maritime.search.gpu.search_adapter import GpuCandidateScorer
 assert GpuCandidateScorer.__name__ == 'GpuCandidateScorer'
 """
     root = Path(__file__).resolve().parents[2]
@@ -168,7 +168,7 @@ def test_real_gpu_candidate_batch_matches_cpu_full_result(
         telemetry=telemetry,
         batch_size=3,
     )
-    import bearing_localization.search.gpu.search_adapter as adapter
+    import maritime.search.gpu.search_adapter as adapter
 
     original_predict = adapter.predict_visible_groups
     contexts = []
@@ -207,7 +207,7 @@ def test_real_gpu_candidate_batch_matches_cpu_full_result(
 def test_gpu_error_fails_closed_or_disables_accelerator_for_cpu_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import bearing_localization.search.gpu.search_adapter as adapter
+    import maritime.search.gpu.search_adapter as adapter
 
     measurements, catalog, vector_map, config, candidates = _fixture()
     scorer = GpuCandidateScorer(

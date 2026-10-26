@@ -7,8 +7,8 @@ import pytest
 from shapely.geometry import LineString, Point, box
 from shapely.geometry.base import BaseGeometry
 
-import maritime_localization_shared.geospatial.vector_map as vector_map_module
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+import maritime.geometry.vector_map as vector_map_module
+from maritime.geometry.vector_map import VectorMap
 
 
 def _old_localframe_reference(
@@ -28,14 +28,14 @@ def _old_localframe_reference(
     import numpy as np
     from pyproj import Geod
 
-    from bearing_localization.search.proposals.pairwise import (
+    from maritime.geometry.coordinates import LocalFrame
+    from maritime.geometry.spatial_index import GeographicSpatialIndex
+    from maritime.search.proposals.pairwise import (
         PairwiseObservation,
         PairwiseProposal,
         PairwiseProposalBatch,
         _proposal_id,
     )
-    from maritime_localization_shared.geospatial.coordinates import LocalFrame
-    from maritime_localization_shared.geospatial.spatial_index import GeographicSpatialIndex
 
     ordered_measurements = sorted(
         measurements.measurements,
@@ -167,7 +167,7 @@ def _old_localframe_reference(
 def _assert_stream_matches_localframe_reference(actual, reference, output_origin_lonlat) -> None:
     from pyproj import Geod
 
-    from maritime_localization_shared.geospatial.coordinates import LocalFrame
+    from maritime.geometry.coordinates import LocalFrame
 
     assert [batch.generation_status for batch in actual] == [
         batch.generation_status for batch in reference
@@ -196,11 +196,11 @@ def test_geodesic_polar_helpers_match_localframe_oracle() -> None:
     import pytest
     from pyproj import Geod
 
-    from bearing_localization.search.proposals.pairwise import (
+    from maritime.geometry.coordinates import LocalFrame
+    from maritime.search.proposals.pairwise import (
         _geodesic_polar_local_xy,
         _geodesic_polar_to_geographic,
     )
-    from maritime_localization_shared.geospatial.coordinates import LocalFrame
 
     geod = Geod(ellps="WGS84")
     cases = (
@@ -233,7 +233,7 @@ def test_geodesic_polar_helpers_match_localframe_oracle() -> None:
             )
             assert step_xy == pytest.approx(expected_xy, abs=1e-6)
 
-    from maritime_localization_shared.geospatial.spatial_index import GeographicSpatialIndex
+    from maritime.geometry.spatial_index import GeographicSpatialIndex
 
     boundary_target = geod.fwd(*cases[0][0], 180.0, 2_000.0)
     boundary_distance = geod.inv(*cases[0][0], boundary_target[0], boundary_target[1])[2]
@@ -247,13 +247,13 @@ def test_geodesic_polar_helpers_match_localframe_oracle() -> None:
 def test_geodesic_polar_stream_matches_localframe_reference() -> None:
     from pyproj import Geod
 
-    from bearing_localization.search.proposals import pairwise
-    from maritime_localization_shared.contracts.inputs_v2 import (
+    from maritime.schemas.inputs_v2 import (
         CatalogRecordV2,
         CatalogV2,
         MeasurementSetV2,
         MeasurementV2,
     )
+    from maritime.search.proposals import pairwise
 
     geod = Geod(ellps="WGS84")
     origin = (179.999, 83.0)
@@ -323,13 +323,13 @@ def test_geodesic_polar_stream_matches_localframe_reference() -> None:
 
 
 def test_geodesic_polar_falls_back_for_submicron_catalog_separation() -> None:
-    from bearing_localization.search.proposals import pairwise
-    from maritime_localization_shared.contracts.inputs_v2 import (
+    from maritime.schemas.inputs_v2 import (
         CatalogRecordV2,
         CatalogV2,
         MeasurementSetV2,
         MeasurementV2,
     )
+    from maritime.search.proposals import pairwise
 
     catalog = CatalogV2(
         records=(

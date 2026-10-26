@@ -9,8 +9,9 @@ import numpy as np
 import pytest
 from shapely.geometry import box
 
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.parallel_candidates import (
+from maritime.schemas.inputs_v2 import CatalogV2
+from maritime.search.config import SearchConfig
+from maritime.search.parallel_candidates import (
     CandidatePoolError,
     CandidatePositionInput,
     PersistentCandidatePool,
@@ -18,8 +19,7 @@ from bearing_localization.search.parallel_candidates import (
     _Task,
     _worker_main,
 )
-from bearing_localization.search.scoring import CandidateScorer, score_candidate_positions
-from maritime_localization_shared.contracts.inputs_v2 import CatalogV2
+from maritime.search.scoring import CandidateScorer, score_candidate_positions
 
 from .test_architecture_regressions import _catalog, _map, _measurements, _origin_xy, _record
 

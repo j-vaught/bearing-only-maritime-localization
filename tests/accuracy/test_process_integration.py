@@ -12,7 +12,7 @@ from typing import Any, cast
 import pytest
 from pyproj import Geod, Transformer
 
-from bearing_localization.accuracy_cli import (
+from maritime.accuracy_cli import (
     SearchV2Session,
     _calibration_binding,
     _candidate_outcome_evidence,
@@ -25,21 +25,8 @@ from bearing_localization.accuracy_cli import (
     search_v2_files,
     search_v2_main,
 )
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.config_serialization import (
-    loads_search_config,
-    search_config_from_dict,
-    search_config_to_dict,
-    write_search_config,
-)
-from bearing_localization.search.proposals.geodesic_wedge import GeodesicWedgeProposal
-from bearing_localization.search.proposals.wedge import (
-    WedgeCatalogObject,
-    WedgeObservation,
-    WedgeProposal,
-    generate_reverse_wedge_proposals_complete,
-)
-from maritime_localization_shared.contracts import (
+from maritime.geometry.coordinates import LocalFrame
+from maritime.schemas import (
     CatalogV2,
     EvaluationTruth,
     Hypothesis,
@@ -50,13 +37,26 @@ from maritime_localization_shared.contracts import (
     PositionEstimate,
     TrueObject,
 )
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.geospatial.coordinates import LocalFrame
-from maritime_localization_shared.serialization import (
+from maritime.search.config import SearchConfig
+from maritime.search.config_serialization import (
+    loads_search_config,
+    search_config_from_dict,
+    search_config_to_dict,
+    write_search_config,
+)
+from maritime.search.proposals.geodesic_wedge import GeodesicWedgeProposal
+from maritime.search.proposals.wedge import (
+    WedgeCatalogObject,
+    WedgeObservation,
+    WedgeProposal,
+    generate_reverse_wedge_proposals_complete,
+)
+from maritime.serialization import (
     contract_from_dict,
     contract_to_dict,
     loads_contract,
@@ -430,7 +430,7 @@ def test_malformed_cli_stages_fail_cleanly_and_gpu_requires_explicit_devices(tmp
         [
             sys.executable,
             "-m",
-            "bearing_localization.simulator.cli",
+            "maritime.simulator.cli",
             "--schema-version",
             "2",
             "--fixture",
@@ -463,7 +463,7 @@ def test_malformed_cli_stages_fail_cleanly_and_gpu_requires_explicit_devices(tmp
         [
             sys.executable,
             "-m",
-            "bearing_localization.search_cli",
+            "maritime.search_cli",
             "--schema-version",
             "2",
             "--measurements",
@@ -1038,7 +1038,7 @@ def test_geodesic_wedge_cli_reports_complete_generation_witnesses_and_stage_timi
 def test_wedge_algorithms_keep_missing_sigma_reports_and_geodesic_uses_floor(
     tmp_path, monkeypatch
 ) -> None:
-    import bearing_localization.accuracy_cli as accuracy_cli
+    import maritime.accuracy_cli as accuracy_cli
 
     captured_observations: tuple[WedgeObservation, ...] = ()
     captured_sigmas: dict[int, float] = {}
@@ -1147,7 +1147,7 @@ def test_geodesic_solver_tolerance_is_bounded_by_effective_sigma(tmp_path) -> No
 def test_geodesic_wedge_cli_propagates_source_budget_and_failed_samples_block_acceptance(
     tmp_path, monkeypatch
 ):
-    import bearing_localization.accuracy_cli as accuracy_cli
+    import maritime.accuracy_cli as accuracy_cli
 
     (
         measurements_path,
@@ -1298,7 +1298,7 @@ def test_seeded_geodesic_cli_scores_cell_centers_then_seed_candidates_and_report
 
 
 def test_seeded_geodesic_pool_startup_failure_is_failed_and_unaccepted(tmp_path, monkeypatch):
-    import bearing_localization.accuracy_cli as accuracy_cli
+    import maritime.accuracy_cli as accuracy_cli
 
     (
         measurements_path,
@@ -1361,8 +1361,8 @@ def test_seeded_geodesic_budgets_require_positive_integers(field):
 
 
 def test_seeded_geodesic_prioritizes_water_seeds_over_land_cell_centers(tmp_path, monkeypatch):
-    import bearing_localization.accuracy_cli as accuracy_cli
-    from maritime_localization_shared.geospatial.vector_map import VectorMap
+    import maritime.accuracy_cli as accuracy_cli
+    from maritime.geometry.vector_map import VectorMap
 
     (
         measurements_path,

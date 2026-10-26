@@ -7,14 +7,14 @@ from math import atan2, degrees
 import numpy as np
 import pytest
 
-from bearing_localization.search.association import associate_observations_to_ais
-from bearing_localization.search.grid import GridSearchConfig, run_grid_search
-from maritime_localization_shared.contracts import (
+from maritime.schemas import (
     AISRecord,
     AISSnapshot,
     MeasurementSet,
     Observation,
 )
+from maritime.search.association import associate_observations_to_ais
+from maritime.search.grid import GridSearchConfig, run_grid_search
 
 
 def _bearing(observer_xy: tuple[float, float], target_xy: tuple[float, float]) -> float:

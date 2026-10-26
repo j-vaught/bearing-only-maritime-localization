@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from bearing_localization.simulator.angular_grouping import (
+from maritime.simulator.angular_grouping import (
     DetectedObject,
     group_angular_detections,
 )

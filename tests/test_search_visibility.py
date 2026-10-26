@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bearing_localization.geospatial.water_mask import WaterMask
-from bearing_localization.search.visibility import filter_visible_candidates
+from maritime.geometry.water_mask import WaterMask
+from maritime.search.visibility import filter_visible_candidates
 
 
 class BoxLineOfSight:

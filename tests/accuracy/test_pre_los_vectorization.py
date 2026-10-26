@@ -4,14 +4,14 @@ from math import atan2, degrees, fsum, inf, log, nextafter
 
 import pytest
 
-from bearing_localization.search import pre_los_bound as bound_module
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.likelihood import build_likelihood_costs
-from bearing_localization.search.pre_los_bound import pre_los_catalog_row_min_bound
-from maritime_localization_shared.geometry.angular_grouping import (
+from maritime.geometry.angular_grouping import (
     DetectedObject,
     group_angular_detections,
 )
+from maritime.search import pre_los_bound as bound_module
+from maritime.search.config import SearchConfig
+from maritime.search.likelihood import build_likelihood_costs
+from maritime.search.pre_los_bound import pre_los_catalog_row_min_bound
 
 from .test_pre_los_bound import _measurements, _prepared_bundle, _records
 

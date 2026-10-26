@@ -5,20 +5,20 @@ import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.algorithms import associate
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.grid import run_grid_search_v2
-from bearing_localization.search.hierarchical import run_hierarchical_search_v2
-from bearing_localization.search.pairwise import run_pairwise_search_v2
-from bearing_localization.search.randomized import run_randomized_search_v2
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.algorithms import associate
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.search.config import SearchConfig
+from maritime.search.grid import run_grid_search_v2
+from maritime.search.hierarchical import run_hierarchical_search_v2
+from maritime.search.pairwise import run_pairwise_search_v2
+from maritime.search.randomized import run_randomized_search_v2
+from maritime.search.scoring import CandidateScorer
 
 CRS_UTM = CRS.from_epsg(32618)
 _TO_XY = Transformer.from_crs("EPSG:4326", CRS_UTM, always_xy=True)

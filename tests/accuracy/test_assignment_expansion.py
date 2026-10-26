@@ -5,22 +5,22 @@ from dataclasses import replace
 import pytest
 from pyproj import Geod
 
-from bearing_localization.search import assignment_expansion as expansion
-from bearing_localization.search.assignment_expansion import (
-    ExpansionConfig,
-    assignment_expansion,
-    expand_assignments,
-    propose_assignment_expansion,
-)
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.scoring import CandidateEvaluation, CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
+from maritime.schemas.localization import Assignment, Hypothesis
+from maritime.search import assignment_expansion as expansion
+from maritime.search.assignment_expansion import (
+    ExpansionConfig,
+    assignment_expansion,
+    expand_assignments,
+    propose_assignment_expansion,
+)
+from maritime.search.config import SearchConfig
+from maritime.search.scoring import CandidateEvaluation, CandidateScorer
 
 from .test_continuous_refinement import ORIGIN, _inputs, _xy
 

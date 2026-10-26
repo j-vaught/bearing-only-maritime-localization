@@ -8,14 +8,7 @@ from typing import Any, TypeVar, cast
 
 import pytest
 
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.config_serialization import (
-    dumps_search_config,
-    loads_search_config,
-    search_config_from_dict,
-    search_config_to_dict,
-)
-from maritime_localization_shared import (
+from maritime.schemas import (
     AISRecord,
     AISSnapshot,
     Assignment,
@@ -35,7 +28,14 @@ from maritime_localization_shared import (
     TrueObject,
     UncertaintyEllipse,
 )
-from maritime_localization_shared.serialization import (
+from maritime.search.config import SearchConfig
+from maritime.search.config_serialization import (
+    dumps_search_config,
+    loads_search_config,
+    search_config_from_dict,
+    search_config_to_dict,
+)
+from maritime.serialization import (
     contract_from_dict,
     contract_to_dict,
     dumps_contract,

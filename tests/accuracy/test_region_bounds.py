@@ -5,14 +5,14 @@ from itertools import product
 import numpy as np
 import pytest
 
-from bearing_localization.search.bounds import (
+from maritime.search.bounds import (
     full_circle_edge_lower_bounds,
     lower_bound_from_edge_floors,
     rectangular_bearing_enclosures,
     rectangular_region_lower_bound,
 )
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.likelihood import LikelihoodCostMatrix, build_likelihood_costs
+from maritime.search.config import SearchConfig
+from maritime.search.likelihood import LikelihoodCostMatrix, build_likelihood_costs
 
 from .reference_assignment import enumerate_partial_assignments, optimal_assignments
 

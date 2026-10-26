@@ -7,9 +7,9 @@ from typing import cast
 
 import numpy as np
 
-from bearing_localization.geospatial.water_mask import WaterMask
-from bearing_localization.simulator.observer import sample_observers
-from maritime_localization_shared.contracts.map_input import MapInput
+from maritime.geometry.water_mask import WaterMask
+from maritime.schemas.map_input import MapInput
+from maritime.simulator.observer import sample_observers
 
 
 class ObserverPlacementTests(unittest.TestCase):

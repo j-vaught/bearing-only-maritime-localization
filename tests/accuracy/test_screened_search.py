@@ -9,17 +9,17 @@ from pyproj import CRS, Transformer
 from shapely.geometry import box
 
 from accuracy.test_visibility_screen import GEOD, catalog, record, vmap, xy
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.scoring import CandidateScorer
-from bearing_localization.search.screened_search import (
-    CandidatePosition,
-    FeasibleIncumbent,
-    screened_candidate_search,
-)
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     MeasurementSetV2,
     MeasurementV2,
+)
+from maritime.search.config import SearchConfig
+from maritime.search.scoring import CandidateScorer
+from maritime.search.screened_search import (
+    CandidatePosition,
+    FeasibleIncumbent,
+    screened_candidate_search,
 )
 
 CRS_UTM = CRS.from_epsg(32618)
@@ -84,7 +84,7 @@ def _scenario(use_types: bool):
 
 @pytest.mark.parametrize("use_types", [False, True])
 def test_screened_finite_search_matches_full_exact_winners_and_ties(use_types, monkeypatch):
-    import bearing_localization.search.screened_search as search_module
+    import maritime.search.screened_search as search_module
 
     scorer, points, observer_b = _scenario(use_types)
     screen_calls = []
@@ -401,7 +401,7 @@ def test_early_group_bound_cannot_hide_unknown_los_members():
 
 
 def test_land_and_unknown_candidates_use_exact_water_status_without_visibility_screen(monkeypatch):
-    import bearing_localization.search.screened_search as search_module
+    import maritime.search.screened_search as search_module
 
     scorer, points, _observer_b = _scenario(True)
 

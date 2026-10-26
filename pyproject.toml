@@ -14,18 +14,18 @@ dependencies = ["numpy>=2.0", "scipy>=1.14", "shapely>=2.0", "pyproj>=3.6"]
 gpu = ["cupy-cuda12x[ctk]>=13.0; sys_platform == \"linux\""]
 
 [project.scripts]
-bearing-localization = "bearing_localization.cli:main"
-bearing-localization-search = "bearing_localization.search_cli:main"
-bearing-localization-evaluate = "bearing_localization.evaluate_cli:main"
-bearing-simulator = "bearing_localization.simulator.cli:main"
-bearing-benchmark = "bearing_localization.benchmark_cli:main"
+bearing-localization = "maritime.cli:main"
+bearing-localization-search = "maritime.search_cli:main"
+bearing-localization-evaluate = "maritime.evaluate_cli:main"
+bearing-simulator = "maritime.simulator.cli:main"
+bearing-benchmark = "maritime.benchmark_cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8.0", "ruff>=0.9", "ty>=0.0.1a0"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["bearing_localization*", "maritime_localization_shared*", "maritime_localization_ingest*"]
+include = ["maritime", "maritime.*"]
 namespaces = false
 
 [tool.uv]

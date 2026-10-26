@@ -6,15 +6,13 @@ from math import hypot
 from pyproj import CRS, Transformer
 from shapely.geometry import Point, Polygon, box, mapping, shape
 
-from bearing_localization.search.prediction import predict_visible_groups
-from bearing_localization.simulator.mismatch import (
-    KnownWaterObserver,
-    PhysicalSceneV2,
-    SensorConfigurationV2,
+from maritime.geometry.coordinates import (
+    LocalFrame,
+    geodesic_bearing_distance,
 )
-from bearing_localization.simulator.runner import run_simulator_v2
-from maritime_localization_ingest.ais import catalog_from_ais_rows
-from maritime_localization_ingest.enc import (
+from maritime.geometry.vector_map import VectorMap
+from maritime.importers.ais import catalog_from_ais_rows
+from maritime.importers.enc import (
     ENCAid,
     ENCAidCatalog,
     ENCCollection,
@@ -27,16 +25,18 @@ from maritime_localization_ingest.enc import (
     group_physical_aids,
     mosaic_by_scale,
 )
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MapV2,
 )
-from maritime_localization_shared.geospatial.coordinates import (
-    LocalFrame,
-    geodesic_bearing_distance,
+from maritime.search.prediction import predict_visible_groups
+from maritime.simulator.mismatch import (
+    KnownWaterObserver,
+    PhysicalSceneV2,
+    SensorConfigurationV2,
 )
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.simulator.runner import run_simulator_v2
 
 
 def _polygon_json(geometry) -> str:

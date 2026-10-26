@@ -8,12 +8,12 @@ import numpy as np
 import pytest
 from pyproj import Geod
 
-from bearing_localization.evaluation.difficulty import (
+from maritime.evaluation.difficulty import (
     build_support_manifest,
     evaluate_scene_difficulty,
 )
-from maritime_localization_shared.contracts.inputs_v2 import MeasurementSetV2, MeasurementV2
-from maritime_localization_shared.contracts.truth import EvaluationTruth, TrueObject
+from maritime.schemas.inputs_v2 import MeasurementSetV2, MeasurementV2
+from maritime.schemas.truth import EvaluationTruth, TrueObject
 
 STAMP = "2026-10-25T12:00:00Z"
 

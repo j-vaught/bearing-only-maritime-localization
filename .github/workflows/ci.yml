@@ -27,3 +27,18 @@ jobs:
       - run: uv run bearing-simulator --help
       - run: uv run bearing-localization-search --help
       - run: uv run bearing-localization-evaluate --help
+      - name: Install the built wheel with locked runtime dependencies
+        run: |
+          uv venv .agent-work/wheel-check
+          uv export --locked --no-dev --no-emit-project --no-hashes -o .agent-work/runtime-requirements.txt
+          uv pip sync --python .agent-work/wheel-check/bin/python .agent-work/runtime-requirements.txt
+          uv pip install --python .agent-work/wheel-check/bin/python --no-deps dist/*.whl
+      - name: Check installed commands outside the source directory
+        working-directory: .agent-work
+        run: |
+          wheel-check/bin/python -c "import maritime.importers.ais, maritime.schemas, maritime.geometry, maritime.serialization"
+          wheel-check/bin/bearing-localization --help
+          wheel-check/bin/bearing-simulator --help
+          wheel-check/bin/bearing-localization-search --help
+          wheel-check/bin/bearing-localization-evaluate --help
+          wheel-check/bin/bearing-benchmark --help

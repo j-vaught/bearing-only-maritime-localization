@@ -51,7 +51,7 @@ def test_simulator_output_runs_search_without_truth_file(tmp_path: Path) -> None
     )
 
     _run_module(
-        "bearing_localization.simulator.cli",
+        "maritime.simulator.cli",
         "--seed",
         "42",
         "--scene-km",
@@ -107,7 +107,7 @@ def test_simulator_output_runs_search_without_truth_file(tmp_path: Path) -> None
         str(estimate),
     )
     assert str(truth) not in search_arguments
-    _run_module("bearing_localization.search_cli", *search_arguments)
+    _run_module("maritime.search_cli", *search_arguments)
 
     estimate_document = json.loads(estimate.read_text(encoding="utf-8"))
     assert estimate_document["contract_type"] == "PositionEstimate"

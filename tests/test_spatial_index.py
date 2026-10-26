@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from bearing_localization.geospatial.spatial_index import SpatialIndex2D
+from maritime.geometry.spatial_index import SpatialIndex2D
 
 
 def test_query_returns_only_points_inside_radius_in_input_order() -> None:

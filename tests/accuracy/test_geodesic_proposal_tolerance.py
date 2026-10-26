@@ -8,17 +8,17 @@ import numpy as np
 import pytest
 from pyproj import Geod
 
-from bearing_localization.search.proposals.geodesic_wedge import (
+from maritime.geometry.coordinates import LocalFrame
+from maritime.search.proposals.geodesic_wedge import (
     _cell_residual_and_evidence,
     _cell_residual_and_evidence_batch,
     _neighbor_cell_indices,
     generate_geographic_reverse_wedge_proposals_geodesic,
 )
-from bearing_localization.search.proposals.wedge import (
+from maritime.search.proposals.wedge import (
     GeographicWedgeCatalogObject,
     WedgeObservation,
 )
-from maritime_localization_shared.geospatial.coordinates import LocalFrame
 
 
 def _small_fixture():

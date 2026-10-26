@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bearing_localization.geospatial.raster_los import raster_line_of_sight
-from maritime_localization_shared.contracts.map_input import MapInput
-from maritime_localization_shared.geospatial.water_mask import WaterMask
+from maritime.geometry.raster_los import raster_line_of_sight
+from maritime.geometry.water_mask import WaterMask
+from maritime.schemas.map_input import MapInput
 
 
 def make_map(mask: tuple[tuple[bool, ...], ...]) -> MapInput:

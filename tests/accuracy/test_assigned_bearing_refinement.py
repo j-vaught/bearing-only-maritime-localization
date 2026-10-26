@@ -5,12 +5,12 @@ from math import hypot
 
 from pyproj import CRS
 
-import bearing_localization.search.assigned_bearing_refinement as assigned_refinement
-from bearing_localization.search.assigned_bearing_refinement import refine_assigned_bearing
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.scoring import CandidateEvaluation, CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import MeasurementSetV2
-from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
+import maritime.search.assigned_bearing_refinement as assigned_refinement
+from maritime.schemas.inputs_v2 import MeasurementSetV2
+from maritime.schemas.localization import Assignment, Hypothesis
+from maritime.search.assigned_bearing_refinement import refine_assigned_bearing
+from maritime.search.config import SearchConfig
+from maritime.search.scoring import CandidateEvaluation, CandidateScorer
 
 from .test_continuous_refinement import _inputs, _xy
 

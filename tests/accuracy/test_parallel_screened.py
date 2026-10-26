@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 
 from accuracy.test_screened_search import _scenario
-from bearing_localization.search.parallel_screened import (
+from maritime.search.parallel_screened import (
     CandidateAudit,
     ParallelScreenedCandidatePool,
     ParallelScreenedError,
@@ -249,7 +249,7 @@ def test_same_chunk_incumbent_schedule_is_deterministic() -> None:
 
 @pytest.mark.parametrize("exit_mode", ["zero", "nonzero"])
 def test_worker_exit_fails_promptly_with_outstanding_count(exit_mode: str) -> None:
-    from bearing_localization.search.parallel_screened import ParallelScreenedError
+    from maritime.search.parallel_screened import ParallelScreenedError
 
     scorer, points, _ = _scenario(True)
     pool = ParallelScreenedCandidatePool(

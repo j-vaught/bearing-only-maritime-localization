@@ -16,20 +16,20 @@ import pytest
 from pyproj import Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.search.assignment_expansion import (
-    ExpansionConfig,
-    expand_assignments,
-)
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.schemas.localization import Assignment, Hypothesis
+from maritime.search.assignment_expansion import (
+    ExpansionConfig,
+    expand_assignments,
+)
+from maritime.search.config import SearchConfig
+from maritime.search.scoring import CandidateScorer
 
 _GEOD = Geod(ellps="WGS84")
 _ORIGIN_LON = -75.0
@@ -272,9 +272,7 @@ def test_duplicate_angular_group_cannot_create_false_success_or_new_pair() -> No
 
 
 def test_bounds_are_clipped_before_solver_and_nfev_is_forwarded(monkeypatch) -> None:
-    module = __import__(
-        "bearing_localization.search.assignment_expansion", fromlist=["least_squares"]
-    )
+    module = __import__("maritime.search.assignment_expansion", fromlist=["least_squares"])
     observed: dict[str, object] = {}
 
     class _Solve:
@@ -330,9 +328,7 @@ def test_residual_fit_uses_true_north_and_report_catalog_uncertainty(monkeypatch
     scorer = _scorer(records, measurements)
     seed = _seed(scorer)
     captured: dict[str, object] = {}
-    module = __import__(
-        "bearing_localization.search.assignment_expansion", fromlist=["least_squares"]
-    )
+    module = __import__("maritime.search.assignment_expansion", fromlist=["least_squares"])
 
     class _Solve:
         x = (_BASE_EAST, _BASE_NORTH)

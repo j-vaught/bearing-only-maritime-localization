@@ -5,17 +5,17 @@ from itertools import chain
 import pytest
 from pyproj import Geod
 
-from bearing_localization.search.proposals.pairwise import (
-    PairwiseCatalogObject,
-    PairwiseObservation,
-    generate_geographic_pairwise_proposals,
-    generate_pairwise_proposals,
-)
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
     MeasurementV2,
+)
+from maritime.search.proposals.pairwise import (
+    PairwiseCatalogObject,
+    PairwiseObservation,
+    generate_geographic_pairwise_proposals,
+    generate_pairwise_proposals,
 )
 
 

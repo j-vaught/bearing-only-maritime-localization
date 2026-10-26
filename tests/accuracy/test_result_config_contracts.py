@@ -4,14 +4,14 @@ from typing import cast
 
 import pytest
 
-from bearing_localization.search.config import ObjectiveVersion, SearchConfig
-from maritime_localization_shared.contracts.localization import (
+from maritime.schemas.localization import (
     Assignment,
     Hypothesis,
     LocalizationResult,
     ScoreComponents,
     UncertaintyEllipse,
 )
+from maritime.search.config import ObjectiveVersion, SearchConfig
 
 
 def _hypothesis(score: float = 3.0) -> Hypothesis:

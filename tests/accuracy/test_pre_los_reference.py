@@ -9,22 +9,22 @@ from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
 from accuracy.reference_assignment import enumerate_partial_assignments
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.likelihood import build_likelihood_costs
-from bearing_localization.search.pre_los_bound import pre_los_catalog_row_min_bound
-from bearing_localization.search.pre_los_preparation import prepare_pre_los_targets
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.geometry.angular_grouping import (
+    DetectedObject,
+    group_angular_detections,
+)
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.geometry.angular_grouping import (
-    DetectedObject,
-    group_angular_detections,
-)
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.search.config import SearchConfig
+from maritime.search.likelihood import build_likelihood_costs
+from maritime.search.pre_los_bound import pre_los_catalog_row_min_bound
+from maritime.search.pre_los_preparation import prepare_pre_los_targets
+from maritime.search.scoring import CandidateScorer
 
 CRS_M = CRS.from_epsg(32618)
 _ORIGIN = (-76.3, 37.0)

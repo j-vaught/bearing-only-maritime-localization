@@ -5,14 +5,14 @@ from typing import Any, cast
 
 import numpy as np
 
-from bearing_localization.search.candidate_order import order_candidate_positions
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.grid import run_grid_search_v2
-from bearing_localization.search.hierarchical import run_hierarchical_search_v2
-from bearing_localization.search.likelihood import LikelihoodCostMatrix
-from bearing_localization.search.prediction import PredictedGroupSet
-from bearing_localization.search.scoring import CandidateEvaluation, CandidateScorer
-from maritime_localization_shared.contracts.localization import Hypothesis
+from maritime.schemas.localization import Hypothesis
+from maritime.search.candidate_order import order_candidate_positions
+from maritime.search.config import SearchConfig
+from maritime.search.grid import run_grid_search_v2
+from maritime.search.hierarchical import run_hierarchical_search_v2
+from maritime.search.likelihood import LikelihoodCostMatrix
+from maritime.search.prediction import PredictedGroupSet
+from maritime.search.scoring import CandidateEvaluation, CandidateScorer
 
 
 class _Map:

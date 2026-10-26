@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import fields
 from inspect import signature
 
-from bearing_localization.evaluation.metrics import evaluate_estimate
-from bearing_localization.search.grid import run_grid_search
-from maritime_localization_shared.contracts.estimate import PositionEstimate
-from maritime_localization_shared.contracts.truth import EvaluationTruth, TrueObject
+from maritime.evaluation.metrics import evaluate_estimate
+from maritime.schemas.estimate import PositionEstimate
+from maritime.schemas.truth import EvaluationTruth, TrueObject
+from maritime.search.grid import run_grid_search
 
 
 def _estimate(

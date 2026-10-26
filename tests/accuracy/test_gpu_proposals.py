@@ -4,17 +4,17 @@ from math import atan2, degrees
 
 import pytest
 
-from bearing_localization.search.gpu.proposals import (
+from maritime.search.gpu.proposals import (
     generate_geographic_pairwise_proposals_cupy,
     generate_pairwise_proposals_cupy,
     generate_reverse_wedge_proposals_cupy,
 )
-from bearing_localization.search.proposals.pairwise import (
+from maritime.search.proposals.pairwise import (
     PairwiseCatalogObject,
     PairwiseObservation,
     generate_pairwise_proposals,
 )
-from bearing_localization.search.proposals.wedge import (
+from maritime.search.proposals.wedge import (
     WedgeCatalogObject,
     WedgeObservation,
     generate_reverse_wedge_proposals,

@@ -54,7 +54,19 @@ These are editable manual experiments. Default budgets do not complete a coast-w
 
 All data files are directly under [data/](data/README.md). `objects-ais.json.gz`, `objects-chart-aids.json.gz`, and `map.json.gz` are the shared runtime inputs. `data/sources.json` provides loading metadata, source descriptions, and checksums for these inputs. `observer_locations.csv` is simulator/evaluator truth; search receives only bearings, catalog, map, and configuration.
 
-Production code is in `bearing_localization/`, `maritime_localization_shared/`, and `maritime_localization_ingest/`. Tests are named by the behavior they check.
+All Python software is under `maritime/`. The repository name and installed command names stay the same.
+
+| Folder or file | Purpose |
+|---|---|
+| `maritime/importers/` | Convert external AIS, chart, and recorded-bearing data. |
+| `maritime/schemas/` | Define and validate objects, observations, maps, and results. |
+| `maritime/geometry/` | Coordinates, bearings, distance, land visibility, and spatial queries. |
+| `maritime/serialization.py` | Read and write the standard JSON formats. |
+| `maritime/simulator/` | Generate observations and separate truth. |
+| `maritime/search/` | Estimate positions from bearings. |
+| `maritime/evaluation/` | Compare estimates against truth. |
+
+Imports use the `maritime` package, such as `from maritime.schemas import MeasurementSetV2`. The programs remain separate, and search never imports simulator or evaluation internals. The examples read the prepared dataset directly; `importers` is used when converting new external data. Tests are named by the behavior they check.
 
 For GPU examples, use Linux with compatible NVIDIA hardware and install the optional extra.
 

@@ -61,7 +61,7 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, object]:
     search_command = [
         sys.executable,
         "-m",
-        "bearing_localization.search_cli",
+        "maritime.search_cli",
         "--measurements",
         str(args.measurements),
         "--ais",
@@ -96,7 +96,7 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, object]:
     evaluate_command = [
         sys.executable,
         "-m",
-        "bearing_localization.evaluate_cli",
+        "maritime.evaluate_cli",
         "--estimate",
         str(estimate_path),
         "--truth",
@@ -123,7 +123,7 @@ def run_pipeline_v2(args: argparse.Namespace) -> dict[str, object]:
     search_command = [
         sys.executable,
         "-m",
-        "bearing_localization.search_cli",
+        "maritime.search_cli",
         "--schema-version",
         "2",
         "--measurements",
@@ -167,7 +167,7 @@ def run_pipeline_v2(args: argparse.Namespace) -> dict[str, object]:
     evaluate_command = [
         sys.executable,
         "-m",
-        "bearing_localization.evaluate_cli",
+        "maritime.evaluate_cli",
         "--schema-version",
         "2",
         "--estimate",

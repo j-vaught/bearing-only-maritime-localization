@@ -6,13 +6,13 @@ from typing import cast
 
 import pytest
 
-from maritime_localization_shared.contracts.localization import (
+from maritime.schemas.localization import (
     BudgetExhaustionReason,
     Hypothesis,
     LocalizationResult,
     SearchStatus,
 )
-from maritime_localization_shared.serialization import (
+from maritime.serialization import (
     contract_from_dict,
     contract_to_dict,
     dumps_contract,

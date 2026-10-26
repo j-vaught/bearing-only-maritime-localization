@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from bearing_localization.search.candidates import generate_candidates
+from maritime.search.candidates import generate_candidates
 
 
 class _BandWaterMask:

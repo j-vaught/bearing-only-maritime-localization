@@ -10,7 +10,20 @@ import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.search.calibration import (
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import (
+    CatalogRecordV2,
+    CatalogV2,
+    MeasurementSetV2,
+    MeasurementV2,
+)
+from maritime.schemas.localization import (
+    Assignment,
+    Hypothesis,
+    LocalizationResult,
+    UncertaintyEllipse,
+)
+from maritime.search.calibration import (
     CalibrationContext,
     CalibrationOperatingCondition,
     DecisionCalibration,
@@ -18,27 +31,14 @@ from bearing_localization.search.calibration import (
     execution_protocol_sha256,
     load_frozen_calibration,
 )
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.decision import CompetitorCoverageEvidence, decide_localization
-from bearing_localization.search.grid import run_grid_search_v2
-from bearing_localization.search.hierarchical import run_hierarchical_search_v2
-from bearing_localization.search.modes import SearchModeEvidence, converged_mode_evidence
-from bearing_localization.search.randomized import run_randomized_search_v2
-from bearing_localization.search.refinement import RefinedMode, RefinementResult, StopReason
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import (
-    CatalogRecordV2,
-    CatalogV2,
-    MeasurementSetV2,
-    MeasurementV2,
-)
-from maritime_localization_shared.contracts.localization import (
-    Assignment,
-    Hypothesis,
-    LocalizationResult,
-    UncertaintyEllipse,
-)
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.search.config import SearchConfig
+from maritime.search.decision import CompetitorCoverageEvidence, decide_localization
+from maritime.search.grid import run_grid_search_v2
+from maritime.search.hierarchical import run_hierarchical_search_v2
+from maritime.search.modes import SearchModeEvidence, converged_mode_evidence
+from maritime.search.randomized import run_randomized_search_v2
+from maritime.search.refinement import RefinedMode, RefinementResult, StopReason
+from maritime.search.scoring import CandidateScorer
 
 from .reference_assignment import optimal_assignments
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bearing_localization.simulator.measurement_model import (
+from maritime.simulator.measurement_model import (
     DetectionGeometry,
     apparent_angular_half_width_deg,
     make_observation,

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MapV2,
@@ -80,7 +80,7 @@ def test_measurement_constructor_rejects_truth_fields() -> None:
 
 
 def test_legacy_contract_construction_is_unchanged() -> None:
-    from maritime_localization_shared.contracts.observation import MeasurementSet, Observation
+    from maritime.schemas.observation import MeasurementSet, Observation
 
     legacy = MeasurementSet((Observation(42.0, 0.5),))
     assert legacy.schema_version == 1

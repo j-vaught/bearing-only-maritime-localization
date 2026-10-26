@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from bearing_localization.search.grid import GridSearchConfig, run_grid_search
-from maritime_localization_shared.contracts import (
+from maritime.schemas import (
     AISRecord,
     AISSnapshot,
     MeasurementSet,
     Observation,
 )
+from maritime.search.grid import GridSearchConfig, run_grid_search
 
 
 def _ais_snapshot() -> AISSnapshot:

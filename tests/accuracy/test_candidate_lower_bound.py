@@ -6,14 +6,14 @@ from typing import cast
 
 import pytest
 
-from bearing_localization.search.candidate_lower_bound import (
+from maritime.schemas.inputs_v2 import MeasurementSetV2, MeasurementV2
+from maritime.search.candidate_lower_bound import (
     candidate_objective_lower_bound,
     prepare_candidate_objective_bound,
     should_prune_candidate,
 )
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.likelihood import build_likelihood_costs
-from maritime_localization_shared.contracts.inputs_v2 import MeasurementSetV2, MeasurementV2
+from maritime.search.config import SearchConfig
+from maritime.search.likelihood import build_likelihood_costs
 
 from .reference_assignment import enumerate_partial_assignments
 

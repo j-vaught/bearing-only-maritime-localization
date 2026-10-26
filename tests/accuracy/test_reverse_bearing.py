@@ -12,7 +12,7 @@ from pyproj import Geod
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from maritime_localization_shared.geospatial.reverse_bearing import (  # noqa: E402
+from maritime.geometry.reverse_bearing import (  # noqa: E402
     ReverseBearingResult,
     solve_reverse_bearing_observer,
 )

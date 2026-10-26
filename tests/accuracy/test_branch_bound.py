@@ -6,15 +6,15 @@ from types import SimpleNamespace
 import pytest
 
 from accuracy.test_reference_grid import _catalog, _map, _measurements, _xy
-from bearing_localization.search.bounds import BoundsResult
-from bearing_localization.search.branch_bound import (
+from maritime.schemas.inputs_v2 import MeasurementSetV2, MeasurementV2
+from maritime.schemas.localization import Hypothesis
+from maritime.search.bounds import BoundsResult
+from maritime.search.branch_bound import (
     branch_and_bound_search,
 )
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.reference_grid import enumerate_grid_points, search_reference_grid
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import MeasurementSetV2, MeasurementV2
-from maritime_localization_shared.contracts.localization import Hypothesis
+from maritime.search.config import SearchConfig
+from maritime.search.reference_grid import enumerate_grid_points, search_reference_grid
+from maritime.search.scoring import CandidateScorer
 
 
 class _QuadraticScorer:

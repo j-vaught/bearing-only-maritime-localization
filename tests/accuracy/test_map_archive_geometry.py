@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from shapely.geometry import MultiPolygon, Polygon, box
 
-from maritime_localization_shared.geospatial.vector_los import line_of_sight_clear
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.geometry.vector_los import line_of_sight_clear
+from maritime.geometry.vector_map import VectorMap
 
 
 def test_map_bytes_match_sources() -> None:
@@ -81,7 +81,7 @@ def test_reference_los_keeps_shoreline_and_narrow_interval_rules() -> None:
 
 
 def test_direct_single_polygon_and_multipolygon_fast_path_preserves_identity() -> None:
-    import maritime_localization_shared.geospatial.vector_map as vector_map_module
+    import maritime.geometry.vector_map as vector_map_module
 
     polygon = box(0.0, 0.0, 2.0, 2.0)
     multipolygon = MultiPolygon((box(4.0, 0.0, 6.0, 2.0), box(8.0, 0.0, 10.0, 2.0)))
@@ -124,7 +124,7 @@ def test_single_geometry_fast_path_preserves_queries_and_sequence_normalization(
 
 
 def test_polygonal_geometry_rejects_empty_and_invalid_direct_geometry() -> None:
-    import maritime_localization_shared.geospatial.vector_map as vector_map_module
+    import maritime.geometry.vector_map as vector_map_module
 
     with pytest.raises(ValueError, match="must not contain empty"):
         vector_map_module._polygonal_geometry(Polygon(), "geometry")

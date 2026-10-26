@@ -10,12 +10,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from bearing_localization.search.assignment import (
+from maritime.search.assignment import (
     assign_likelihood_costs,
     assign_partial_cost_matrix,
 )
-from bearing_localization.search.gpu.assignment import assignment_acceleration_decision
-from bearing_localization.search.likelihood import LikelihoodCostMatrix
+from maritime.search.gpu.assignment import assignment_acceleration_decision
+from maritime.search.likelihood import LikelihoodCostMatrix
 
 from .reference_assignment import optimal_assignments
 

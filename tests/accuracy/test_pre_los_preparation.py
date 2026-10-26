@@ -5,23 +5,23 @@ import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.pre_los_preparation import (
-    PreLOSTargetRecord,
-    PreparedPreLOSTargets,
-    prepare_pre_los_targets,
-)
-from bearing_localization.search.prediction import predict_visible_groups
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.geometry.coordinates import geodesic_bearing_distance
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.contracts.object_types import normalize_object_type
-from maritime_localization_shared.geospatial.coordinates import geodesic_bearing_distance
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.schemas.object_types import normalize_object_type
+from maritime.search.config import SearchConfig
+from maritime.search.pre_los_preparation import (
+    PreLOSTargetRecord,
+    PreparedPreLOSTargets,
+    prepare_pre_los_targets,
+)
+from maritime.search.prediction import predict_visible_groups
+from maritime.search.scoring import CandidateScorer
 
 CRS_UTM = CRS.from_epsg(32618)
 _GEOD = Geod(ellps="WGS84")

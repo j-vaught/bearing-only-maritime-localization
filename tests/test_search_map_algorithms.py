@@ -5,15 +5,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bearing_localization.search_cli import run_search_files
-from maritime_localization_shared.contracts import (
+from maritime.schemas import (
     AISRecord,
     AISSnapshot,
     MapInput,
     MeasurementSet,
     Observation,
 )
-from maritime_localization_shared.serialization import write_contract
+from maritime.search_cli import run_search_files
+from maritime.serialization import write_contract
 
 
 @pytest.mark.parametrize("algorithm", ["randomized", "hierarchical"])

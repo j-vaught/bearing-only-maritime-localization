@@ -10,17 +10,17 @@ from typing import cast
 import pytest
 from shapely.geometry import box
 
-from bearing_localization.search import parallel_assignment_expansion as parallel
-from bearing_localization.search.assignment_expansion import ExpansionConfig, expand_assignments
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.parallel_assignment_expansion import (
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import CatalogV2, MeasurementSetV2
+from maritime.search import parallel_assignment_expansion as parallel
+from maritime.search.assignment_expansion import ExpansionConfig, expand_assignments
+from maritime.search.config import SearchConfig
+from maritime.search.parallel_assignment_expansion import (
     ModeTask,
     ParallelExpansionError,
     run_expansion_modes,
 )
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import CatalogV2, MeasurementSetV2
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.search.scoring import CandidateScorer
 
 from . import test_assignment_expansion_review as fixture
 

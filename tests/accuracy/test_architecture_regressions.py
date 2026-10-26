@@ -6,19 +6,19 @@ import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box, mapping
 
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.grid import run_grid_search_v2
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.estimate import PositionEstimate
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.estimate import PositionEstimate
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MapV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.geospatial.vector_map import VectorMap
-from maritime_localization_shared.serialization import (
+from maritime.search.config import SearchConfig
+from maritime.search.grid import run_grid_search_v2
+from maritime.search.scoring import CandidateScorer
+from maritime.serialization import (
     contract_from_dict,
     contract_to_dict,
     dumps_contract,
@@ -139,7 +139,7 @@ def test_search_serialization_and_cli_contract_have_no_truth_channel(tmp_path) -
         "contract_type",
     }
 
-    from bearing_localization.accuracy_cli import search_v2_main
+    from maritime.accuracy_cli import search_v2_main
 
     with pytest.raises(SystemExit) as error:
         search_v2_main(["--truth", str(tmp_path / "truth.json")])

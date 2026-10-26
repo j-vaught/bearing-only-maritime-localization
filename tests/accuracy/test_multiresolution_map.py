@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 from shapely.geometry import Polygon, box
 
-from maritime_localization_shared.geospatial.multires_map import MultiResolutionMap
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.geometry.multires_map import MultiResolutionMap
+from maritime.geometry.vector_map import VectorMap
 
 CRS_METRES = "EPSG:32618"
 

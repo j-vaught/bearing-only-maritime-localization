@@ -7,7 +7,7 @@ from math import hypot
 import pytest
 from pyproj import Geod
 
-from maritime_localization_shared.geospatial.coordinates import (
+from maritime.geometry.coordinates import (
     LocalFrame,
     geodesic_bearing_distance,
 )

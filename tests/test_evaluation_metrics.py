@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from bearing_localization.evaluation.metrics import evaluate_estimate
-from maritime_localization_shared.contracts.estimate import PositionEstimate
-from maritime_localization_shared.contracts.truth import EvaluationTruth, TrueObject
+from maritime.evaluation.metrics import evaluate_estimate
+from maritime.schemas.estimate import PositionEstimate
+from maritime.schemas.truth import EvaluationTruth, TrueObject
 
 
 def _truth() -> EvaluationTruth:

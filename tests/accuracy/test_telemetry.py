@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from bearing_localization.search.telemetry import SearchTelemetry
+from maritime.search.telemetry import SearchTelemetry
 
 
 class StepClock:

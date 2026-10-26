@@ -3,14 +3,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bearing_localization.search import PairwiseSearchConfig, run_pairwise_search
-from bearing_localization.search.pairwise import pairwise_hypothesis_search
-from maritime_localization_shared.contracts import (
+from maritime.schemas import (
     AISRecord,
     AISSnapshot,
     MeasurementSet,
     Observation,
 )
+from maritime.search import PairwiseSearchConfig, run_pairwise_search
+from maritime.search.pairwise import pairwise_hypothesis_search
 
 
 def _fixture(

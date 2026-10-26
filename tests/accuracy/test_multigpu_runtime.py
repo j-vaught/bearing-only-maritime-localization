@@ -8,14 +8,14 @@ from typing import Any, cast
 import numpy as np
 import pytest
 
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.gpu.costs import CandidateBearingInput
-from bearing_localization.search.gpu.runtime import (
+from maritime.search.config import SearchConfig
+from maritime.search.gpu.costs import CandidateBearingInput
+from maritime.search.gpu.runtime import (
     iter_candidate_likelihood_costs_multi_gpu,
     run_proposal_api_on_device,
 )
-from bearing_localization.search.likelihood import build_likelihood_costs
-from bearing_localization.search.proposals.pairwise import (
+from maritime.search.likelihood import build_likelihood_costs
+from maritime.search.proposals.pairwise import (
     PairwiseCatalogObject,
     PairwiseObservation,
     generate_pairwise_proposals,
@@ -94,7 +94,7 @@ def test_multigpu_runtime_rejects_duplicate_or_unstable_ids_and_bounds_queue() -
 
 
 def test_worker_exception_propagates_instead_of_dropping_candidates(monkeypatch) -> None:
-    runtime = importlib.import_module("bearing_localization.search.gpu.runtime")
+    runtime = importlib.import_module("maritime.search.gpu.runtime")
     original = runtime.iter_candidate_likelihood_costs_cupy
 
     def fail_one(measurements, candidates, config, **kwargs):
@@ -124,7 +124,7 @@ def test_runtime_proposal_dispatch_preserves_geographic_unsupported_contract() -
 
 
 def test_multigpu_source_and_result_batches_stay_within_the_inflight_window(monkeypatch) -> None:
-    runtime = importlib.import_module("bearing_localization.search.gpu.runtime")
+    runtime = importlib.import_module("maritime.search.gpu.runtime")
     original = runtime.iter_candidate_likelihood_costs_cupy
     consumed = 0
 
@@ -196,7 +196,7 @@ def test_early_iterator_close_drains_workers_and_releases_bounded_queues() -> No
 
 @pytest.mark.parametrize("corruption", ["lost", "duplicate"])
 def test_worker_rejects_lost_or_duplicate_output(monkeypatch, corruption: str) -> None:
-    runtime = importlib.import_module("bearing_localization.search.gpu.runtime")
+    runtime = importlib.import_module("maritime.search.gpu.runtime")
     original = runtime.iter_candidate_likelihood_costs_cupy
 
     def corrupt(measurements, candidates, config, **kwargs):

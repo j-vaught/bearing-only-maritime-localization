@@ -10,15 +10,12 @@ from pathlib import Path
 import pytest
 from pyproj import Geod, Transformer
 
-import bearing_localization.accuracy_cli as accuracy_cli
-import bearing_localization.search as search_api
-from bearing_localization.accuracy_cli import _validate_scope_manifest
-from bearing_localization.algorithms import SearchResult
-from bearing_localization.evaluation.metrics import SupportManifest
-from bearing_localization.search.assignment_expansion import ExpansionConfig, expand_assignments
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.config_serialization import read_search_config, write_search_config
-from maritime_localization_shared.contracts import (
+import maritime.accuracy_cli as accuracy_cli
+import maritime.search as search_api
+from maritime.accuracy_cli import _validate_scope_manifest
+from maritime.algorithms import SearchResult
+from maritime.evaluation.metrics import SupportManifest
+from maritime.schemas import (
     AISRecord,
     AISSnapshot,
     CatalogRecordV2,
@@ -27,9 +24,12 @@ from maritime_localization_shared.contracts import (
     MeasurementSet,
     Observation,
 )
-from maritime_localization_shared.contracts.estimate import PositionEstimate
-from maritime_localization_shared.contracts.localization import LocalizationResult
-from maritime_localization_shared.serialization import (
+from maritime.schemas.estimate import PositionEstimate
+from maritime.schemas.localization import LocalizationResult
+from maritime.search.assignment_expansion import ExpansionConfig, expand_assignments
+from maritime.search.config import SearchConfig
+from maritime.search.config_serialization import read_search_config, write_search_config
+from maritime.serialization import (
     contract_to_dict,
     read_contract,
     write_contract,
@@ -105,7 +105,7 @@ def _v2_fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
         [
             sys.executable,
             "-m",
-            "bearing_localization.simulator.cli",
+            "maritime.simulator.cli",
             "--schema-version",
             "2",
             "--fixture",
@@ -148,7 +148,7 @@ def test_v2_cli_simulator_search_after_truth_removal_and_evaluator(tmp_path: Pat
     search_args = [
         sys.executable,
         "-m",
-        "bearing_localization.search_cli",
+        "maritime.search_cli",
         "--schema-version",
         "2",
         "--measurements",
@@ -201,7 +201,7 @@ def test_v2_cli_simulator_search_after_truth_removal_and_evaluator(tmp_path: Pat
         [
             sys.executable,
             "-m",
-            "bearing_localization.evaluate_cli",
+            "maritime.evaluate_cli",
             "--schema-version",
             "2",
             "--estimate",
@@ -232,7 +232,7 @@ def test_v2_cli_malformed_config_exits_nonzero_without_result(tmp_path: Path) ->
         [
             sys.executable,
             "-m",
-            "bearing_localization.search_cli",
+            "maritime.search_cli",
             "--schema-version",
             "2",
             "--measurements",
@@ -345,7 +345,7 @@ def test_v2_main_orchestrates_independent_search_and_evaluator_files(tmp_path: P
 def test_scope_manifest_binds_full_coast_inputs_and_projected_bounds(tmp_path: Path) -> None:
     measurement_path, catalog_path, map_path, config_path, _truth_path = _v2_fixture(tmp_path)
     del measurement_path
-    from bearing_localization.search.config_serialization import read_search_config
+    from maritime.search.config_serialization import read_search_config
 
     search_config = read_search_config(config_path)
     assert search_config.bounds_xy is not None
@@ -392,7 +392,7 @@ def test_truth_free_standalone_expansion_preserves_search_budget_and_calibration
         [
             sys.executable,
             "-m",
-            "bearing_localization.search_cli",
+            "maritime.search_cli",
             "--schema-version",
             "2",
             "--measurements",
@@ -481,7 +481,7 @@ def test_assignment_expansion_request_deadline_reports_budget_exhaustion(
         [
             sys.executable,
             "-m",
-            "bearing_localization.search_cli",
+            "maritime.search_cli",
             "--schema-version",
             "2",
             "--measurements",
@@ -596,7 +596,7 @@ def test_truth_free_coarse_assignment_expansion_skips_pattern_refinement(
         [
             sys.executable,
             "-m",
-            "bearing_localization.search_cli",
+            "maritime.search_cli",
             "--schema-version",
             "2",
             "--measurements",
@@ -720,7 +720,7 @@ def test_coarse_assignment_expansion_and_refined_flag_are_mutually_exclusive() -
         [
             sys.executable,
             "-m",
-            "bearing_localization.search_cli",
+            "maritime.search_cli",
             "--schema-version",
             "2",
             "--measurements",
@@ -749,7 +749,7 @@ def test_assignment_expansion_gpu_backend_fails_explicitly(tmp_path: Path) -> No
         [
             sys.executable,
             "-m",
-            "bearing_localization.search_cli",
+            "maritime.search_cli",
             "--schema-version",
             "2",
             "--measurements",

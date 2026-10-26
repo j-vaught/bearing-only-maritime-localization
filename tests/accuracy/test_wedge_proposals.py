@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import replace
 from math import atan2, degrees
 
-from bearing_localization.search.proposals.wedge import (
+from maritime.geometry.coordinates import LocalFrame
+from maritime.search.proposals.wedge import (
     GeographicWedgeCatalogObject,
     WedgeCatalogObject,
     WedgeObservation,
     generate_geographic_reverse_wedge_proposals,
     generate_reverse_wedge_proposals,
 )
-from maritime_localization_shared.geospatial.coordinates import LocalFrame
 
 
 def _bearing(observer: tuple[float, float], target: tuple[float, float]) -> float:

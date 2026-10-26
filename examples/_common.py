@@ -16,21 +16,21 @@ from typing import Any, Literal, cast
 from _data import ROOT, CatalogMode, catalog_spec, digest, prepare_data
 from pyproj import Geod, Transformer
 
-from bearing_localization.accuracy_cli import evaluate_v2_files
-from bearing_localization.evaluation.difficulty import PostmergeDiagnostics, build_support_manifest
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.config_serialization import write_search_config
-from bearing_localization.simulator.mismatch import (
+from maritime.accuracy_cli import evaluate_v2_files
+from maritime.evaluation.difficulty import PostmergeDiagnostics, build_support_manifest
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import CatalogV2, MapV2, MeasurementSetV2
+from maritime.schemas.localization import LocalizationResult
+from maritime.schemas.truth import EvaluationTruth
+from maritime.search.config import SearchConfig
+from maritime.search.config_serialization import write_search_config
+from maritime.serialization import read_contract, write_contract
+from maritime.simulator.mismatch import (
     KnownWaterObserver,
     PhysicalSceneV2,
     SensorConfigurationV2,
 )
-from bearing_localization.simulator.runner import run_simulator_v2
-from maritime_localization_shared.contracts.inputs_v2 import CatalogV2, MapV2, MeasurementSetV2
-from maritime_localization_shared.contracts.localization import LocalizationResult
-from maritime_localization_shared.contracts.truth import EvaluationTruth
-from maritime_localization_shared.geospatial.vector_map import VectorMap
-from maritime_localization_shared.serialization import read_contract, write_contract
+from maritime.simulator.runner import run_simulator_v2
 
 DATA = ROOT / "data"
 PROJECTED_CRS = "EPSG:32618"
@@ -248,7 +248,7 @@ def search(
     command = [
         sys.executable,
         "-m",
-        "bearing_localization.search_cli",
+        "maritime.search_cli",
         "--schema-version",
         "2",
         "--measurements",

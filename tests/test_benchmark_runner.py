@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bearing_localization.evaluation.benchmark import (
+from maritime.evaluation.benchmark import (
     BenchmarkCase,
     BenchmarkConfig,
     BenchmarkSearchRequest,
     run_benchmark,
     write_benchmark,
 )
-from maritime_localization_shared.contracts import (
+from maritime.schemas import (
     AISRecord,
     AISSnapshot,
     EvaluationTruth,

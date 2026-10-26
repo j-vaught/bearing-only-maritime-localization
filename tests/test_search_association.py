@@ -3,11 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bearing_localization.search.association import (
+from maritime.schemas import AISRecord, Observation
+from maritime.search.association import (
     associate_observations_to_ais,
     compatible_types,
 )
-from maritime_localization_shared.contracts import AISRecord, Observation
 
 
 def _ais(record_id: str, east: float, north: float, ais_class: str) -> AISRecord:

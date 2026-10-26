@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from bearing_localization.evaluate_cli import main
-from maritime_localization_shared.contracts import EvaluationTruth, PositionEstimate
-from maritime_localization_shared.serialization import write_contract
+from maritime.evaluate_cli import main
+from maritime.schemas import EvaluationTruth, PositionEstimate
+from maritime.serialization import write_contract
 
 
 def test_evaluator_cli_reads_estimate_and_separate_truth(
@@ -74,6 +74,6 @@ def test_evaluator_rejects_truth_and_estimate_in_same_file(tmp_path: Path) -> No
     )
 
     with pytest.raises(ValueError, match="separate contract files"):
-        from bearing_localization.evaluate_cli import evaluate_files
+        from maritime.evaluate_cli import evaluate_files
 
         evaluate_files(shared_path, shared_path)

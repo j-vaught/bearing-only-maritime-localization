@@ -7,7 +7,7 @@ import importlib.util
 import numpy as np
 import pytest
 
-from bearing_localization import backends
+from maritime import backends
 
 
 def test_cpu_kernel_uses_global_bearings_and_wraps_at_north() -> None:

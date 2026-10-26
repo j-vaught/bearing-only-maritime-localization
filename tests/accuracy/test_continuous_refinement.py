@@ -5,17 +5,17 @@ from math import hypot
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.refinement import refine_modes
-from bearing_localization.search.scoring import CandidateScorer
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.schemas.localization import Assignment, Hypothesis
+from maritime.search.config import SearchConfig
+from maritime.search.refinement import refine_modes
+from maritime.search.scoring import CandidateScorer
 
 CRS_UTM = CRS.from_epsg(32618)
 ORIGIN = (-76.3, 37.0)
@@ -109,7 +109,7 @@ def test_noisy_mixed_sigma_refinement_recovers_from_coarse_cell_and_matches_scor
 
 
 def test_modes_refine_independently_without_crossing_local_basins(monkeypatch):
-    import bearing_localization.search.refinement as refinement
+    import maritime.search.refinement as refinement
 
     class BasinScorer:
         def __init__(self, *_args):
@@ -153,7 +153,7 @@ def test_modes_refine_independently_without_crossing_local_basins(monkeypatch):
 
 
 def test_assignment_switch_is_rescored_and_equal_score_keeps_pose(monkeypatch):
-    import bearing_localization.search.refinement as refinement
+    import maritime.search.refinement as refinement
 
     class SwitchingScorer:
         def __init__(self, *_args):
@@ -254,7 +254,7 @@ def test_collinear_assignments_report_singular_uncertainty_without_ellipse():
 
 
 def test_equal_objective_trials_preserve_seed_pose(monkeypatch):
-    import bearing_localization.search.refinement as refinement
+    import maritime.search.refinement as refinement
 
     class EqualScorer:
         def __init__(self, *_args):

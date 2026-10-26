@@ -8,15 +8,15 @@ import sys
 import numpy as np
 import pytest
 
-from bearing_localization import backends
-from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.gpu.costs import (
+from maritime import backends
+from maritime.search.config import SearchConfig
+from maritime.search.gpu.costs import (
     CandidateBearingInput,
     build_likelihood_costs_cupy,
     iter_candidate_likelihood_costs_cupy,
 )
-from bearing_localization.search.likelihood import PredictedType, build_likelihood_costs
-from bearing_localization.search.telemetry import SearchTelemetry
+from maritime.search.likelihood import PredictedType, build_likelihood_costs
+from maritime.search.telemetry import SearchTelemetry
 
 
 @pytest.mark.skipif(importlib.util.find_spec("cupy") is None, reason="CuPy extra required")
@@ -182,11 +182,7 @@ def test_cost_chunk_size_validation_and_cpu_only_import_compatibility() -> None:
         [
             sys.executable,
             "-c",
-            (
-                "import sys;\n"
-                "import bearing_localization.search.gpu.costs;\n"
-                'assert "cupy" not in sys.modules'
-            ),
+            ('import sys;\nimport maritime.search.gpu.costs;\nassert "cupy" not in sys.modules'),
         ],
         check=True,
     )

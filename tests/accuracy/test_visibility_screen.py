@@ -6,21 +6,21 @@ import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.search.prediction import (
+from maritime.geometry.angular_grouping import (
+    DetectedObject,
+    group_angular_detections,
+)
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import CatalogRecordV2, CatalogV2
+from maritime.search.prediction import (
     predict_visible_groups,
     prepare_prediction_context,
 )
-from bearing_localization.search.visibility_screen import (
+from maritime.search.visibility_screen import (
     _screen_candidate_visibility_batched,
     _screen_candidate_visibility_scalar,
     screen_candidate_visibility,
 )
-from maritime_localization_shared.contracts.inputs_v2 import CatalogRecordV2, CatalogV2
-from maritime_localization_shared.geometry.angular_grouping import (
-    DetectedObject,
-    group_angular_detections,
-)
-from maritime_localization_shared.geospatial.vector_map import VectorMap
 
 CRS_UTM = CRS.from_epsg(32618)
 GEOD = Geod(ellps="WGS84")

@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from bearing_localization.search import parallel_assignment_expansion as parallel
-from bearing_localization.search.assignment_expansion import ExpansionConfig, expand_assignments
+from maritime.search import parallel_assignment_expansion as parallel
+from maritime.search.assignment_expansion import ExpansionConfig, expand_assignments
 
 from .test_assignment_expansion import _scorer_with_fifth, _single_addition_seed
 
@@ -48,7 +48,7 @@ class _Factory:
             time.sleep(self.slow_init_s)
         scorer, _ = _scorer_and_seed()
         if self.crash_exit is not None:
-            import bearing_localization.search.parallel_assignment_expansion as module
+            import maritime.search.parallel_assignment_expansion as module
 
             exit_code = self.crash_exit
 
@@ -57,7 +57,7 @@ class _Factory:
 
             setattr(module, "expand_assignments", crash)
         elif self.fail_mode or self.delay_by_budget or self.delay_mode_s:
-            import bearing_localization.search.parallel_assignment_expansion as module
+            import maritime.search.parallel_assignment_expansion as module
 
             original = module.expand_assignments
 

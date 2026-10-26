@@ -6,18 +6,18 @@ from dataclasses import replace
 import pytest
 from pyproj import Geod
 
-import bearing_localization.search.proposals.witness_seeds as witness_seeds
-from bearing_localization.search.proposals.geodesic_wedge import GeodesicWedgeProposal
-from bearing_localization.search.proposals.wedge import (
+import maritime.search.proposals.witness_seeds as witness_seeds
+from maritime.geometry.coordinates import (
+    LocalFrame,
+    geodesic_bearing_distance,
+)
+from maritime.search.proposals.geodesic_wedge import GeodesicWedgeProposal
+from maritime.search.proposals.wedge import (
     GeographicWedgeCatalogObject,
     WedgeObservation,
 )
-from bearing_localization.search.proposals.witness_seeds import (
+from maritime.search.proposals.witness_seeds import (
     generate_continuous_witness_seeds,
-)
-from maritime_localization_shared.geospatial.coordinates import (
-    LocalFrame,
-    geodesic_bearing_distance,
 )
 
 _GEOD = Geod(ellps="WGS84")

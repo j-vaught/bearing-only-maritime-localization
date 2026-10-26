@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from bearing_localization.search.proposals.wedge import (
+from maritime.geometry.coordinates import LocalFrame
+from maritime.search.proposals.wedge import (
     GeographicWedgeCatalogObject,
     WedgeCatalogObject,
     WedgeObservation,
@@ -8,7 +9,6 @@ from bearing_localization.search.proposals.wedge import (
     generate_reverse_wedge_proposals,
     generate_reverse_wedge_proposals_complete,
 )
-from maritime_localization_shared.geospatial.coordinates import LocalFrame
 
 
 def test_reversed_inputs_preserve_stable_ids_votes_and_source_accounting():

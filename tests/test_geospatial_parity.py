@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from bearing_localization.geospatial import line_of_sight_clear, raster_line_of_sight
-from maritime_localization_shared.contracts.map_input import MapInput
+from maritime.geometry import line_of_sight_clear, raster_line_of_sight
+from maritime.schemas.map_input import MapInput
 
 
 @pytest.mark.parametrize(

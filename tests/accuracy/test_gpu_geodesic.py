@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from pyproj import Geod
 
-from bearing_localization.search.gpu.geodesic import solve_reverse_bearing_cupy
-from maritime_localization_shared.geospatial.reverse_bearing import solve_reverse_bearing_observer
+from maritime.geometry.reverse_bearing import solve_reverse_bearing_observer
+from maritime.search.gpu.geodesic import solve_reverse_bearing_cupy
 
 
 def _cupy():

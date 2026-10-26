@@ -4,8 +4,8 @@ from typing import Any, cast
 
 import pytest
 
-from maritime_localization_shared.contracts.ais import AISRecord
-from maritime_localization_shared.contracts.object_types import (
+from maritime.schemas.ais import AISRecord
+from maritime.schemas.object_types import (
     is_visual_entity,
     normalize_object_type,
 )

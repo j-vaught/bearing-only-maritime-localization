@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from bearing_localization.search.hierarchical import hierarchical_search
+from maritime.search.hierarchical import hierarchical_search
 
 
 def _example() -> tuple[list[tuple[str | None, float]], np.ndarray, list[str | None]]:
@@ -147,7 +147,7 @@ def test_invalid_refinement_configuration_is_rejected(config: _InvalidSearchConf
 
 
 def test_missing_penalty_counts_unreported_visible_targets() -> None:
-    from bearing_localization.algorithms import associate
+    from maritime.algorithms import associate
 
     score, matches = associate(
         np.asarray([0.0, 0.0]),

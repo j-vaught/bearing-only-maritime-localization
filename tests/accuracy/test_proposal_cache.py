@@ -13,22 +13,22 @@ import numpy as np
 import pytest
 from pyproj import Geod
 
-import bearing_localization.search.proposals.cache as cache_module
-from bearing_localization.search.proposals.cache import (
+import maritime.search.proposals.cache as cache_module
+from maritime.geometry.coordinates import LocalFrame
+from maritime.search.proposals.cache import (
     ProposalCacheContext,
     load_proposal_cache,
     save_proposal_cache,
 )
-from bearing_localization.search.proposals.geodesic_wedge import (
+from maritime.search.proposals.geodesic_wedge import (
     GeodesicWedgeProposal,
     GeodesicWedgeProposalResult,
     generate_geographic_reverse_wedge_proposals_geodesic,
 )
-from bearing_localization.search.proposals.wedge import (
+from maritime.search.proposals.wedge import (
     GeographicWedgeCatalogObject,
     WedgeObservation,
 )
-from maritime_localization_shared.geospatial.coordinates import LocalFrame
 
 _GEOD = Geod(ellps="WGS84")
 

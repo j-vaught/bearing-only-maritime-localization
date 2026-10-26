@@ -6,7 +6,7 @@ import json
 import pytest
 from shapely.geometry import Point, Polygon, shape
 
-from maritime_localization_ingest.enc import (
+from maritime.importers.enc import (
     ENCAid,
     ENCCollection,
     ENCFeature,

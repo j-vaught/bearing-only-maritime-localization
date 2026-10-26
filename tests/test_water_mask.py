@@ -7,7 +7,7 @@ from typing import cast
 
 import numpy as np
 
-from bearing_localization.geospatial.water_mask import WaterMask
+from maritime.geometry.water_mask import WaterMask
 
 
 class WaterMaskTests(unittest.TestCase):

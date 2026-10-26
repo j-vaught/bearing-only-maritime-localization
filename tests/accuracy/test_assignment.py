@@ -7,12 +7,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bearing_localization.search.assignment import (
+from maritime.schemas import AISRecord, Observation
+from maritime.search.assignment import (
     assign_likelihood_costs,
     assign_partial_cost_matrix,
 )
-from bearing_localization.search.likelihood import LikelihoodCostMatrix
-from maritime_localization_shared.contracts import AISRecord, Observation
+from maritime.search.likelihood import LikelihoodCostMatrix
 
 from .reference_assignment import optimal_assignments
 
@@ -124,7 +124,7 @@ def test_zero_delta_ties_and_group_count_change_remain_optimal() -> None:
 
 
 def test_legacy_aliases_unknown_wildcards_and_custom_mapping() -> None:
-    from bearing_localization.search.association import compatible_types
+    from maritime.search.association import compatible_types
 
     assert compatible_types("ships", "vessel")
     assert compatible_types("buoy", "physical aid")
@@ -140,7 +140,7 @@ def test_legacy_aliases_unknown_wildcards_and_custom_mapping() -> None:
 def test_legacy_assignment_api_still_returns_unmatched_and_unused() -> None:
     observation = Observation(0.0, 1.0, "ship")
     ais = (AISRecord("v1", 0.0, 100.0, "vessel"),)
-    from bearing_localization.search.association import associate_observations_to_ais
+    from maritime.search.association import associate_observations_to_ais
 
     result = associate_observations_to_ais((0.0, 0.0), (observation,), ais)
     assert result.matches == ((0, 0),)

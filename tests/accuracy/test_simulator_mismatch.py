@@ -8,16 +8,16 @@ import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.simulator.mismatch import (
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import CatalogRecordV2, CatalogV2
+from maritime.simulator.mismatch import (
     KnownWaterObserver,
     PhysicalObjectV2,
     PhysicalSceneV2,
     SensorConfigurationV2,
     SimulatorMismatchConfig,
 )
-from bearing_localization.simulator.runner import run_simulator_v2
-from maritime_localization_shared.contracts.inputs_v2 import CatalogRecordV2, CatalogV2
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.simulator.runner import run_simulator_v2
 
 ORIGIN = (-76.3, 37.0)
 MAP_CRS = CRS.from_epsg(32618)

@@ -8,8 +8,8 @@ from math import hypot
 import pytest
 from pyproj import Geod
 
-from maritime_localization_shared.geospatial.coordinates import geodesic_bearing_distance
-from maritime_localization_shared.geospatial.spatial_index import (
+from maritime.geometry.coordinates import geodesic_bearing_distance
+from maritime.geometry.spatial_index import (
     GeographicSpatialIndex,
     SpatialIndex2D,
 )

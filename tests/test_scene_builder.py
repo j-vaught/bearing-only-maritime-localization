@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from bearing_localization.simulator.scene_builder import (
+from maritime.simulator.scene_builder import (
     SceneBuilderConfig,
     build_scene,
 )

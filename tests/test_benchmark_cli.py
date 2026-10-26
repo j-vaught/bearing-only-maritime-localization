@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from bearing_localization.benchmark_cli import main
+from maritime.benchmark_cli import main
 
 
 def test_benchmark_cli_writes_trials_and_summary(tmp_path: Path, capsys) -> None:

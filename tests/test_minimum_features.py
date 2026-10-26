@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from bearing_localization.evaluation.minimum_features import summarize_minimum_features
+from maritime.evaluation.minimum_features import summarize_minimum_features
 
 
 def trial(

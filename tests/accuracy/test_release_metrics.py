@@ -5,22 +5,22 @@ from __future__ import annotations
 import pytest
 from pyproj import CRS, Geod, Transformer
 
-from bearing_localization.evaluation.metrics import (
+from maritime.evaluation.metrics import (
     SupportManifest,
     aggregate_release_metrics,
     clustered_bootstrap_interval,
     evaluate_estimate,
     evaluate_localization,
 )
-from maritime_localization_shared.contracts.estimate import PositionEstimate
-from maritime_localization_shared.contracts.localization import (
+from maritime.schemas.estimate import PositionEstimate
+from maritime.schemas.localization import (
     Assignment,
     DecisionStatus,
     Hypothesis,
     LocalizationResult,
     SearchStatus,
 )
-from maritime_localization_shared.contracts.truth import EvaluationTruth, TrueObject
+from maritime.schemas.truth import EvaluationTruth, TrueObject
 
 
 def manifest(*, supported: bool = True, port: str = "p1", placement: str = "x1") -> SupportManifest:

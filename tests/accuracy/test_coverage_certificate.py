@@ -6,13 +6,13 @@ from pyproj import Transformer
 from shapely import to_geojson
 from shapely.geometry import Polygon, box
 
-from maritime_localization_shared.contracts.inputs_v2 import MapV2
-from maritime_localization_shared.geospatial.coverage_certificate import (
+from maritime.geometry.coverage_certificate import (
     CandidateCoverageCertificate,
     certify_candidate_coverage,
     prepare_candidate_coverage_context,
 )
-from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime.geometry.vector_map import VectorMap
+from maritime.schemas.inputs_v2 import MapV2
 
 CRS = "EPSG:32618"
 

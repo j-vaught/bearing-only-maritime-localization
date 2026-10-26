@@ -1,13 +1,13 @@
 from pyproj import Geod
 
-from bearing_localization.search.proposals.geodesic_wedge import (
+from maritime.geometry.coordinates import LocalFrame
+from maritime.search.proposals.geodesic_wedge import (
     generate_geographic_reverse_wedge_proposals_geodesic,
 )
-from bearing_localization.search.proposals.wedge import (
+from maritime.search.proposals.wedge import (
     GeographicWedgeCatalogObject,
     WedgeObservation,
 )
-from maritime_localization_shared.geospatial.coordinates import LocalFrame
 
 
 def _matching_fixture():

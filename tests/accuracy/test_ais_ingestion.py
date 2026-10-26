@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from maritime_localization_ingest.ais import catalog_from_ais_rows, read_ais_csv
-from maritime_localization_ingest.measurements import measurement_set_v2_from_observations
-from maritime_localization_shared.contracts.observation import MeasurementSet, Observation
+from maritime.importers.ais import catalog_from_ais_rows, read_ais_csv
+from maritime.importers.measurements import measurement_set_v2_from_observations
+from maritime.schemas.observation import MeasurementSet, Observation
 
 
 def row(stamp: str, *, lat: float = 37.0, lon: float = -76.0, **extra: object) -> dict[str, object]:

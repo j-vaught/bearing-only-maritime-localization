@@ -7,15 +7,15 @@ from dataclasses import fields
 
 import numpy as np
 
-from bearing_localization.scene import (
+from maritime.scene import (
     Scene,
     SceneConfig,
     ShipPose,
     generate_scene,
 )
-from bearing_localization.simulator.runner import run_simulator
-from maritime_localization_shared.contracts import EvaluationTruth, MeasurementSet
-from maritime_localization_shared.serialization import read_contract
+from maritime.schemas import EvaluationTruth, MeasurementSet
+from maritime.serialization import read_contract
+from maritime.simulator.runner import run_simulator
 
 
 def _scene_and_observer() -> tuple[Scene, ShipPose]:

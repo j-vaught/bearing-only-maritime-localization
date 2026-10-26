@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from maritime_localization_shared.contracts.inputs_v2 import (
+from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
     MeasurementV2,
 )
-from maritime_localization_shared.serialization import contract_from_dict, read_contract
+from maritime.serialization import contract_from_dict, read_contract
 
 
 def _record(key: str = "record-1") -> CatalogRecordV2:

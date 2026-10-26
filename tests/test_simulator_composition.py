@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from bearing_localization.simulator import (
+from maritime.schemas import MapInput
+from maritime.simulator import (
     SceneBuilderConfig,
     build_scene,
     run_simulator,
@@ -12,7 +13,6 @@ from bearing_localization.simulator import (
     to_ship_pose,
     to_simulator_scene,
 )
-from maritime_localization_shared.contracts import MapInput
 
 
 def test_builder_observer_adapter_and_runner_compose_with_truth_isolation() -> None:
