@@ -1,5 +1,9 @@
 # Bearing-only maritime localization
 
+## Paused checkpoint. 26 October 2026
+
+Implementation is paused for travel. [Read the detailed handoff and figures](docs/PAUSED-HANDOFF-2026-10-26.md). Main contains the consolidated checkpoint; automatic continuation is paused.
+
 ## Current development results — 26 October 2026
 
 The latest assignment-expansion diagnostic recovers the difficult development scene. Its lowest-objective returned estimate is 11.127 m from the simulated boat, with all five object associations correct. Earlier refinement selected a location 853.440 km away, with no correct associations. The input catalog, map, observations, and complete scoring objective are unchanged; the new proposal step explores additional report-to-object matches.
