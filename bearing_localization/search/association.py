@@ -73,15 +73,15 @@ def compatible_types(
         return ais == sensor
     sensor_kind = normalize_object_type(sensor_type)
     ais_kind = normalize_object_type(ais_class)
-    if sensor_kind in (None, "unknown") or ais_kind in (None, "unknown"):
-        return True
-    if sensor_kind == ais_kind:
+    if sensor_kind != "unknown" and ais_kind != "unknown" and sensor_kind == ais_kind:
         return True
     # Preserve historical crosswalks for legacy AIS strings not in the
-    # neutral taxonomy while using A05 aliases for recognized labels.
+    # neutral taxonomy while treating other unrecognized labels literally.
     aliases = _SENSOR_KIND_ALIASES.get(sensor)
-    if aliases is not None:
-        return ais in aliases
+    if aliases is not None and ais in aliases:
+        return True
+    if sensor_kind == "unknown" or ais_kind == "unknown":
+        return sensor == ais
     return False
 
 
