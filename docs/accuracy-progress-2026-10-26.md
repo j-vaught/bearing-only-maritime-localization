@@ -46,11 +46,23 @@ The 250 m complete-voting diagnostic at 07d8036 finished in 227.05 seconds exter
 
 An evaluator-only check transformed truth from EPSG:32619 into the search frame EPSG:32618. At that location the same scorer matched all five simulator groups, with identical group membership, no predicted misses, and objective 5.206587168. The returned best hypothesis scored 24.926678078. The correct basin therefore scores better when evaluated, but this search did not evaluate it. No truth coordinate was supplied to the estimator.
 
-The projection audit independently found that the single coast-wide proposal frame differs from true north by up to 5.2323 degrees, with a 4.0365 degree 95th percentile. About 89 percent of catalog positions exceed the supplied 0.5 degree allowance. A geodesic reverse-bearing primitive now solves points in true-north coordinates and explicitly reports numerical convergence. Its 17 helper and audit tests pass. Integrating geodesic proposals and distinct-source ranking is the next repair.
+The projection audit independently found that the single coast-wide proposal frame differs from true north by up to 5.2323 degrees, with a 4.0365 degree 95th percentile. About 89 percent of catalog positions exceed the supplied 0.5 degree allowance. A geodesic reverse-bearing primitive now solves points in true-north coordinates and explicitly reports numerical convergence. Its 17 helper and audit tests pass. Geodesic proposals and distinct-source ranking are integrated in the checkpoint below.
 
 The same coordinate audit corrected the earlier A43 evaluator diagnostic. Its original 391,446.878 m first-hypothesis error omitted the truth/search coordinate-system conversion. The corrected error is 509,653.742 m, and the minimum among seven hypotheses is 506,055.789 m rather than 391,368.947 m. The search outputs and original diagnostic remain preserved; the correction and every corrected hypothesis error are recorded by A35. This correction changes evaluator reporting, not the estimator result.
 
 The renewed independent software gate at 07d8036 passed 709 CPU tests, with 28 optional tests skipped and seven subtests passed. It also passed truth-removal and import-boundary checks, formatting, lint, type checks, wheel and source installation, all five command entry points, and all 19 tracked Typst builds. These checks do not establish search accuracy. The gate report is reports/a37-07d8036-regression.md.
+
+## Geodesic search integration at 0ae7c1e
+
+The explicit wedge_geodesic program now generates reverse rays using WGS84 true-north bearings. The shared projection indexes proposal cells without defining their bearing directions. Each cell retains the observation-to-source witness graph. Maximum distinct-source matching and observation votes determine priority; known-water preference applies within equal priority tiers. Exact range, land visibility, angular grouping, and the complete assignment objective remain the final scoring authority.
+
+The numerical audit traced 25 strict-solver failures among 124,500 samples to residuals between 1.0002e-9 and 1.0150e-9 degrees. The explicit configuration tolerance of 1e-7 degrees resolved all of these failures, with maximum independent range error 3.39e-9 metres. This numerical solver setting leaves observation noise, likelihood, and acceptance thresholds unchanged. Any remaining failed geodesic sample produces a failed search status and cannot produce an accepted fix.
+
+Batching cell geometry and replacing two-column deduplication with an overflow-checked integer key reduced the frozen 500-pair proposal median from 0.881 to 0.514 seconds, a 1.715-fold component speedup. Ordered cell IDs, witnesses, counters, and status match the scalar oracle. Numeric evidence differences remain below 3.34e-16. An earlier vector-only experiment produced no meaningful speedup and remains documented in reports/a43-geodesic-performance.md.
+
+At integration commit 0ae7c1e, all 69 combined helper, generator, configuration, and CLI tests pass. Reports with absent optional sigma remain present; the configured generated sigma and floor apply. Telemetry separates proposal generation, ordering, and exact scoring. The serialized-request wall clock remains the authority for complete latency. A new frozen-input full-coast diagnostic is starting with 250 m cells and the same 256 exact-candidate budget. Its outcome is pending; no accuracy improvement is claimed from component tests.
+
+The exact previous failed case is now reproducible from tracked compressed catalog and map inputs, measurement and configuration files, search outputs, evaluator truth, and checksum manifests. Search and evaluator inputs are stored separately. The package verification command validates 24 entries and decompressed archive payloads. The corrected progress figure is available as [a zoomable PDF](figures/search-repair-checkpoint-2026-10-26.pdf).
 
 ## Scene geometry and map coverage
 
@@ -60,7 +72,7 @@ The versioned map package preserves the exact approved geometry. Known coverage 
 
 ## Remaining work and resource controls
 
-Validation physical preparation has completed 570 of 2,040 initial rows. Preparation is paused during the next exclusive diagnostic run. Each bounded wave is archived and verified before further preparation. The first 270-row wave shrank from about 7.5 GiB to 1.9 GiB after lossless compaction. New output remains subject to the 40 GiB free-space reserve. No held-out search has run.
+Validation physical preparation reached 1,830 of 2,040 initial rows at the wave-27 checkpoint. Preparation is paused during the next exclusive diagnostic run. Each bounded wave is archived and verified before further preparation. The first 270-row wave shrank from about 7.5 GiB to 1.9 GiB after lossless compaction. New output remains subject to the 40 GiB free-space reserve. No held-out search has run.
 
 Remaining gates are the full-search pilot, final source and hardware regression, complete development calibration and validation, frozen held-out evaluation, clean one-, two-, and four-device timing, final figures, and independent release review. The six accuracy conditions require at least 90 percent accepted-fix availability and 95 percent conditional accuracy within 100 metres. The 100 ms latency target is separate. A failed target will be reported with its evidence.
 
