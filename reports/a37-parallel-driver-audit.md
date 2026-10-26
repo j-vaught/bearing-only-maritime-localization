@@ -35,3 +35,20 @@ The successful process used driver commit `1ef881b6d761b56cdf920b5812bcc5bf5ba71
 The preserved strict-config failure used driver commit `f004601a5f3d96854f64e9e78124c01df9c7854f` and the same scoring/runtime and generation commits. It failed with `SearchConfig.__init__() got an unexpected keyword argument contract_type`; A26 replaced permissive manual construction with strict versioned contract loading in `1ef881b`.
 
 The preserved short-timeout run used driver commit `c159704785906ec4eea46715cda5d4acad652402`. Its five-second parent deadline terminated/reaped the worker process group and produced a complete interruption inventory. This run is timeout recovery evidence, not a successful scoring request.
+
+## Final continuation gate at `1002d733b557aa94c0a7da46dc6733c654f44af3`
+
+The clean A26 resumable checkout at `1002d733b557aa94c0a7da46dc6733c654f44af3` passed the focused integration command:
+
+```text
+python -m pytest -q tests/accuracy/test_a26_cached_finite_domain.py tests/accuracy/test_a30.py tests/accuracy/test_a30_cpu.py tests/accuracy/test_a30_screened.py tests/accuracy/test_a22.py tests/accuracy/test_a22_screened.py
+68 passed, 12 skipped
+```
+
+The two real CLI attempts used generation source `33fded7641a0dd93c04dd2d26f290dd99dccb90d`, scoring source `0d34a17ed384da63936de0017937b38609921239`, and the v4 cached proposal artifact. Attempt 1 wrote `.agent-work/outputs/a37-resume-smoke-1002d733/attempt-1`. Attempt 2 wrote `.agent-work/outputs/a37-resume-smoke-1002d733/attempt-2` with `--resume-from attempt-1`. Both completed as exact one-candidate prefix requests. Attempt 2 validated and reused the parent's committed chunk and hypothesis sidecar, with identical run identity, chunk-tree, hypothesis-tree, and disposition-ledger hashes. It did not rescore the committed candidate.
+
+Both manifests recorded 1,457,546 total plan IDs, one exact-scored candidate, 1,457,545 candidates outside the explicit one-candidate prefix, zero failed, unresolved, or unvisited IDs, and `request_complete=true`. Both correctly retained `all_candidates_accounted=false` and `finite_candidate_set_certified=false`. The result is a driver continuation check, not full-domain scoring, finite-set certification, or an accuracy evaluation.
+
+A small direct integrity fixture against `resume_verified_chunks` accepted a valid parent, rejected an edited chunk score when the declared chunk-tree hash was stale, and rejected a parent manifest missing `candidate_dispositions_sha256`. The full focused suite also passed action/counter, strict identity, ordering, sidecar, and lineage cases. Disk remained above the 40 GiB reserve, with 42 GiB free after the two attempts. No production source was changed during this audit.
+
+The A37 decision is GO for the separately authorized bounded exact scoring run. Map coverage remains partial; this gate does not support a complete-coast accuracy claim or held-out evaluation.
