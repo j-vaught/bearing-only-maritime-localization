@@ -1,0 +1,18 @@
+{
+  "schema": "a35-evaluator-operator-stop-record-v1",
+  "source": "A26 runner-owner operator stop record; separate from the immutable attempt manifest",
+  "attempt_root": "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/outputs/a26-cached-exact-full-1002d73",
+  "supervisor_manifest_sha256": "66df01fa92009eaf4ebcb2a6d051fa8ce726b7e8e66209e0ee9930cfb110634a",
+  "supervisor_status": "worker_failed",
+  "worker_returncode": -15,
+  "worker_process_group_id": 2087862,
+  "termination_signal": "SIGTERM",
+  "free_bytes_at_stop_check": 43282800640,
+  "reserve_floor_bytes": 42949672960,
+  "bytes_above_floor_at_stop_check": 333127680,
+  "worker_group_exit_delay_s": 2,
+  "full_request_elapsed_s": 859.9919113619253,
+  "exact_signal_timestamp_captured": false,
+  "supervisor_manifest_mtime_utc": "2026-10-26T11:15:56.800Z",
+  "interpretation": "disk-reserve intervention; not algorithm crash or planned timeout"
+}
