@@ -21,6 +21,7 @@ from tools.evaluate_assignment_expansion import (
     _verify_ranked_manifest,
     canonical_hash,
     choose_start_label,
+    evaluate_exact_position,
     validate_mode_counts,
     validate_no_unmatched_mode,
     validate_objective_progress,
@@ -217,3 +218,22 @@ def test_no_unmatched_mode_requires_every_report_and_unchanged_seed() -> None:
             measurement_count=2,
             result_event_count=0,
         )
+
+
+def test_exact_position_cache_does_not_round_coordinates() -> None:
+    class Scorer:
+        def __init__(self) -> None:
+            self.positions: list[tuple[float, float]] = []
+
+        def evaluate(self, position: tuple[float, float]) -> tuple[float, float]:
+            self.positions.append(position)
+            return position
+
+    scorer = Scorer()
+    cache: dict[tuple[float, float], Any] = {}
+    first = (1.0, 2.0)
+    second = (1.0 + 1e-12, 2.0)
+    assert evaluate_exact_position(scorer, cache, first) == first
+    assert evaluate_exact_position(scorer, cache, first) == first
+    assert evaluate_exact_position(scorer, cache, second) == second
+    assert scorer.positions == [first, second]

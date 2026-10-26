@@ -45,6 +45,17 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def evaluate_exact_position(
+    scorer: Any,
+    cache: dict[tuple[float, float], Any],
+    position: tuple[float, float],
+) -> Any:
+    key = (float(position[0]), float(position[1]))
+    if key not in cache:
+        cache[key] = scorer.evaluate(key)
+    return cache[key]
+
+
 def _same_score(a: float, b: float) -> bool:
     return math.isclose(a, b, rel_tol=RTOL, abs_tol=ATOL)
 
@@ -358,6 +369,7 @@ def validate_expansion_bundle(
         "final event chain digest differs from manifest/checkpoint",
     )
     event_counts = verify_mode_event_correspondence(rows, events)
+    exact_evaluations: dict[tuple[float, float], Any] = {}
 
     require(
         len(assigned_rows) == MODE_COUNT and len(a20_rows) == MODE_COUNT,
@@ -403,7 +415,9 @@ def validate_expansion_bundle(
                 alternative.get("canonical_match") is True,
                 "runner did not record canonical start agreement",
             )
-            evaluation = scorer.evaluate((canonical.east_m, canonical.north_m))
+            evaluation = evaluate_exact_position(
+                scorer, exact_evaluations, (canonical.east_m, canonical.north_m)
+            )
             require(
                 evaluation.status == "scored" and evaluation.hypothesis is not None,
                 "canonical start cannot be exactly rescored",
@@ -425,7 +439,9 @@ def validate_expansion_bundle(
         require(
             _same_hypothesis(seed, chosen), "expansion seed differs from chosen score-only start"
         )
-        exact_best_eval = scorer.evaluate((best.east_m, best.north_m))
+        exact_best_eval = evaluate_exact_position(
+            scorer, exact_evaluations, (best.east_m, best.north_m)
+        )
         require(
             exact_best_eval.status == "scored" and exact_best_eval.hypothesis is not None,
             "best hypothesis cannot be exactly rescored",
@@ -483,7 +499,9 @@ def validate_expansion_bundle(
                 type(pose) is list and len(pose) == 2,
                 "exact branch result lacks its evaluated pose",
             )
-            exact_eval = scorer.evaluate((float(pose[0]), float(pose[1])))
+            exact_eval = evaluate_exact_position(
+                scorer, exact_evaluations, (float(pose[0]), float(pose[1]))
+            )
             require(
                 exact_eval.status == "scored" and exact_eval.hypothesis is not None,
                 "branch exact result cannot be re-scored",
