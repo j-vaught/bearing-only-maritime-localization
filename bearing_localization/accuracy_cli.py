@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, fields
 from math import hypot, isfinite
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 from pyproj import CRS, Transformer
@@ -20,7 +20,14 @@ from bearing_localization.evaluation.metrics import (
 )
 from bearing_localization.search.bounds import BoundsResult
 from bearing_localization.search.branch_bound import BranchBoundContext, branch_and_bound_search
-from bearing_localization.search.calibration import load_frozen_calibration
+from bearing_localization.search.calibration import (
+    CalibrationContext,
+    CalibrationOperatingCondition,
+    implementation_sha256,
+    load_frozen_calibration,
+    search_execution_sha256,
+)
+from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.config_serialization import read_search_config
 from bearing_localization.search.decision import CompetitorCoverageEvidence, apply_accuracy_decision
 from bearing_localization.search.grid import run_grid_search_v2
@@ -153,6 +160,76 @@ def _raw_distant_hypothesis_evidence(result: LocalizationResult) -> dict[str, An
         "score_tolerance": score_tolerance,
         "alternatives": alternatives,
     }
+
+
+def _file_sha256(path: str | Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _calibration_binding(
+    *,
+    config: SearchConfig,
+    algorithm: str,
+    projected_crs: str,
+    catalog_path: str | Path,
+    map_path: str | Path,
+    scope_manifest_path: str | Path | None,
+    spacing_m: float,
+    seed: int,
+    seed_policy: str,
+    wedge_error_deg: float | None,
+    wedge_tolerance_deg: float,
+    wedge_cell_size_m: float,
+    branch_max_regions: int,
+    refine: bool,
+    refine_modes_count: int,
+    refine_initial_step_m: float,
+    refine_iterations: int,
+    device_ids: Sequence[int],
+) -> tuple[CalibrationOperatingCondition, CalibrationContext]:
+    """Bind frozen release decisions to the exact context and execution."""
+    if seed_policy not in ("fixed", "per_trial_variable"):
+        raise ValueError("seed_policy must be fixed or per_trial_variable.")
+    config_fields = asdict(config)
+    condition = CalibrationOperatingCondition(
+        range_m=config_fields["max_range_m"],
+        use_types=config_fields["use_types"],
+        objective_version=config_fields["objective_version"],
+        algorithm=algorithm,
+    )
+    execution_settings = {
+        "search_config": config_fields,
+        "algorithm": algorithm,
+        "projected_crs": CRS.from_user_input(projected_crs).to_string(),
+        "spacing_m": spacing_m,
+        "seed": seed,
+        "seed_policy": seed_policy,
+        "wedge_error_deg": wedge_error_deg,
+        "wedge_tolerance_deg": wedge_tolerance_deg,
+        "wedge_cell_size_m": wedge_cell_size_m,
+        "branch_max_regions": branch_max_regions,
+        "refine": refine,
+        "refine_modes_count": refine_modes_count,
+        "refine_initial_step_m": refine_initial_step_m,
+        "refine_iterations": refine_iterations,
+        "backend": config_fields["backend"],
+        "device_ids": list(device_ids),
+    }
+    scope_sha256 = (
+        _file_sha256(scope_manifest_path)
+        if scope_manifest_path is not None
+        else hashlib.sha256(b"scope-manifest-v2:not-provided").hexdigest()
+    )
+    context = CalibrationContext(
+        catalog_sha256=_file_sha256(catalog_path),
+        map_sha256=_file_sha256(map_path),
+        scope_manifest_sha256=scope_sha256,
+        search_execution_sha256=search_execution_sha256(
+            execution_settings, seed_policy=seed_policy
+        ),
+        implementation_sha256=implementation_sha256(Path(__file__).resolve().parents[1]),
+    )
+    return condition, context
 
 
 def _write_json(path: str | Path, value: object) -> None:
@@ -474,6 +551,7 @@ def search_v2_files(
     algorithm: str | None = None,
     spacing_m: float = 250.0,
     seed: int = 0,
+    seed_policy: Literal["fixed", "per_trial_variable"] = "fixed",
     wedge_error_deg: float | None = None,
     wedge_tolerance_deg: float = 0.5,
     wedge_cell_size_m: float = 250.0,
@@ -530,6 +608,26 @@ def search_v2_files(
         )
         scope_verified = True
 
+    condition, calibration_context = _calibration_binding(
+        config=config,
+        algorithm=selected_algorithm,
+        projected_crs=projected_crs,
+        catalog_path=catalog_path,
+        map_path=map_path,
+        scope_manifest_path=scope_manifest_path,
+        spacing_m=spacing_m,
+        seed=seed,
+        seed_policy=seed_policy,
+        wedge_error_deg=wedge_error_deg,
+        wedge_tolerance_deg=wedge_tolerance_deg,
+        wedge_cell_size_m=wedge_cell_size_m,
+        branch_max_regions=branch_max_regions,
+        refine=refine,
+        refine_modes_count=refine_modes_count,
+        refine_initial_step_m=refine_initial_step_m,
+        refine_iterations=refine_iterations,
+        device_ids=selected_devices,
+    )
     telemetry = SearchTelemetry(
         objective_version=config.objective_version,
         backend=config.backend,
@@ -652,6 +750,13 @@ def search_v2_files(
     ]
     diagnostics["public_evidence"] = {
         "schema": "search-mode-evidence-v1",
+        "calibration_context_schema": "calibration-context-v2",
+        "calibration_condition": condition.as_dict(),
+        "calibration_context": calibration_context.as_dict(),
+        "search_config_sha256": _file_sha256(config_path),
+        "seed_policy": seed_policy,
+        "seed": seed,
+        "calibration_binding_status": "not_requested",
         "search_status": candidate_result.search_status,
         "scope_manifest_verified": scope_verified,
         "mode_source": "refined_local_modes" if decision_modes else "none",
@@ -677,7 +782,13 @@ def search_v2_files(
     }
     if calibration_path is not None and scope_verified:
         with telemetry.stage("calibrated_decision"):
-            calibration = load_frozen_calibration(calibration_path)
+            calibration = load_frozen_calibration(
+                calibration_path,
+                expected_condition=condition,
+                expected_context=calibration_context,
+                release_acceptance=True,
+            )
+            diagnostics["public_evidence"]["calibration_binding_status"] = "matched"
             coverage = CompetitorCoverageEvidence(
                 evaluated_candidate_count=candidate_count,
                 search_extent_m=0.0,
@@ -710,6 +821,9 @@ def search_v2_files(
                     objective_version=result.objective_version,
                     bound_gap=result.bound_gap,
                 )
+            diagnostics["public_evidence"]["calibration_binding_status"] = (
+                "not_requested" if calibration_path is None else "scope_not_verified"
+            )
             diagnostics["decision_reason"] = (
                 "missing_full_coast_scope_manifest"
                 if calibration_path is not None
@@ -851,6 +965,12 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--spacing-m", type=float, default=250.0)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--seed-policy",
+        choices=("fixed", "per_trial_variable"),
+        default="fixed",
+        help="Bind a fixed seed or declare that trials use varying seeds.",
+    )
     parser.add_argument("--max-grid-bearing-error-deg", type=float)
     parser.add_argument("--wedge-tolerance-deg", type=float, default=0.5)
     parser.add_argument("--wedge-cell-size-m", type=float, default=250.0)
@@ -893,6 +1013,7 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             algorithm=args.algorithm,
             spacing_m=args.spacing_m,
             seed=args.seed,
+            seed_policy=args.seed_policy,
             wedge_error_deg=args.max_grid_bearing_error_deg,
             wedge_tolerance_deg=args.wedge_tolerance_deg,
             wedge_cell_size_m=args.wedge_cell_size_m,

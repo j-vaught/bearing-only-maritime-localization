@@ -142,6 +142,8 @@ def run_pipeline_v2(args: argparse.Namespace) -> dict[str, object]:
         str(args.spacing_m),
         "--seed",
         str(args.seed),
+        "--seed-policy",
+        getattr(args, "seed_policy", "fixed"),
     ]
     if args.calibration is not None:
         search_command.extend(("--calibration", str(args.calibration)))
@@ -233,6 +235,11 @@ def _v2_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--spacing-m", type=float, default=250.0)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--seed-policy",
+        choices=("fixed", "per_trial_variable"),
+        default="fixed",
+    )
     parser.add_argument(
         "--device-id",
         type=int,
