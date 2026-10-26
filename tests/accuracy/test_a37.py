@@ -281,12 +281,21 @@ def test_ambiguous_identity_and_unknown_coverage_never_become_finite_candidates(
         _map(),
         SearchConfig(max_range_m=5000.0),
     )
+    candidate = scorer.evaluate((east, north))
+    assert candidate.status == "scored"
+    assert candidate.predicted is not None
+    assert candidate.predicted.identity_limited_keys == ("uncertain-aid",)
+    assert candidate.predicted.unresolved_model is False
+    assert candidate.hypothesis is not None
+    assert candidate.hypothesis.assignments[0].catalog_key == "uncertain-aid"
+
     result = run_grid_search_v2(scorer, candidate_positions=[(east, north)])
     assert result.candidate_count == 1
-    assert dict(result.outcome_counts)["unresolved_model"] == 1
-    assert result.hypotheses == ()
-    assert result.localization.decision_status == "no_fix"
-    assert result.localization.certificate_scope == "none"
+    assert dict(result.outcome_counts)["scored"] == 1
+    assert len(result.hypotheses) == 1
+    assert result.localization.decision_status == "ambiguous"
+    assert result.localization.accepted_index is None
+    assert result.localization.certificate_scope == "finite_candidate_set"
 
     unknown_map = VectorMap(
         None, crs=_CRS, coverage_geometry=box(east + 1.0, north + 1.0, east + 2.0, north + 2.0)
