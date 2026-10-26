@@ -131,6 +131,33 @@ def test_resolve_project_root_uses_git_common_dir(tmp_path: Path, monkeypatch) -
     assert resolve_project_root(worktree) == shared_root
 
 
+def test_pool_failure_preserves_not_dispatched_ids(tmp_path: Path) -> None:
+    output = tmp_path / "out"
+    output.mkdir()
+    (output / "candidate-plan.jsonl").write_text(
+        "".join(json.dumps({"candidate_id": f"cell:{letter}"}) + "\n" for letter in "abc")
+    )
+    counts = write_candidate_dispositions(
+        output,
+        externally_interrupted=True,
+        failed_candidate_ids=["cell:b"],
+        not_dispatched_candidate_ids=["cell:c"],
+        failed_count_unattributed=1,
+    )
+    rows = [
+        json.loads(line)
+        for line in (output / "candidate-dispositions.jsonl").read_text().splitlines()
+    ]
+    assert counts["failed"] == 1
+    assert counts["not_dispatched"] == 1
+    assert counts["dispatched_uncommitted_or_unknown"] == 1
+    assert [row["status"] for row in rows] == [
+        "worker_state_unknown_at_interruption",
+        "worker_reported_failure",
+        "not_dispatched",
+    ]
+
+
 def test_finite_domain_driver_refuses_nonempty_output(tmp_path: Path) -> None:
     from tools.run_a26_cached_finite_domain import run_finite_domain
 
