@@ -124,3 +124,14 @@ def test_nonfinite_json_rejected(tmp_path):
     path.write_text('{"score":NaN}')
     with pytest.raises(ValueError, match="Nonfinite"):
         read_json(path)
+
+
+def test_implicit_plan_ordinal_is_supported(tmp_path):
+    selected = seed(1, 2, 3)
+    row = {"candidate_id": selected.candidate_id, "position_xy_m": [250, 500]}
+    (tmp_path / "candidate-plan.jsonl").write_text(json.dumps(row) + "\n")
+    verify_selected_plan(tmp_path, [selected])
+    row["input_index"] = 1
+    (tmp_path / "candidate-plan.jsonl").write_text(json.dumps(row) + "\n")
+    with pytest.raises(ValueError, match="ordinal"):
+        verify_selected_plan(tmp_path, [selected])
