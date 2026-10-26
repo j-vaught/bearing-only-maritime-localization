@@ -111,3 +111,20 @@ def test_rejects_mismatched_or_unverified_coarse_start(mutation: str) -> None:
         rows[0]["start_alternatives"][2]["canonical_match"] = False
     with pytest.raises(EvaluationError):
         verify_coarse_selection(rows, a20, assigned)
+
+
+def test_accepts_dataclass_a20_mode_rows() -> None:
+    from dataclasses import dataclass
+
+    rows, a20, assigned = _fixtures()
+
+    @dataclass(frozen=True)
+    class A20Row:
+        input_index: int
+        candidate_id: str
+        cached_hypothesis: dict[str, Any]
+
+    typed_a20 = [
+        A20Row(row["input_index"], row["candidate_id"], row["cached_hypothesis"]) for row in a20
+    ]
+    verify_coarse_selection(rows, typed_a20, assigned)
