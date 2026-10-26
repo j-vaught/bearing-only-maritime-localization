@@ -365,6 +365,37 @@ def verify_mode_event_correspondence(
     return result
 
 
+def validate_checkpoint_rows(checkpoint: dict[str, Any], manifest: dict[str, Any]) -> None:
+    require(
+        checkpoint.get("rows_sha256") == manifest.get("rows_sha256"),
+        "checkpoint rows hash differs from final manifest",
+    )
+
+
+def verify_checkpoint_event_prefix(
+    checkpoint: dict[str, Any],
+    events_path: Path,
+    events: list[dict[str, Any]],
+) -> None:
+    count = checkpoint.get("event_count")
+    require(
+        type(count) is int and 0 <= count <= len(events),
+        "checkpoint event count is outside the final event log",
+    )
+    raw_lines = events_path.read_bytes().splitlines(keepends=True)
+    require(len(raw_lines) == len(events), "event JSONL lines differ from parsed records")
+    prefix_bytes = b"".join(raw_lines[:count])
+    require(
+        hashlib.sha256(prefix_bytes).hexdigest() == checkpoint.get("events_sha256"),
+        "checkpoint event-file hash does not match its final-log prefix",
+    )
+    prefix_digest = verify_event_chain(events[:count])
+    require(
+        prefix_digest == checkpoint.get("event_digest"),
+        "checkpoint event-chain digest does not match its final-log prefix",
+    )
+
+
 def _verify_ranked_manifest(manifest: dict[str, Any], rows: list[dict[str, Any]]) -> None:
     ranked = manifest.get("ranked_selected_modes")
     require(
@@ -459,26 +490,36 @@ def validate_expansion_bundle(
     )
     package_source = Path(manifest.get("package_source", ""))
     module_source = Path(manifest.get("assignment_expansion_source", ""))
-    require(
-        package_source.is_file() and module_source.is_file(),
-        "runner package provenance files are unavailable",
-    )
-    require(
-        sha256_file(module_source) == manifest.get("assignment_expansion_sha256"),
-        "assignment-expansion source hash mismatch",
-    )
     package_root = package_source.parent.parent
-    runner_source = package_root / "tools" / "run_assignment_expansion_diagnostic.py"
+    package_commit = manifest.get("package_commit")
     require(
-        runner_source.is_file() and sha256_file(runner_source) == manifest.get("runner_sha256"),
-        "runner source hash mismatch",
-    )
-    package_commit = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=package_root, text=True
-    ).strip()
-    require(
-        package_commit == manifest.get("package_commit") == manifest.get("harness_commit"),
+        type(package_commit) is str and package_commit == manifest.get("harness_commit"),
         "runner package and harness source commits differ",
+    )
+    commit_exists = subprocess.run(
+        ["git", "cat-file", "-e", f"{package_commit}^{{commit}}"],
+        cwd=package_root,
+        check=False,
+        capture_output=True,
+    )
+    require(commit_exists.returncode == 0, "pinned runner source commit is unavailable")
+    module_relative = module_source.resolve().relative_to(package_root.resolve())
+    runner_relative = Path("tools/run_assignment_expansion_diagnostic.py")
+    module_bytes = subprocess.check_output(
+        ["git", "show", f"{package_commit}:{module_relative.as_posix()}"],
+        cwd=package_root,
+    )
+    runner_bytes = subprocess.check_output(
+        ["git", "show", f"{package_commit}:{runner_relative.as_posix()}"],
+        cwd=package_root,
+    )
+    require(
+        hashlib.sha256(module_bytes).hexdigest() == manifest.get("assignment_expansion_sha256"),
+        "assignment-expansion source hash differs from pinned commit",
+    )
+    require(
+        hashlib.sha256(runner_bytes).hexdigest() == manifest.get("runner_sha256"),
+        "runner source hash differs from pinned commit",
     )
 
     rows_path = root / ROWS_NAME
@@ -502,19 +543,16 @@ def validate_expansion_bundle(
         and checkpoint.get("pending_mode_count") == pending_count,
         "checkpoint counts differ from manifest",
     )
+    validate_checkpoint_rows(checkpoint, manifest)
     require(
-        checkpoint.get("rows_sha256") == manifest.get("rows_sha256")
-        and checkpoint.get("events_sha256") == manifest.get("events_sha256"),
-        "checkpoint file hashes differ from final manifest",
+        manifest.get("event_count") == len(events),
+        "final event count differs from the manifest",
     )
-    require(
-        checkpoint.get("event_count") == manifest.get("event_count") == len(events),
-        "event counts differ",
-    )
+    verify_checkpoint_event_prefix(checkpoint, events_path, events)
     event_digest = verify_event_chain(events)
     require(
-        event_digest == manifest.get("event_digest") == checkpoint.get("event_digest"),
-        "final event chain digest differs from manifest/checkpoint",
+        event_digest == manifest.get("event_digest"),
+        "final event chain digest differs from manifest",
     )
     partial_mode_index = completed_count if pending_count > 0 else None
     event_counts = verify_mode_event_correspondence(
