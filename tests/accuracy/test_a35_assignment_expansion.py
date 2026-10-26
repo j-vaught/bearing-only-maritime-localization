@@ -23,11 +23,13 @@ from tools.evaluate_assignment_expansion import (
     choose_start_label,
     evaluate_exact_position,
     validate_branch_score_sequence,
+    validate_checkpoint_rows,
     validate_completed_prefix,
     validate_mode_counts,
     validate_no_branch_mode,
     validate_no_unmatched_mode,
     validate_objective_progress,
+    verify_checkpoint_event_prefix,
     verify_event_chain,
     verify_mode_event_correspondence,
 )
@@ -317,3 +319,110 @@ def test_preflight_failure_preserves_empty_evidence_without_changing_seed() -> N
     validate_no_branch_mode(row, seed, seed)
     with pytest.raises(ValueError, match="without exploring"):
         validate_no_branch_mode(row, seed, Hypothesis(2.0, 2.0, 2.0))
+
+
+def test_checkpoint_may_bind_an_exact_prefix_of_final_event_log(tmp_path: Path) -> None:
+    first = _event_record(
+        0,
+        "",
+        0,
+        "branch_started",
+        {"branch_id": 0, "report_index": 1, "catalog_key": "ais:one", "status": "started"},
+    )
+    second = _event_record(
+        1,
+        first["event_sha256"],
+        0,
+        "branch_result",
+        {"branch_id": 0, "report_index": 1, "catalog_key": "ais:one", "status": "no_improvement"},
+    )
+    third = _event_record(
+        2,
+        second["event_sha256"],
+        1,
+        "branch_started",
+        {"branch_id": 0, "report_index": 2, "catalog_key": "ais:two", "status": "started"},
+    )
+    lines = [
+        json.dumps(item, separators=(",", ":")).encode() + b"\n" for item in (first, second, third)
+    ]
+    path = tmp_path / "events.jsonl"
+    path.write_bytes(b"".join(lines))
+    checkpoint = {
+        "event_count": 2,
+        "events_sha256": hashlib.sha256(b"".join(lines[:2])).hexdigest(),
+        "event_digest": second["event_sha256"],
+    }
+    verify_checkpoint_event_prefix(checkpoint, path, [first, second, third])
+    checkpoint["event_digest"] = third["event_sha256"]
+    with pytest.raises(ValueError, match="prefix"):
+        verify_checkpoint_event_prefix(checkpoint, path, [first, second, third])
+
+
+def test_checkpoint_prefix_rejects_middle_edit_and_truncated_line(tmp_path: Path) -> None:
+    events = [
+        _event_record(
+            0,
+            "",
+            0,
+            "branch_started",
+            {"branch_id": 0, "report_index": 1, "catalog_key": "ais:one", "status": "started"},
+        ),
+        _event_record(
+            1,
+            "",
+            0,
+            "branch_result",
+            {
+                "branch_id": 0,
+                "report_index": 1,
+                "catalog_key": "ais:one",
+                "status": "no_improvement",
+            },
+        ),
+    ]
+    events[1]["previous_event_sha256"] = events[0]["event_sha256"]
+    events[1]["event_sha256"] = canonical_hash(
+        {key: value for key, value in events[1].items() if key != "event_sha256"}
+    )
+    lines = [json.dumps(item, separators=(",", ":")).encode() + b"\n" for item in events]
+    path = tmp_path / "events.jsonl"
+    path.write_bytes(b"".join(lines))
+    checkpoint = {
+        "event_count": 2,
+        "events_sha256": hashlib.sha256(b"".join(lines)).hexdigest(),
+        "event_digest": events[1]["event_sha256"],
+    }
+    verify_checkpoint_event_prefix(checkpoint, path, events)
+
+    path.write_bytes(lines[0] + lines[1].replace(b"no_improvement", b"improved"))
+    with pytest.raises(ValueError, match="file hash"):
+        verify_checkpoint_event_prefix(checkpoint, path, events)
+
+    path.write_bytes(lines[0] + lines[1][:-3])
+    with pytest.raises(ValueError, match="file hash"):
+        verify_checkpoint_event_prefix(checkpoint, path, events)
+
+
+def test_checkpoint_prefix_rejects_count_past_end_and_rows_hash_mismatch(
+    tmp_path: Path,
+) -> None:
+    event = _event_record(
+        0,
+        "",
+        0,
+        "branch_started",
+        {"branch_id": 0, "report_index": 1, "catalog_key": "ais:one", "status": "started"},
+    )
+    path = tmp_path / "events.jsonl"
+    raw = json.dumps(event, separators=(",", ":")).encode() + b"\n"
+    path.write_bytes(raw)
+    checkpoint = {
+        "event_count": 2,
+        "events_sha256": hashlib.sha256(raw).hexdigest(),
+        "event_digest": event["event_sha256"],
+    }
+    with pytest.raises(ValueError, match="outside"):
+        verify_checkpoint_event_prefix(checkpoint, path, [event])
+    with pytest.raises(ValueError, match="rows hash"):
+        validate_checkpoint_rows({"rows_sha256": "wrong"}, {"rows_sha256": "bound"})
