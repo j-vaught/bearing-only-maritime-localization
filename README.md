@@ -9,7 +9,9 @@ The latest assignment-expansion diagnostic recovers the difficult development sc
 | Previous pattern refinement | 853,439.780 m | 0 of 4 |
 | Assignment expansion | 11.127 m | 5 of 5 |
 
-The [zoomable progress PDF](docs/figures/cached-refinement-progress-2026-10-26.pdf) shows the selected result at each stage and the nearby alternative's progression. The [independent evaluation](reports/experiments/a35-cached-evaluation/assignment-expansion-full-audit.json) records the numerical evidence, and the [progress ledger](docs/accuracy-progress-2026-10-26.md) retains failed approaches and remaining work.
+![Selected development result before and after assignment expansion.](docs/figures/localization-recovery-summary-2026-10-26.png)
+
+The [one-page results PDF](docs/figures/localization-recovery-summary-2026-10-26.pdf) provides the compact comparison. The [detailed progress PDF](docs/figures/cached-refinement-progress-2026-10-26.pdf) shows the selected result at each stage and the nearby alternative's progression. The [independent evaluation](reports/experiments/a35-cached-evaluation/assignment-expansion-full-audit.json) records the numerical evidence, and the [progress ledger](docs/accuracy-progress-2026-10-26.md) retains failed approaches and remaining work.
 
 This result uses generated bearings over real catalog and chart data. It is one development scene, not a measured-bearing field result or a benchmark accuracy rate. The serial run completed 60 of 64 selected locations before its deadline. A four-worker run completed 63 of 64 before its storage guard; a composite audit is checking their combined coverage. The original coast-wide search still has 1,410,282 unvisited or unresolved candidate IDs, so acceptance, global optimality, and the 100 ms target remain unproven.
 
