@@ -82,9 +82,7 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
     if not merged_preparation_rows:
         raise RuntimeError(f"Worker {src} did not produce preparation rows")
     completed_rows = [row for row in merged_preparation_rows if row.get("status") == "completed"]
-    expected_output_paths = {
-        folder(src, split, row).relative_to(src).as_posix() for row in completed_rows
-    }
+    expected_output_paths = {_trial_output_relative_path(row["trial_id"]) for row in completed_rows}
     if moved_output_paths != expected_output_paths:
         missing = sorted(expected_output_paths - moved_output_paths)
         unexpected = sorted(moved_output_paths - expected_output_paths)
@@ -117,6 +115,22 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
     # Failed attempts are valid outcomes without trial directories. Count
     # accounted attempt rows while still requiring every completed row's output.
     return len(merged_preparation_rows)
+
+
+def _trial_output_relative_path(trial_id: str) -> str:
+    parts = trial_id.split("/")
+    if len(parts) != 7 or parts[0] != "development":
+        raise ValueError(f"Unexpected A38 trial ID layout: {trial_id}")
+    split, port, placement, realization, range_label, type_label, condition = parts
+    if not range_label.startswith("range") or not range_label.endswith("m"):
+        raise ValueError(f"Unexpected range in A38 trial ID: {trial_id}")
+    if type_label not in {"typeson", "typesoff"}:
+        raise ValueError(f"Unexpected report-type label in A38 trial ID: {trial_id}")
+    distance = range_label.removeprefix("range").removesuffix("m")
+    report_types = "types-on" if type_label == "typeson" else "types-off"
+    return Path(
+        split, port, placement, realization, f"{distance}m", report_types, condition
+    ).as_posix()
 
 
 def validate_worker_ids(expected: list[str], observed: list[str]) -> None:

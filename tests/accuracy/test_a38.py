@@ -26,6 +26,7 @@ from tools.compact_a38_audit import compact_audits
 from tools.run_a38_execution import compact_truth, evaluator_parity
 from tools.run_a38_parallel_prep import (
     _merge_worker,
+    _trial_output_relative_path,
     enforce_disk_guard,
     estimated_wave_gib,
     validate_worker_ids,
@@ -184,6 +185,15 @@ def test_parallel_merge_accounts_for_explicit_failures_without_outputs(tmp_path:
         }
     ]
     assert not (canonical / "development/port-001/placement-001").exists()
+
+
+def test_trial_id_maps_to_canonical_preparation_directory() -> None:
+    assert (
+        _trial_output_relative_path(
+            "development/port-010/placement-004/r0/range10000m/typesoff/miss"
+        )
+        == "development/port-010/placement-004/r0/10000m/types-off/miss"
+    )
 
 
 def test_parallel_merge_rejects_completed_row_without_output(tmp_path: Path) -> None:
