@@ -1,0 +1,21 @@
+{
+  "candidate_domain_count": 1457546,
+  "candidate_inventory_sha256": "1c5ef3829bf4f3269523f1e1668b8aa0c3225a27591860b7f7305f7ba6478432",
+  "candidate_order": "cli_geodesic_matching_votes_water_residual_evidence_cell_v1",
+  "candidate_plan_sha256": "3746ed932e21c445ebae26756cdf057413303074e2345f61daefdbcf99900349",
+  "candidate_prefix_limit": null,
+  "execution_mode": "exact",
+  "generation_source_sha": "33fded7641a0dd93c04dd2d26f290dd99dccb90d",
+  "identity_sha256": "3402e8cbb30e690816935541ada1472ed55a0d9ec3ea5220585bdf8e6d87a569",
+  "proposal_cache_context_sha256": "3e450d04fd82d4bec5c5786d9e49960d51a0dab4615e7237b55bc493251aea44",
+  "proposal_cache_tree_sha256": "d6154c18349842d22ca1cd5eaf2d022a6ac67004eebc9e35c5c59d03ad767e72",
+  "proposal_generation_run_id": "a26-screened-cachegen-port001-placement001-r0-10km-typesoff-v3",
+  "schema": "a26-cached-finite-domain-identity-v2",
+  "scoring_config_sha256": "adef2647b728c2459c64a7f88b3c7a821f6bce8f05fb25cacd0e98dbd9cf2df0",
+  "scoring_source_sha": "0d34a17ed384da63936de0017937b38609921239",
+  "static_input_sha256": {
+    "catalog": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+    "map": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
+    "measurements": "ed1145cee93d4f06ffa983f671319dee49e9a95cb4692a2dd14a44c4a8eeceb1"
+  }
+}
