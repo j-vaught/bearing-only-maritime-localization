@@ -1019,6 +1019,88 @@ def test_geodesic_wedge_cli_reports_complete_generation_witnesses_and_stage_timi
     )
 
 
+def test_wedge_algorithms_keep_missing_sigma_reports_and_geodesic_uses_floor(
+    tmp_path, monkeypatch
+) -> None:
+    import bearing_localization.accuracy_cli as accuracy_cli
+
+    captured_observations: tuple[WedgeObservation, ...] = ()
+    captured_sigmas: dict[int, float] = {}
+    original_generator = accuracy_cli.generate_geographic_reverse_wedge_proposals_geodesic
+
+    def capture_geodesic_inputs(*args, **kwargs):
+        nonlocal captured_observations, captured_sigmas
+        captured_observations = args[0]
+        captured_sigmas = kwargs["observation_sigmas_deg"]
+        return original_generator(*args, **kwargs)
+
+    monkeypatch.setattr(
+        accuracy_cli,
+        "generate_geographic_reverse_wedge_proposals_geodesic",
+        capture_geodesic_inputs,
+    )
+    for algorithm in ("wedge", "wedge_complete", "wedge_geodesic"):
+        request_dir = tmp_path / algorithm
+        request_dir.mkdir()
+        (
+            measurements_path,
+            catalog_path,
+            map_path,
+            config_path,
+            output_path,
+            projected_crs,
+        ) = _write_geodesic_search_fixture(request_dir, candidate_budget=1_000)
+        measurement_set = loads_contract(measurements_path.read_text(), MeasurementSetV2)
+        measurements = tuple(
+            replace(item, sigma_deg=None)
+            if index == 0
+            else replace(item, sigma_deg=0.01)
+            if index == 1
+            else item
+            for index, item in enumerate(measurement_set.measurements)
+        )
+        write_contract(
+            measurements_path,
+            replace(measurement_set, measurements=measurements),
+        )
+        config = loads_search_config(config_path.read_text())
+        write_search_config(
+            config_path,
+            replace(
+                config,
+                algorithm=algorithm,
+                generated_sigma_deg=0.7,
+                sigma_floor_deg=0.2,
+            ),
+        )
+        result = search_v2_files(
+            measurements_path,
+            catalog_path,
+            map_path,
+            config_path,
+            projected_crs,
+            output_path,
+            wedge_error_deg=0.5,
+            wedge_cell_size_m=100.0,
+            refine=False,
+        )
+        assert result.search_status in ("completed", "budget_exhausted")
+        sidecar = json.loads(output_path.with_suffix(".json.telemetry.json").read_text())
+        if algorithm == "wedge_geodesic":
+            generation = sidecar["diagnostics"]["proposal_generation"]
+            assert len(captured_observations) == 5
+            assert generation["source_pairs_total"] == 30
+            assert captured_sigmas == {
+                0: 0.7,
+                1: 0.2,
+                2: 0.5,
+                3: 0.5,
+                4: 0.5,
+            }
+        else:
+            assert sidecar["diagnostics"]["source_pairs_total"] == 30
+
+
 def test_geodesic_solver_tolerance_is_bounded_by_effective_sigma(tmp_path) -> None:
     (
         measurements_path,
