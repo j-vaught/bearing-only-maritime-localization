@@ -46,6 +46,20 @@ def load_refinement(
     if manifest.get("supervisor_sha256") != sha256_file(supervisor):
         raise ValueError("Source supervisor manifest hash mismatch.")
     supervisor_doc = read_json(supervisor)
+    expected_source_evidence = {
+        field: supervisor_doc.get(field)
+        for field in (
+            "candidate_plan_sha256",
+            "candidate_inventory_sha256",
+            "candidate_dispositions_sha256",
+            "chunk_results_sha256",
+            "hypotheses_sha256",
+        )
+    }
+    if manifest.get("source_evidence_sha256") != expected_source_evidence:
+        raise ValueError("Source evidence hash mapping differs from supervisor manifest.")
+    if manifest.get("package_commit") != run.identity.get("scoring_source_sha"):
+        raise ValueError("Package commit differs from pinned scoring source.")
     for field in (
         "candidate_plan_sha256",
         "candidate_inventory_sha256",
@@ -125,10 +139,14 @@ def load_refinement(
         if _hyp(row.get("cached_hypothesis")) != by_index[index].hypothesis:
             raise ValueError("Refined row cached hypothesis differs from source.")
         revalidated = _hyp(row.get("revalidated_hypothesis"))
-        if revalidated is not None and not math.isclose(
-            revalidated.score, by_index[index].hypothesis.score, rel_tol=1e-10, abs_tol=1e-8
+        if revalidated is not None and (
+            not math.isclose(
+                revalidated.score, by_index[index].hypothesis.score, rel_tol=1e-10, abs_tol=1e-8
+            )
+            or (revalidated.east_m, revalidated.north_m)
+            != (by_index[index].hypothesis.east_m, by_index[index].hypothesis.north_m)
         ):
-            raise ValueError("Revalidated seed score differs from cached score.")
+            raise ValueError("Revalidated seed differs from cached score or position.")
         mode = row.get("refined_mode")
         if not isinstance(mode, dict):
             raise ValueError("Missing RefinedMode record.")
@@ -136,7 +154,30 @@ def load_refinement(
             if field not in mode:
                 raise ValueError(f"RefinedMode is missing {field}.")
         _hyp(mode["hypothesis"])
-        _hyp(mode["improved_hypothesis"])
+        if type(mode["improved_hypothesis"]) is not bool:
+            raise ValueError("RefinedMode improved_hypothesis must be a boolean.")
+        history = mode["history"]
+        if not isinstance(history, list) or not history:
+            raise ValueError("Refinement history is missing.")
+        history_scores = []
+        for expected_iteration, item in enumerate(history):
+            if not isinstance(item, dict) or item.get("iteration") != expected_iteration:
+                raise ValueError("Refinement history iteration sequence is invalid.")
+            score = item.get("score")
+            if (
+                isinstance(score, bool)
+                or not isinstance(score, (int, float))
+                or not math.isfinite(score)
+            ):
+                raise ValueError("Refinement history contains an invalid score.")
+            history_scores.append(float(score))
+        if any(after > before + 1e-9 for before, after in zip(history_scores, history_scores[1:])):
+            raise ValueError("Refinement objective increased in the accepted history.")
+        final_hypothesis = _hyp(mode["hypothesis"])
+        if final_hypothesis is not None and not math.isclose(
+            final_hypothesis.score, history_scores[-1], rel_tol=1e-10, abs_tol=1e-8
+        ):
+            raise ValueError("Final refined score differs from accepted history.")
     return manifest, rows
 
 
@@ -190,7 +231,6 @@ def evaluate_rows(
             "source": _metrics(row["cached_hypothesis"], truth_xy, truth_ids),
             "revalidated": _metrics(row["revalidated_hypothesis"], truth_xy, truth_ids),
             "refined": _metrics(mode.get("hypothesis"), truth_xy, truth_ids),
-            "best_improved": _metrics(mode.get("improved_hypothesis"), truth_xy, truth_ids),
         }
         result.append(
             {
@@ -199,6 +239,7 @@ def evaluate_rows(
                 "candidate_id": row["candidate_id"],
                 "iterations": mode["iterations"],
                 "stop_reason": mode["stop_reason"],
+                "improved_hypothesis": mode["improved_hypothesis"],
                 "mode_history": mode["history"],
                 "mode_uncertainty": {
                     k: mode.get(k)

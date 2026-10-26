@@ -45,10 +45,13 @@ def test_evaluator_records_source_revalidated_and_refined_metrics() -> None:
         "revalidated_hypothesis": _hypothesis(500000.0, 2.0, "a"),
         "refined_mode": {
             "hypothesis": _hypothesis(500010.0, 1.5, "a"),
-            "improved_hypothesis": _hypothesis(500010.0, 1.5, "a"),
+            "improved_hypothesis": True,
             "iterations": 4,
             "stop_reason": "score_improvement_tolerance",
-            "history": [],
+            "history": [
+                {"iteration": 0, "score": 2.0},
+                {"iteration": 1, "score": 1.5},
+            ],
             "uncertainty_rank": 2,
             "uncertainty_singular": False,
             "uncertainty_reason": None,
@@ -67,6 +70,7 @@ def test_evaluator_records_source_revalidated_and_refined_metrics() -> None:
     assert result["revalidated"]["score"] == 2.0
     assert result["refined"]["score"] == 1.5
     assert result["mode_uncertainty"]["uncertainty_rank"] == 2
+    assert result["improved_hypothesis"] is True
 
 
 def test_evaluator_keeps_null_refined_hypothesis_unavailable() -> None:
@@ -78,10 +82,10 @@ def test_evaluator_keeps_null_refined_hypothesis_unavailable() -> None:
         "revalidated_hypothesis": None,
         "refined_mode": {
             "hypothesis": None,
-            "improved_hypothesis": None,
+            "improved_hypothesis": False,
             "iterations": 0,
             "stop_reason": "unsupported_seed",
-            "history": [],
+            "history": [{"iteration": 0, "score": 2.0}],
         },
     }
     truth_xy = Transformer.from_crs("EPSG:32618", "EPSG:32619", always_xy=True).transform(
