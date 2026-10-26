@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from importlib import import_module
 from math import isfinite
+from time import perf_counter
 from typing import Any, Literal
 
 import numpy as np
@@ -29,7 +30,7 @@ _MAX_RANGE_M = 20_000.0
 class GeodesicGPUProposalResult:
     """Broadcast-shaped reverse-geodesic positions with explicit status."""
 
-    stable_ids: tuple[str | int, ...]
+    stable_ids: Sequence[str | int]
     broadcast_shape: tuple[int, ...]
     observer_lonlat_deg: NDArray[np.float64]
     inverse_bearing_deg: NDArray[np.float64]
@@ -41,6 +42,10 @@ class GeodesicGPUProposalResult:
     chunks_processed: int
     host_to_device_bytes: int
     device_to_host_bytes: int
+    host_to_device_seconds: float
+    synchronized_work_seconds: float
+    device_to_host_seconds: float
+    elapsed_seconds: float
 
 
 def solve_reverse_bearing_cupy(
@@ -53,6 +58,7 @@ def solve_reverse_bearing_cupy(
     tolerance_deg: float = 1e-7,
     fallback_to_cpu: bool = False,
     cupy_module: Any | None = None,
+    collect_timings: bool = False,
 ) -> GeodesicGPUProposalResult:
     """Return observer proposals for catalog points, bearings, and ranges.
 
@@ -62,6 +68,9 @@ def solve_reverse_bearing_cupy(
     catalog point with degenerate=True and converged=False. Out-of-domain
     inputs raise NotImplementedError unless explicit CPU fallback is enabled.
     """
+    elapsed_start = perf_counter()
+    if type(collect_timings) is not bool:
+        raise ValueError("collect_timings must be a bool.")
     catalog = _finite_array(catalog_lonlat_deg, "catalog_lonlat_deg")
     if catalog.ndim < 1 or catalog.shape[-1] != 2 or catalog.size == 0:
         raise ValueError("catalog_lonlat_deg must have a nonempty final axis of length two.")
@@ -104,6 +113,7 @@ def solve_reverse_bearing_cupy(
     result_converged = np.zeros(flat_lon.size, dtype=np.bool_)
     degenerate = flat_range == 0.0
     chunks = h2d = d2h = 0
+    h2d_seconds = work_seconds = d2h_seconds = 0.0
 
     for start in range(0, flat_lon.size, max_pairs_per_chunk):
         stop = min(start + max_pairs_per_chunk, flat_lon.size)
@@ -119,9 +129,15 @@ def solve_reverse_bearing_cupy(
         )
         h2d += sum(array.nbytes for array in host)
         with cp.cuda.Device():
+            if collect_timings:
+                phase_start = perf_counter()
             source_lon, source_lat, desired, distance_gpu = (
                 cp.asarray(array, dtype=cp.float64) for array in host
             )
+            if collect_timings:
+                cp.cuda.get_current_stream().synchronize()
+                h2d_seconds += perf_counter() - phase_start
+                phase_start = perf_counter()
             start_azimuth = (desired + 180.0) % 360.0
             for _ in range(12):
                 out_lon, out_lat, reverse_azimuth = _direct(
@@ -129,7 +145,7 @@ def solve_reverse_bearing_cupy(
                 )
                 residual = _wrap(reverse_azimuth - desired)
                 start_azimuth = cp.where(
-                    cp.abs(residual) > tolerance_deg,
+                    cp.abs(residual) > tolerance_deg * 0.5,
                     (start_azimuth - residual) % 360.0,
                     start_azimuth,
                 )
@@ -148,6 +164,10 @@ def solve_reverse_bearing_cupy(
                 & (cp.abs(angular_error) <= tolerance_deg)
                 & (cp.abs(range_error) <= 1e-3)
             )
+            if collect_timings:
+                cp.cuda.get_current_stream().synchronize()
+                work_seconds += perf_counter() - phase_start
+                phase_start = perf_counter()
             host_result = cp.asnumpy(
                 cp.stack(
                     (
@@ -161,7 +181,9 @@ def solve_reverse_bearing_cupy(
                     axis=1,
                 )
             )
-            cp.cuda.get_current_stream().synchronize()
+            if collect_timings:
+                cp.cuda.get_current_stream().synchronize()
+                d2h_seconds += perf_counter() - phase_start
         d2h += host_result.nbytes
         result_xy[indexes] = host_result[:, :2]
         result_bearing[indexes] = host_result[:, 2]
@@ -180,7 +202,19 @@ def solve_reverse_bearing_cupy(
     )
     for array in arrays:
         array.setflags(write=False)
-    return GeodesicGPUProposalResult(ids, shape, *arrays, "cupy", chunks, int(h2d), int(d2h))
+    return GeodesicGPUProposalResult(
+        ids,
+        shape,
+        *arrays,
+        "cupy",
+        chunks,
+        int(h2d),
+        int(d2h),
+        h2d_seconds if collect_timings else 0.0,
+        work_seconds if collect_timings else 0.0,
+        d2h_seconds if collect_timings else 0.0,
+        perf_counter() - elapsed_start if collect_timings else 0.0,
+    )
 
 
 def _direct(cp: Any, lon1: Any, lat1: Any, azimuth: Any, distance: Any):
@@ -309,11 +343,13 @@ def _cpu_fallback(catalog, bearing, distance, stable_ids, tolerance_deg):
     arrays = (positions, np.asarray(azimuth), residual, errors, converged, degenerate)
     for array in arrays:
         array.setflags(write=False)
-    return GeodesicGPUProposalResult(ids, shape, *arrays, "cpu_fallback", 0, 0, 0)
+    return GeodesicGPUProposalResult(
+        ids, shape, *arrays, "cpu_fallback", 0, 0, 0, 0.0, 0.0, 0.0, 0.0
+    )
 
 
 def _stable_ids(stable_ids: Sequence[str | int] | None, size: int):
-    ids = tuple(range(size)) if stable_ids is None else tuple(stable_ids)
+    ids: Sequence[str | int] = range(size) if stable_ids is None else tuple(stable_ids)
     if len(ids) != size:
         raise ValueError("stable_ids length must equal flattened broadcast size.")
     if any(type(item) not in (str, int) for item in ids) or len(set(ids)) != len(ids):
