@@ -7,7 +7,7 @@ bearings, and map coverage uncertainty is carried explicitly in the result.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import atan2, degrees, hypot, isfinite
 from typing import Literal
 
@@ -62,6 +62,131 @@ class PredictedGroupSet:
     identity_limited_keys: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedRecord:
+    record: CatalogRecordV2
+    is_physical: bool
+    east_offset_m: float
+    north_offset_m: float
+    offset_quality: OffsetQuality
+    half_width_deg: float
+    uncertainty_m: float | None
+    identity_limited: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedPredictionContext:
+    """Immutable validated preparation reused by repeated candidate predictions.
+
+    Use prepare_prediction_context to construct this object. Its catalog, map,
+    index alignment, CRS, and prediction settings are fixed for its lifetime.
+    """
+
+    catalog: CatalogV2 = field(repr=False, compare=False)
+    vector_map: VectorMap = field(repr=False, compare=False)
+    spatial_index: GeographicSpatialIndex = field(repr=False, compare=False)
+    crs: CRS = field(repr=False, compare=False)
+    records: tuple[_PreparedRecord, ...] = field(repr=False, compare=False)
+    inverse: Transformer = field(repr=False, compare=False)
+    forward: Transformer = field(repr=False, compare=False)
+    max_offset_m: float
+    signature: tuple[object, ...]
+
+
+def prepare_prediction_context(
+    catalog: CatalogV2,
+    *,
+    observer_crs: str | int | CRS,
+    visibility_radius_m: float,
+    vector_map: VectorMap,
+    minimum_range_m: float = 0.0,
+    range_inclusive: bool = True,
+    angular_resolution_deg: float = 0.1,
+    type_labels_enabled: bool = True,
+    spatial_index: GeographicSpatialIndex | None = None,
+) -> PreparedPredictionContext:
+    """Validate and cache catalog-dependent fields and coordinate transforms."""
+
+    if not isinstance(catalog, CatalogV2) or not isinstance(vector_map, VectorMap):
+        raise TypeError("catalog and vector_map must be their V2 shared types.")
+    if not isinstance(type_labels_enabled, bool) or type(range_inclusive) is not bool:
+        raise TypeError("type_labels_enabled and range_inclusive must be bool values.")
+    if (
+        not isfinite(visibility_radius_m)
+        or visibility_radius_m < 0
+        or not isfinite(minimum_range_m)
+        or minimum_range_m < 0
+        or minimum_range_m > visibility_radius_m
+        or not isfinite(angular_resolution_deg)
+        or not 0 <= angular_resolution_deg < 180
+    ):
+        raise ValueError("Prediction range and angular settings are invalid.")
+    try:
+        crs = CRS.from_user_input(observer_crs)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("observer_crs must be a valid projected metre CRS.") from exc
+    axes = crs.axis_info
+    if (
+        not crs.is_projected
+        or len(axes) < 2
+        or any(abs(axis.unit_conversion_factor - 1.0) > 1e-12 for axis in axes[:2])
+    ):
+        raise ValueError("observer_crs must be projected and use metres on both horizontal axes.")
+    if not crs.equals(vector_map.crs):
+        raise ValueError("observer_crs must match vector_map.crs.")
+    index = spatial_index or GeographicSpatialIndex(
+        ((r.longitude_deg, r.latitude_deg) for r in catalog.records),
+        keys=(r.key for r in catalog.records),
+    )
+    keys = tuple(r.key for r in catalog.records)
+    points = tuple((float(r.longitude_deg), float(r.latitude_deg)) for r in catalog.records)
+    if index.keys != keys or index.points != points:
+        raise ValueError("spatial_index must match catalog coordinates, keys, and order.")
+    prepared = tuple(
+        _PreparedRecord(
+            record=r,
+            is_physical=is_visual_entity(r.normalized_type or r.raw_type),
+            east_offset_m=(offset := _visible_feature_offset(r))[0],
+            north_offset_m=offset[1],
+            offset_quality=offset[2],
+            half_width_deg=_record_half_width(r),
+            uncertainty_m=_record_uncertainty(r),
+            identity_limited=(
+                _record_metadata(r).get("physical_linkage_status") == "unresolved"
+                or _record_metadata(r).get("identity_ambiguous") is True
+            ),
+        )
+        for r in catalog.records
+    )
+    maximum_offset = max(
+        (
+            hypot(r.east_offset_m, r.north_offset_m)
+            for r in prepared
+            if r.is_physical and r.offset_quality != "unsupported"
+        ),
+        default=0.0,
+    )
+    signature = (
+        crs.to_wkt(),
+        visibility_radius_m,
+        minimum_range_m,
+        range_inclusive,
+        angular_resolution_deg,
+        type_labels_enabled,
+    )
+    return PreparedPredictionContext(
+        catalog,
+        vector_map,
+        index,
+        crs,
+        prepared,
+        Transformer.from_crs(crs, "EPSG:4326", always_xy=True),
+        Transformer.from_crs("EPSG:4326", crs, always_xy=True),
+        maximum_offset,
+        signature,
+    )
+
+
 def predict_visible_groups(
     observer_xy_m: tuple[float, float],
     catalog: CatalogV2,
@@ -74,6 +199,7 @@ def predict_visible_groups(
     angular_resolution_deg: float = 0.1,
     type_labels_enabled: bool = True,
     spatial_index: GeographicSpatialIndex | None = None,
+    prepared_context: PreparedPredictionContext | None = None,
 ) -> PredictedGroupSet:
     """Predict range-limited, line-of-sight-visible angular catalog groups.
 
@@ -132,42 +258,47 @@ def predict_visible_groups(
         raise ValueError("observer_xy_m must contain two finite coordinates.")
     observer_xy = (float(east_m), float(north_m))
 
-    inverse = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
-    observer_lon, observer_lat = inverse.transform(*observer_xy)
+    if prepared_context is None:
+        prepared_context = prepare_prediction_context(
+            catalog,
+            observer_crs=crs,
+            visibility_radius_m=visibility_radius_m,
+            vector_map=vector_map,
+            minimum_range_m=minimum_range_m,
+            range_inclusive=range_inclusive,
+            angular_resolution_deg=angular_resolution_deg,
+            type_labels_enabled=type_labels_enabled,
+            spatial_index=spatial_index,
+        )
+    else:
+        expected = (
+            crs.to_wkt(),
+            visibility_radius_m,
+            minimum_range_m,
+            range_inclusive,
+            angular_resolution_deg,
+            type_labels_enabled,
+        )
+        if (
+            not isinstance(prepared_context, PreparedPredictionContext)
+            or prepared_context.catalog is not catalog
+            or prepared_context.vector_map is not vector_map
+            or prepared_context.crs != crs
+            or prepared_context.signature != expected
+            or (spatial_index is not None and prepared_context.spatial_index is not spatial_index)
+        ):
+            raise ValueError(
+                "prepared_context does not match catalog, map, index, CRS, or settings."
+            )
+    observer_lon, observer_lat = prepared_context.inverse.transform(*observer_xy)
     if not isfinite(observer_lon) or not isfinite(observer_lat):
         raise ValueError("observer_xy_m cannot be transformed to a valid geographic position.")
 
-    index = spatial_index or GeographicSpatialIndex(
-        ((record.longitude_deg, record.latitude_deg) for record in catalog.records),
-        keys=(record.key for record in catalog.records),
-    )
-    expected_keys = tuple(record.key for record in catalog.records)
-    if index.keys != expected_keys:
-        raise ValueError("spatial_index must match catalog keys and order.")
-    forward = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
-    physical_records = tuple(
-        record
-        for record in catalog.records
-        if is_visual_entity(
-            record.normalized_type or record.raw_type,
-            type_labels_enabled=type_labels_enabled,
-        )
-    )
-    physical_by_key = {record.key: record for record in physical_records}
-    offset_data = {record.key: _visible_feature_offset(record) for record in physical_records}
-    max_offset_m = max(
-        (
-            hypot(east_m, north_m)
-            for east_m, north_m, quality in offset_data.values()
-            if quality != "unsupported"
-        ),
-        default=0.0,
-    )
-    nearby_indices = index.query_radius(
-        observer_lon, observer_lat, visibility_radius_m + max_offset_m
+    nearby_indices = prepared_context.spatial_index.query_radius(
+        observer_lon, observer_lat, visibility_radius_m + prepared_context.max_offset_m
     )
     detections: list[DetectedObject] = []
-    metadata_by_key: dict[str, CatalogRecordV2] = {}
+    metadata_by_key: dict[str, _PreparedRecord] = {}
     offset_applied_by_key: dict[str, OffsetQuality] = {}
     unresolved: list[str] = []
     unresolved_model_keys: list[str] = []
@@ -175,10 +306,13 @@ def predict_visible_groups(
     observer_status = vector_map.point_water_status(observer_xy)
 
     for record_index in nearby_indices:
-        record = catalog.records[record_index]
-        if record.key not in physical_by_key:
+        prepared_record = prepared_context.records[record_index]
+        record = prepared_record.record
+        if not prepared_record.is_physical:
             continue
-        east_offset_m, north_offset_m, offset_quality = offset_data[record.key]
+        east_offset_m = prepared_record.east_offset_m
+        north_offset_m = prepared_record.north_offset_m
+        offset_quality = prepared_record.offset_quality
         if offset_quality == "unsupported":
             unresolved_model_keys.append(record.key)
             continue
@@ -202,7 +336,7 @@ def predict_visible_groups(
                 continue
         elif geometry.distance_m <= minimum_range_m or geometry.distance_m >= visibility_radius_m:
             continue
-        target_east_m, target_north_m = forward.transform(target_lon, target_lat)
+        target_east_m, target_north_m = prepared_context.forward.transform(target_lon, target_lat)
         target_xy = (float(target_east_m), float(target_north_m))
         visibility = vector_map.line_visibility(observer_xy, target_xy)
         if visibility == "unknown" or observer_status == "unknown":
@@ -210,11 +344,7 @@ def predict_visible_groups(
             continue
         if visibility == "blocked" or observer_status == "land":
             continue
-        metadata = _record_metadata(record)
-        if (
-            metadata.get("physical_linkage_status") == "unresolved"
-            or metadata.get("identity_ambiguous") is True
-        ):
+        if prepared_record.identity_limited:
             identity_limited_keys.append(record.key)
 
         source_type = record.normalized_type or record.raw_type
@@ -229,7 +359,7 @@ def predict_visible_groups(
                 range_m=geometry.distance_m,
             )
         )
-        metadata_by_key[record.key] = record
+        metadata_by_key[record.key] = prepared_record
         offset_applied_by_key[record.key] = offset_quality
 
     grouped = group_angular_detections(detections, angular_resolution_deg)
@@ -243,7 +373,7 @@ def predict_visible_groups(
         representative = key_to_detection[representative_key]
         extent = max(
             _circular_separation(representative.bearing_deg, key_to_detection[key].bearing_deg)
-            + _record_half_width(metadata_by_key[key])
+            + metadata_by_key[key].half_width_deg
             for key in member_keys
         )
         output.append(
@@ -337,14 +467,20 @@ def _record_uncertainty(record: CatalogRecordV2) -> float | None:
 
 
 def _group_uncertainty(
-    member_keys: tuple[str, ...], records_by_key: dict[str, CatalogRecordV2]
+    member_keys: tuple[str, ...], records_by_key: dict[str, _PreparedRecord]
 ) -> float | None:
     values = [
         uncertainty
         for key in member_keys
-        if (uncertainty := _record_uncertainty(records_by_key[key])) is not None
+        if (uncertainty := records_by_key[key].uncertainty_m) is not None
     ]
     return max(values) if values else None
 
 
-__all__ = ["PredictedGroupSet", "PredictedVisibleGroup", "predict_visible_groups"]
+__all__ = [
+    "PredictedGroupSet",
+    "PredictedVisibleGroup",
+    "PreparedPredictionContext",
+    "predict_visible_groups",
+    "prepare_prediction_context",
+]

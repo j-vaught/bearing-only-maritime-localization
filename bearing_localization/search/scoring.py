@@ -22,7 +22,11 @@ from maritime_localization_shared.geospatial.vector_map import VectorMap
 from .assignment import assign_likelihood_costs
 from .config import SearchConfig
 from .likelihood import LikelihoodCostMatrix, build_likelihood_costs
-from .prediction import PredictedGroupSet, predict_visible_groups
+from .prediction import (
+    PredictedGroupSet,
+    predict_visible_groups,
+    prepare_prediction_context,
+)
 
 CandidateStatus = Literal["scored", "invalid_water", "unresolved_coverage", "unresolved_model"]
 _STATUS_ORDER: tuple[CandidateStatus, ...] = (
@@ -98,6 +102,17 @@ class CandidateScorer:
             ((record.longitude_deg, record.latitude_deg) for record in catalog.records),
             keys=(record.key for record in catalog.records),
         )
+        self._prediction_context = prepare_prediction_context(
+            catalog,
+            observer_crs=vector_map.crs,
+            visibility_radius_m=config.max_range_m,
+            vector_map=vector_map,
+            minimum_range_m=config.min_range_m,
+            range_inclusive=config.range_inclusive,
+            angular_resolution_deg=config.circular_merge_tolerance_deg,
+            type_labels_enabled=config.use_types,
+            spatial_index=self._spatial_index,
+        )
 
     def evaluate(self, position_xy: tuple[float, float]) -> CandidateEvaluation:
         """Return a complete scored hypothesis or an explicit unresolved outcome."""
@@ -127,6 +142,7 @@ class CandidateScorer:
             angular_resolution_deg=self.config.circular_merge_tolerance_deg,
             type_labels_enabled=self.config.use_types,
             spatial_index=self._spatial_index,
+            prepared_context=self._prediction_context,
         )
         if predicted.unresolved_model:
             return CandidateEvaluation(
