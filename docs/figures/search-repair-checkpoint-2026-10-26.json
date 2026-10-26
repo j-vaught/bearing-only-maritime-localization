@@ -4,8 +4,18 @@
   "matched_baseline": {
     "source_report": "reports/legacy-to-v2-regression.md",
     "source_report_sha256": "92ac3d08d13a0e159bf6bab7aa2b45ec702ad5899e4913962c5bcabd2d1cde57",
-    "local": {"main_error_m": 10.3346, "integration_error_m": 10.3346, "measurement_sha256": "ef23c717c5cee6d3a09fadc803a4912ecdff8328a12e029f0008639d2e6d31d2", "catalog_sha256": "06a5f19ff63cc0593908ed3faf848bf373186cd8b7a309a2c44cb21f094cd208"},
-    "coast": {"main_error_m": 89.091, "integration_error_m": 89.091, "measurement_sha256": "8fb341c12f8f4f4351669223bd12442e9ee5c3ec096218aa3a73b1bcc3cf65d1", "catalog_sha256": "674c5fe1bffd06dd3ff9001f8eec6ebd06500565de125efb24f48f5b8ca4ffff"}
+    "local": {
+      "main_error_m": 10.3346,
+      "integration_error_m": 10.3346,
+      "measurement_sha256": "ef23c717c5cee6d3a09fadc803a4912ecdff8328a12e029f0008639d2e6d31d2",
+      "catalog_sha256": "06a5f19ff63cc0593908ed3faf848bf373186cd8b7a309a2c44cb21f094cd208"
+    },
+    "coast": {
+      "main_error_m": 89.091,
+      "integration_error_m": 89.091,
+      "measurement_sha256": "8fb341c12f8f4f4351669223bd12442e9ee5c3ec096218aa3a73b1bcc3cf65d1",
+      "catalog_sha256": "674c5fe1bffd06dd3ff9001f8eec6ebd06500565de125efb24f48f5b8ca4ffff"
+    }
   },
   "los_component": {
     "source_report": ".agent-work/reports/a43.md",
@@ -42,11 +52,16 @@
     "decision": "ambiguous",
     "candidate_budget_used": 64,
     "candidate_budget_total": 64,
-    "top_ranked_error_m": 391446.9,
-    "minimum_error_among_7_hypotheses_m": 391368.9,
+    "top_ranked_error_m": 509653.742,
+    "minimum_error_among_7_hypotheses_m": 506055.789,
     "exact_key_matches": 0,
     "exact_key_total": 18,
     "vector_map_source_sha256": "1663dc71c5cee6d3a09fadc803a4912ecdff8328a12e029f0008639d2e6d31d2",
-    "prediction_source_sha256": "a13b140483c0bb203f32b26f957b5f3b24c2484d558e8137325e3497afec98ee"
+    "prediction_source_sha256": "a13b140483c0bb203f32b26f957b5f3b24c2484d558e8137325e3497afec98ee",
+    "truth_crs": "EPSG:32619",
+    "search_crs": "EPSG:32618",
+    "corrected_by_diagnostic": "data/accuracy/diagnostics/2026-10-26/evaluator/a35-diagnostic.json",
+    "corrected_by_diagnostic_sha256": "c8b2c35f1056e634d6f4e2ff675309e4a537b6aad481e1ae5bc892e150ccca37",
+    "correction_note": "Earlier distances used raw truth coordinates in EPSG:32619 against search estimates in EPSG:32618; applying the CRS transform gives the corrected values above."
   }
 }

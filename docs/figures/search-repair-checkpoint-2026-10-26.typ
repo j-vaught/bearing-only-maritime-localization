@@ -56,18 +56,18 @@
 #text(size: 10pt, weight: "bold")[Unresolved full-search case]
 #text(size: 7pt)[Pairwise search attempt. Error to known position for top-ranked hypothesis and minimum among seven hypotheses.]
 #lq.diagram(
-  xlabel: [Position error (m)], xlim: (0, 450000), ylim: (0.4, 2.6),
-  xaxis: (ticks: ((0,[0]),(100000,[100k]),(200000,[200k]),(300000,[300k]),(400000,[400k])), subticks: none),
+  xlabel: [Position error (m)], xlim: (0, 600000), ylim: (0.4, 2.6),
+  xaxis: (ticks: ((0,[0]),(100000,[100k]),(200000,[200k]),(300000,[300k]),(400000,[400k]),(600000,[600k])), subticks: none),
   yaxis: (ticks: ((1,[Best of 7]),(2,[Top ranked])), subticks: none),
   width: 275mm, height: 43mm,
   lq.hbar((search.at("minimum_error_among_7_hypotheses_m"),), (1,)),
   lq.hbar((search.at("top_ranked_error_m"),), (2,)),
 )
 #linebreak()
-#text(size: 7pt)[Best of seven #str(search.at("minimum_error_among_7_hypotheses_m")) m. Top ranked #str(search.at("top_ranked_error_m")) m. 48 s wall. Candidate budget #str(search.at("candidate_budget_used")) / #str(search.at("candidate_budget_total")). Status budget exhausted; decision ambiguous; exact-key matches #str(search.at("exact_key_matches")) / #str(search.at("exact_key_total")).]
+#text(size: 7pt)[CRS-corrected best of seven #str(search.at("minimum_error_among_7_hypotheses_m")) m. Top ranked #str(search.at("top_ranked_error_m")) m. 48 s wall. Candidate budget #str(search.at("candidate_budget_used")) / #str(search.at("candidate_budget_total")). Status budget exhausted; decision ambiguous; exact-key matches #str(search.at("exact_key_matches")) / #str(search.at("exact_key_total")).]
 #v(2mm)
 #text(size: 6.5pt)[
-  Source reports and input SHA-256 values are recorded in adjacent JSON. Baseline report #baseline.at("source_report_sha256"). LOS and search report #los.at("source_report_sha256"). Wedge report #wedge.at("source_report_sha256").
+  The previous A43 error values were superseded after correcting the truth-to-search CRS transformation. Corrected evidence: #search.at("corrected_by_diagnostic"), SHA-256 #search.at("corrected_by_diagnostic_sha256"). Truth EPSG:32619 was transformed to search EPSG:32618. Source reports and input SHA-256 values are recorded in adjacent JSON. Baseline report #baseline.at("source_report_sha256"). LOS and search report #los.at("source_report_sha256"). Wedge report #wedge.at("source_report_sha256").
 ]
 #text(size: 7pt, weight: "bold")[
   These panels report separate measurements and workloads. The matched baseline compares identical inputs only. LOS timing is component-level, wedge timing covers voting only, and the full-search case remains unresolved. No held-out accuracy or end-to-end speed claim is made.
