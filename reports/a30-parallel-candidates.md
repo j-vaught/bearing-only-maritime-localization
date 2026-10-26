@@ -19,3 +19,9 @@ No performance measurement or speedup claim was made. GPU devices and the A43 be
 ## Limits
 
 The component uses existing `CandidateScorer` evaluation and therefore preserves its geometry, line-of-sight, assignment, and likelihood semantics. The pool is sequential at the request level; overlapping requests are rejected. The caller chooses worker count and memory budget. Resident-set sampling is Linux `/proc` based, matching the assigned server. The serialized-size estimate cannot bound Python, GEOS, allocator, or process-runtime overhead; the additional RSS check detects observed overshoot and stops with an explicit failure.
+
+## Lifecycle review follow-up
+
+An independent review identified that a worker can send an unexpected `stopped` message and exit with status zero, which the coordinator previously failed to recognize as a dead worker. The coordinator now stops feeding immediately on any unexpected stopped message and treats every exited process, including exit code zero, as a failure. Failed or cancelled requests raise with completed, failed, and outstanding counts, terminate and reap every pool worker, close both IPC queues, and mark the pool unusable. A later request receives an explicit error instead of reading stale batch messages from the shared result queue.
+
+Added bounded regression cases for an exit-zero stopped worker, abrupt `os._exit(0)` and nonzero process exits, and closing an iterator after its first result. They assert prompt failure, accounting, worker reaping, and rejection of pool reuse. These new regressions have not yet been run because the coordinator asked to wait for the A26 benchmark lock to be released. The earlier 12-test result predates these lifecycle changes and is not evidence that the new cases pass.
