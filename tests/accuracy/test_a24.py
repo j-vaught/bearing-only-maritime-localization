@@ -691,6 +691,57 @@ def test_v2_calibration_rejects_mixed_conditions_and_missing_nominal_labels():
         )
 
 
+def test_v2_population_allows_only_explicit_unresolved_stress_rows():
+    condition = CalibrationOperatingCondition(1000.0, True, "bearing_set_map_v1", "pairwise")
+    dev = _v2_calibration_doc("development", condition=condition)
+    val = _v2_calibration_doc("validation", condition=condition)
+    for document in (dev, val):
+        stress = next(row for row in document["all_trials"] if row["sensor_condition"] == "stress")
+        stress["supported"] = None
+        stress["eligibility_status"] = "unresolved"
+        stress["eligibility_reason"] = "Observer must lie in known water."
+        stress["preparation_status"] = "failed"
+        document["trials"] = [row for row in document["all_trials"] if row["supported"] is True]
+    artifact = calibrate(
+        dev,
+        val,
+        development_metrics_sha256="5" * 64,
+        validation_metrics_sha256="6" * 64,
+    )
+    assert artifact["population"]["development"]["excluded_stress"]["count"] == 2
+
+    missing_reason = _v2_calibration_doc("development", condition=condition)
+    stress = next(
+        row for row in missing_reason["all_trials"] if row["sensor_condition"] == "stress"
+    )
+    stress["supported"] = None
+    stress["preparation_status"] = "failed"
+    stress["eligibility_status"] = "unresolved"
+    missing_reason["trials"] = [
+        row for row in missing_reason["all_trials"] if row["supported"] is True
+    ]
+    with pytest.raises(ValueError, match="failed preparation"):
+        calibrate(
+            missing_reason,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+    unresolved_nominal = _v2_calibration_doc("development", condition=condition)
+    nominal = next(
+        row for row in unresolved_nominal["all_trials"] if row["sensor_condition"] == "nominal"
+    )
+    nominal["supported"] = None
+    with pytest.raises(ValueError, match="Nominal rows"):
+        calibrate(
+            unresolved_nominal,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+
 def test_context_fingerprints_bind_seed_policy_sources_and_dependency_lock(tmp_path):
     settings = {
         "algorithm": "pairwise",
