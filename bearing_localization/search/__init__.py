@@ -16,6 +16,12 @@ from bearing_localization.search.association import (
     associate_observations_to_ais,
     compatible_types,
 )
+from bearing_localization.search.branch_bound import (
+    BranchBoundContext,
+    BranchBoundResult,
+    RegionDiagnostic,
+    branch_and_bound_search,
+)
 from bearing_localization.search.candidates import WaterMaskProtocol, generate_candidates
 from bearing_localization.search.config import Backend, ObjectiveVersion, SearchConfig
 from bearing_localization.search.config_serialization import (
@@ -139,6 +145,8 @@ def run_hierarchical_search(
 
 __all__ = [
     "AssociationResult",
+    "BranchBoundContext",
+    "BranchBoundResult",
     "Backend",
     "GridSearchConfig",
     "HierarchicalSearchConfig",
@@ -147,11 +155,13 @@ __all__ = [
     "ObjectiveVersion",
     "PairwiseSearchConfig",
     "RandomizedSearchConfig",
+    "RegionDiagnostic",
     "SearchConfig",
     "WaterMaskProtocol",
     "WaterPredicate",
     "WaterQuery",
     "associate_observations_to_ais",
+    "branch_and_bound_search",
     "compatible_types",
     "dumps_search_config",
     "filter_visible_candidates",
