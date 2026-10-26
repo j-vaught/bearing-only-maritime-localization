@@ -403,8 +403,6 @@ def run_hierarchical_search_v2(
     # counts remain aligned with the budget-exhausted contract.
     if any_stage_truncated and not budget_exhausted:
         evaluate_stage(pending_truncated, budget - accumulator.candidate_count)
-        if accumulator.candidate_count == budget:
-            budget_exhausted = True
 
     if budget_exhausted:
         return accumulator.finish(

@@ -170,3 +170,39 @@ def test_explicit_candidate_streams_keep_caller_order():
     )
     run_hierarchical_search_v2(hierarchical_scorer, candidate_positions=positions)
     assert hierarchical_evaluated == positions
+
+
+def test_deferred_exact_fit_completes_when_no_planned_candidate_remains():
+    def statuses(_position):
+        return "unknown"
+
+    scorer, evaluated = _fake_scorer((0.0, 1.0, 0.0, 1.0), 4, statuses)
+    run = run_hierarchical_search_v2(
+        scorer,
+        coarse_spacing_m=2.0,
+        refinement_levels=2,
+        refinement_factor=2.0,
+        beam_width=2,
+    )
+    assert len(evaluated) == run.candidate_count == 4
+    assert run.localization.search_status == "completed"
+    assert run.localization.budget_limit == run.localization.budget_used == 4
+    counts = dict(run.outcome_counts)
+    assert sum(counts.values()) == run.candidate_count == 4
+
+
+def test_deferred_unique_candidate_beyond_budget_is_exhausted():
+    def statuses(_position):
+        return "unknown"
+
+    scorer, evaluated = _fake_scorer((0.0, 12.0, 0.0, 12.0), 4, statuses)
+    run = run_hierarchical_search_v2(
+        scorer,
+        coarse_spacing_m=4.0,
+        refinement_levels=2,
+        refinement_factor=2.0,
+        beam_width=2,
+    )
+    assert len(evaluated) == run.candidate_count == 4
+    assert run.localization.search_status == "budget_exhausted"
+    assert run.localization.budget_limit == run.localization.budget_used == 4
