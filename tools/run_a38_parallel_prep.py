@@ -23,6 +23,7 @@ def _worker(
     plan_s, catalog_s, maps_s, temp_s, ids, worker_index, prior_attempts, split = args
     temp_root = Path(temp_s)
     plan = Path(plan_s)
+    placements_per_port = planned_placements_per_port(plan, split)
     if prior_attempts:
         _write_table(temp_root / split / "preparation-attempts.csv", prior_attempts)
     prepare_inputs(
@@ -31,7 +32,7 @@ def _worker(
         map_cache=Path(maps_s),
         input_root=temp_root,
         split=split,
-        placements_per_port=25,
+        placements_per_port=placements_per_port,
         only_trial_ids=set(ids),
         _allow_extension=False,
     )
@@ -39,6 +40,19 @@ def _worker(
     compact_split(temp_root, manifest, split)
     rows = _read_table(temp_root / split / "preparation.csv")
     return {"root": str(temp_root), "rows": len(rows), "trial_ids": ids}
+
+
+def planned_placements_per_port(plan_path: Path, split: str) -> int:
+    # Compute placement extent from the versioned trial table, including
+    # deterministic support-extension rows above the original 25 placements.
+    document = json.loads(plan_path.read_text(encoding="utf-8"))
+    rows = _read_table(plan_path.parent / str(document["trial_table"]))
+    placements = [
+        int(row["placement_id"].rsplit("-", 1)[1]) for row in rows if row["split"] == split
+    ]
+    if not placements:
+        raise ValueError(f"The plan has no rows for split {split!r}.")
+    return max(placements)
 
 
 def _merge_worker(
