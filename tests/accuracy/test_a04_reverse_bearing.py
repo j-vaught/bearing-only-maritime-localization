@@ -145,7 +145,7 @@ def test_nonbroadcastable_inputs_and_iteration_options_are_rejected() -> None:
         solve_reverse_bearing_observer((0.0, 0.0), 0.0, 1.0, tolerance_deg=0.0)
 
 
-def test_generator_tolerance_can_accept_sub_nanodegree_inverse_roundoff() -> None:
+def test_internal_margin_keeps_strict_tolerance_after_inverse_check() -> None:
     catalog = (-75.3929250000001, 39.18361940000068)
     desired_bearing = 205.725571474809
     range_m = 2_875.0
@@ -158,8 +158,8 @@ def test_generator_tolerance_can_accept_sub_nanodegree_inverse_roundoff() -> Non
         tolerance_deg=1e-7,
     )
 
-    assert not bool(strict.converged)
-    assert abs(float(strict.angular_residual_deg)) == pytest.approx(1.0149961e-9, abs=1e-15)
+    assert bool(strict.converged)
+    assert abs(float(strict.angular_residual_deg)) <= 1e-9
     assert bool(explicit.converged)
     inverse_bearing, _, distance = _GEOD.inv(
         float(explicit.observer_lonlat_deg[0]),
@@ -168,5 +168,26 @@ def test_generator_tolerance_can_accept_sub_nanodegree_inverse_roundoff() -> Non
         catalog[1],
     )
     angular_error = (inverse_bearing - desired_bearing + 180.0) % 360.0 - 180.0
+    assert abs(angular_error) <= 1e-7
+    assert distance == pytest.approx(range_m, abs=1e-8)
+
+
+def test_full_catalog_roundoff_failure_is_resolved_with_public_tolerance() -> None:
+    # Captured from the coordinate-only replay of the frozen A26 input set.
+    catalog = (-80.98065189999943, 31.796930200000133)
+    desired_bearing = 215.65789052601954
+    range_m = 625.0
+
+    result = solve_reverse_bearing_observer(catalog, desired_bearing, range_m, tolerance_deg=1e-7)
+
+    inverse_bearing, _, distance = _GEOD.inv(
+        float(result.observer_lonlat_deg[0]),
+        float(result.observer_lonlat_deg[1]),
+        catalog[0],
+        catalog[1],
+    )
+    angular_error = (inverse_bearing - desired_bearing + 180.0) % 360.0 - 180.0
+    assert bool(result.converged)
+    assert abs(float(result.angular_residual_deg)) <= 1e-7
     assert abs(angular_error) <= 1e-7
     assert distance == pytest.approx(range_m, abs=1e-8)
