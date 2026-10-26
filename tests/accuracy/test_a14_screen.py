@@ -10,7 +10,11 @@ from bearing_localization.search.prediction import (
     predict_visible_groups,
     prepare_prediction_context,
 )
-from bearing_localization.search.visibility_screen import screen_candidate_visibility
+from bearing_localization.search.visibility_screen import (
+    _screen_candidate_visibility_batched,
+    _screen_candidate_visibility_scalar,
+    screen_candidate_visibility,
+)
 from maritime_localization_shared.contracts.inputs_v2 import CatalogRecordV2, CatalogV2
 from maritime_localization_shared.geometry.angular_grouping import (
     DetectedObject,
@@ -337,3 +341,75 @@ def test_first_clear_member_certifies_component_without_raying_members_again():
     assert result.complete is False
     assert result.components[0].confirmed_clear_key == "near"
     assert result.components[0].unexamined_member_keys == ("same-bearing",)
+
+
+def test_full_scan_batch_matches_scalar_component_evidence_on_edge_cases():
+    x, y = xy()
+    target = GEOD.fwd(*ORIGIN, 0, 1000)
+    tx, ty = XY.transform(target[0], target[1])
+    cases = (
+        (
+            catalog(
+                record("front", 0, 700),
+                record("back", 0, 1500),
+                record("north-west", 359.96, 900),
+                record("north-east", 0.04, 950),
+                record("solo", 30, 1200),
+            ),
+            vmap(land=box(x - 120, y + 900, x + 120, y + 1100)),
+        ),
+        (
+            catalog(record("unknown-crossing", 0, 1000), record("clear", 20, 1200)),
+            vmap(unknown=box(x - 100, y + 400, x + 100, y + 600)),
+        ),
+        (
+            catalog(record("shore-endpoint", 0, 1000)),
+            vmap(land=box(tx - 5, ty - 5, tx + 5, ty + 5)),
+        ),
+        (
+            catalog(
+                record(
+                    "offset",
+                    359.98,
+                    800,
+                    metadata=(
+                        ("visible_feature_offset_east_m", 4.0),
+                        ("visible_feature_offset_north_m", 3.0),
+                        ("position_uncertainty_m", 2.0),
+                        ("angular_half_width_deg", 0.02),
+                    ),
+                ),
+                record(
+                    "height",
+                    0.02,
+                    900,
+                    metadata=(("source_attributes", {"height": "12.0", "objnam": "Light"}),),
+                ),
+            ),
+            vmap(),
+        ),
+    )
+    for cat, vector_map in cases:
+        ctx = context(cat, vector_map)
+        batch = _screen_candidate_visibility_batched(xy(), ctx, scan_all_members=True)
+        scalar = _screen_candidate_visibility_scalar(xy(), ctx, scan_all_members=True)
+        # Dataclass equality compares every result and per-component evidence field.
+        assert batch == scalar
+
+
+def test_batch_los_is_reserved_for_full_scans(monkeypatch):
+    cat = catalog(record("north", 0, 100), record("east", 20, 200))
+    ctx = context(cat)
+    calls = []
+    original = VectorMap.line_visibility_many
+
+    def counted(self, observer_xy_m, targets_xy_m, **kwargs):
+        calls.append(len(targets_xy_m))
+        return original(self, observer_xy_m, targets_xy_m, **kwargs)
+
+    monkeypatch.setattr(VectorMap, "line_visibility_many", counted)
+    batched = _screen_candidate_visibility_batched(xy(), ctx, scan_all_members=True)
+    assert batched.complete and calls == [2]
+    calls.clear()
+    screen_candidate_visibility(xy(), ctx, stop_after_minimum_groups=1)
+    assert calls == []
