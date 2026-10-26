@@ -17,6 +17,11 @@ from maritime_localization_shared.contracts.localization import (
     LocalizationResult,
 )
 from maritime_localization_shared.contracts.truth import EvaluationTruth, TrueObject
+from tools.a38_archive import (
+    atomic_write_bytes,
+    verified_gzip_bytes,
+    write_verified_gzip,
+)
 from tools.run_accuracy_suite import (
     MAX_PLACEMENTS,
     _extend_nominal_plan_if_needed,
@@ -45,6 +50,7 @@ def evaluator_parity() -> dict[str, Any]:
         30.0,
         (
             TrueObject("truth-object", "aid", 101.0, 201.0, observation_index=0),
+            TrueObject("truth-group-member", "aid", 102.0, 202.0, observation_index=0),
             TrueObject("unobserved-object", "aid", 500.0, 600.0),
             TrueObject("second-unobserved", "vessel", 700.0, 800.0),
         ),
@@ -97,33 +103,67 @@ def evaluator_parity() -> dict[str, Any]:
 
 def compact_truth(path: Path, manifest: Path, split: str) -> dict[str, Any] | None:
     archive = path.with_name("truth.full.json.gz")
+    manifest_rows = _read_table(manifest) if manifest.exists() else []
+    indexed = {row["trial_id"]: row for row in manifest_rows}
+    source = path.read_bytes() if path.exists() else None
+    prior = next((row for row in manifest_rows if row.get("truth_path") == str(path)), None)
+
+    archived_raw: bytes | None = None
     if archive.exists():
-        return None
-    raw = path.read_bytes()
-    full_sha = hbytes(raw)
-    doc = json.loads(raw)
-    objects = doc.get("objects")
-    if not isinstance(objects, list):
-        raise ValueError(f"Truth objects is not a list: {path}")
+        try:
+            archived_raw = verified_gzip_bytes(
+                archive, prior.get("full_truth_sha256") if prior else None
+            )
+        except (OSError, EOFError, gzip.BadGzipFile, RuntimeError):
+            if source is None or (prior and hbytes(source) == prior.get("compact_truth_sha256")):
+                raise RuntimeError(
+                    f"Full truth archive is incomplete and no full source remains "
+                    f"for recovery: {archive}"
+                )
+            archive.unlink()
+
+    if archived_raw is None:
+        if source is None:
+            raise FileNotFoundError(f"Neither full truth source nor archive exists: {path}")
+        doc = json.loads(source)
+        objects = doc.get("objects")
+        if not isinstance(objects, list):
+            raise ValueError(f"Truth objects is not a list: {path}")
+        full_raw = source
+        full_sha = hbytes(full_raw)
+        write_verified_gzip(full_raw, archive)
+    else:
+        full_raw = archived_raw
+        full_sha = hbytes(full_raw)
+        doc = json.loads(full_raw)
+        objects = doc.get("objects")
+        if not isinstance(objects, list):
+            raise ValueError(f"Archived truth objects is not a list: {archive}")
+        if source is not None:
+            source_sha = hbytes(source)
+            if prior and source_sha == prior.get("compact_truth_sha256"):
+                pass
+            elif source != full_raw:
+                raise RuntimeError(
+                    f"Truth source matches neither full archive nor compact manifest: {path}"
+                )
+
     keep = [obj for obj in objects if obj.get("observation_index") is not None]
-    with archive.open("wb") as dst:
-        with gzip.GzipFile(fileobj=dst, mode="wb", compresslevel=1, mtime=0) as gz:
-            gz.write(raw)
-    replay = gzip.decompress(archive.read_bytes())
-    if replay != raw or hbytes(replay) != full_sha:
-        archive.unlink(missing_ok=True)
-        raise RuntimeError(f"Full truth gzip failed exact SHA-256 replay: {path}")
-    compact = {k: v for k, v in doc.items() if k != "objects"}
+    compact = {key: value for key, value in doc.items() if key != "objects"}
     compact["objects"] = keep
     compact_bytes = (json.dumps(compact, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
-    path.write_bytes(compact_bytes)
+    if source != compact_bytes:
+        atomic_write_bytes(path, compact_bytes)
+    trial_id = str(doc.get("trial_id", ""))
+    if not trial_id:
+        raise ValueError(f"Truth document has no trial_id: {path}")
     row = {
         "split": split,
-        "trial_id": doc.get("trial_id", ""),
+        "trial_id": trial_id,
         "truth_path": str(path),
         "full_truth_archive_path": str(archive),
         "full_truth_sha256": full_sha,
-        "full_truth_bytes": len(raw),
+        "full_truth_bytes": len(full_raw),
         "full_object_count": len(objects),
         "retained_observation_object_count": len(keep),
         "compact_truth_sha256": hbytes(compact_bytes),
@@ -133,10 +173,15 @@ def compact_truth(path: Path, manifest: Path, split: str) -> dict[str, Any] | No
         "gzip_roundtrip_sha256_verified": True,
         "view": "observer pose plus objects referenced by evaluator true_by_group",
     }
+    previous = indexed.get(trial_id)
+    if (
+        previous is not None
+        and source == compact_bytes
+        and all(str(previous.get(key, "")) == str(value) for key, value in row.items())
+    ):
+        return None
+    indexed[trial_id] = row
     manifest.parent.mkdir(parents=True, exist_ok=True)
-    old = _read_table(manifest) if manifest.exists() else []
-    indexed = {r["trial_id"]: r for r in old}
-    indexed[str(row["trial_id"])] = row
     _write_table(manifest, list(indexed.values()))
     return row
 

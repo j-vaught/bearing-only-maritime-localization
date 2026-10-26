@@ -100,6 +100,30 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
     return copied
 
 
+def validate_worker_ids(expected: list[str], observed: list[str]) -> None:
+    if len(observed) != len(set(observed)):
+        raise RuntimeError("Worker completion set contains duplicate trial IDs")
+    if sorted(observed) != sorted(expected):
+        missing = sorted(set(expected) - set(observed))
+        unexpected = sorted(set(observed) - set(expected))
+        raise RuntimeError(
+            f"Worker completion set mismatch; missing={missing}, unexpected={unexpected}"
+        )
+
+
+def estimated_wave_gib(row_count: int) -> float:
+    return row_count * 30_000_000 * 1.35 / (1024**3)
+
+
+def enforce_disk_guard(free_gib: float, row_count: int, minimum_free_gib: float = 40) -> float:
+    required = minimum_free_gib + estimated_wave_gib(row_count)
+    if free_gib < required:
+        raise RuntimeError(
+            f"Disk guard requires {required:.2f} GiB free, observed {free_gib:.2f} GiB"
+        )
+    return required
+
+
 def _free_gib(path: Path) -> float:
     stat = shutil.disk_usage(path)
     return stat.free / (1024**3)
@@ -171,13 +195,13 @@ def main() -> int:
         wave = pending[wave_start : wave_start + a.workers * a.chunk_size]
         chunks = [wave[i : i + a.chunk_size] for i in range(0, len(wave), a.chunk_size)]
         # Six raw JSON products include the full truth and full identity map. Apply 35% headroom.
-        estimated_gib = len(wave) * 30_000_000 * 1.35 / (1024**3)
         free = _free_gib(a.input_root)
-        if free < a.minimum_free_gib + estimated_gib:
+        try:
+            required = enforce_disk_guard(free, len(wave), a.minimum_free_gib)
+        except RuntimeError as exc:
             raise RuntimeError(
-                f"Disk guard stopped wave at rows {wave_start}:{wave_start + len(wave)}; "
-                f"free={free:.2f} GiB, required={a.minimum_free_gib + estimated_gib:.2f} GiB"
-            )
+                f"Disk guard stopped wave at rows {wave_start}:{wave_start + len(wave)}; {exc}"
+            ) from exc
         with tempfile.TemporaryDirectory(
             prefix="a38-wave-", dir=str(a.input_root.parent)
         ) as temp_base:
@@ -209,10 +233,7 @@ def main() -> int:
                 results = [f.result() for f in as_completed(futures)]
             observed_ids = [trial for result in results for trial in result["trial_ids"]]
             expected_ids = [r["trial_id"] for r in wave]
-            if sorted(observed_ids) != sorted(expected_ids) or len(observed_ids) != len(
-                set(observed_ids)
-            ):
-                raise RuntimeError("Worker completion set differs from disjoint input wave")
+            validate_worker_ids(expected_ids, observed_ids)
             moved = 0
             for root in roots:
                 # Normalize per-worker truth manifest name for the merge helper.
