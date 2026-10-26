@@ -20,6 +20,7 @@ from maritime_localization_shared.geometry.angular_grouping import (
 from maritime_localization_shared.geospatial.spatial_index import SpatialIndex2D
 
 from ..algorithms import SearchResult, associate
+from .candidate_order import order_candidate_positions
 from .scoring import (
     CandidateScorer,
     CandidateSearchAccumulator,
@@ -268,14 +269,25 @@ def run_hierarchical_search_v2(
 ) -> CandidateSearchRun:
     """Run a coarse-to-fine V2 search over the complete declared bounds.
 
-    Spatially diverse scored leaders seed each refinement level. Completion is
-    heuristic and carries no global certificate. An explicit position iterable
-    provides fixed-candidate parity mode.
+    Spatially diverse scored leaders seed each refinement level.  The remaining
+    candidate budget is allocated with ceil(remaining/stages_left) at each
+    stage, which reserves work for refinement instead of allowing the initial
+    coarse prefix to consume the full budget.  Candidate ordering is
+    deterministic and status-aware; it does not remove candidates or weaken
+    acceptance criteria.  Completion is heuristic and carries no global
+    certificate.  An explicit position iterable provides fixed-candidate
+    parity mode.
     """
     if candidate_positions is not None:
+        bounds = scorer.config.bounds_xy
+        positions = order_candidate_positions(
+            candidate_positions,
+            water_status=scorer.vector_map.point_water_status,
+            bounds=bounds,
+        )
         return score_candidate_positions(
             scorer,
-            candidate_positions,
+            positions,
             candidate_limit=scorer.config.candidate_budget,
         )
     bounds = scorer.config.bounds_xy
@@ -293,7 +305,8 @@ def run_hierarchical_search_v2(
     xmin, xmax, ymin, ymax = bounds
     budget = scorer.config.candidate_budget
     accumulator = CandidateSearchAccumulator(scorer)
-    exhausted = False
+    budget_exhausted = False
+    total_stages = refinement_levels + 1
 
     def axis(low: float, high: float, step: float) -> Iterable[float]:
         index = 0
@@ -313,27 +326,45 @@ def run_hierarchical_search_v2(
             for north_m in axis(ymin, ymax, step):
                 yield east_m, north_m
 
-    def evaluate(positions: Iterable[tuple[float, float]]) -> bool:
-        for position in positions:
-            if accumulator.is_new(position) and accumulator.candidate_count >= budget:
-                return False
+    def evaluate_stage(positions: Iterable[tuple[float, float]], quota: int) -> None:
+        nonlocal budget_exhausted
+        ordered = order_candidate_positions(
+            positions,
+            water_status=scorer.vector_map.point_water_status,
+            bounds=bounds,
+        )
+        used = 0
+        for position in ordered:
+            if not accumulator.is_new(position):
+                continue
+            if accumulator.candidate_count >= budget:
+                budget_exhausted = True
+                return
+            if used >= quota:
+                return
             accumulator.add(position)
-        return True
+            used += 1
 
-    if not evaluate(lattice(coarse_spacing_m)):
-        exhausted = True
-    step = coarse_spacing_m
-    for _ in range(refinement_levels):
-        if exhausted:
+    for stage_index in range(total_stages):
+        if budget_exhausted:
             break
-        step /= refinement_factor
+        remaining_budget = budget - accumulator.candidate_count
+        if remaining_budget <= 0:
+            remaining_budget = 1
+        stages_left = total_stages - stage_index
+        quota = max(1, (remaining_budget + stages_left - 1) // stages_left)
+        if stage_index == 0:
+            evaluate_stage(lattice(coarse_spacing_m), quota)
+            continue
+
+        step = coarse_spacing_m / (refinement_factor**stage_index)
         cell_size = max(coarse_spacing_m * 4.0, 50_000.0)
-        leaders: list[tuple[float, float]] = []
-        occupied: set[tuple[int, int]] = set()
         ranked = sorted(
             accumulator.scored_by_position.items(),
             key=lambda item: (item[1].score, item[0]),
         )
+        leaders: list[tuple[float, float]] = []
+        occupied: set[tuple[int, int]] = set()
         for (east_m, north_m), _hypothesis in ranked:
             cell = (
                 int(np.floor((east_m - xmin) / cell_size)),
@@ -360,15 +391,18 @@ def run_hierarchical_search_v2(
             for dy in (-step, 0.0, step)
             if xmin <= x + dx <= xmax and ymin <= y + dy <= ymax
         }
-        if not evaluate(sorted(next_positions)):
-            exhausted = True
-    if exhausted:
+        evaluate_stage(next_positions, quota)
+
+    if budget_exhausted:
         return accumulator.finish(
             search_status="budget_exhausted",
             budget_limit=budget,
             budget_used=budget,
         )
-    return accumulator.finish(budget_limit=budget, budget_used=accumulator.candidate_count)
+    return accumulator.finish(
+        budget_limit=budget,
+        budget_used=accumulator.candidate_count,
+    )
 
 
 __all__ = [
