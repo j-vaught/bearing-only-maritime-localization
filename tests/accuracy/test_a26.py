@@ -10,13 +10,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from types import SimpleNamespace
 
 import pytest
+from pyproj import CRS, Geod, Transformer
+from shapely.geometry import box
 
+from maritime_localization_shared.contracts.inputs_v2 import (
+    CatalogRecordV2,
+    CatalogV2,
+    MeasurementSetV2,
+)
+from maritime_localization_shared.geospatial.vector_map import VectorMap
+from maritime_localization_shared.serialization import read_contract, write_contract
 from tools.run_accuracy_suite import (  # noqa: E402
     _extend_nominal_plan_if_needed,
     _load_command_config,
     _run_process,
     build_split_manifest,
     create_plan,
+    prepare_inputs,
     run_trials,
 )
 
@@ -104,6 +114,105 @@ def test_command_config_requires_full_coast_search_and_hides_truth(tmp_path: Pat
     path.write_text(json.dumps(config))
     with pytest.raises(ValueError, match="evaluator-only"):
         _load_command_config(path)
+
+
+def test_prepared_measurements_use_catalog_timestamp(tmp_path: Path, monkeypatch) -> None:
+    origin_lon, origin_lat = -76.3, 37.0
+    stamp = "2023-07-15T12:00:30Z"
+    geod = Geod(ellps="WGS84")
+    records = []
+    for index, bearing in enumerate((10.0, 130.0, 250.0)):
+        lon, lat, _ = geod.fwd(origin_lon, origin_lat, bearing, 500.0)
+        records.append(
+            CatalogRecordV2(
+                key=f"mmsi:{index + 1}",
+                latitude_deg=lat,
+                longitude_deg=lon,
+                raw_type="vessel",
+                normalized_type="vessel",
+                metadata=(("physical_entity_id", f"vessel-{index + 1}"),),
+            )
+        )
+    catalog = CatalogV2(
+        records=tuple(records),
+        timestamp_utc=stamp,
+        source="timestamp-regression",
+        catalog_version="1",
+        catalog_id="timestamp-regression",
+    )
+    catalog_path = tmp_path / "catalog.json"
+    write_contract(catalog_path, catalog)
+
+    origin_xy = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True).transform(
+        origin_lon, origin_lat
+    )
+    vector_map = VectorMap(
+        None,
+        crs=CRS.from_epsg(32618),
+        coverage_geometry=box(
+            origin_xy[0] - 20_000,
+            origin_xy[1] - 20_000,
+            origin_xy[0] + 20_000,
+            origin_xy[1] + 20_000,
+        ),
+    )
+    forward = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True)
+    inverse = Transformer.from_crs("EPSG:32618", "EPSG:4326", always_xy=True)
+    monkeypatch.setattr(
+        "tools.run_accuracy_suite._water_sampler",
+        lambda _port, _path: (vector_map, forward, inverse),
+    )
+    monkeypatch.setattr(
+        "tools.run_accuracy_suite._sample_placements",
+        lambda _port, _path, *, count, port_split: [
+            {
+                "placement_id": f"placement-{index + 1:03d}",
+                "longitude_deg": origin_lon,
+                "latitude_deg": origin_lat,
+            }
+            for index in range(count)
+        ],
+    )
+    monkeypatch.setitem(
+        __import__("tools.run_accuracy_suite", fromlist=["STRESS_PROFILES"]).STRESS_PROFILES,
+        "nominal",
+        {"detection_probability": 1.0, "expected_clutter_reports": 0.0},
+    )
+
+    plan_dir = tmp_path / "plan"
+    plan_dir.mkdir()
+    manifest = build_split_manifest()
+    (plan_dir / "splits.json").write_text(json.dumps(manifest))
+    trial_id = "development/port-001/placement-001/r0/range1000m/typeson/nominal"
+    (plan_dir / "config.json").write_text(
+        json.dumps({"trial_table": "trials.csv", "split_manifest": "splits.json"})
+    )
+    (plan_dir / "trials.csv").write_text(
+        "trial_id,split,port_id,placement_id,realization,range_m,report_types,physical_seed,sensor_condition,profile_parameters\n"
+        f"{trial_id},development,port-001,placement-001,0,1000,True,123,nominal,{{}}\n"
+    )
+    map_cache = tmp_path / "maps"
+    map_cache.mkdir()
+    (map_cache / "noaa-enc-port-B1-15km.map-v2.json").write_text("reference-map")
+    input_root = tmp_path / "inputs"
+
+    prepare_inputs(
+        plan_dir / "config.json",
+        catalog_path=catalog_path,
+        map_cache=map_cache,
+        input_root=input_root,
+        split="development",
+        only_trial_ids={trial_id},
+        _allow_extension=False,
+    )
+
+    measurements = read_contract(
+        input_root
+        / "development/port-001/placement-001/r0/1000m/types-on/nominal/measurements.json",
+        MeasurementSetV2,
+    )
+    assert measurements.measurements
+    assert {measurement.timestamp_utc for measurement in measurements.measurements} == {stamp}
 
 
 def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch) -> None:

@@ -647,6 +647,7 @@ def prepare_inputs(
             seed=trial_seed,
             mismatch=SimulatorMismatchConfig(**mismatch_values),
             trial_id=trial_id,
+            timestamp_utc=catalog.timestamp_utc,
         )
         valid_water = maps[port_id][1].observer_valid(
             _project_observer(maps[port_id][1], placement)
