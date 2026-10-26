@@ -1,0 +1,40 @@
+{
+  "figure_id": "development-geometry-2026-10-26",
+  "source_file": "results/accuracy/development-difficulty-2026-10-26.json",
+  "source_file_sha256": "053b6079fca86843f9d659534d813dd425f1e232563ebf994e4388948b5d0348",
+  "source_commit": "a441b86",
+  "source_split": "development",
+  "source_method": "bearing_localization.evaluation.difficulty.evaluate_scene_difficulty",
+  "eligibility_manifest_sha256": "2330090802952093bab1d5ec6cb97c6298cce27ee2050804f6eab91d66e8d050",
+  "preparation_sha256": "f84072c6cd77af4dfebece37632d80a6675880be0ab8607636be37f27cab1928",
+  "nominal_physical_scenes_per_range": 600,
+  "paired_type_modes_per_range": 2,
+  "paired_modes_geometry_identical": true,
+  "supported_scene_definition": "Valid reference water and at least three distinct detected postmerge catalog-matched physical groups.",
+  "ellipse_definition": "Known-association Fisher-information 95% ellipse major radius; sigma fallback 0.5 deg and floor 0.05 deg.",
+  "heldout_rows_read": false,
+  "search_outputs_read": false,
+  "ranges": [
+    {
+      "range_km": 1,
+      "nominal_scenes": 600,
+      "supported_scenes": 269,
+      "strata": {"<=25m": 257, "25-100m": 12, ">100m": 0, "singular": 0},
+      "median_catalog_matches": 7
+    },
+    {
+      "range_km": 5,
+      "nominal_scenes": 600,
+      "supported_scenes": 438,
+      "strata": {"<=25m": 382, "25-100m": 47, ">100m": 9, "singular": 0},
+      "median_catalog_matches": 26
+    },
+    {
+      "range_km": 10,
+      "nominal_scenes": 600,
+      "supported_scenes": 448,
+      "strata": {"<=25m": 390, "25-100m": 47, ">100m": 11, "singular": 0},
+      "median_catalog_matches": 29
+    }
+  ]
+}
