@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -256,3 +257,35 @@ def test_existing_cache_is_write_once(tmp_path: Path) -> None:
 
     with pytest.raises(FileExistsError, match="already exists"):
         save_proposal_cache(cache_path, result, context=_context())
+
+
+def test_result_validation_builds_catalog_lookup_once_for_many_proposals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = _tiny_real_result()
+    template = base.proposals[0]
+    cell_size = base.cell_size_m
+    proposals = tuple(
+        replace(
+            template,
+            candidate_id=f"cell:{index}:0",
+            cell_i=index,
+            cell_j=0,
+            east_m=(index + 0.5) * cell_size,
+            north_m=0.5 * cell_size,
+        )
+        for index in range(64)
+    )
+    result = replace(base, proposals=proposals, candidate_cells_total=len(proposals))
+    original = cache_module._catalog_positions
+    calls = 0
+
+    def counted_catalog_positions(catalog_keys: tuple[str, ...]) -> dict[str, int]:
+        nonlocal calls
+        calls += 1
+        return original(catalog_keys)
+
+    monkeypatch.setattr(cache_module, "_catalog_positions", counted_catalog_positions)
+    cache_module._validate_result(result)
+
+    assert calls == 1

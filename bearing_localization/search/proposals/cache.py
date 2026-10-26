@@ -466,6 +466,7 @@ def _validate_result(result: GeodesicWedgeProposalResult) -> None:
         raise ValueError("max_solver_residual_deg must be finite and nonnegative.")
     proposal_reports = {item.report_index for item in observations}
     proposal_keys = set(catalog_keys)
+    catalog_position = _catalog_positions(catalog_keys)
     for item in proposals:
         if item.candidate_id != f"cell:{item.cell_i}:{item.cell_j}":
             raise ValueError("Proposal candidate ID does not match its cell.")
@@ -487,7 +488,6 @@ def _validate_result(result: GeodesicWedgeProposalResult) -> None:
             raise ValueError("Proposal witness_keys do not equal the union of report witnesses.")
         if not 0 <= item.matching_count <= min(item.vote_count, len(item.witness_keys)):
             raise ValueError("Proposal matching_count is inconsistent with its witnesses.")
-        catalog_position = {key: position for position, key in enumerate(catalog_keys)}
         report_graph = {
             report_index: [catalog_position[key] for key in keys]
             for report_index, keys in item.witness_report_keys
@@ -843,6 +843,11 @@ def _validate_arrays(
         )
     if ranked_keys != sorted(ranked_keys):
         raise ValueError("Proposal array order does not match deterministic ranking order.")
+
+
+def _catalog_positions(catalog_keys: tuple[str, ...]) -> dict[str, int]:
+    """Build the stable key-to-position index once per result validation."""
+    return {key: position for position, key in enumerate(catalog_keys)}
 
 
 def _maximum_catalog_matching(report_to_keys: dict[int, list[int]]) -> int:
