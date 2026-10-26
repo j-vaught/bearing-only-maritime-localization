@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
-from pyproj import Geod, Transformer
+from pyproj import CRS, Geod, Transformer
 
 from bearing_localization.evaluation.difficulty import (
     build_support_manifest,
@@ -28,6 +28,7 @@ from bearing_localization.simulator.mismatch import (
 )
 from bearing_localization.simulator.runner import run_simulator_v2
 from maritime_localization_shared.contracts.inputs_v2 import CatalogV2, MapV2
+from maritime_localization_shared.contracts.localization import LocalizationResult
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 from maritime_localization_shared.serialization import read_contract, write_contract
 
@@ -469,7 +470,7 @@ def _load_command_config(path: Path) -> dict[str, Any]:
     if not isinstance(config["projected_crs"], str) or not config["projected_crs"].strip():
         raise ValueError("projected_crs must be a nonempty string.")
     for option, expected_value in (
-        ("--projected-crs", str(config["projected_crs"])),
+        ("--projected-crs", "{projected_crs}"),
         ("--scope-manifest", "{search_scope_manifest_path}"),
     ):
         try:
@@ -482,9 +483,26 @@ def _load_command_config(path: Path) -> dict[str, Any]:
     if any(token in item for item in search_argv for token in forbidden):
         raise ValueError("search_argv may not include evaluator-only file placeholders.")
     evaluator_argv = config["evaluator_argv"]
-    required_evaluator = ("{estimate_path}", "{truth_path}", "{support_path}", "{evaluation_path}")
+    required_evaluator = (
+        "{evaluator_estimate_path}",
+        "{truth_path}",
+        "{support_path}",
+        "{evaluation_path}",
+        "{truth_coordinate_crs}",
+    )
     if any(not any(token in item for item in evaluator_argv) for token in required_evaluator):
-        raise ValueError("evaluator_argv must use estimate, truth, support, and evaluation paths.")
+        raise ValueError(
+            "evaluator_argv must use transformed evaluator estimate, truth, support, output, "
+            "and coordinate CRS."
+        )
+    if "--coordinate-crs" not in evaluator_argv:
+        raise ValueError("evaluator_argv must declare --coordinate-crs.")
+    crs_index = evaluator_argv.index("--coordinate-crs")
+    if (
+        crs_index + 1 >= len(evaluator_argv)
+        or evaluator_argv[crs_index + 1] != "{truth_coordinate_crs}"
+    ):
+        raise ValueError("evaluator_argv must pass {truth_coordinate_crs} after --coordinate-crs.")
     return config
 
 
@@ -595,6 +613,7 @@ def prepare_inputs(
         support_path = trial_dir / "support.json"
         difficulty_path = trial_dir / "difficulty.json"
         audit_path = trial_dir / "physical-identity-audit.json"
+        truth_crs_path = trial_dir / "truth-crs.json"
         required_outputs = (
             measurement_path,
             truth_path,
@@ -602,6 +621,7 @@ def prepare_inputs(
             support_path,
             difficulty_path,
             audit_path,
+            truth_crs_path,
         )
         if all(path.is_file() for path in required_outputs):
             cached_audit = json.loads(audit_path.read_text(encoding="utf-8"))
@@ -675,6 +695,18 @@ def prepare_inputs(
         trial_dir.mkdir(parents=True, exist_ok=True)
         write_contract(measurement_path, run.measurements)
         write_contract(truth_path, run.truth)
+        _atomic_json(
+            truth_crs_path,
+            {
+                "schema_version": 1,
+                "trial_id": trial_id,
+                "reference_map_path": str(maps[port_id][0]),
+                "reference_map_sha256": sha256_file(maps[port_id][0]),
+                "coordinate_reference_system": maps[port_id][1].crs.to_string(),
+                "coordinate_units": "metre",
+                "axis_order": "east_north",
+            },
+        )
         _atomic_json(diagnostics_path, asdict(run.diagnostics))
         _atomic_json(support_path, {**asdict(support), "supported": support.supported})
         _atomic_json(difficulty_path, asdict(difficulty))
@@ -720,6 +752,7 @@ def prepare_inputs(
             "truth_sha256": _trial_hash(input_root, split, row, "truth.json"),
             "support_sha256": _trial_hash(input_root, split, row, "support.json"),
             "difficulty_sha256": _trial_hash(input_root, split, row, "difficulty.json"),
+            "truth_crs_sha256": _trial_hash(input_root, split, row, "truth-crs.json"),
         }
         preparation_attempts.append(attempt)
         preparation_rows[trial_id] = attempt
@@ -1024,6 +1057,90 @@ def _physical_identity_audit(catalog: CatalogV2, diagnostics: object) -> dict[st
     return audit
 
 
+def _trial_search_config(base: dict[str, Any], row: dict[str, str]) -> dict[str, Any]:
+    """Bind search range and type-label use to one physical trial."""
+    if base.get("contract_type") != "SearchConfig":
+        raise ValueError("SearchConfig must declare contract_type SearchConfig.")
+    config = dict(base)
+    config["max_range_m"] = float(row["range_m"])
+    config["use_types"] = row["report_types"] == "True"
+    return config
+
+
+def _write_evaluator_estimate(
+    estimate_path: Path,
+    truth_path: Path,
+    truth_crs_path: Path,
+    output_path: Path,
+    provenance_path: Path,
+    *,
+    trial_id: str,
+    estimate_crs: str,
+) -> dict[str, Any]:
+    """Transform only a separate evaluator estimate into the source truth CRS."""
+    truth_crs_document = json.loads(truth_crs_path.read_text(encoding="utf-8"))
+    if (
+        truth_crs_document.get("schema_version") != 1
+        or truth_crs_document.get("trial_id") != trial_id
+    ):
+        raise ValueError("Truth CRS metadata is missing or does not match the trial.")
+    source_crs = CRS.from_user_input(estimate_crs)
+    target_crs = CRS.from_user_input(str(truth_crs_document["coordinate_reference_system"]))
+    estimate = read_contract(estimate_path, LocalizationResult)
+    transformer = Transformer.from_crs(source_crs, target_crs, always_xy=True)
+    transformed_hypotheses = []
+    for hypothesis in estimate.hypotheses:
+        east_m, north_m = transformer.transform(hypothesis.east_m, hypothesis.north_m)
+        transformed_hypotheses.append(
+            replace(hypothesis, east_m=float(east_m), north_m=float(north_m))
+        )
+    evaluator_estimate = replace(estimate, hypotheses=tuple(transformed_hypotheses))
+    write_contract(output_path, evaluator_estimate)
+    provenance = {
+        "schema_version": 1,
+        "trial_id": trial_id,
+        "source_estimate_sha256": sha256_file(estimate_path),
+        "source_truth_sha256": sha256_file(truth_path),
+        "evaluator_estimate_sha256": sha256_file(output_path),
+        "estimate_source_crs": source_crs.to_string(),
+        "truth_coordinate_crs": target_crs.to_string(),
+        "estimate_target_crs": target_crs.to_string(),
+        "transform_method": "pyproj.Transformer.from_crs(always_xy=True)",
+        "transformer_description": transformer.description,
+        "transformer_definition": transformer.definition,
+        "transformer_accuracy_m": float(transformer.accuracy),
+        "axis_order": "xy",
+        "truth_crs_metadata_sha256": sha256_file(truth_crs_path),
+    }
+    _atomic_json(provenance_path, provenance)
+    return provenance
+
+
+def _run_identity(
+    *,
+    split: str,
+    command_config_hash: str,
+    plan_path: Path,
+    trial_table_path: Path,
+    catalog_path: Path,
+    map_path: Path,
+    search_config_path: Path,
+    projected_crs: str,
+) -> str:
+    identity = {
+        "split": split,
+        "command_config_sha256": command_config_hash,
+        "plan_sha256": sha256_file(plan_path),
+        "trial_table_sha256": sha256_file(trial_table_path),
+        "catalog_sha256": sha256_file(catalog_path),
+        "map_sha256": sha256_file(map_path),
+        "search_config_sha256": sha256_file(search_config_path),
+        "projected_crs": projected_crs,
+    }
+    canonical = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(canonical).hexdigest()[:24]
+
+
 def run_trials(
     plan_path: Path,
     *,
@@ -1036,7 +1153,7 @@ def run_trials(
     authorize_a38_release: bool = False,
     retry_failures: bool = False,
 ) -> Path:
-    """Run explicit independent command templates and retain every attempt."""
+    """Run independent estimator/evaluator programs with hash-bound artifacts."""
     if timeout_s <= 0.0 or not math.isfinite(timeout_s):
         raise ValueError("timeout_s must be finite and positive.")
     if split == "heldout":
@@ -1057,26 +1174,19 @@ def run_trials(
     plan: dict[str, Any] = json.loads(plan_path.read_text(encoding="utf-8"))
     trial_table_path = plan_path.parent / str(plan["trial_table"])
     rows = _read_table(trial_table_path)
-    run_root.mkdir(parents=True, exist_ok=True)
-    state_path = run_root / "trials.csv"
-    attempts_path = run_root / "attempts.csv"
-    current = (
-        {row["trial_id"]: row for row in _read_table(state_path)} if state_path.exists() else {}
-    )
-    attempts: list[dict[str, Any]] = _read_table(attempts_path) if attempts_path.exists() else []
+    command_config_hash = sha256_file(command_config_path)
     source_sha = _git_head()
-    config_hash = sha256_file(command_config_path)
     catalog_path = Path(str(command_config["search_catalog"])).expanduser().resolve()
     search_map_path = Path(str(command_config["search_map"])).expanduser().resolve()
-    search_config_path = Path(str(command_config["search_config"])).expanduser().resolve()
-    if not all(path.is_file() for path in (catalog_path, search_map_path, search_config_path)):
+    base_search_config_path = Path(str(command_config["search_config"])).expanduser().resolve()
+    if not all(path.is_file() for path in (catalog_path, search_map_path, base_search_config_path)):
         raise FileNotFoundError(
             "Full-coast search catalog, coast map, and search config must exist."
         )
-    search_config_document = json.loads(search_config_path.read_text(encoding="utf-8"))
-    bounds_xy = search_config_document.get("bounds_xy")
+    base_search_config = json.loads(base_search_config_path.read_text(encoding="utf-8"))
+    bounds_xy = base_search_config.get("bounds_xy")
     if (
-        search_config_document.get("contract_type") != "SearchConfig"
+        base_search_config.get("contract_type") != "SearchConfig"
         or not isinstance(bounds_xy, list)
         or len(bounds_xy) != 4
     ):
@@ -1084,26 +1194,78 @@ def run_trials(
             "SearchConfig must declare contract_type SearchConfig and four projected bounds_xy "
             "values."
         )
-    scope_manifest_path = run_root / "scope-manifest.json"
+    projected_crs = str(command_config["projected_crs"])
+    run_id = _run_identity(
+        split=split,
+        command_config_hash=command_config_hash,
+        plan_path=plan_path,
+        trial_table_path=trial_table_path,
+        catalog_path=catalog_path,
+        map_path=search_map_path,
+        search_config_path=base_search_config_path,
+        projected_crs=projected_crs,
+    )
+    run_dir = run_root / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    state_path = run_dir / "trials.csv"
+    attempts_path = run_dir / "attempts.csv"
+    manifest_path = run_dir / "run-manifest.json"
+    current = (
+        {row["trial_id"]: row for row in _read_table(state_path)} if state_path.exists() else {}
+    )
+    attempts: list[dict[str, Any]] = _read_table(attempts_path) if attempts_path.exists() else []
+    scope_manifest_path = run_dir / "scope-manifest.json"
     scope_manifest = {
         "schema_version": 1,
         "geographic_scope": "full_coast",
         "catalog_sha256": sha256_file(catalog_path),
         "map_sha256": sha256_file(search_map_path),
-        "projected_crs": str(command_config["projected_crs"]),
+        "projected_crs": projected_crs,
         "bounds_xy_m": bounds_xy,
     }
     _atomic_json(scope_manifest_path, scope_manifest)
     scope_manifest_sha256 = sha256_file(scope_manifest_path)
+
+    run_manifest: dict[str, Any] = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "split": split,
+        "command_config_sha256": command_config_hash,
+        "plan_sha256": sha256_file(plan_path),
+        "trial_table_sha256": sha256_file(trial_table_path),
+        "search_catalog_sha256": sha256_file(catalog_path),
+        "search_map_sha256": sha256_file(search_map_path),
+        "base_search_config_sha256": sha256_file(base_search_config_path),
+        "search_scope_manifest_sha256": scope_manifest_sha256,
+        "projected_crs": projected_crs,
+        "geographic_scope": "full_coast",
+        "trials": [],
+    }
+
+    def flush_state() -> None:
+        _write_table(state_path, list(current.values()))
+        _write_table(attempts_path, attempts)
+        run_manifest["trials"] = [current[key] for key in sorted(current)]
+        _atomic_json(manifest_path, run_manifest)
+
+    hash_names = (
+        "measurements_sha256",
+        "truth_sha256",
+        "support_sha256",
+        "truth_crs_sha256",
+        "physical_identity_audit_sha256",
+        "search_config_sha256",
+        "command_config_sha256",
+        "search_catalog_sha256",
+        "search_map_sha256",
+        "search_scope_manifest_sha256",
+    )
     for row in rows:
         if row["split"] != split:
             continue
         trial_id = row["trial_id"]
-        prior = current.get(trial_id)
-        if prior and (prior.get("status") == "completed" or not retry_failures):
-            continue
         type_mode = "types-on" if row["report_types"] == "True" else "types-off"
-        trial_dir = (
+        input_trial_dir = (
             input_root
             / split
             / row["port_id"]
@@ -1113,133 +1275,284 @@ def run_trials(
             / type_mode
             / row["sensor_condition"]
         )
-        measurements_path = trial_dir / "measurements.json"
-        truth_path = trial_dir / "truth.json"
-        support_path = trial_dir / "support.json"
-        diagnostics_path = trial_dir / "diagnostics.json"
-        estimate_path = trial_dir / "estimate.json"
-        evaluation_path = trial_dir / "evaluation.json"
-        base = {
+        measurements_path = input_trial_dir / "measurements.json"
+        truth_path = input_trial_dir / "truth.json"
+        support_path = input_trial_dir / "support.json"
+        diagnostics_path = input_trial_dir / "diagnostics.json"
+        truth_crs_path = input_trial_dir / "truth-crs.json"
+        audit_path = input_trial_dir / "physical-identity-audit.json"
+        trial_search_config = _trial_search_config(base_search_config, row)
+        trial_key_seed = {
             "trial_id": trial_id,
+            "measurements_sha256": sha256_file(measurements_path)
+            if measurements_path.is_file()
+            else "",
+            "truth_sha256": sha256_file(truth_path) if truth_path.is_file() else "",
+            "support_sha256": sha256_file(support_path) if support_path.is_file() else "",
+            "truth_crs_sha256": sha256_file(truth_crs_path) if truth_crs_path.is_file() else "",
+            "search_config": trial_search_config,
+        }
+        trial_key = hashlib.sha256(
+            json.dumps(trial_key_seed, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()[:24]
+        artifact_dir = run_dir / "artifacts" / trial_key
+        search_config_path = run_dir / "search-configs" / f"{trial_key}.json"
+        _atomic_json(search_config_path, trial_search_config)
+        search_config_hash = sha256_file(search_config_path)
+        estimate_path = artifact_dir / "estimate.json"
+        evaluator_estimate_path = artifact_dir / "evaluator-estimate.json"
+        evaluation_path = artifact_dir / "evaluation.json"
+        provenance_path = artifact_dir / "evaluation-coordinate-provenance.json"
+        base: dict[str, Any] = {
+            "trial_id": trial_id,
+            "trial_key": trial_key,
             "split": split,
             "port_id": row["port_id"],
             "placement_id": row["placement_id"],
             "realization": row["realization"],
             "range_m": row["range_m"],
             "report_types": row["report_types"],
+            "sensor_condition": row["sensor_condition"],
             "physical_seed": row["physical_seed"],
             "source_sha": source_sha,
-            "command_config_sha256": config_hash,
+            "command_config_sha256": command_config_hash,
             "search_catalog_sha256": sha256_file(catalog_path),
             "search_map_sha256": sha256_file(search_map_path),
-            "search_config_sha256": sha256_file(search_config_path),
+            "base_search_config_sha256": sha256_file(base_search_config_path),
+            "search_config_path": str(search_config_path.relative_to(run_dir)),
+            "search_config_sha256": search_config_hash,
             "search_scope_manifest_sha256": scope_manifest_sha256,
-            "measurements_sha256": sha256_file(measurements_path)
-            if measurements_path.is_file()
+            "measurements_path": str(measurements_path),
+            "truth_path": str(truth_path),
+            "support_path": str(support_path),
+            "truth_crs_path": str(truth_crs_path),
+            "estimate_path": str(estimate_path.relative_to(run_dir)),
+            "evaluator_estimate_path": str(evaluator_estimate_path.relative_to(run_dir)),
+            "evaluation_path": str(evaluation_path.relative_to(run_dir)),
+            "coordinate_provenance_path": str(provenance_path.relative_to(run_dir)),
+            "measurements_sha256": trial_key_seed["measurements_sha256"],
+            "truth_sha256": trial_key_seed["truth_sha256"],
+            "support_sha256": trial_key_seed["support_sha256"],
+            "truth_crs_sha256": trial_key_seed["truth_crs_sha256"],
+            "physical_identity_audit_sha256": sha256_file(audit_path)
+            if audit_path.is_file()
             else "",
-            "truth_sha256": sha256_file(truth_path) if truth_path.is_file() else "",
-            "support_sha256": sha256_file(support_path) if support_path.is_file() else "",
-            "diagnostics_sha256": (
-                sha256_file(trial_dir / "diagnostics.json")
-                if (trial_dir / "diagnostics.json").is_file()
-                else ""
-            ),
-            "difficulty_sha256": (
-                sha256_file(trial_dir / "difficulty.json")
-                if (trial_dir / "difficulty.json").is_file()
-                else ""
-            ),
-            "physical_identity_audit_sha256": (
-                sha256_file(trial_dir / "physical-identity-audit.json")
-                if (trial_dir / "physical-identity-audit.json").is_file()
-                else ""
-            ),
+            "diagnostics_sha256": sha256_file(diagnostics_path)
+            if diagnostics_path.is_file()
+            else "",
+            "difficulty_sha256": sha256_file(input_trial_dir / "difficulty.json")
+            if (input_trial_dir / "difficulty.json").is_file()
+            else "",
+            "estimate_sha256": "",
+            "evaluator_estimate_sha256": "",
+            "evaluation_sha256": "",
+            "coordinate_provenance_sha256": "",
         }
-        audit_path = trial_dir / "physical-identity-audit.json"
-        if not audit_path.is_file():
+        prior = current.get(trial_id)
+        if prior:
+            same_inputs = all(prior.get(name) == base.get(name) for name in hash_names)
+            output_hashes = {
+                ("estimate_sha256", "estimate_path"),
+                ("evaluator_estimate_sha256", "evaluator_estimate_path"),
+                ("evaluation_sha256", "evaluation_path"),
+                ("coordinate_provenance_sha256", "coordinate_provenance_path"),
+            }
+            current_output_hashes = {
+                hash_name: (
+                    sha256_file(run_dir / str(prior[path_name]))
+                    if prior.get(path_name) and (run_dir / str(prior[path_name])).is_file()
+                    else ""
+                )
+                for hash_name, path_name in output_hashes
+            }
+            prior_outputs_valid = all(
+                prior.get(hash_name) and current_output_hashes[hash_name] == prior[hash_name]
+                for hash_name, _ in output_hashes
+            )
+            if same_inputs and prior.get("status") == "completed" and prior_outputs_valid:
+                continue
+            if same_inputs and prior.get("status") != "completed" and not retry_failures:
+                continue
+            if not same_inputs or (prior.get("status") == "completed" and not prior_outputs_valid):
+                attempts.append(
+                    {
+                        "attempt_id": f"{trial_id}#resume-{len(attempts) + 1}",
+                        "trial_id": trial_id,
+                        "stage": "resume_validation",
+                        "status": "hash_mismatch",
+                        "mismatched_input_hashes_json": json.dumps(
+                            {
+                                name: {
+                                    "previous": prior.get(name, ""),
+                                    "current": base.get(name, ""),
+                                }
+                                for name in hash_names
+                                if prior.get(name, "") != base.get(name, "")
+                            },
+                            sort_keys=True,
+                        ),
+                        "previous_output_hashes_json": json.dumps(
+                            {name: prior.get(name, "") for name, _ in output_hashes},
+                            sort_keys=True,
+                        ),
+                        "current_output_hashes_json": json.dumps(
+                            current_output_hashes, sort_keys=True
+                        ),
+                    }
+                )
+        required_inputs = (
+            measurements_path,
+            truth_path,
+            support_path,
+            truth_crs_path,
+            audit_path,
+        )
+        if not all(path.is_file() for path in required_inputs):
             current[trial_id] = {
                 **base,
                 "status": "missing_inputs",
-                "failure": "physical_identity_audit_missing",
+                "failure": "simulator_input_missing",
             }
+            flush_state()
             continue
-        simulator_catalog_hash = json.loads(audit_path.read_text(encoding="utf-8")).get(
-            "catalog_sha256"
-        )
-        if simulator_catalog_hash != sha256_file(catalog_path):
+        audit = json.loads(audit_path.read_text(encoding="utf-8"))
+        if audit.get("catalog_sha256") != base["search_catalog_sha256"]:
             current[trial_id] = {
                 **base,
                 "status": "catalog_mismatch",
                 "failure": "simulator_and_search_catalog_hash_mismatch",
             }
+            flush_state()
             continue
+        truth_crs_document = json.loads(truth_crs_path.read_text(encoding="utf-8"))
         if (
-            not measurements_path.is_file()
-            or not truth_path.is_file()
-            or not support_path.is_file()
+            truth_crs_document.get("schema_version") != 1
+            or truth_crs_document.get("trial_id") != trial_id
+            or truth_crs_document.get("reference_map_sha256")
+            != sha256_file(Path(str(truth_crs_document.get("reference_map_path", ""))))
         ):
-            row_result = {**base, "status": "missing_inputs", "failure": "simulator_input_missing"}
-            current[trial_id] = row_result
+            current[trial_id] = {
+                **base,
+                "status": "invalid_truth_crs_metadata",
+                "failure": "truth_crs_metadata_provenance_mismatch",
+            }
+            flush_state()
             continue
+        truth_coordinate_crs = CRS.from_user_input(
+            str(truth_crs_document["coordinate_reference_system"])
+        ).to_string()
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        for output_path in (
+            estimate_path,
+            evaluator_estimate_path,
+            evaluation_path,
+            provenance_path,
+        ):
+            output_path.unlink(missing_ok=True)
         values: dict[str, Any] = {
             "trial_id": trial_id,
             "measurements_path": measurements_path,
             "truth_path": truth_path,
+            "truth_crs_path": truth_crs_path,
+            "truth_coordinate_crs": truth_coordinate_crs,
             "diagnostics_path": diagnostics_path,
             "support_path": support_path,
             "search_catalog_path": catalog_path,
             "search_map_path": search_map_path,
             "search_config_path": search_config_path,
             "search_scope_manifest_path": scope_manifest_path,
+            "projected_crs": projected_crs,
             "estimate_path": estimate_path,
+            "evaluator_estimate_path": evaluator_estimate_path,
             "evaluation_path": evaluation_path,
+            "coordinate_provenance_path": provenance_path,
         }
-        command_sets = (
-            ("search", _format_argv(command_config["search_argv"], values)),
-            ("evaluator", _format_argv(command_config["evaluator_argv"], values)),
-        )
+        command_sets = (("search", _format_argv(command_config["search_argv"], values)),)
         status = "completed"
         failure = ""
         trial_attempts: list[dict[str, Any]] = []
         for stage, argv in command_sets:
-            if stage == "evaluator" and not estimate_path.is_file():
-                status, failure = "missing_search_output", "estimate_missing"
-                break
             outcome = _run_process(argv, cwd=ROOT, timeout_s=timeout_s)
             attempt_id = f"{trial_id}#{len(attempts) + len(trial_attempts) + 1}"
-            log_dir = run_root / "logs" / hashlib.sha256(attempt_id.encode()).hexdigest()[:20]
+            log_dir = run_dir / "logs" / hashlib.sha256(attempt_id.encode()).hexdigest()[:20]
             log_dir.mkdir(parents=True, exist_ok=True)
             (log_dir / "stdout.txt").write_text(str(outcome.pop("stdout")), encoding="utf-8")
             (log_dir / "stderr.txt").write_text(str(outcome.pop("stderr")), encoding="utf-8")
-            attempt = {
-                "attempt_id": attempt_id,
-                "trial_id": trial_id,
-                "stage": stage,
-                "argv_json": json.dumps(argv),
-                "status": outcome["status"],
-                "returncode": outcome["returncode"],
-                "elapsed_s": outcome["elapsed_s"],
-                "log_directory": str(log_dir),
-            }
-            trial_attempts.append(attempt)
+            trial_attempts.append(
+                {
+                    "attempt_id": attempt_id,
+                    "trial_id": trial_id,
+                    "stage": stage,
+                    "argv_json": json.dumps(argv),
+                    "status": outcome["status"],
+                    "returncode": outcome["returncode"],
+                    "elapsed_s": outcome["elapsed_s"],
+                    "log_directory": str(log_dir.relative_to(run_dir)),
+                }
+            )
             if outcome["status"] != "completed":
                 status = f"{stage}_{outcome['status']}"
                 failure = f"{stage}_command_{outcome['status']}"
                 break
+        if status == "completed" and not estimate_path.is_file():
+            status, failure = "missing_search_output", "estimate_missing"
+        if status == "completed":
+            try:
+                _write_evaluator_estimate(
+                    estimate_path,
+                    truth_path,
+                    truth_crs_path,
+                    evaluator_estimate_path,
+                    provenance_path,
+                    trial_id=trial_id,
+                    estimate_crs=projected_crs,
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                status, failure = "estimate_transform_failed", f"{type(exc).__name__}: {exc}"
+        if status == "completed":
+            argv = _format_argv(command_config["evaluator_argv"], values)
+            outcome = _run_process(argv, cwd=ROOT, timeout_s=timeout_s)
+            attempt_id = f"{trial_id}#{len(attempts) + len(trial_attempts) + 1}"
+            log_dir = run_dir / "logs" / hashlib.sha256(attempt_id.encode()).hexdigest()[:20]
+            log_dir.mkdir(parents=True, exist_ok=True)
+            (log_dir / "stdout.txt").write_text(str(outcome.pop("stdout")), encoding="utf-8")
+            (log_dir / "stderr.txt").write_text(str(outcome.pop("stderr")), encoding="utf-8")
+            trial_attempts.append(
+                {
+                    "attempt_id": attempt_id,
+                    "trial_id": trial_id,
+                    "stage": "evaluator",
+                    "argv_json": json.dumps(argv),
+                    "status": outcome["status"],
+                    "returncode": outcome["returncode"],
+                    "elapsed_s": outcome["elapsed_s"],
+                    "log_directory": str(log_dir.relative_to(run_dir)),
+                }
+            )
+            if outcome["status"] != "completed":
+                status = f"evaluator_{outcome['status']}"
+                failure = f"evaluator_command_{outcome['status']}"
+            elif not evaluation_path.is_file():
+                status, failure = "missing_evaluator_output", "evaluation_missing"
         attempts.extend(trial_attempts)
         row_result = {
             **base,
             "status": status,
             "failure": failure,
+            "truth_coordinate_crs": truth_coordinate_crs,
             "estimate_sha256": sha256_file(estimate_path) if estimate_path.is_file() else "",
+            "evaluator_estimate_sha256": (
+                sha256_file(evaluator_estimate_path) if evaluator_estimate_path.is_file() else ""
+            ),
             "evaluation_sha256": sha256_file(evaluation_path) if evaluation_path.is_file() else "",
+            "coordinate_provenance_sha256": (
+                sha256_file(provenance_path) if provenance_path.is_file() else ""
+            ),
             "attempt_count": len(trial_attempts),
         }
         current[trial_id] = row_result
-        _write_table(state_path, list(current.values()))
-        _write_table(attempts_path, attempts)
-    _write_table(state_path, list(current.values()))
-    _write_table(attempts_path, attempts)
+        flush_state()
+    flush_state()
     return state_path
 
 
