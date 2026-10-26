@@ -294,3 +294,92 @@ def test_proposal_implementation_hash_tracks_generation_source_only(tmp_path: Pa
     generator_path.write_bytes(generator_path.read_bytes() + b"\n# changed source\n")
     after = cli._proposal_generation_implementation_sha256(target)
     assert before != after
+
+
+def test_missing_cache_parent_is_created_before_generation(tmp_path: Path, monkeypatch) -> None:
+    cache = tmp_path / "nested" / "new-parent" / "proposal-cache"
+    paths = _fixture(tmp_path, cache=cache)
+    original_generator = cli.generate_geographic_reverse_wedge_proposals_geodesic
+    observed = {"called": False}
+
+    def checking_generator(*args, **kwargs):
+        observed["called"] = True
+        assert cache.parent.is_dir()
+        assert list(cache.parent.iterdir()) == []
+        return original_generator(*args, **kwargs)
+
+    monkeypatch.setattr(
+        cli, "generate_geographic_reverse_wedge_proposals_geodesic", checking_generator
+    )
+    result = _run(paths)
+    assert observed["called"] is True
+    assert result.search_status == "completed"
+    assert cache.is_dir()
+    assert _sidecar(paths[4])["diagnostics"]["proposal_cache"]["action"] == "generated_and_saved"
+
+
+def test_cache_parent_errors_fail_before_generator_or_output(tmp_path: Path, monkeypatch) -> None:
+    blocker = tmp_path / "parent-is-a-file"
+    blocker.write_text("file", encoding="utf-8")
+    paths = _fixture(tmp_path, cache=blocker / "child" / "proposal-cache")
+    called = False
+
+    def unexpected_generator(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("generator must not start before cache path preflight")
+
+    monkeypatch.setattr(
+        cli, "generate_geographic_reverse_wedge_proposals_geodesic", unexpected_generator
+    )
+    with pytest.raises(OSError, match="Cannot create proposal cache parent"):
+        _run(paths)
+    assert called is False
+    assert not paths[4].exists()
+
+    writable_cache = tmp_path / "unwritable-parent" / "proposal-cache"
+    fixture_dir = tmp_path / "unwritable-fixture"
+    fixture_dir.mkdir()
+    writable_paths = _fixture(fixture_dir, cache=writable_cache)
+    monkeypatch.setattr(
+        cli.tempfile,
+        "mkstemp",
+        lambda **kwargs: (_ for _ in ()).throw(PermissionError("read-only")),
+    )
+    with pytest.raises(OSError, match="not writable"):
+        _run(writable_paths)
+    assert called is False
+    assert not writable_paths[4].exists()
+
+
+def test_generation_or_save_failure_leaves_no_claimed_cache(tmp_path: Path, monkeypatch) -> None:
+    cache = tmp_path / "nested" / "proposal-cache"
+    (tmp_path / "nested").mkdir()
+    paths = _fixture(tmp_path, cache=cache)
+
+    def failed_generator(*args, **kwargs):
+        raise RuntimeError("generator stopped")
+
+    monkeypatch.setattr(
+        cli, "generate_geographic_reverse_wedge_proposals_geodesic", failed_generator
+    )
+    with pytest.raises(RuntimeError, match="generator stopped"):
+        _run(paths)
+    assert cache.parent.is_dir()
+    assert not cache.exists()
+    assert not paths[4].exists()
+
+    monkeypatch.setattr(
+        cli,
+        "generate_geographic_reverse_wedge_proposals_geodesic",
+        generate_geographic_reverse_wedge_proposals_geodesic,
+    )
+
+    def failed_save(*args, **kwargs):
+        raise OSError("injected cache publication failure")
+
+    monkeypatch.setattr(cli, "save_proposal_cache", failed_save)
+    with pytest.raises(RuntimeError, match="save failed after proposal generation"):
+        _run(paths)
+    assert not cache.exists()
+    assert not paths[4].exists()

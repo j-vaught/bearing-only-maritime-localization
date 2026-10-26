@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import tempfile
 from collections.abc import Callable, Sequence
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, fields, replace
@@ -140,6 +142,43 @@ def _proposal_generation_implementation_sha256(
     digest.update(len(dependency_bytes).to_bytes(8, "big"))
     digest.update(dependency_bytes)
     return digest.hexdigest()
+
+
+def _preflight_proposal_cache_destination(cache_path: str | Path) -> bool:
+    """Create and probe a missing cache parent before expensive proposal generation.
+
+    Return true when generation may populate a missing cache. Existing targets are
+    left for the strict loader and are never replaced.
+    """
+    target = Path(cache_path).expanduser()
+    if target.exists() or target.is_symlink():
+        return False
+    parent = target.parent
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise OSError(f"Cannot create proposal cache parent directory {parent}: {exc}") from exc
+    if not parent.is_dir():
+        raise NotADirectoryError(f"Proposal cache parent is not a directory: {parent}")
+    descriptor: int | None = None
+    probe_path: str | None = None
+    try:
+        descriptor, probe_path = tempfile.mkstemp(prefix=f".{target.name}.preflight-", dir=parent)
+        os.close(descriptor)
+        descriptor = None
+        os.unlink(probe_path)
+        probe_path = None
+    except OSError as exc:
+        raise OSError(f"Proposal cache parent is not writable: {parent}: {exc}") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        if probe_path is not None:
+            try:
+                os.unlink(probe_path)
+            except FileNotFoundError:
+                pass
+    return not (target.exists() or target.is_symlink())
 
 
 def _proposal_generation_config_sha256(settings: dict[str, Any]) -> str:
@@ -891,7 +930,8 @@ def _search_dispatch(
                     "cache_format": "geodesic-proposal-cache-v1",
                 }
             )
-            if proposal_cache_path.exists() or proposal_cache_path.is_symlink():
+            cache_miss_preflight = _preflight_proposal_cache_destination(proposal_cache_path)
+            if not cache_miss_preflight:
                 cache_load_stage = (
                     telemetry.stage("proposal_cache_load")
                     if telemetry is not None
@@ -927,10 +967,16 @@ def _search_dispatch(
                     if telemetry is not None
                     else nullcontext()
                 )
-                with cache_save_stage:
-                    save_proposal_cache(
-                        proposal_cache_path, proposals, context=proposal_cache_context
-                    )
+                try:
+                    with cache_save_stage:
+                        save_proposal_cache(
+                            proposal_cache_path, proposals, context=proposal_cache_context
+                        )
+                except (OSError, ValueError) as exc:
+                    raise RuntimeError(
+                        "Proposal cache save failed after proposal generation; no complete cache "
+                        f"is claimed at {proposal_cache_path}."
+                    ) from exc
                 proposal_cache_diagnostics.update({"hit": False, "action": "generated_and_saved"})
         to_map = Transformer.from_crs("EPSG:4326", scorer.vector_map.crs, always_xy=True)
         positions: list[tuple[float, float]] = []
