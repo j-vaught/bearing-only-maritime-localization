@@ -8,7 +8,7 @@ It does not certify continuous geographic coverage or exclude any cell.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from math import asin, ceil, degrees, isfinite
 from typing import Literal
@@ -272,6 +272,7 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
     range_step_m: float | None = None,
     observation_sigmas_deg: Mapping[int, float] | None = None,
     solver_tolerance_deg: float = 1e-7,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> GeodesicWedgeProposalResult:
     """Generate cells from sampled WGS84 reverse rays.
 
@@ -460,6 +461,8 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
                 processed_pairs += 1
                 if chunk_exhausted:
                     break
+            if progress_callback is not None:
+                progress_callback(processed_pairs, min(effective_source_limit, source_total))
             if chunk_exhausted:
                 break
         if budget_reason != "none":

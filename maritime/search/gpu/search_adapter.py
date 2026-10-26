@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from math import atan2, degrees, isfinite
 from typing import Any
 
@@ -302,6 +302,8 @@ def score_candidate_positions_batched(
     budget_limit: int | None = None,
     budget_used: int | None = None,
     certificate_scope: str = "none",
+    progress_callback: Callable[[int, int], None] | None = None,
+    progress_total: int | None = None,
 ) -> Any:
     """Run a fixed candidate traversal in bounded GPU batches.
 
@@ -322,6 +324,8 @@ def score_candidate_positions_batched(
         raise ValueError("batch_size must be positive.")
     if candidate_limit is not None and (type(candidate_limit) is not int or candidate_limit < 1):
         raise ValueError("candidate_limit must be positive.")
+    if progress_total is not None and (type(progress_total) is not int or progress_total < 1):
+        raise ValueError("progress_total must be positive.")
     if search_status not in ("completed", "budget_exhausted"):
         raise ValueError("unsupported search_status.")
     if certificate_scope not in ("none", "finite_candidate_set"):
@@ -345,6 +349,9 @@ def score_candidate_positions_batched(
                 hypotheses.append(evaluation.hypothesis)
         candidate_count += len(batch)
         batch.clear()
+        if progress_callback is not None:
+            total = progress_total or candidate_limit or candidate_count
+            progress_callback(min(candidate_count, total), total)
 
     for raw_position in positions_xy:
         position = _valid_position(raw_position)

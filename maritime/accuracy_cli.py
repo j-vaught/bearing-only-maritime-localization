@@ -56,6 +56,7 @@ from maritime.search.parallel_candidates import (
     CandidatePositionInput,
     PersistentCandidatePool,
 )
+from maritime.search.progress import ProgressCallback, SearchProgressReporter
 from maritime.search.proposals.cache import (
     ProposalCacheContext,
     load_proposal_cache,
@@ -501,6 +502,7 @@ def _search_dispatch(
     branch_max_regions: int,
     telemetry: SearchTelemetry | None = None,
     proposal_cache_input_hashes: dict[str, str] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[LocalizationResult, dict[str, Any], int, bool]:
     config = scorer.config
     if algorithm == "grid":
@@ -982,6 +984,15 @@ def _search_dispatch(
                         source_chunk_size=config.proposal_chunk_size,
                         observation_sigmas_deg=observation_sigmas,
                         solver_tolerance_deg=config.proposal_solver_tolerance_deg,
+                        progress_callback=(
+                            (
+                                lambda completed, total: progress_callback(
+                                    "geodesic_proposals", completed, total
+                                )
+                            )
+                            if progress_callback is not None
+                            else None
+                        ),
                     )
                 cache_save_stage = (
                     telemetry.stage("proposal_cache_save")
@@ -1137,6 +1148,18 @@ def _search_dispatch(
                             candidate_positions,
                             batch_size=8,
                             candidate_limit=config.candidate_budget,
+                            progress_callback=(
+                                (
+                                    lambda completed, total: progress_callback(
+                                        "gpu_candidate_scoring", completed, total
+                                    )
+                                )
+                                if progress_callback is not None
+                                else None
+                            ),
+                            progress_total=max(
+                                1, min(len(candidate_positions), config.candidate_budget)
+                            ),
                         )
                     else:
                         scoring_run = score_candidate_positions(
@@ -1672,6 +1695,7 @@ def _search_v2_request(
     expansion_request_timeout_s: float = 1_800.0,
     telemetry_path: str | Path | None = None,
     device_ids: Sequence[int] | None = None,
+    progress_interval_s: float = 0.0,
     _session: SearchV2Session,
     _clock: Callable[[], float],
     _timing_started: float,
@@ -1694,6 +1718,9 @@ def _search_v2_request(
     )
     if not isfinite(expansion_request_timeout_s) or expansion_request_timeout_s <= 0.0:
         raise ValueError("expansion_request_timeout_s must be finite and positive.")
+    if not isfinite(progress_interval_s) or progress_interval_s < 0.0:
+        raise ValueError("progress_interval_s must be finite and nonnegative.")
+    progress = SearchProgressReporter(progress_interval_s) if progress_interval_s > 0.0 else None
     expansion_deadline = (
         _timing_started + expansion_request_timeout_s if expand_assignments_enabled else None
     )
@@ -1858,6 +1885,7 @@ def _search_v2_request(
                     "catalog_sha256": _session._snapshot.catalog_sha256,
                     "map_sha256": _session._snapshot.map_sha256,
                 },
+                progress_callback=progress,
             )
     diagnostics["algorithm"] = selected_algorithm
     diagnostics["assignment_expansion_config"] = (
@@ -2441,6 +2469,7 @@ def search_v2_files(
     expansion_request_timeout_s: float = 1_800.0,
     telemetry_path: str | Path | None = None,
     device_ids: Sequence[int] | None = None,
+    progress_interval_s: float = 0.0,
     _request_started_at: float | None = None,
 ) -> LocalizationResult:
     """Run one cold v2 request, preserving the historical file API."""
@@ -2478,6 +2507,7 @@ def search_v2_files(
         expansion_request_timeout_s=expansion_request_timeout_s,
         telemetry_path=telemetry_path,
         device_ids=device_ids,
+        progress_interval_s=progress_interval_s,
         _session=session,
         _clock=clock,
         _timing_started=started,
@@ -2744,6 +2774,12 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
         help="GPU device index. Repeat to use multiple GPUs; required for GPU backend.",
     )
     parser.add_argument("--telemetry-output", type=Path)
+    parser.add_argument(
+        "--progress-interval-s",
+        type=float,
+        default=5.0,
+        help="Print live stage progress and ETA at this interval; use 0 to disable.",
+    )
     args = parser.parse_args(argv)
     if (
         min(args.spacing_m, args.wedge_cell_size_m, args.refine_initial_step_m) <= 0
@@ -2799,6 +2835,7 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             "expansion_max_branches": args.expansion_max_branches,
             "expansion_request_timeout_s": args.expansion_request_timeout_s,
             "device_ids": args.device_id,
+            "progress_interval_s": args.progress_interval_s,
         }
         if args.requests_jsonl is not None:
             results = _run_jsonl_searches(
