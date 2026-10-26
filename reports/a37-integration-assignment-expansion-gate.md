@@ -38,3 +38,10 @@ Installed CLI help checks passed with the environment `bin` on `PATH` and the fr
 No wheel or source distribution was built or installed. No GPU or timing jobs were run. The full pytest run created `/tmp/pytest-of-jvaught2/pytest-984`; this was the owned temporary tree from this gate and was removed after the run, restoring 42.96 GB free. No other output was removed.
 
 The 32 skips do not establish hardware behavior. This CPU regression gate is not evidence of localization accuracy, full-domain scoring, complete-coast coverage, or held-out performance. No production source was changed.
+
+
+## Corrected targeted rerun
+
+The source remained pinned to `03d34590afcac28cc7961d9b560b17aa39284bc3`. The eight tests above were rerun together using the same CPU environment with `PATH=$ENV/bin:$PATH`, `PYTHONPATH=$WT`, and `--basetemp=$ROOT/.agent-work/tmp/a37-03d3459-failed-tests-20261026/pytest`. Result: **8 passed in 5.04 seconds**. The exact short pytest output is committed in `reports/a37-integration-assignment-expansion-rerun.log`.
+
+The two standalone tests had failed previously because their subprocess could not find `bearing-localization-search` with the original PATH. All six proposal-cache tests passed in the corrected rerun. The earlier full run was performed at the storage safety floor; after deleting only its owned 1.7 GiB pytest temporary tree, free space returned above the floor before this rerun. This supports classifying those six failures as environment reserve pressure rather than source regressions; the full-trace output for the prior run had shown the cache save error but was truncated before its lower-level cause. No code or test was changed between runs.
