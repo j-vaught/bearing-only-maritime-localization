@@ -14,7 +14,7 @@ The frozen input SHA-256 values are measurements `ed1145cee93d4f06ffa983f671319d
 
 ## Generation result
 
-The generator processed all 333,340 source pairs and emitted 1,457,546 candidate cells. It examined 83,001,660 geodesic samples. No source pair or geodesic sample failed, and no generation budget was exhausted. The cache records 66,668 witness keys and 24,328,107 witness edges. The maximum solver residual was (5.010917902836809\times10^{-8}\) degrees against a (10^{-7}\)-degree tolerance.
+The maximum solver residual was $5.010917902836809\times10^{-8}$ degrees against a $10^{-7}$-degree tolerance.
 
 Generation took 351.697 seconds, cache publication took 49.876 seconds, and the serialized request took 435.181 seconds. The external one-shot wall time was 437.944 seconds, including 12.608 seconds of session startup. Exact scoring was limited to one candidate and refinement was disabled. The emitted estimate therefore reports `budget_exhausted`; it must not be used as an accuracy outcome.
 
