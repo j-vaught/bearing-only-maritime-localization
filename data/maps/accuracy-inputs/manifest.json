@@ -1,0 +1,420 @@
+{
+  "schema_version": 1,
+  "dataset": "Eastern Seaboard NOAA ENC map inputs for accuracy evaluation",
+  "authorship": "J.C. Vaught",
+  "source": {
+    "organization": "NOAA Office of Coast Survey",
+    "product": "NOAA ENC Direct weekly scale-specific ArcGIS MapServer layers",
+    "product_url": "https://www.nauticalcharts.noaa.gov/learn/encdirect/",
+    "service_url": "https://encdirect.noaa.gov/arcgis/rest/services/encdirect/",
+    "retrieved_at_utc": "2026-10-26T01:28:24.869483+00:00",
+    "license_and_attribution": "NOAA federal ENC data; retain NOAA source attribution. Consult source layer metadata for any third-party notices.",
+    "reuse_policy_url": "https://oceanservice.noaa.gov/about/faq.html",
+    "source_manifest": {
+      "path": "../accuracy-east-coast-enc.manifest.json",
+      "bytes": 503609,
+      "sha256": "9ac7362bcb9caaf1c1163573f03927c3d01ed38580f9da6c15cf4deaa218f663"
+    }
+  },
+  "domain": {
+    "name": "eastern-seaboard-24-port-domain",
+    "bbox_wgs84": [
+      -82.0,
+      24.5,
+      -66.0,
+      45.5
+    ],
+    "coordinate_reference_system": "EPSG:4326"
+  },
+  "collection": {
+    "feature_count": 43899,
+    "incomplete_scale_bands": [
+      "approach",
+      "coastal",
+      "general",
+      "harbour",
+      "overview"
+    ],
+    "incomplete_scale_policy": "A scale is excluded from valid coverage if either the scale's coverage or land feature layer was incomplete; lower complete scales may still fill its area.",
+    "payload": {
+      "name": "noaa-enc-east-coast-24-ports.geojson",
+      "bytes": 268600752,
+      "sha256": "4a3d1ffcaa9de2c87f8658c7ee3cc742da2ceb1e926f5634ae9495b0919806c7"
+    }
+  },
+  "port_maps": {
+    "count": 24,
+    "coverage_counts": {
+      "known": 19,
+      "partial": 5
+    },
+    "files": [
+      {
+        "site_id": "B1",
+        "port": "Searsport ME",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B1-15km.map-v2.json",
+        "bytes": 2139583,
+        "sha256": "392b70946655bc54d29260722d743d92baa1f99f89af4ce8848e496eb217df73"
+      },
+      {
+        "site_id": "B2",
+        "port": "Portland ME",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B2-15km.map-v2.json",
+        "bytes": 2145230,
+        "sha256": "e05cfcd475acfe0d796cd285725cf84334d191d8d938cf74af2226dc7046fa8d"
+      },
+      {
+        "site_id": "B3",
+        "port": "Portsmouth NH",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B3-15km.map-v2.json",
+        "bytes": 3980158,
+        "sha256": "c5bc1b3922a1692a17679e628257a93e43644f773ec2de134f0c8f7e1df235c1"
+      },
+      {
+        "site_id": "B4",
+        "port": "Boston",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B4-15km.map-v2.json",
+        "bytes": 2619078,
+        "sha256": "cadd6cb8227184aeed3445c5ed7a3378fdb16bded505f0b5be0a0271f6f0f4e6"
+      },
+      {
+        "site_id": "B5",
+        "port": "Providence",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B5-15km.map-v2.json",
+        "bytes": 2087678,
+        "sha256": "8a91879a3d7442acce3be3ac3400f50ace1eb36f843c2f66cce071779a1759f3"
+      },
+      {
+        "site_id": "B6",
+        "port": "New Haven",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B6-15km.map-v2.json",
+        "bytes": 1876452,
+        "sha256": "ea84dc55ae96bc1fdd27745b11af45b0cdc75bcf87a6728925e6844240194f59"
+      },
+      {
+        "site_id": "B7",
+        "port": "Bridgeport CT",
+        "coverage_status": "partial",
+        "path": "noaa-enc-port-B7-15km.map-v2.json",
+        "bytes": 925340,
+        "sha256": "4b08b18353e686f40992566c38d76a825fc9b0fb3827f1e37c68f0341f5a98b6"
+      },
+      {
+        "site_id": "B8",
+        "port": "Port Jefferson NY",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B8-15km.map-v2.json",
+        "bytes": 1423252,
+        "sha256": "07aea65661d752459711cfcbd15a553ca4bcc5a3d469df64ee7ce316c46a6a07"
+      },
+      {
+        "site_id": "B9",
+        "port": "New York and New Jersey",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B9-15km.map-v2.json",
+        "bytes": 3283393,
+        "sha256": "d3efb165b2df59a977e4b3008cf399ee7339658b5373fec556c20d89a918e897"
+      },
+      {
+        "site_id": "B10",
+        "port": "South Jersey",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B10-15km.map-v2.json",
+        "bytes": 2020409,
+        "sha256": "6cbdc80bc50284654f15ac4814a6e1f4022583cf2825982b03c819e61cd01046"
+      },
+      {
+        "site_id": "B11",
+        "port": "Philadelphia",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B11-15km.map-v2.json",
+        "bytes": 2077199,
+        "sha256": "8ae5d6ce606dafeb48d784b5bc69c776928b919c4618d3c16e1123b971a2178b"
+      },
+      {
+        "site_id": "B12",
+        "port": "Wilmington DE",
+        "coverage_status": "partial",
+        "path": "noaa-enc-port-B12-15km.map-v2.json",
+        "bytes": 3082465,
+        "sha256": "bbc42d8c1deed56541be8d6cdae94b406402bff23b7467387e895a29782d848c"
+      },
+      {
+        "site_id": "B13",
+        "port": "Baltimore",
+        "coverage_status": "partial",
+        "path": "noaa-enc-port-B13-15km.map-v2.json",
+        "bytes": 3067885,
+        "sha256": "e6402b64199a2808968818c559afc9d77292141d65a9a9d2549d3eafbe4d86cd"
+      },
+      {
+        "site_id": "B14",
+        "port": "Virginia Hampton Roads",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B14-15km.map-v2.json",
+        "bytes": 3686790,
+        "sha256": "254211c46824982f6fc3c08434ba97ad2f3aca07d78da32a070f2746003c510a"
+      },
+      {
+        "site_id": "B15",
+        "port": "Morehead City",
+        "coverage_status": "partial",
+        "path": "noaa-enc-port-B15-15km.map-v2.json",
+        "bytes": 3348203,
+        "sha256": "838e247e182c5d4f3edab273f4aede38e6da6d7dad1a9727c26eea23cb021ad0"
+      },
+      {
+        "site_id": "B16",
+        "port": "Wilmington NC",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B16-15km.map-v2.json",
+        "bytes": 1414951,
+        "sha256": "cfdcba57231e4498a8b3c238bf94f9615305610d1f30605a146e8d07c5096e62"
+      },
+      {
+        "site_id": "B17",
+        "port": "Charleston",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B17-15km.map-v2.json",
+        "bytes": 1930096,
+        "sha256": "881c5d57b5de1ac9d4fe11ad7e7392167ae697644fb19d28d284da9c962e911e"
+      },
+      {
+        "site_id": "B18",
+        "port": "Savannah",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B18-15km.map-v2.json",
+        "bytes": 2795837,
+        "sha256": "ce9f303eb0372ade37b6a1252b578dd3abd1a9edb2848e063e888de4bcb327f3"
+      },
+      {
+        "site_id": "B19",
+        "port": "Brunswick GA",
+        "coverage_status": "partial",
+        "path": "noaa-enc-port-B19-15km.map-v2.json",
+        "bytes": 5807327,
+        "sha256": "c18219bf6379ccd389cacd6b10b30442e0e1f0c2d6d2e33c839f22e83eba2667"
+      },
+      {
+        "site_id": "B20",
+        "port": "Jacksonville",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B20-15km.map-v2.json",
+        "bytes": 7646916,
+        "sha256": "a5741fbabff6b55764328a2a4f8f0ae26e52011cd6aff394cf30a8932bcc4739"
+      },
+      {
+        "site_id": "B21",
+        "port": "Port Canaveral",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B21-15km.map-v2.json",
+        "bytes": 3057289,
+        "sha256": "c7ab73041718b093d17ecc6a03bf321451026bb8b6444c38451e7b4b4c09385e"
+      },
+      {
+        "site_id": "B22",
+        "port": "Palm Beach",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B22-15km.map-v2.json",
+        "bytes": 1533011,
+        "sha256": "b7c4ec9ebc671dd0f364e21508d1558b5fa62c0f6f22f5b9cd3f25d51a6bee54"
+      },
+      {
+        "site_id": "B23",
+        "port": "Port Everglades",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B23-15km.map-v2.json",
+        "bytes": 733415,
+        "sha256": "7414d10e798006c5412c78c8df5eea7169665432d697103aabe5901e872866d3"
+      },
+      {
+        "site_id": "B24",
+        "port": "PortMiami",
+        "coverage_status": "known",
+        "path": "noaa-enc-port-B24-15km.map-v2.json",
+        "bytes": 2397843,
+        "sha256": "0fc9c59ac9a6fa597a70f4f8f40ecb0553fa54501422d997e956d4ac50d51743"
+      }
+    ]
+  },
+  "coast_mosaic": {
+    "payload": {
+      "name": "noaa-enc-east-coast-fullcoast-map-v2.json",
+      "bytes": 83879922,
+      "sha256": "ac53d93505b839d924eb3d6f9d9072f31aad43cec2edf470c521eb5b179a5667"
+    },
+    "map_version": "noaa-enc-east-coast-partial-mosaic:2026-10-26T01:28:24.869483+00:00",
+    "coverage_status": "partial",
+    "crs": "EPSG:4326",
+    "known_coverage_fraction": 0.004927708485719819,
+    "unknown_area_policy": "Unknown remains unknown; absence of returned coverage is not water."
+  },
+  "archives": [
+    {
+      "path": "noaa-enc-east-coast-24-ports.geojson.gz",
+      "compression": "gzip",
+      "bytes": 63745829,
+      "sha256": "dcf2f57a26197130dc314e4bd58d2ad498d9238a5d2d09f6c7686a05b5b48627",
+      "payloads": [
+        {
+          "name": "noaa-enc-east-coast-24-ports.geojson",
+          "bytes": 268600752,
+          "sha256": "4a3d1ffcaa9de2c87f8658c7ee3cc742da2ceb1e926f5634ae9495b0919806c7"
+        }
+      ]
+    },
+    {
+      "path": "noaa-enc-east-coast-fullcoast-map-v2.json.gz",
+      "compression": "gzip",
+      "bytes": 23118719,
+      "sha256": "bc46fb4a86edfa96979d566d72afae639655629eddee73b508c4928641eedc90",
+      "payloads": [
+        {
+          "name": "noaa-enc-east-coast-fullcoast-map-v2.json",
+          "bytes": 83879922,
+          "sha256": "ac53d93505b839d924eb3d6f9d9072f31aad43cec2edf470c521eb5b179a5667"
+        }
+      ]
+    },
+    {
+      "path": "noaa-enc-port-B1-B24-15km-maps.tar.gz",
+      "compression": "tar+gzip",
+      "bytes": 18962835,
+      "sha256": "cb6bd9b64a12fa34a3262009366f4dcb7ce9cb9ee56c98dc2ec547a61afede02",
+      "payloads": [
+        {
+          "name": "noaa-enc-port-B1-15km.map-v2.json",
+          "bytes": 2139583,
+          "sha256": "392b70946655bc54d29260722d743d92baa1f99f89af4ce8848e496eb217df73"
+        },
+        {
+          "name": "noaa-enc-port-B2-15km.map-v2.json",
+          "bytes": 2145230,
+          "sha256": "e05cfcd475acfe0d796cd285725cf84334d191d8d938cf74af2226dc7046fa8d"
+        },
+        {
+          "name": "noaa-enc-port-B3-15km.map-v2.json",
+          "bytes": 3980158,
+          "sha256": "c5bc1b3922a1692a17679e628257a93e43644f773ec2de134f0c8f7e1df235c1"
+        },
+        {
+          "name": "noaa-enc-port-B4-15km.map-v2.json",
+          "bytes": 2619078,
+          "sha256": "cadd6cb8227184aeed3445c5ed7a3378fdb16bded505f0b5be0a0271f6f0f4e6"
+        },
+        {
+          "name": "noaa-enc-port-B5-15km.map-v2.json",
+          "bytes": 2087678,
+          "sha256": "8a91879a3d7442acce3be3ac3400f50ace1eb36f843c2f66cce071779a1759f3"
+        },
+        {
+          "name": "noaa-enc-port-B6-15km.map-v2.json",
+          "bytes": 1876452,
+          "sha256": "ea84dc55ae96bc1fdd27745b11af45b0cdc75bcf87a6728925e6844240194f59"
+        },
+        {
+          "name": "noaa-enc-port-B7-15km.map-v2.json",
+          "bytes": 925340,
+          "sha256": "4b08b18353e686f40992566c38d76a825fc9b0fb3827f1e37c68f0341f5a98b6"
+        },
+        {
+          "name": "noaa-enc-port-B8-15km.map-v2.json",
+          "bytes": 1423252,
+          "sha256": "07aea65661d752459711cfcbd15a553ca4bcc5a3d469df64ee7ce316c46a6a07"
+        },
+        {
+          "name": "noaa-enc-port-B9-15km.map-v2.json",
+          "bytes": 3283393,
+          "sha256": "d3efb165b2df59a977e4b3008cf399ee7339658b5373fec556c20d89a918e897"
+        },
+        {
+          "name": "noaa-enc-port-B10-15km.map-v2.json",
+          "bytes": 2020409,
+          "sha256": "6cbdc80bc50284654f15ac4814a6e1f4022583cf2825982b03c819e61cd01046"
+        },
+        {
+          "name": "noaa-enc-port-B11-15km.map-v2.json",
+          "bytes": 2077199,
+          "sha256": "8ae5d6ce606dafeb48d784b5bc69c776928b919c4618d3c16e1123b971a2178b"
+        },
+        {
+          "name": "noaa-enc-port-B12-15km.map-v2.json",
+          "bytes": 3082465,
+          "sha256": "bbc42d8c1deed56541be8d6cdae94b406402bff23b7467387e895a29782d848c"
+        },
+        {
+          "name": "noaa-enc-port-B13-15km.map-v2.json",
+          "bytes": 3067885,
+          "sha256": "e6402b64199a2808968818c559afc9d77292141d65a9a9d2549d3eafbe4d86cd"
+        },
+        {
+          "name": "noaa-enc-port-B14-15km.map-v2.json",
+          "bytes": 3686790,
+          "sha256": "254211c46824982f6fc3c08434ba97ad2f3aca07d78da32a070f2746003c510a"
+        },
+        {
+          "name": "noaa-enc-port-B15-15km.map-v2.json",
+          "bytes": 3348203,
+          "sha256": "838e247e182c5d4f3edab273f4aede38e6da6d7dad1a9727c26eea23cb021ad0"
+        },
+        {
+          "name": "noaa-enc-port-B16-15km.map-v2.json",
+          "bytes": 1414951,
+          "sha256": "cfdcba57231e4498a8b3c238bf94f9615305610d1f30605a146e8d07c5096e62"
+        },
+        {
+          "name": "noaa-enc-port-B17-15km.map-v2.json",
+          "bytes": 1930096,
+          "sha256": "881c5d57b5de1ac9d4fe11ad7e7392167ae697644fb19d28d284da9c962e911e"
+        },
+        {
+          "name": "noaa-enc-port-B18-15km.map-v2.json",
+          "bytes": 2795837,
+          "sha256": "ce9f303eb0372ade37b6a1252b578dd3abd1a9edb2848e063e888de4bcb327f3"
+        },
+        {
+          "name": "noaa-enc-port-B19-15km.map-v2.json",
+          "bytes": 5807327,
+          "sha256": "c18219bf6379ccd389cacd6b10b30442e0e1f0c2d6d2e33c839f22e83eba2667"
+        },
+        {
+          "name": "noaa-enc-port-B20-15km.map-v2.json",
+          "bytes": 7646916,
+          "sha256": "a5741fbabff6b55764328a2a4f8f0ae26e52011cd6aff394cf30a8932bcc4739"
+        },
+        {
+          "name": "noaa-enc-port-B21-15km.map-v2.json",
+          "bytes": 3057289,
+          "sha256": "c7ab73041718b093d17ecc6a03bf321451026bb8b6444c38451e7b4b4c09385e"
+        },
+        {
+          "name": "noaa-enc-port-B22-15km.map-v2.json",
+          "bytes": 1533011,
+          "sha256": "b7c4ec9ebc671dd0f364e21508d1558b5fa62c0f6f22f5b9cd3f25d51a6bee54"
+        },
+        {
+          "name": "noaa-enc-port-B23-15km.map-v2.json",
+          "bytes": 733415,
+          "sha256": "7414d10e798006c5412c78c8df5eea7169665432d697103aabe5901e872866d3"
+        },
+        {
+          "name": "noaa-enc-port-B24-15km.map-v2.json",
+          "bytes": 2397843,
+          "sha256": "0fc9c59ac9a6fa597a70f4f8f40ecb0553fa54501422d997e956d4ac50d51743"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The collection has incomplete scale bands recorded above.",
+    "Five of 24 port maps have partial coverage and nineteen have known coverage according to the source manifest.",
+    "The coast mosaic covers only a small fraction of the stated domain; it is not a complete coastline chart.",
+    "This is a single snapshot. Field validation with measured bearings and independent truth remains pending."
+  ]
+}
