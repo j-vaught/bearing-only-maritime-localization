@@ -15,7 +15,7 @@
 ]
 #v(3mm)
 #text(size: 12pt, weight: "bold")[The returned score winner changed from 853,439.780 m error to 11.127 m.]
-#text(size: 10pt)[Before expansion, the assigned-fit score winner had 0 of 4 correct assignments. After expansion, the lowest-score completed result had 5 of 5 correct assignments. These are different modes, selected by search score within their completed stages.]
+#text(size: 10pt)[Before expansion, the assigned-fit score winner had 0 of 4 correct assignments. After expansion, the lowest-score completed result had 5 of 5 correct assignments and ranks 1 of 64 in the composite selected-mode audit. These are different modes, selected by search score within their stages.]
 #v(3mm)
 #align(center)[
   #lq.diagram(
@@ -57,7 +57,7 @@
 #v(4mm)
 #block(stroke: 0.8pt + black, inset: 5pt)[
   #text(size: 10pt, weight: "bold")[Scope and status]
-  The expansion completed 60 of 64 score-selected modes; four remain pending. The source search stopped with 1,410,282 hypotheses unknown. This development result is not an overall accuracy rate or an accepted, calibrated fix. Evaluator truth was used only after each estimate to measure error and assignment correctness.
+  The composite audit covers 64 of 64 selected modes. The serial run stopped at 60/64 on its deadline; the parallel run stopped at 63/64 after disk interruption at 568.419 s. The composite is not a completed parallel run or a combined latency result. The source search stopped with 1,410,282 hypotheses unknown. This development result is not an overall accuracy rate or an accepted, calibrated fix. Evaluator truth was used only after each estimate to measure error and assignment correctness.
 ]
 #v(3mm)
-#text(size: 8pt)[Source paths and exact SHA-256 values are recorded in the adjacent JSON. Expansion audit digest begins #d.at("source_artifacts").at(2).at("sha256").slice(0, 12). Authorship J.C. Vaught.]
+#text(size: 8pt)[Source paths and exact SHA-256 values are recorded in the adjacent JSON. Composite audit digest begins #d.at("source_artifacts").at(3).at("sha256").slice(0, 12). Authorship J.C. Vaught.]
