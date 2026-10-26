@@ -241,6 +241,15 @@ def run_case(
             candidate.candidate_id for candidate in candidates
         ]:
             raise AssertionError(f"{mode} candidate order changed")
+        unsupported_prunes = [
+            audit.candidate_id
+            for audit in audits
+            if audit.action == "pruned" and audit.lower_bound_supported is not True
+        ]
+        if unsupported_prunes:
+            raise AssertionError(
+                f"pruned candidates lack supported bounds: {unsupported_prunes[:3]}"
+            )
         best_score, tie_ids = best_score_and_ties(audits)
         case_results[mode] = {
             "workers": workers,
@@ -359,6 +368,8 @@ def profile(
                 candidates=candidates,
                 workers=workers,
             )
+    compare_best(cases["1"]["exact"], cases["4"]["exact"])
+    compare_best(cases["1"]["screened"], cases["4"]["screened"])
     result = {
         "schema": "cached-candidate-scoring-profile-v1",
         "created_utc": datetime.now(UTC).isoformat(),
