@@ -55,6 +55,7 @@ from maritime_localization_shared.geospatial.vector_map import VectorMap  # noqa
 from maritime_localization_shared.serialization import contract_from_dict, read_contract  # noqa: E402
 from tools.refine_cached_modes import (  # noqa: E402
     FLOOR as A20_FLOOR,
+    Seed,
     load_committed,
     read_json,
     sha256,
@@ -68,6 +69,17 @@ MIN_DISPLACEMENT_M = 0.01
 SCORE_ATOL = 1e-8
 SCORE_RTOL = 1e-10
 MAX_OUTPUT_BYTES = 5 * 1024 * 1024
+
+
+def canonical_lock_path() -> Path:
+    common = Path(
+        subprocess.check_output(
+            ["git", "rev-parse", "--git-common-dir"], cwd=_REPO_ROOT, text=True
+        ).strip()
+    )
+    if not common.is_absolute():
+        common = (_REPO_ROOT / common).resolve()
+    return common.resolve().parent / ".agent-work" / "benchmark.lock"
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,7 +178,18 @@ def load_a20_bundle(root: Path) -> tuple[list[ModeRow], dict[str, Any]]:
     selected = manifest.get("selected_modes")
     if type(selected) is not list or len(selected) != MODE_COUNT:
         raise DiagnosticInputError("A20 selected_modes must contain exactly 64 rows")
-    rows_path = root / str(manifest.get("rows_file", ""))
+    rows_file = manifest.get("rows_file")
+    if (
+        type(rows_file) is not str
+        or not rows_file
+        or Path(rows_file).is_absolute()
+        or Path(rows_file).name != rows_file
+        or "/" in rows_file
+        or "\\" in rows_file
+        or rows_file in (".", "..")
+    ):
+        raise DiagnosticInputError("A20 rows_file must be one safe basename")
+    rows_path = root / rows_file
     if not rows_path.is_file() or sha256(rows_path) != manifest.get("rows_sha256"):
         raise DiagnosticInputError("A20 rows hash mismatch")
     rows: list[ModeRow] = []
@@ -192,7 +215,7 @@ def verify_source_pins(
     attempt: Path,
     static: Path,
     config_path: Path,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], list[Seed]]:
     expected_attempt = Path(str(a20_manifest.get("source_attempt", ""))).resolve()
     if expected_attempt != attempt.resolve():
         raise DiagnosticInputError("A20 source attempt path differs from requested attempt")
@@ -238,11 +261,10 @@ def verify_source_pins(
         "frozen_scoring_source_sha": identity.get("scoring_source_sha"),
         "input_paths": {name: str(path.resolve()) for name, path in input_paths.items()},
         "config_path": str(config_path.resolve()),
-    }
+    }, seeds
 
 
-def validate_mode_source_refs(rows: list[ModeRow], attempt: Path) -> None:
-    seeds, _bindings = load_committed(attempt)
+def validate_mode_source_refs(rows: list[ModeRow], seeds: list[Seed]) -> None:
     by_index = {seed.input_index: seed for seed in seeds}
     for row in rows:
         seed = by_index.get(row.input_index)
@@ -324,6 +346,8 @@ def run_start(
     for step_index in range(max_steps):
         try:
             result = proposer(scorer, current)
+        except TimeoutError:
+            raise
         except Exception as exc:  # Preserve a solver exception as an explicit stop.
             steps.append(
                 {
@@ -417,6 +441,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     started = time.perf_counter()
     if args.timeout_s <= 0.0 or args.timeout_s > 1800.0 or not math.isfinite(args.timeout_s):
         raise ValueError("timeout must be finite and within 1800 seconds")
+    if args.lock.resolve() != canonical_lock_path().resolve():
+        raise ValueError(f"Only the canonical benchmark lock is allowed: {canonical_lock_path()}")
     _check_space(args.output.parent)
     args.output.mkdir(exist_ok=False)
     rows_path = args.output / "assigned-refinement-rows.jsonl"
@@ -461,13 +487,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             except BlockingIOError as exc:
                 raise RuntimeError("canonical benchmark lock is already held") from exc
             rows, a20_manifest = load_a20_bundle(args.a20)
-            validate_mode_source_refs(rows, args.attempt)
+            source_pins, seeds = verify_source_pins(
+                a20_manifest, args.a20, args.attempt, args.static, args.config
+            )
+            validate_mode_source_refs(rows, seeds)
             manifest["a20_root"] = str(args.a20.resolve())
             manifest["a20_manifest_sha256"] = sha256(args.a20 / "manifest.json")
             manifest["a20_rows_sha256"] = a20_manifest["rows_sha256"]
-            manifest["source_pins"] = verify_source_pins(
-                a20_manifest, args.a20, args.attempt, args.static, args.config
-            )
+            manifest["source_pins"] = source_pins
             manifest["harness_commit"] = subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT, text=True
             ).strip()
