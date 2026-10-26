@@ -22,6 +22,7 @@ from tools.evaluate_assignment_expansion import (
     canonical_hash,
     choose_start_label,
     validate_mode_counts,
+    validate_no_unmatched_mode,
     validate_objective_progress,
     verify_event_chain,
     verify_mode_event_correspondence,
@@ -183,3 +184,36 @@ def test_canonical_event_hash_is_stable_sorted_json() -> None:
             ).encode("utf-8")
         ).hexdigest()
     )
+
+
+def test_no_unmatched_mode_requires_every_report_and_unchanged_seed() -> None:
+    seed = Hypothesis(
+        east_m=1.0,
+        north_m=2.0,
+        score=3.0,
+        assignments=(Assignment(0, "ais:one"), Assignment(1, "ais:two")),
+    )
+    row = {
+        "status": "no_unmatched_reports",
+        "counters": {},
+        "branch_event_count": 0,
+        "completed": True,
+        "budget_exhausted": False,
+    }
+    validate_no_unmatched_mode(row, seed, seed, measurement_count=2, result_event_count=0)
+    with pytest.raises(ValueError, match="does not cover every report"):
+        validate_no_unmatched_mode(
+            row,
+            Hypothesis(1.0, 2.0, 3.0),
+            Hypothesis(1.0, 2.0, 3.0),
+            measurement_count=2,
+            result_event_count=0,
+        )
+    with pytest.raises(ValueError, match="changed its exact seed"):
+        validate_no_unmatched_mode(
+            row,
+            seed,
+            Hypothesis(2.0, 2.0, 2.9),
+            measurement_count=2,
+            result_event_count=0,
+        )
