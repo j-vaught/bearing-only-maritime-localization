@@ -181,6 +181,32 @@ def test_equal_scores_rank_by_global_input_index_and_incomplete_stays_incomplete
     assert partial.disposition_counts["worker_state_unknown_at_interruption"] == 1
 
 
+def test_continuation_lineage_binds_parent_manifest_and_chunk_trees(tmp_path: Path) -> None:
+    parent_root, _ = _fixture(tmp_path / "attempt-0001", incomplete=True)
+    child_root, expected = _fixture(tmp_path / "attempt-0002")
+    parent_identity = json.loads((parent_root / "run-identity.json").read_text())
+    parent_manifest_sha = sha256_file(parent_root / "run-manifest.json")
+    parent_chunks_sha = sha256_tree(parent_root / "chunk-results")
+    parent_hypotheses_sha = sha256_tree(parent_root / "hypotheses")
+    source = {
+        "source_run_root": str(parent_root.resolve()),
+        "source_identity_sha256": parent_identity["identity_sha256"],
+        "source_run_manifest_sha256": parent_manifest_sha,
+        "source_chunk_results_sha256": parent_chunks_sha,
+        "source_hypotheses_sha256": parent_hypotheses_sha,
+    }
+    _write(child_root / "resume-source.json", source)
+    manifest = json.loads((child_root / "run-manifest.json").read_text())
+    manifest["resume_lineage"] = dict(source)
+    _write(child_root / "run-manifest.json", manifest)
+    assert load_run(child_root, expected_bindings=expected).complete
+
+    source["source_hypotheses_sha256"] = "0" * 64
+    _write(child_root / "resume-source.json", source)
+    with pytest.raises(ValueError, match="tree differs"):
+        load_run(child_root, expected_bindings=expected)
+
+
 def test_disposition_must_match_durable_chunk_action(tmp_path: Path) -> None:
     root, expected = _fixture(tmp_path / "run")
     rows = [

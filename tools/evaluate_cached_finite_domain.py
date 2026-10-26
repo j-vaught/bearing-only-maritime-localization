@@ -323,9 +323,9 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
         parent_manifest = source_root / "run-manifest.json"
         parent_supervisor = source_root / "supervisor-manifest.json"
         present_manifest = (
-            parent_manifest
-            if parent_manifest.is_file()
-            else (parent_supervisor if parent_supervisor.is_file() else None)
+            parent_supervisor
+            if parent_supervisor.is_file()
+            else (parent_manifest if parent_manifest.is_file() else None)
         )
         declared_parent_manifest_sha = lineage.get("source_run_manifest_sha256")
         actual_parent_manifest_sha = (
@@ -333,6 +333,8 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
         )
         if declared_parent_manifest_sha != actual_parent_manifest_sha:
             raise ValueError("Resume parent manifest hash differs from the lineage record.")
+        if source.get("source_run_manifest_sha256") != declared_parent_manifest_sha:
+            raise ValueError("Resume source manifest hash differs from the lineage record.")
         for name, lineage_key in (
             ("chunk-results", "source_chunk_results_sha256"),
             ("hypotheses", "source_hypotheses_sha256"),
@@ -340,7 +342,7 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
             parent_tree = source_root / name
             expected_tree = lineage.get(lineage_key)
             actual_tree = sha256_tree(parent_tree) if parent_tree.is_dir() else None
-            if expected_tree != actual_tree:
+            if expected_tree != actual_tree or source.get(lineage_key) != actual_tree:
                 raise ValueError(f"Resume parent {name} tree differs from the lineage record.")
     elif lineage is not None:
         raise ValueError("Run manifest declares a resume lineage without resume-source.json.")
