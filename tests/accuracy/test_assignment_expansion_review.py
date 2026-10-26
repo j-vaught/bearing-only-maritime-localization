@@ -396,3 +396,31 @@ def test_expansion_keeps_exact_canonical_assignment_when_new_key_is_not_retained
     assert event["exact_score"] is not None
     assert event["added_assignment_retained"] is False
     assert result.best_hypothesis.assignments == seed.assignments
+
+
+def test_result_callback_follows_branch_completion_and_preserves_event_copy() -> None:
+    scorer, seed = _branch_scene()
+    phases: list[tuple[str, int]] = []
+
+    def on_start(event: dict[str, object]) -> None:
+        phases.append(("started", int(event["branch_id"])))
+
+    def on_result(event: dict[str, object]) -> None:
+        phases.append(("result", int(event["branch_id"])))
+        event["status"] = "review-mutation"
+
+    result = expand_assignments(
+        scorer,
+        seed,
+        config=ExpansionConfig(max_branches=2),
+        progress_callback=on_start,
+        result_callback=on_result,
+    )
+
+    assert phases == [
+        ("started", 0),
+        ("result", 0),
+        ("started", 1),
+        ("result", 1),
+    ]
+    assert all(event["status"] != "review-mutation" for event in result.branch_events)
