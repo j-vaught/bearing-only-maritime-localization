@@ -10,7 +10,7 @@ Prediction now carries each query result through the visibility checks. When bot
 
 The index regression covers antimeridian proximity, distinct duplicate-coordinate catalog entries, stable catalog order, exact inverse bearing and distance values, and parity between the geometry query indices and query_radius. The prediction regression uses a north-wrap mixed-offset catalog. It verifies complete visible member keys and the bearing and range values for both records. Instrumentation confirms one prediction-side inverse helper call for the nonzero-offset physical record while the zero-offset record reuses query geometry.
 
-The scoped validation used Python 3.11.15 after uv sync --locked --all-groups --python 3.11. Ruff format, Ruff check, ty check, and git diff --check passed. The scoped pytest run covered the new regression, A04, A13, A14, spatial-index, and pairwise-search tests. All 65 tests passed. These checks establish operation-count and functional behavior; no timing profile was run and no speed claim is made. Existing A14 tests also compare prepared and unprepared full PredictedGroupSet results. This change did not add a separate CandidateEvaluation score fixture.
+The mixed-offset test also compares a complete CandidateScorer evaluation using reused geometry with one using recomputed inverse geometry. PredictedGroupSet, likelihood arrays, and hypothesis match exactly. The scoped validation used Python 3.11.15 after uv sync --locked --all-groups --python 3.11. Ruff format, Ruff check, ty check, and git diff --check passed. The scoped pytest run covered the new regressions, A04, A13, A14, spatial-index, and pairwise-search tests. All 66 tests passed. These checks establish operation-count and functional behavior; no timing profile was run and no speed claim is made. Existing A14 tests also compare prepared and unprepared full PredictedGroupSet results.
 
 ## Boundaries
 
@@ -18,4 +18,4 @@ The exact inverse in radius filtering is still required to decide geodesic membe
 
 ## Revision
 
-Branch accuracy/a13-geodesic-reuse was created from accuracy/integration at 9f6c4ee. Commit SHA is recorded after push.
+Branch accuracy/a13-geodesic-reuse was created from accuracy/integration at 9f6c4ee. Implementation commit ed9c2d49ddebcead8d811a80a7d89293ba341316.
