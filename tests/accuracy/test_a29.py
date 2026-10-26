@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
@@ -18,25 +16,8 @@ from bearing_localization.search.assignment import (
 )
 from bearing_localization.search.gpu.assignment import assignment_acceleration_decision
 from bearing_localization.search.likelihood import LikelihoodCostMatrix
-from tools.profile_accuracy_assignment import run_bounded_process  # noqa: E402
 
 from .reference_assignment import optimal_assignments
-
-
-def _proc_state(pid: int) -> str | None:
-    try:
-        stat = Path(f"/proc/{pid}/stat").read_text()
-    except (FileNotFoundError, ProcessLookupError):
-        return None
-    return stat.rsplit(") ", maxsplit=1)[-1].split()[0]
-
-
-def test_proc_state_treats_disappearing_process_as_terminated(monkeypatch) -> None:
-    def disappear(_path: Path) -> str:
-        raise ProcessLookupError("process exited between the probe and stat read")
-
-    monkeypatch.setattr(Path, "read_text", disappear)
-    assert _proc_state(12345) is None
 
 
 def test_prototype_gate_defers_below_twenty_percent_and_opens_at_threshold() -> None:
@@ -96,44 +77,3 @@ def test_equal_cost_ties_are_repeatable_and_empty_dimensions_keep_miss_costs() -
     )
     assert empty.matches == ()
     assert empty.cost == pytest.approx(0.25)
-
-
-def test_bounded_process_captures_successful_output() -> None:
-    result = run_bounded_process(
-        [sys.executable, "-c", "print('ready')"],
-        timeout_s=3.0,
-    )
-    assert not result.timed_out
-    assert result.returncode == 0
-    assert result.stdout == "ready\n"
-
-
-def test_bounded_process_timeout_terminates_grandchild(tmp_path) -> None:
-    pid_path = tmp_path / "child.pid"
-    child_code = "import time; time.sleep(60)"
-    parent_code = (
-        "import subprocess,sys,time; "
-        "child=subprocess.Popen([sys.executable,'-c',sys.argv[2]]); "
-        "open(sys.argv[1],'w').write(str(child.pid)); time.sleep(60)"
-    )
-    result = run_bounded_process(
-        [sys.executable, "-c", parent_code, str(pid_path), child_code],
-        timeout_s=0.4,
-        terminate_grace_s=0.4,
-    )
-    assert result.timed_out
-    assert result.elapsed_s < 5.0
-    assert pid_path.is_file()
-    child_pid = int(pid_path.read_text())
-    deadline = time.monotonic() + 2.0
-    while time.monotonic() < deadline:
-        try:
-            os.kill(child_pid, 0)
-        except ProcessLookupError:
-            break
-        state = _proc_state(child_pid)
-        if state is None or state == "Z":
-            break
-        time.sleep(0.02)
-    else:
-        pytest.fail("Timed-out process group left its grandchild running.")

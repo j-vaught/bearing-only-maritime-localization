@@ -1,7 +1,0 @@
-# A43 geodesic source-worker diagnostic archive
-
-This directory contains a historical experiment archive, not maintained source code. The saved edit scripts, test insertion scripts, and benchmark harness are stored with `.py.txt` extensions so repository Python tooling does not discover or lint them. Their file contents were preserved byte-for-byte when renamed. `SHA256SUMS` records the archive file hashes; verify them from this directory with `sha256sum -c SHA256SUMS`.
-
-The clean 20,000-pair timing record reports measured implementation SHA-256 `1e15e477a0843c18c377dd403ea8a23753b24f7a4158145e13171e8d1eabbb69`. The prototype source was removed from the worktree before it was snapshotted. Reapplying the retained edit scripts and formatting the result produced SHA-256 `90a46b0d6b4ad3e4100393c298d771b05925386055e6bd16ad7e8409bee9e956`, which does not match the measured source hash. The reconstructed patch is retained only as a diagnostic aid. The exact measured source cannot currently be reproduced, and the archived harness must not be presented as reproducing the original measured prototype.
-
-The production generator remains serial. The worker comparison was slower than serial, so no multiprocessing API is approved for integration. The JSON files preserve the measured outcomes. To inspect the exact experiment inputs and settings, read `worker-comparison-20k-chunk4096.json` and `a43-multiprocess-bench.py.txt`; do not execute the archived edit or test scripts as part of production maintenance.

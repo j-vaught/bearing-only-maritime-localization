@@ -1,6 +1,0 @@
-warning: `VIRTUAL_ENV=/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/a26-screened-diagnostic/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-Using CPython 3.11.15
-Creating virtual environment at: .venv
-   Building bearing-only-maritime-localization @ file:///home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/a26-cachegen-33fded7
-      Built bearing-only-maritime-localization @ file:///home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/a26-cachegen-33fded7
-Installed 13 packages in 16ms

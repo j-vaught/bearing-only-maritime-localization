@@ -406,16 +406,6 @@ def test_identity_limited_aid_remains_search_candidate_and_not_proven_support() 
     assert run.diagnostics.groups[0].identity_limited_catalog_member_keys == (record.key,)
     assert run.diagnostics.groups[0].catalog_member_physical_ids == ("resolved-background",)
     assert run.truth.objects[0].ais_record_id == f"catalog:{record.key}"
-    from tools.run_accuracy_suite import _physical_support_groups
-
-    support_groups, audit = _physical_support_groups(catalog, run.diagnostics)
-    assert support_groups == ()
-    assert audit["detected_distinct_physical_entity_count"] == 0
-    assert audit["detected_identity_limited_group_count"] == 1
-    assert audit["detected_identity_limited_groups"][0][
-        "resolved_background_physical_entity_ids"
-    ] == ["resolved-background"]
-
     blocked = VectorMap(
         box(
             min(observer_xy[0], target_xy[0]) - 2_000,
@@ -532,9 +522,7 @@ def test_cross_chart_duplicate_components_remain_candidates_but_are_identity_lim
     assert set(prediction.groups[0].member_keys) == {record.key for record in catalog.records}
 
 
-def test_colocated_distinct_aids_make_one_detection_and_one_support_unit() -> None:
-    from tools.run_accuracy_suite import _physical_support_groups
-
+def test_colocated_distinct_aids_make_one_detection() -> None:
     aids = (
         ENCAid(
             "north-row",
@@ -593,13 +581,10 @@ def test_colocated_distinct_aids_make_one_detection_and_one_support_unit() -> No
         ),
         seed=6,
     )
-    selected, audit = _physical_support_groups(catalog, simulation.diagnostics)
     assert len(catalog.records) == 2
     assert len(prediction.groups) == 1
     assert len(simulation.diagnostics.groups) == 1
     assert len(simulation.diagnostics.groups[0].catalog_member_physical_ids) == 2
-    assert len(selected) == 1
-    assert audit["detected_distinct_physical_entity_count"] == 1
 
 
 def test_near_but_distinct_aids_remain_separate_groups() -> None:

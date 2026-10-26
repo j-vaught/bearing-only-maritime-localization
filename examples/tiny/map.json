@@ -1,0 +1,1 @@
+{"contract_type":"MapV2","coverage_geometry_geojson":"{\"type\":\"Polygon\",\"coordinates\":[[[-76.02,36.98],[-75.98,36.98],[-75.98,37.02],[-76.02,37.02],[-76.02,36.98]]]}","coverage_status":"known","crs":"EPSG:4326","land_geometry_geojson":null,"map_version":"1","schema_version":2,"source":"synthetic open water","unknown_geometry_geojson":null}

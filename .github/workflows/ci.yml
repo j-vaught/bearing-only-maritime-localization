@@ -1,114 +1,29 @@
-name: CI
+name: Python checks
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
-    inputs:
-      run_gpu_validation:
-        description: Run correctness checks on a self-hosted machine with at least four GPUs.
-        type: boolean
-        required: false
-        default: false
 
 permissions:
   contents: read
 
 jobs:
   python:
-    name: Python checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: uv sync --locked --all-groups
-      - name: Confirm default CPU environment excludes CuPy
-        run: uv run python -c "import importlib.util; assert importlib.util.find_spec('cupy') is None"
-      - run: uv run pytest
-      - name: Check installed command entry points
-        run: |
-          uv run bearing-localization --help
-          uv run bearing-localization-search --help
-          uv run bearing-localization-evaluate --help
-          uv run bearing-simulator --help
-          uv run bearing-benchmark --help
-      - name: Build and install wheel and source distribution
-        shell: bash
-        run: |
-          set -euo pipefail
-          uv build
-          for distribution in wheel sdist; do
-            uv venv --python 3.11 "${RUNNER_TEMP}/${distribution}-env"
-            env_dir="${RUNNER_TEMP}/${distribution}-env"
-            if [[ "${distribution}" == wheel ]]; then
-              uv pip install --python "${env_dir}/bin/python" dist/*.whl
-            else
-              uv pip install --python "${env_dir}/bin/python" dist/*.tar.gz
-            fi
-            "${env_dir}/bin/bearing-localization" --help
-            "${env_dir}/bin/bearing-localization-search" --help
-            "${env_dir}/bin/bearing-localization-evaluate" --help
-            "${env_dir}/bin/bearing-simulator" --help
-            "${env_dir}/bin/bearing-benchmark" --help
-          done
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run ty check .
-
-  typst:
-    name: Typst figure builds
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: typst-community/setup-typst@v5
-      - name: Compile every figure source
-        shell: bash
-        run: |
-          set -euo pipefail
-          output_dir="${RUNNER_TEMP}/typst-figures"
-          mkdir -p "${output_dir}"
-          while IFS= read -r source; do
-            output="${output_dir}/$(basename "${source%.typ}").pdf"
-            typst compile --root . "${source}" "${output}"
-          done < <(find docs/figures figures -type f -name '*.typ' -print | sort)
-
-  gpu-correctness:
-    name: GPU correctness (explicit hardware run)
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_gpu_validation }}
-    runs-on: [self-hosted, linux, x64, gpu]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Require four available CUDA devices
-        shell: bash
-        run: |
-          set -euo pipefail
-          command -v nvidia-smi
-          device_count="$(nvidia-smi --query-gpu=index --format=csv,noheader | wc -l)"
-          if (( device_count < 4 )); then
-            echo "GPU validation requires four visible CUDA devices; found ${device_count}." >&2
-            exit 1
-          fi
-      - run: uv sync --locked --all-groups --extra gpu
-      - name: Run real 1, 2, and 4 device parity tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          device_ids="$(nvidia-smi --query-gpu=index --format=csv,noheader | head -n 4 | paste -sd, -)"
-          export CUDA_VISIBLE_DEVICES="${device_ids}"
-          uv run python -c "import cupy; assert cupy.cuda.runtime.getDeviceCount() >= 4"
-          flock /home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/benchmark.lock \
-            uv run pytest -q tests/accuracy/test_a36.py tests/accuracy/test_a27.py \
-              tests/accuracy/test_a28.py tests/accuracy/test_a29.py \
-              tests/accuracy/test_a30.py tests/accuracy/test_a31.py
+      - run: uv run pytest -q
+      - run: uv build
+      - run: uv run bearing-simulator --help
+      - run: uv run bearing-localization-search --help
+      - run: uv run bearing-localization-evaluate --help

@@ -1,6 +1,0 @@
-Corrected focused rerun at source 03d34590afcac28cc7961d9b560b17aa39284bc3
-PATH=$ENV/bin:$PATH
-PYTHONPATH=$WT
-Command: python -m pytest -q --tb=long --basetemp=$ROOT/.agent-work/tmp/a37-03d3459-failed-tests-20261026/pytest [2 assignment expansion cases + 6 A33 proposal-cache tests]
-........                                                                 [100%]
-8 passed in 5.04s

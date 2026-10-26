@@ -1,3 +1,0 @@
-method,trials,valid_estimates,successes,success_rate,median_position_error_m,p95_position_error_m,median_search_ms,p95_search_ms,median_valid_estimate_search_ms,p95_valid_estimate_search_ms,median_correct_ais_matches,median_chart_aid_matches
-hierarchical_1km,15,15,9,0.6,51.806183539651336,17778.30441404399,1973.3535830164328,2117.801545507973,1973.3535830164328,2117.801545507973,3.0,4.0
-pairwise_hypothesis,15,12,9,0.6,25.866082904039246,56.49416495143019,635.9915409993846,1181.4356286166003,782.0452705054777,1186.0275474129594,3.0,4.0

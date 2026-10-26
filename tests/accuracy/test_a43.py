@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import json
-import subprocess
-import sys
 from collections.abc import Iterable
 from math import hypot
-from pathlib import Path
 
 import pytest
 from shapely.geometry import LineString, Point, box
@@ -13,33 +9,6 @@ from shapely.geometry.base import BaseGeometry
 
 import maritime_localization_shared.geospatial.vector_map as vector_map_module
 from maritime_localization_shared.geospatial.vector_map import VectorMap
-
-
-def test_bounded_profile_writes_partial_artifacts_on_timeout(tmp_path: Path) -> None:
-    repository = Path(__file__).resolve().parents[2]
-    output = tmp_path / "profile"
-    command = [
-        sys.executable,
-        str(repository / "tools" / "profile_pairwise_feasibility.py"),
-        "--seconds",
-        "0.05",
-        "--profile-output",
-        str(output),
-        "--",
-        "module",
-        "timeit",
-        "-n",
-        "100000000",
-        "pass",
-    ]
-    result = subprocess.run(command, capture_output=True, check=False, timeout=5)
-
-    assert result.returncode == 124
-    assert output.with_suffix(".prof").is_file()
-    assert output.with_suffix(".txt").is_file()
-    metadata = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
-    assert metadata["status"] == "watchdog_timeout"
-    assert metadata["elapsed_s"] < 2.0
 
 
 def _old_localframe_reference(

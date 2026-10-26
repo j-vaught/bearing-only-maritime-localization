@@ -1,20 +1,24 @@
 from __future__ import annotations
 
+import csv
+import math
 from dataclasses import replace
 from pathlib import Path
-from runpy import run_path
 
 import numpy as np
 import pytest
 
 from bearing_localization.evaluation.metrics import evaluate_estimate
-from bearing_localization.scene import ShipPose
+from bearing_localization.scene import AISRecord as LegacyAISRecord
+from bearing_localization.scene import Landmark, Scene, SceneConfig, ShipPose
 from bearing_localization.search import PairwiseSearchConfig, run_pairwise_search
 from bearing_localization.search.pairwise import pairwise_hypothesis_search
+from bearing_localization.search_cli import _RasterVisibility
 from bearing_localization.simulator.runner import run_simulator
 from maritime_localization_shared.contracts import (
     AISRecord,
     AISSnapshot,
+    MapInput,
     MeasurementSet,
     Observation,
 )
@@ -168,22 +172,115 @@ def test_pairwise_search_requires_two_observations() -> None:
         )
 
 
+# Fixed historical B1 fixture. Load committed input tables directly.
+ROOT = Path(__file__).resolve().parents[1]
+R_EARTH_M = 6_371_008.8
+ORIGIN_LAT_DEG = 38.0
+ORIGIN_LON_DEG = -76.2
+BOUNDS_LON_LAT = (-76.8, -75.5, 36.5, 39.5)
+VISIBILITY_RANGE_M = 10_000.0
+BEARING_SIGMA_DEG = 0.5
+
+
+def _project_b1(lon_deg: float, lat_deg: float) -> tuple[float, float]:
+    east = (
+        R_EARTH_M * math.radians(lon_deg - ORIGIN_LON_DEG) * math.cos(math.radians(ORIGIN_LAT_DEG))
+    )
+    north = R_EARTH_M * math.radians(lat_deg - ORIGIN_LAT_DEG)
+    return east, north
+
+
+def _load_b1_inputs() -> tuple[
+    Scene,
+    MapInput,
+    dict[str, tuple[float, float]],
+    tuple[float, float, float, float],
+]:
+    with (ROOT / "data/ais/chesapeake_2023-07-15T1200Z.csv").open(newline="") as stream:
+        ais_rows = list(csv.DictReader(stream))
+    with (ROOT / "data/chart-aids/chesapeake-enc-aids.csv").open(newline="") as stream:
+        aid_rows = list(csv.DictReader(stream))
+    with (ROOT / "data/sites/b1-b5.csv").open(newline="") as stream:
+        site_rows = list(csv.DictReader(stream))
+
+    ais: list[LegacyAISRecord] = []
+    landmarks: list[Landmark] = []
+    for index, row in enumerate(ais_rows):
+        east, north = _project_b1(float(row["longitude_deg"]), float(row["latitude_deg"]))
+        ais.append(LegacyAISRecord(index, east, north, "vessel"))
+        landmarks.append(Landmark(index, east, north, "vessel", True))
+    for index, row in enumerate(aid_rows):
+        east, north = _project_b1(float(row["longitude_deg"]), float(row["latitude_deg"]))
+        object_id = len(ais_rows) + index
+        landmarks.append(Landmark(object_id, east, north, "aid", False))
+
+    x_min, y_min = _project_b1(BOUNDS_LON_LAT[0], BOUNDS_LON_LAT[2])
+    x_max, y_max = _project_b1(BOUNDS_LON_LAT[1], BOUNDS_LON_LAT[3])
+    scene = Scene(
+        ais=tuple(ais),
+        landmarks=tuple(landmarks),
+        config=SceneConfig(
+            width_m=x_max - x_min,
+            height_m=y_max - y_min,
+            object_count=len(landmarks),
+            ais_fraction=len(ais) / len(landmarks),
+            visibility_radius_m=VISIBILITY_RANGE_M,
+            bearing_noise_sigma_deg=BEARING_SIGMA_DEG,
+            report_type_labels=True,
+            object_types=("vessel", "aid"),
+        ),
+    )
+
+    packed = np.load(ROOT / "data/maps/chesapeake-water-mask-500m.npz")
+    water = tuple(tuple(bool(cell) for cell in row) for row in packed["water"])
+    map_input = MapInput(
+        crs=str(packed["crs"]),
+        west_m=float(packed["west_m"]),
+        south_m=float(packed["south_m"]),
+        cell_size_m=float(packed["cell_size_m"]),
+        water_mask=water,
+    )
+    sites = {
+        row["site_id"]: _project_b1(float(row["longitude_deg"]), float(row["latitude_deg"]))
+        for row in site_rows
+    }
+    bounds: tuple[float, float, float, float] = (x_min, x_max, y_min, y_max)
+    return scene, map_input, sites, bounds
+
+
+def _b1_candidate_snapshot(run, aid_landmarks: tuple[Landmark, ...]) -> AISSnapshot:
+    """Expose AIS and ENC coordinates as separate typed search candidates."""
+    records = list(run.ais_snapshot.records)
+    # AIS records are created in the simulator from the legacy scene records.
+    # Chart aids have no AIS identifier; their separate prefix keeps that
+    # distinction visible in search output and evaluation.
+    if not aid_landmarks:
+        raise RuntimeError("The ENC aid candidate catalog is empty.")
+    for index, item in enumerate(aid_landmarks):
+        records.append(AISRecord(f"aid:{index}", item.east_m, item.north_m, "aid", "ENC"))
+    return AISSnapshot(
+        records=tuple(records),
+        timestamp_utc=run.ais_snapshot.timestamp_utc,
+        crs=run.ais_snapshot.crs,
+        snapshot_id=run.ais_snapshot.snapshot_id,
+    )
+
+
 def test_pairwise_search_realistic_b1_runtime_profile() -> None:
-    pilot = run_path(str(Path(__file__).resolve().parents[1] / "tools/run_ais_enc_pilot.py"))
-    scene, map_input, sites, bounds = pilot["load_inputs"]()
+    scene, map_input, sites, bounds = _load_b1_inputs()
     observer = sites["B1"]
     simulated = run_simulator(
         scene,
         ShipPose(*observer, 0.0),
-        seed=pilot["SEED_BASE"],
+        seed=20_262_023,
         trial_id="B1-r1-pairwise-profile",
-        angular_resolution_deg=pilot["ANGULAR_RESOLUTION_DEG"],
+        angular_resolution_deg=0.1,
         map_input=map_input,
     )
-    catalog = pilot["candidate_snapshot"](
+    catalog = _b1_candidate_snapshot(
         simulated, tuple(item for item in scene.landmarks if not item.has_ais)
     )
-    base_visibility = pilot["RasterVisibility"](map_input)
+    base_visibility = _RasterVisibility(map_input)
 
     class CountingVisibility:
         water_queries = 0
