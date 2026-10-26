@@ -11,9 +11,11 @@ import pytest
 
 from tools.run_a26_cached_finite_domain import (
     append_jsonl,
+    resolve_project_root,
     sha256_file,
     smoke_scoring_source,
     terminate_process_group,
+    worker_exit_code,
     write_candidate_dispositions,
 )
 
@@ -95,6 +97,38 @@ def test_pool_failure_keeps_known_failure_and_unknown_remainder(tmp_path: Path) 
         "worker_reported_failure",
         "worker_state_unknown_at_interruption",
     ]
+
+
+def test_prefix_completion_is_success_without_full_domain_certificate() -> None:
+    assert (
+        worker_exit_code(
+            {
+                "totals": {
+                    "selected_request_complete": True,
+                    "all_candidates_accounted": False,
+                    "finite_candidate_set_certified": False,
+                }
+            }
+        )
+        == 0
+    )
+    assert worker_exit_code({"totals": {"selected_request_complete": False}}) == 1
+
+
+def test_resolve_project_root_uses_git_common_dir(tmp_path: Path, monkeypatch) -> None:
+    shared_root = tmp_path / "repo"
+    (shared_root / ".git").mkdir(parents=True)
+    (shared_root / ".agent-work").mkdir()
+    worktree = shared_root / ".agent-work" / "worktrees" / "worker"
+    worktree.mkdir(parents=True)
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(
+            args[0], 0, stdout=str(shared_root / ".git") + "\n", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert resolve_project_root(worktree) == shared_root
 
 
 def test_finite_domain_driver_refuses_nonempty_output(tmp_path: Path) -> None:

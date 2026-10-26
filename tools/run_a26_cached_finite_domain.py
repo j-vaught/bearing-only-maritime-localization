@@ -724,6 +724,33 @@ def run_finite_domain(
     return manifest
 
 
+def resolve_project_root(scoring_root: Path) -> Path:
+    """Resolve the shared repository root from Git's common directory."""
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(scoring_root.resolve()),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    common_git_dir = Path(result.stdout.strip()).resolve()
+    project_root = common_git_dir.parent
+    if not (project_root / ".agent-work").is_dir():
+        raise ValueError(f"Shared repository root {project_root} has no .agent-work directory.")
+    return project_root
+
+
+def worker_exit_code(manifest: dict[str, Any]) -> int:
+    """Return success for a complete selected request, including explicit profiles."""
+    return 0 if manifest["totals"]["selected_request_complete"] else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--generation-root", type=Path, required=True)
@@ -760,7 +787,7 @@ def main() -> int:
     else:
         import fcntl
 
-        project_root = args.scoring_root.resolve().parents[2]
+        project_root = resolve_project_root(args.scoring_root)
         lock_path = project_root / ".agent-work/benchmark.lock"
         with lock_path.open("a+") as lock_stream:
             try:
@@ -772,7 +799,7 @@ def main() -> int:
             finally:
                 fcntl.flock(lock_stream, fcntl.LOCK_UN)
     print(json.dumps({"totals": manifest["totals"], "run_id": manifest["run_id"]}, sort_keys=True))
-    return 0 if manifest["totals"]["all_candidates_accounted"] else 1
+    return worker_exit_code(manifest)
 
 
 def terminate_process_group(process: subprocess.Popen[Any], *, grace_s: float = 1.0) -> None:
