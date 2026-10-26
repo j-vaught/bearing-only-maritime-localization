@@ -21,6 +21,57 @@ from maritime_localization_shared.geospatial.coordinates import (
 
 _GEOD = Geod(ellps="WGS84")
 Status = Literal["visible", "blocked", "unresolved", "unexamined"]
+_OFFSET_KEYS = frozenset({"visible_feature_offset_east_m", "visible_feature_offset_north_m"})
+_SAFE_METADATA_KEYS = frozenset(
+    {
+        *_OFFSET_KEYS,
+        "angular_half_width_deg",
+        "position_uncertainty_m",
+        "horizontal_uncertainty_m",
+        "uncertainty_m",
+        "physical_linkage_status",
+        "identity_ambiguous",
+        "physical_entity_id",
+        "physical_group_id",
+        "source_record_identity_status",
+        "observation_association_status",
+        "identity_resolution",
+        "identity_resolution_reason",
+        "source_feature_id",
+        "source_component_count",
+        "source_components",
+        "source_attributes",
+        "chart_id",
+        "scale_band",
+        "service_layer",
+        "uncertainty_status",
+        "identity_kind",
+        "motion_status",
+        "motion_valid",
+        "position_interpolated",
+    }
+)
+_MODEL_KEY_TOKENS = (
+    "antenna",
+    "beam",
+    "bearing",
+    "coordinate",
+    "dimension",
+    "displacement",
+    "feature_center",
+    "geometry",
+    "height",
+    "length",
+    "location",
+    "longitude",
+    "latitude",
+    "offset",
+    "position",
+    "range",
+    "shift",
+    "translation",
+    "width",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,7 +151,9 @@ def screen_candidate_visibility(
         record = item.record
         if not item.is_physical:
             continue
-        if item.offset_quality == "unsupported":
+        if item.offset_quality == "unsupported" or _has_unsupported_metadata_model(
+            dict(record.metadata)
+        ):
             model_keys.append(record.key)
             continue
         lon, lat = record.longitude_deg, record.latitude_deg
@@ -246,6 +299,54 @@ def screen_candidate_visibility(
         cov,
         observer_status,
     )
+
+
+def _has_unsupported_metadata_model(metadata: dict[str, object]) -> bool:
+    """Fail closed on metadata that can encode unsupported target geometry.
+
+    Top-level metadata uses an explicit allowlist. Nested source attributes and
+    component records are provenance containers, so only geometry-bearing keys
+    invalidate the screen certificate.
+    """
+    if any(key not in _SAFE_METADATA_KEYS for key in metadata):
+        return True
+
+    component_keys = {
+        "feature_id",
+        "chart_id",
+        "scale_band",
+        "service_layer",
+        "longitude_deg",
+        "latitude_deg",
+        "source_epoch_sordat",
+    }
+    components = metadata.get("source_components")
+    if components is not None:
+        if not isinstance(components, (tuple, list)):
+            return True
+        for component in components:
+            if not isinstance(component, dict) or any(
+                key not in component_keys for key in component
+            ):
+                return True
+
+    def source_attributes_have_model_key(value: object) -> bool:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                normalized = str(key).casefold()
+                if any(token in normalized for token in _MODEL_KEY_TOKENS):
+                    # ENC source attributes contain a standard height field;
+                    # an empty value carries no dimensional model.
+                    if normalized == "height" and child in ("", None):
+                        continue
+                    return True
+                if source_attributes_have_model_key(child):
+                    return True
+        elif isinstance(value, (tuple, list)):
+            return any(source_attributes_have_model_key(child) for child in value)
+        return False
+
+    return source_attributes_have_model_key(metadata.get("source_attributes"))
 
 
 __all__ = ["ComponentEvidence", "VisibilityScreenResult", "screen_candidate_visibility"]

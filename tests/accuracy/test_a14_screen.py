@@ -160,3 +160,127 @@ def test_inclusive_shoreline_endpoint_delegates_exact_los_to_map():
 def test_invalid_stop_count_rejected():
     with pytest.raises(ValueError):
         screen_candidate_visibility(xy(), context(catalog()), stop_after_minimum_groups=-1)
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        (("source_feature_shift_m", 4.0),),
+        (("target_offset_m", 4.0),),
+        (("unrecognized_geometry_extension", 1.0),),
+        (("source_attributes", {"length_m": 20.0}),),
+        (
+            ("source_attributes", {"objnam": "East Light"}),
+            ("source_feature_id", "fid-row"),
+            ("physical_linkage_status", "resolved"),
+            ("identity_ambiguous", False),
+        ),
+    ],
+)
+def test_unknown_or_nested_geometry_model_metadata_prevents_certification(metadata):
+    cat = catalog(record("model", 15, 500, metadata=metadata))
+    result = screen_candidate_visibility(xy(), context(cat))
+    if (
+        metadata[0][0] == "source_attributes"
+        and isinstance(metadata[0][1], dict)
+        and "objnam" in metadata[0][1]
+    ):
+        assert result.certified
+    else:
+        assert not result.certified
+        assert result.reason == "unsupported_feature_model"
+        assert result.unresolved_model_member_keys == ("model",)
+
+
+def test_supported_visible_feature_offset_metadata_remains_certifiable():
+    cat = catalog(
+        record(
+            "offset",
+            15,
+            500,
+            metadata=(
+                ("visible_feature_offset_east_m", 4.0),
+                ("visible_feature_offset_north_m", 3.0),
+                ("position_uncertainty_m", 2.0),
+                ("angular_half_width_deg", 0.02),
+            ),
+        )
+    )
+    result = screen_candidate_visibility(xy(), context(cat))
+    assert result.certified
+    assert result.minimum_visible_group_count == 1
+
+
+def test_a34_resolved_component_reference_metadata_is_geometry_inert():
+    metadata = (
+        ("identity_ambiguous", False),
+        ("identity_resolution", "same_chart_name_and_proximity"),
+        ("observation_association_status", "candidate_geometry_only"),
+        ("physical_entity_id", "physical-1"),
+        ("physical_linkage_status", "resolved_by_chart_heuristic"),
+        ("position_uncertainty_m", None),
+        ("source_component_count", 1),
+        (
+            "source_components",
+            [
+                {
+                    "feature_id": "feature-1",
+                    "chart_id": "chart-1",
+                    "scale_band": "general",
+                    "service_layer": "Approach.Light_point",
+                    "longitude_deg": -76.3,
+                    "latitude_deg": 37.0,
+                    "source_epoch_sordat": "20151104",
+                }
+            ],
+        ),
+        ("source_record_identity_status", "qualified_source_components"),
+        ("uncertainty_status", "unspecified_by_source"),
+    )
+    cat = catalog(record("enc-resolved", 15, 500, metadata=metadata))
+    result = screen_candidate_visibility(xy(), context(cat))
+    assert result.certified
+    assert result.minimum_visible_group_count == 1
+
+
+def test_frozen_ais_motion_and_identity_metadata_is_allowed():
+    metadata = (
+        ("identity_kind", "source_key"),
+        ("motion_status", "stale_extrapolation_disabled"),
+        ("motion_valid", True),
+        ("position_interpolated", False),
+        ("position_uncertainty_m", None),
+        ("uncertainty_status", "unspecified_by_source"),
+    )
+    cat = catalog(record("ais", 15, 500, metadata=metadata))
+    result = screen_candidate_visibility(xy(), context(cat))
+    assert result.certified
+    assert result.minimum_visible_group_count == 1
+
+
+def test_nonempty_nested_height_is_an_unsupported_dimension_model():
+    cat = catalog(
+        record(
+            "height",
+            15,
+            500,
+            metadata=(("source_attributes", {"bcnshp": "stake", "height": "4.6"}),),
+        )
+    )
+    result = screen_candidate_visibility(xy(), context(cat))
+    assert not result.certified
+    assert result.reason == "unsupported_feature_model"
+
+
+def test_empty_nested_enc_height_does_not_claim_a_dimension_model():
+    cat = catalog(
+        record(
+            "no-height",
+            15,
+            500,
+            metadata=(("source_attributes", {"bcnshp": "stake", "height": ""}),),
+        )
+    )
+    result = screen_candidate_visibility(xy(), context(cat))
+    assert result.certified
+    assert result.minimum_visible_group_count == 1
