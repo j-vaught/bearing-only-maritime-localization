@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -9,9 +10,11 @@ import sys
 import pytest
 
 from bearing_localization.accuracy_cli import (
+    _calibration_binding,
     _candidate_outcome_evidence,
     _distant_region_bound_evidence,
     evaluate_v2_main,
+    search_v2_files,
 )
 from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.config_serialization import (
@@ -21,14 +24,17 @@ from bearing_localization.search.config_serialization import (
     write_search_config,
 )
 from maritime_localization_shared.contracts import (
+    CatalogV2,
     EvaluationTruth,
     Hypothesis,
     LocalizationResult,
+    MapV2,
     MeasurementSet,
     Observation,
     PositionEstimate,
     TrueObject,
 )
+from maritime_localization_shared.contracts.inputs_v2 import MeasurementSetV2
 from maritime_localization_shared.serialization import (
     contract_from_dict,
     contract_to_dict,
@@ -36,6 +42,161 @@ from maritime_localization_shared.serialization import (
     read_contract,
     write_contract,
 )
+
+
+def test_search_sidecar_emits_versioned_calibration_context_without_truth(tmp_path) -> None:
+    timestamp = "2026-10-25T12:00:00Z"
+    measurements = tmp_path / "measurements.json"
+    catalog = tmp_path / "catalog.json"
+    map_path = tmp_path / "map.json"
+    config_path = tmp_path / "config.json"
+    output = tmp_path / "estimate.json"
+    write_contract(measurements, MeasurementSetV2((), trial_id="context-trial"))
+    write_contract(
+        catalog,
+        CatalogV2((), timestamp, "context-test", "1", "context-catalog"),
+    )
+    ring = [[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0], [0.0, 0.0]]
+    write_contract(
+        map_path,
+        MapV2(
+            crs="EPSG:32618",
+            source="context-test",
+            map_version="1",
+            coverage_status="known",
+            coverage_geometry_geojson=json.dumps(
+                {"type": "Polygon", "coordinates": [ring]}, separators=(",", ":")
+            ),
+        ),
+    )
+    write_search_config(
+        config_path,
+        SearchConfig(
+            algorithm="grid",
+            bounds_xy=(10.0, 20.0, 10.0, 20.0),
+            candidate_budget=4,
+        ),
+    )
+
+    search_v2_files(
+        measurements,
+        catalog,
+        map_path,
+        config_path,
+        "EPSG:32618",
+        output,
+        spacing_m=10.0,
+        refine=False,
+    )
+    telemetry = json.loads(output.with_suffix(".json.telemetry.json").read_text())
+    evidence = telemetry["diagnostics"]["public_evidence"]
+    assert evidence["calibration_context_schema"] == "calibration-context-v2"
+    assert evidence["calibration_condition"] == {
+        "range_m": 10000.0,
+        "use_types": True,
+        "objective_version": "bearing_set_map_v1",
+        "algorithm": "grid",
+    }
+    context = evidence["calibration_context"]
+    assert set(context) == {
+        "catalog_sha256",
+        "map_sha256",
+        "scope_manifest_sha256",
+        "search_execution_sha256",
+        "implementation_sha256",
+    }
+    assert all(
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+        for value in context.values()
+    )
+    assert context["catalog_sha256"] == hashlib.sha256(catalog.read_bytes()).hexdigest()
+    assert context["map_sha256"] == hashlib.sha256(map_path.read_bytes()).hexdigest()
+    assert evidence["search_config_sha256"] == hashlib.sha256(config_path.read_bytes()).hexdigest()
+    assert evidence["seed_policy"] == "fixed"
+    assert evidence["seed"] == 0
+    assert evidence["scope_manifest_verified"] is False
+    assert evidence["calibration_binding_status"] == "not_requested"
+    assert not (tmp_path / "truth.json").exists()
+
+
+def test_calibration_binding_is_path_independent_and_records_seed_policy(tmp_path) -> None:
+    catalog_a = tmp_path / "a" / "catalog.json"
+    map_a = tmp_path / "a" / "map.json"
+    catalog_b = tmp_path / "b" / "catalog.json"
+    map_b = tmp_path / "b" / "map.json"
+    catalog_a.parent.mkdir()
+    catalog_b.parent.mkdir()
+    catalog_a.write_bytes(b"catalog contents")
+    map_a.write_bytes(b"map contents")
+    catalog_b.write_bytes(catalog_a.read_bytes())
+    map_b.write_bytes(map_a.read_bytes())
+    config = SearchConfig(
+        algorithm="grid",
+        bounds_xy=(0.0, 10.0, 0.0, 10.0),
+        max_range_m=5000.0,
+        use_types=False,
+    )
+
+    scope_manifest = tmp_path / "scope.json"
+    scope_manifest.write_bytes(b"verified scope manifest")
+
+    def bind(
+        catalog_path,
+        map_path,
+        *,
+        scope_manifest_path=None,
+        seed=17,
+        seed_policy="fixed",
+        spacing_m=50.0,
+    ):
+        return _calibration_binding(
+            config=config,
+            algorithm="grid",
+            projected_crs="EPSG:32618",
+            catalog_path=catalog_path,
+            map_path=map_path,
+            scope_manifest_path=scope_manifest_path,
+            spacing_m=spacing_m,
+            seed=seed,
+            seed_policy=seed_policy,
+            wedge_error_deg=None,
+            wedge_tolerance_deg=0.5,
+            wedge_cell_size_m=250.0,
+            branch_max_regions=999,
+            refine=False,
+            refine_modes_count=8,
+            refine_initial_step_m=100.0,
+            refine_iterations=50,
+            device_ids=(),
+        )
+
+    condition_a, context_a = bind(catalog_a, map_a)
+    condition_b, context_b = bind(catalog_b, map_b)
+    assert condition_a.as_dict() == {
+        "range_m": 5000.0,
+        "use_types": False,
+        "objective_version": config.objective_version,
+        "algorithm": "grid",
+    }
+    assert context_a.as_dict() == context_b.as_dict()
+    assert context_a.catalog_sha256 == hashlib.sha256(b"catalog contents").hexdigest()
+    assert context_a.map_sha256 == hashlib.sha256(b"map contents").hexdigest()
+    assert len(context_a.scope_manifest_sha256) == 64
+
+    _, fixed_other_seed = bind(catalog_a, map_a, seed=18)
+    assert context_a.search_execution_sha256 != fixed_other_seed.search_execution_sha256
+    _, variable_seed_a = bind(catalog_a, map_a, seed=17, seed_policy="per_trial_variable")
+    _, variable_seed_b = bind(catalog_a, map_a, seed=18, seed_policy="per_trial_variable")
+    assert variable_seed_a.search_execution_sha256 == variable_seed_b.search_execution_sha256
+    _, scoped_context = bind(catalog_a, map_a, scope_manifest_path=scope_manifest)
+    assert (
+        scoped_context.scope_manifest_sha256
+        == hashlib.sha256(scope_manifest.read_bytes()).hexdigest()
+    )
+    _, changed_spacing = bind(catalog_a, map_a, spacing_m=25.0)
+    assert context_a.search_execution_sha256 != changed_spacing.search_execution_sha256
 
 
 def test_evaluated_unresolved_outcomes_are_counted_without_branch_sentinels() -> None:
@@ -328,6 +489,7 @@ def test_v2_pipeline_forwards_each_gpu_device_id_and_keeps_truth_out_of_search(
         projected_crs="EPSG:32618",
         spacing_m=100.0,
         seed=0,
+        seed_policy="per_trial_variable",
         device_id=[0, 2],
         algorithm="grid",
         no_refine=True,
@@ -337,6 +499,7 @@ def test_v2_pipeline_forwards_each_gpu_device_id_and_keeps_truth_out_of_search(
 
     assert pipeline.run_pipeline_v2(args) == {"status": "ok"}
     search_command = commands[0]
+    assert search_command[search_command.index("--seed-policy") + 1] == "per_trial_variable"
     assert search_command.count("--device-id") == 2
     first_device = search_command.index("--device-id")
     second_device = search_command.index("--device-id", first_device + 1)
@@ -344,3 +507,9 @@ def test_v2_pipeline_forwards_each_gpu_device_id_and_keeps_truth_out_of_search(
     assert search_command[second_device + 1] == "2"
     assert str(args.truth) not in search_command
     assert str(args.support) not in search_command
+
+    commands.clear()
+    del args.seed_policy
+    assert pipeline.run_pipeline_v2(args) == {"status": "ok"}
+    default_search_command = commands[0]
+    assert default_search_command[default_search_command.index("--seed-policy") + 1] == "fixed"
