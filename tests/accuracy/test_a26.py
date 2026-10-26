@@ -24,8 +24,10 @@ from maritime_localization_shared.contracts.truth import EvaluationTruth
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 from maritime_localization_shared.serialization import read_contract, write_contract
 from tools.run_accuracy_suite import (  # noqa: E402
+    _distance_m,
     _extend_nominal_plan_if_needed,
     _load_command_config,
+    _load_ports,
     _run_process,
     build_split_manifest,
     create_plan,
@@ -34,23 +36,39 @@ from tools.run_accuracy_suite import (  # noqa: E402
 )
 
 
-def test_split_manifest_moves_whole_overlap_component_to_development() -> None:
+def test_split_manifest_uses_reference_anchor_overlap_groups() -> None:
     manifest = build_split_manifest()
     assignments = {port["source_site_id"]: port["effective_split"] for port in manifest["ports"]}
 
     assert len(manifest["ports"]) == 24
-    assert assignments["B8"] == "development"
+    assert manifest["schema"] == "accuracy-split-manifest-v2"
+    assert assignments["B8"] == "validation"
     assert manifest["split_port_ids"]["development"] == [
-        f"port-{index:03d}" for index in (1, 3, 6, 7, 8, 9, 10, 11, 13, 14, 17, 20, 23)
+        f"port-{index:03d}" for index in (1, 3, 6, 7, 9, 10, 11, 13, 14, 17, 20, 23)
     ]
-    assert len(manifest["split_port_ids"]["validation"]) == 3
+    assert manifest["split_port_ids"]["validation"] == [
+        f"port-{index:03d}" for index in (2, 8, 16, 22)
+    ]
     assert len(manifest["split_port_ids"]["heldout"]) == 8
-    assert manifest["overlap_decisions"][0]["port_ids"] == [
-        "port-006",
-        "port-007",
-        "port-008",
-    ]
+    assert manifest["overlap_decisions"] == []
     assert manifest["legacy_b1_b5_separate"] is True
+
+    ports = {
+        row["source_site_id"]: row
+        for row in _load_ports(Path("data/sites/east-coast-major-ports-top150-2024.csv"))
+    }
+    assert _distance_m(ports["B7"], ports["B8"]) == pytest.approx(26_432.49, abs=0.02)
+    assert _distance_m(ports["B6"], ports["B7"]) < 26_000.0
+
+    geod = Geod(ellps="WGS84")
+    _, _, port_point_distance = geod.inv(
+        ports["B7"]["longitude_deg"],
+        ports["B7"]["latitude_deg"],
+        ports["B8"]["longitude_deg"],
+        ports["B8"]["latitude_deg"],
+    )
+    assert port_point_distance < 26_000.0
+    assert _distance_m(ports["B7"], ports["B8"]) > 26_000.0
 
 
 def test_plan_pins_profiles_and_pairs_type_label_seeds(tmp_path: Path) -> None:

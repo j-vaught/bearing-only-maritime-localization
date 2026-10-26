@@ -101,12 +101,37 @@ def evaluator_parity() -> dict[str, Any]:
     }
 
 
-def compact_truth(path: Path, manifest: Path, split: str) -> dict[str, Any] | None:
+def _truth_trial_id(path: Path, split: str) -> str:
+    parts = path.parent.parts[-6:]
+    if len(parts) != 6:
+        raise ValueError(f"Unexpected truth path layout: {path}")
+    port, placement, realization, range_label, type_label, condition = parts
+    range_m = range_label.removesuffix("m")
+    type_mode = "on" if type_label == "types-on" else "off"
+    return f"{split}/{port}/{placement}/{realization}/range{range_m}m/types{type_mode}/{condition}"
+
+
+def _compact_truth_one(
+    path: Path, indexed: dict[str, dict[str, Any]], split: str
+) -> dict[str, Any] | None:
     archive = path.with_name("truth.full.json.gz")
-    manifest_rows = _read_table(manifest) if manifest.exists() else []
-    indexed = {row["trial_id"]: row for row in manifest_rows}
     source = path.read_bytes() if path.exists() else None
-    prior = next((row for row in manifest_rows if row.get("truth_path") == str(path)), None)
+    trial_id = _truth_trial_id(path, split)
+    prior = indexed.get(trial_id)
+
+    # Previously completed rows bind both the compact view and full archive
+    # to pinned hashes. Verify those bytes once and avoid re-decompressing all
+    # rows every time a preparation batch resumes.
+    if prior is not None and archive.exists() and source is not None:
+        if prior.get("gzip_roundtrip_sha256_verified") == "True":
+            if (
+                hbytes(source) != prior.get("compact_truth_sha256")
+                or len(source) != int(prior["compact_truth_bytes"])
+                or hfile(archive) != prior.get("gzip_full_truth_sha256")
+                or archive.stat().st_size != int(prior["gzip_full_truth_bytes"])
+            ):
+                raise RuntimeError(f"Pinned compact truth or archive hash mismatch: {path}")
+            return None
 
     archived_raw: bytes | None = None
     if archive.exists():
@@ -144,9 +169,25 @@ def compact_truth(path: Path, manifest: Path, split: str) -> dict[str, Any] | No
             if prior and source_sha == prior.get("compact_truth_sha256"):
                 pass
             elif source != full_raw:
-                raise RuntimeError(
-                    f"Truth source matches neither full archive nor compact manifest: {path}"
-                )
+                if prior is not None:
+                    raise RuntimeError(
+                        f"Truth source matches neither full archive nor compact manifest: {path}"
+                    )
+                keep_from_archive = [
+                    obj for obj in objects if obj.get("observation_index") is not None
+                ]
+                compact_from_archive = {
+                    key: value for key, value in doc.items() if key != "objects"
+                }
+                compact_from_archive["objects"] = keep_from_archive
+                expected_compact = (
+                    json.dumps(compact_from_archive, indent=2, sort_keys=True, allow_nan=False)
+                    + "\n"
+                ).encode()
+                if source != expected_compact:
+                    raise RuntimeError(
+                        f"Orphan compact truth does not match its full archive: {path}"
+                    )
 
     keep = [obj for obj in objects if obj.get("observation_index") is not None]
     compact = {key: value for key, value in doc.items() if key != "objects"}
@@ -181,15 +222,28 @@ def compact_truth(path: Path, manifest: Path, split: str) -> dict[str, Any] | No
     ):
         return None
     indexed[trial_id] = row
-    manifest.parent.mkdir(parents=True, exist_ok=True)
-    _write_table(manifest, list(indexed.values()))
+    return row
+
+
+def compact_truth(path: Path, manifest: Path, split: str) -> dict[str, Any] | None:
+    manifest_rows = _read_table(manifest) if manifest.exists() else []
+    indexed: dict[str, dict[str, Any]] = {row["trial_id"]: row for row in manifest_rows}
+    row = _compact_truth_one(path, indexed, split)
+    if row is not None:
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        _write_table(manifest, list(indexed.values()))
     return row
 
 
 def compact_split(root: Path, manifest: Path, split: str) -> int:
     n = 0
+    manifest_rows = _read_table(manifest) if manifest.exists() else []
+    indexed: dict[str, dict[str, Any]] = {row["trial_id"]: row for row in manifest_rows}
     for path in sorted((root / split).glob("**/truth.json")):
-        n += compact_truth(path, manifest, split) is not None
+        n += _compact_truth_one(path, indexed, split) is not None
+    if n:
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        _write_table(manifest, list(indexed.values()))
     from tools.compact_a38_audit import compact_audits
 
     compact_audits(root, manifest.with_name("identity-audit-compaction.csv"), split)

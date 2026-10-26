@@ -74,6 +74,62 @@ def test_truth_compaction_is_lossless_and_idempotent(tmp_path: Path) -> None:
     assert rows[0]["gzip_roundtrip_sha256_verified"] == "True"
 
 
+def test_compact_resume_checks_pinned_hashes_without_decompressing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    trial = tmp_path / "development/port-001/placement-001/r0/1000m/types-on/nominal"
+    trial.mkdir(parents=True)
+    truth = trial / "truth.json"
+    truth.write_bytes(_truth_doc())
+    audit = trial / "physical-identity-audit.json"
+    audit.write_text(
+        json.dumps(
+            {
+                "catalog_sha256": "catalog-hash",
+                "physical_entity_by_catalog_key": {"chart:1": "physical:1"},
+                "unresolved_catalog_keys": [],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    (trial / "support.json").write_text(json.dumps({"supported": True}))
+    truth_manifest = tmp_path / "truth-compaction.csv"
+    audit_manifest = tmp_path / "identity-audit-compaction.csv"
+    assert compact_truth(truth, truth_manifest, "development") is not None
+    assert compact_audits(tmp_path, audit_manifest, "development") == 1
+
+    def unexpected_decompression(*_args, **_kwargs):
+        raise AssertionError("verified complete archives should use pinned-hash fast path")
+
+    monkeypatch.setattr("tools.run_a38_execution.verified_gzip_bytes", unexpected_decompression)
+    monkeypatch.setattr("tools.compact_a38_audit.verified_gzip_bytes", unexpected_decompression)
+    from tools.run_a38_execution import compact_split
+
+    assert compact_split(tmp_path, truth_manifest, "development") == 0
+    assert compact_audits(tmp_path, audit_manifest, "development") == 0
+
+
+def test_orphan_compact_truth_recovers_manifest_from_verified_archive(tmp_path: Path) -> None:
+    path = tmp_path / "development/port-001/placement-001/r0/1000m/types-on/nominal/truth.json"
+    path.parent.mkdir(parents=True)
+    original = _truth_doc()
+    path.write_bytes(original)
+    manifest = tmp_path / "truth-compaction.csv"
+    first = compact_truth(path, manifest, "development")
+    assert first is not None
+    compact_bytes = path.read_bytes()
+    manifest.unlink()
+
+    recovered = compact_truth(path, manifest, "development")
+
+    assert recovered is not None
+    assert path.read_bytes() == compact_bytes
+    assert gzip.decompress(Path(recovered["full_truth_archive_path"]).read_bytes()) == original
+    assert recovered["full_truth_sha256"] == a38_archive.sha256_bytes(original)
+
+
 def test_interrupted_archive_write_keeps_final_archive_atomic(tmp_path: Path, monkeypatch) -> None:
     raw = _truth_doc()
     archive = tmp_path / "truth.json.gz"
@@ -106,7 +162,7 @@ def test_corrupt_final_archive_is_rebuilt_only_from_full_source(tmp_path: Path) 
     assert row["full_truth_sha256"] == a38_archive.sha256_bytes(original)
     # A damaged archive cannot be accepted after the complete source has been compacted away.
     archive.write_bytes(b"corrupt")
-    with pytest.raises(RuntimeError, match="no full source remains"):
+    with pytest.raises(RuntimeError, match="Pinned compact truth or archive hash mismatch"):
         compact_truth(path, tmp_path / "truth.csv", "development")
 
 
@@ -146,6 +202,60 @@ def test_audit_compaction_is_lossless_and_idempotent(tmp_path: Path) -> None:
     assert len(rows) == 1
     assert rows[0]["entity_map_entry_count"] == "2"
     assert rows[0]["unresolved_key_count"] == "1"
+
+
+def test_audit_compaction_can_reconcile_only_missing_trial_ids(tmp_path: Path) -> None:
+    selected = tmp_path / "development/port-001/placement-001/r0/1000m/types-on/nominal"
+    ignored = tmp_path / "development/port-001/placement-002/r0/1000m/types-on/nominal"
+    selected.mkdir(parents=True)
+    ignored.mkdir(parents=True)
+    full = {
+        "catalog_sha256": "catalog-hash",
+        "physical_entity_by_catalog_key": {"chart:1": "physical:1"},
+        "unresolved_catalog_keys": [],
+    }
+    audit_path = selected / "physical-identity-audit.json"
+    audit_path.write_text(json.dumps(full, indent=2, sort_keys=True) + "\n")
+    (ignored / "physical-identity-audit.json").write_text("{incomplete")
+
+    updated = compact_audits(
+        tmp_path,
+        tmp_path / "identity-audit-compaction.csv",
+        "development",
+        trial_ids={"development/port-001/placement-001/r0/range1000m/typeson/nominal"},
+    )
+
+    assert updated == 1
+    rows = list(csv.DictReader((tmp_path / "identity-audit-compaction.csv").open(newline="")))
+    assert [row["trial_id"] for row in rows] == [
+        "development/port-001/placement-001/r0/range1000m/typeson/nominal"
+    ]
+
+
+def test_orphan_compact_audit_recovers_manifest_from_verified_archive(tmp_path: Path) -> None:
+    trial = tmp_path / "development/port-001/placement-001/r0/1000m/types-on/nominal"
+    trial.mkdir(parents=True)
+    audit = trial / "physical-identity-audit.json"
+    full = {
+        "catalog_sha256": "catalog-hash",
+        "physical_entity_by_catalog_key": {"chart:1": "physical:1"},
+        "unresolved_catalog_keys": [],
+    }
+    original = (json.dumps(full, indent=2, sort_keys=True) + "\n").encode()
+    audit.write_bytes(original)
+    manifest = tmp_path / "identity-audit-compaction.csv"
+    assert compact_audits(tmp_path, manifest, "development") == 1
+    compact_bytes = audit.read_bytes()
+    manifest.unlink()
+
+    assert compact_audits(tmp_path, manifest, "development") == 1
+
+    assert audit.read_bytes() == compact_bytes
+    archive = audit.with_name("physical-identity-audit.full.json.gz")
+    assert gzip.decompress(archive.read_bytes()) == original
+    recovered = list(csv.DictReader(manifest.open(newline="")))
+    assert len(recovered) == 1
+    assert recovered[0]["gzip_roundtrip_sha256_verified"] == "True"
 
 
 def test_parallel_row_validation_rejects_missing_and_duplicate_ids() -> None:

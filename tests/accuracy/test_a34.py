@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from math import hypot
 
 from pyproj import CRS, Transformer
-from shapely.geometry import Polygon, box, mapping
+from shapely.geometry import Point, Polygon, box, mapping, shape
 
 from bearing_localization.search.prediction import predict_visible_groups
 from bearing_localization.simulator.mismatch import (
@@ -16,10 +17,15 @@ from maritime_localization_ingest.ais import catalog_from_ais_rows
 from maritime_localization_ingest.enc import (
     ENCAid,
     ENCAidCatalog,
+    ENCCollection,
+    ENCFeature,
     combine_ais_and_enc_physical_catalogs,
+    compose_fallback_map_v2,
     compose_partial_map_v2,
+    compose_scale_fallback_map_v2,
     enc_aids_catalog_to_catalog_v2,
     group_physical_aids,
+    mosaic_by_scale,
 )
 from maritime_localization_shared.contracts.inputs_v2 import (
     CatalogRecordV2,
@@ -191,6 +197,55 @@ def test_full_domain_map_composition_keeps_unknown_seams_and_partial_coverage() 
     assert vector_map.point_water_status(project(-75.5, 36.2)) == "water"
     assert vector_map.point_water_status(project(-75.2, 36.2)) == "unknown"
     assert vector_map.line_visibility(project(-75.5, 36.2), project(-75.2, 36.2)) == "unknown"
+
+
+def test_fine_coast_map_overrides_coarse_land_and_falls_back_across_fine_unknowns() -> None:
+    domain = box(-76.0, 36.0, -75.0, 37.0)
+    fallback_coverage = box(-75.9, 36.1, -75.1, 36.9)
+    fallback_land = box(-75.8, 36.2, -75.3, 36.8)
+    fallback = MapV2(
+        crs="EPSG:4326",
+        source="complete General-scale fallback",
+        map_version="general-fixture",
+        coverage_status="known",
+        coverage_geometry_geojson=_polygon_json(fallback_coverage),
+        land_geometry_geojson=_polygon_json(fallback_land),
+    )
+    detailed_coverage = box(-75.75, 36.3, -75.25, 36.7)
+    detailed_unknown = box(-75.55, 36.3, -75.25, 36.7)
+    detailed_land = box(-75.72, 36.34, -75.68, 36.66)
+    detailed = MapV2(
+        crs="EPSG:4326",
+        source="fine port map",
+        map_version="fine-fixture",
+        coverage_status="partial",
+        coverage_geometry_geojson=_polygon_json(detailed_coverage),
+        unknown_geometry_geojson=_polygon_json(detailed_unknown),
+        land_geometry_geojson=_polygon_json(detailed_land),
+    )
+
+    result = compose_fallback_map_v2(
+        fallback,
+        (detailed,),
+        domain=domain,
+        map_version="fallback-composition-fixture",
+        source="fine maps over complete General-scale fallback",
+    )
+    vector_map = VectorMap.from_map_v2(result, target_crs="EPSG:32618")
+    project = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True).transform
+
+    assert result.coverage_status == "partial"
+    assert vector_map.point_water_status(project(-75.7, 36.4)) == "land"
+    # A narrow channel known to the fine map overrides coarse land.
+    assert vector_map.point_water_status(project(-75.62, 36.4)) == "water"
+    # The fine-map no-data seam falls back to General coverage and land.
+    assert vector_map.point_water_status(project(-75.4, 36.4)) == "land"
+    # General-scale coverage supplies water where the fine map has no authority.
+    assert vector_map.point_water_status(project(-75.2, 36.4)) == "water"
+    # Neither chart source covers this seam; it stays unknown.
+    assert vector_map.point_water_status(project(-75.95, 36.4)) == "unknown"
+    # Fine coverage beyond the requested map domain is cropped.
+    assert vector_map.point_water_status(project(-75.05, 36.4)) == "unknown"
 
 
 def test_true_north_prediction_and_simulation_share_range_los_and_merge_geometry() -> None:
@@ -594,3 +649,161 @@ def test_near_but_distinct_aids_remain_separate_groups() -> None:
     assert len(catalog.records) == 2
     assert len(prediction.groups) == 2
     assert len({record.key for record in catalog.records}) == 2
+
+
+def _map_v2(coverage, land, *, unknown=None, version="fixture"):
+    status = "partial" if unknown is not None else "known"
+    return MapV2(
+        crs="EPSG:4326",
+        source="fixture",
+        map_version=version,
+        coverage_status=status,
+        coverage_geometry_geojson=_polygon_json(coverage),
+        unknown_geometry_geojson=_polygon_json(unknown) if unknown is not None else None,
+        land_geometry_geojson=_polygon_json(land) if not land.is_empty else None,
+    )
+
+
+def test_scale_fallback_prioritizes_detail_and_preserves_coarse_unknown_fallback() -> None:
+    domain = box(0, 0, 10, 10)
+    coarse = _map_v2(domain, domain, version="general-base")
+    approach_coverage = box(2, 2, 8, 8)
+    approach_land = box(2, 2, 8, 5).difference(box(6, 3, 7, 4))
+    approach_unknown = box(7, 2, 8, 4)
+    approach = _map_v2(
+        approach_coverage,
+        approach_land,
+        unknown=approach_unknown,
+        version="approach",
+    )
+    harbour_coverage = box(3, 3, 5, 5)
+    harbour = _map_v2(harbour_coverage, Polygon(), version="harbour")
+    result, conflicts = compose_scale_fallback_map_v2(
+        coarse,
+        {"approach": [approach], "harbour": [harbour]},
+        domain=domain,
+        map_version="composed",
+        source="fixture",
+        densify_geographic_edges=False,
+    )
+    assert result.coverage_geometry_geojson is not None
+    assert result.land_geometry_geojson is not None
+    coverage = shape(json.loads(result.coverage_geometry_geojson))
+    land = shape(json.loads(result.land_geometry_geojson))
+    assert conflicts["approach"] == 0.0
+    assert result.coverage_status == "known"
+    assert result.unknown_geometry_geojson is None
+    assert coverage.covers(Point(4, 4))
+    assert not land.covers(Point(4, 4))  # Harbour water overrides approach and coarse land.
+    assert not land.covers(Point(6.5, 3.5))  # Narrow approach water channel is retained.
+    assert land.covers(Point(7.25, 3.0))  # Fine unknown seam falls back to coarse land.
+    assert not coverage.covers(Point(11, 11))
+    assert not coverage.covers(Point(11, 11))  # Out-of-domain is not inferred as water.
+
+
+def test_segmentized_scale_output_preserves_shoreline_and_los_in_search_crs() -> None:
+    domain = box(-75.2, 39.8, -74.8, 40.2)
+    land = Polygon([(-75.1, 39.9), (-74.9, 40.1), (-74.9, 40.2), (-75.1, 40.2)])
+    fallback = _map_v2(domain, land)
+    compact, _ = compose_scale_fallback_map_v2(
+        fallback,
+        {},
+        domain=domain,
+        map_version="compact",
+        source="fixture",
+        densify_geographic_edges=False,
+    )
+    segmentized, _ = compose_scale_fallback_map_v2(
+        fallback,
+        {},
+        domain=domain,
+        map_version="segmentized",
+        source="fixture",
+        densify_geographic_edges=False,
+        geographic_segment_length_deg=0.001,
+    )
+    reference, _ = compose_scale_fallback_map_v2(
+        fallback,
+        {},
+        domain=domain,
+        map_version="fine-reference",
+        source="fixture",
+        densify_geographic_edges=False,
+        geographic_segment_length_deg=0.0001,
+    )
+    compact_vector = VectorMap.from_map_v2(compact, target_crs="EPSG:32618")
+    segmentized_vector = VectorMap.from_map_v2(segmentized, target_crs="EPSG:32618")
+    reference_vector = VectorMap.from_map_v2(reference, target_crs="EPSG:32618")
+    project = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True)
+    start = project.transform(-75.1, 39.9)
+    end = project.transform(-74.9, 40.1)
+    tangent_x = end[0] - start[0]
+    tangent_y = end[1] - start[1]
+    tangent_length = hypot(tangent_x, tangent_y)
+    normal = (-tangent_y / tangent_length, tangent_x / tangent_length)
+    shore = project.transform(-75.0, 40.0)
+    samples = [(shore[0] + side * normal[0], shore[1] + side * normal[1]) for side in (-1.0, 1.0)]
+    reference_status = [reference_vector.point_water_status(point) for point in samples]
+    assert [segmentized_vector.point_water_status(point) for point in samples] == reference_status
+    assert [compact_vector.point_water_status(point) for point in samples] != reference_status
+    observer = (
+        shore[0] + 100.0 * normal[0],
+        shore[1] + 100.0 * normal[1],
+    )
+    target = (
+        shore[0] - 100.0 * normal[0],
+        shore[1] - 100.0 * normal[1],
+    )
+    assert segmentized_vector.line_visibility(observer, target) == reference_vector.line_visibility(
+        observer, target
+    )
+
+
+def test_scale_fallback_marks_same_scale_land_water_disagreement_unknown() -> None:
+    domain = box(0, 0, 10, 10)
+    coarse = _map_v2(domain, domain)
+    overlap = box(2, 2, 5, 5)
+    land_source = _map_v2(overlap, overlap, version="approach-land")
+    water_source = _map_v2(overlap, Polygon(), version="approach-water")
+    result, conflicts = compose_scale_fallback_map_v2(
+        coarse,
+        {"approach": [land_source, water_source]},
+        domain=domain,
+        map_version="conflict",
+        source="fixture",
+        densify_geographic_edges=False,
+    )
+    assert result.coverage_geometry_geojson is not None
+    assert result.unknown_geometry_geojson is not None
+    coverage = shape(json.loads(result.coverage_geometry_geojson))
+    unknown = shape(json.loads(result.unknown_geometry_geojson))
+    assert conflicts["approach"] == overlap.area
+    assert not coverage.covers(Point(3, 3))
+    assert unknown.covers(Point(3, 3))
+    assert coverage.covers(Point(1, 1))
+
+
+def test_scale_mosaic_drops_zero_area_boundary_contacts_before_precedence_overlay() -> None:
+    domain = box(0, 0, 10, 10)
+    coastal = ENCFeature(
+        feature_id="coastal-boundary-contact",
+        chart_id="chart-coastal",
+        scale_band="coastal",
+        layer="Coastal.Coverage_area",
+        geometry=box(10, 0, 12, 10),
+        attributes=(("CATCOV", "coverage available"),),
+    )
+    general_coverage = ENCFeature(
+        feature_id="general-coverage",
+        chart_id="chart-general",
+        scale_band="general",
+        layer="General.Coverage_area",
+        geometry=domain,
+        attributes=(("CATCOV", "coverage available"),),
+    )
+    layers = mosaic_by_scale(
+        ENCCollection("EPSG:4326", (coastal, general_coverage), "boundary-contact"),
+        domain,
+    )
+    assert [layer.scale_band for layer in layers] == ["general"]
+    assert layers[0].coverage.equals(domain)

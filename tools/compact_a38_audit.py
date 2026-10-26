@@ -15,15 +15,38 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def compact_audits(root: Path, manifest: Path, split: str) -> int:
+def sha_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def compact_audits(
+    root: Path, manifest: Path, split: str, trial_ids: set[str] | None = None
+) -> int:
     count = 0
     manifest.parent.mkdir(parents=True, exist_ok=True)
     existing = _read_table(manifest) if manifest.exists() else []
     indexed = {row["trial_id"]: row for row in existing}
     for path in sorted((root / split).glob("**/physical-identity-audit.json")):
+        trial_id = _trial_id(path, root, split)
+        if trial_ids is not None and trial_id not in trial_ids:
+            continue
         archive = path.with_name("physical-identity-audit.full.json.gz")
-        prior = indexed.get(_trial_id(path, root, split))
+        prior = indexed.get(trial_id)
         source = path.read_bytes()
+        if prior is not None and archive.exists():
+            if prior.get("gzip_roundtrip_sha256_verified") == "True":
+                if (
+                    sha(source) != prior.get("compact_audit_sha256")
+                    or len(source) != int(prior["compact_audit_bytes"])
+                    or sha_file(archive) != prior.get("gzip_audit_sha256")
+                    or archive.stat().st_size != int(prior["gzip_audit_bytes"])
+                ):
+                    raise RuntimeError(f"Pinned compact audit or archive hash mismatch: {path}")
+                continue
         archived_raw = None
         if archive.exists():
             try:
@@ -53,7 +76,7 @@ def compact_audits(root: Path, manifest: Path, split: str) -> int:
             raw = archived_raw
             digest = sha(raw)
             doc = json.loads(raw)
-            if source != raw and (not prior or sha(source) != prior.get("compact_audit_sha256")):
+            if source != raw and prior and sha(source) != prior.get("compact_audit_sha256"):
                 raise RuntimeError(
                     f"Audit source matches neither full archive nor compact manifest: {path}"
                 )
@@ -66,9 +89,10 @@ def compact_audits(root: Path, manifest: Path, split: str) -> int:
         summary["physical_entity_map_entry_count"] = len(entity_map)
         summary["unresolved_catalog_key_count"] = len(unresolved)
         compact = (json.dumps(summary, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+        if source != raw and prior is None and source != compact:
+            raise RuntimeError(f"Orphan compact audit does not match its full archive: {path}")
         if source != compact:
             atomic_write_bytes(path, compact)
-        trial_id = _trial_id(path, root, split)
         support_path = path.with_name("support.json")
         support = json.loads(support_path.read_text()) if support_path.exists() else {}
         audit_row = {
