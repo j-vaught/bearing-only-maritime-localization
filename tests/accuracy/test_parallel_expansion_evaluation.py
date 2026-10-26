@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -58,11 +60,15 @@ def _branch(branch_id: int, *, result: bool) -> dict[str, Any]:
 
 def _chain(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     previous = ""
+    mode_event_counts: dict[int, int] = {}
     output = []
     for index, record in enumerate(records):
+        mode = record["mode_index"]
+        mode_event_index = record.get("mode_event_index", mode_event_counts.get(mode, 0))
+        mode_event_counts[mode] = mode_event_index + 1
         payload = {
-            "mode_index": record["mode_index"],
-            "mode_event_index": record.get("mode_event_index", 0),
+            "mode_index": mode,
+            "mode_event_index": mode_event_index,
             "phase": record["phase"],
             "event_index": index,
             "event": record["event"],
@@ -74,7 +80,9 @@ def _chain(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return output
 
 
-def _write_events(root: Path, records: list[dict[str, Any]]) -> None:
+def _write_events(
+    root: Path, records: list[dict[str, Any]], *, checkpoint_prefix: int | None = None
+) -> None:
     events = _chain(records)
     (root / evaluator.EVENTS_NAME).write_text(
         "".join(json.dumps(item, sort_keys=True) + "\n" for item in events)
@@ -85,8 +93,11 @@ def _write_events(root: Path, records: list[dict[str, Any]]) -> None:
     manifest["events_sha256"] = _sha(root / evaluator.EVENTS_NAME)
     _write_json(root / "manifest.json", manifest)
     checkpoint = json.loads((root / evaluator.CHECKPOINT_NAME).read_text())
-    checkpoint["event_digest"] = manifest["event_digest"]
-    checkpoint["events_sha256"] = manifest["events_sha256"]
+    prefix_count = len(events) if checkpoint_prefix is None else checkpoint_prefix
+    prefix_lines = (root / evaluator.EVENTS_NAME).read_bytes().splitlines(keepends=True)
+    checkpoint["event_count"] = prefix_count
+    checkpoint["event_digest"] = events[prefix_count - 1]["event_sha256"] if prefix_count else ""
+    checkpoint["events_sha256"] = hashlib.sha256(b"".join(prefix_lines[:prefix_count])).hexdigest()
     _write_json(root / evaluator.CHECKPOINT_NAME, checkpoint)
 
 
@@ -132,6 +143,8 @@ def _bundle(root: Path, *, parallel: bool) -> Path:
     common: dict[str, Any] = dict(ROOT_KEYS)
     common.update(
         {
+            "package_commit": "2" * 40 if parallel else "1" * 40,
+            "harness_commit": "2" * 40 if parallel else "1" * 40,
             "schema": "assignment-expansion-diagnostic-v1",
             "mode_count": 64,
             "completed_mode_count": completed,
@@ -154,7 +167,7 @@ def _bundle(root: Path, *, parallel: bool) -> Path:
             {
                 "worker_id": index,
                 "pid": index + 1,
-                "package_commit": "pkg",
+                "package_commit": "2" * 40,
                 "assignment_expansion_sha256": ROOT_KEYS["assignment_expansion_sha256"],
                 "scorer_source": str(scorer),
                 "scorer_sha256": _sha(scorer),
@@ -203,7 +216,7 @@ def _bundle(root: Path, *, parallel: bool) -> Path:
                         "event": _branch(branch_id, result=True),
                     }
                 )
-    _write_events(root, records)
+    _write_events(root, records, checkpoint_prefix=None if parallel else len(records) - 1)
     return root
 
 
@@ -235,6 +248,8 @@ def test_valid_partial_serial_prefix_and_complete_parallel_bundle(
         "payload",
         "serial_prefix",
         "source_pin",
+        "missing_binding_hash",
+        "mode_event_index",
     ),
 )
 def test_corruptions_are_rejected(
@@ -281,9 +296,180 @@ def test_corruptions_are_rejected(
         manifest["pending_mode_count"] = 5
         manifest["rows_sha256"] = _sha(serial_copy / evaluator.ROWS_NAME)
         _write_json(serial_copy / "manifest.json", manifest)
-    else:
+    elif mutation == "source_pin":
         manifest = evaluator.read_json(parallel_copy / "manifest.json")
         manifest["source_pins"]["config_sha256"] = "0" * 64
         _write_json(parallel_copy / "manifest.json", manifest)
+    elif mutation == "mode_event_index":
+        events = evaluator.read_jsonl(parallel_copy / evaluator.EVENTS_NAME)
+        events[1]["mode_event_index"] = 0
+        records = [
+            {
+                "mode_index": item["mode_index"],
+                "mode_event_index": item["mode_event_index"],
+                "phase": item["phase"],
+                "event": item["event"],
+            }
+            for item in events
+        ]
+        _write_events(parallel_copy, records)
+    else:
+        manifest = evaluator.read_json(parallel_copy / "manifest.json")
+        manifest.pop("assignment_expansion_sha256")
+        _write_json(parallel_copy / "manifest.json", manifest)
     with pytest.raises(evaluator.EvaluationError):
         evaluator.evaluate(serial_copy, parallel_copy)
+
+
+def test_real_serial_artifact_uses_checkpoint_prefix_and_failure_tail() -> None:
+    root = Path(
+        "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/outputs/"
+        "assignment-expansion-diagnostic-v1"
+    )
+    manifest, rows, events = evaluator.validate_manifest(root)
+    assert manifest["status"] == "interrupted"
+    assert len(rows) == 60
+    assert events[-1]["phase"] == "failure"
+    assert events[-1]["mode_index"] == 60
+
+
+def test_complete_audit_requires_all_64_exact_artifact_hashes(
+    bundles: tuple[Path, Path],
+) -> None:
+    serial, parallel = bundles
+    parallel_manifest = evaluator.read_json(parallel / "manifest.json")
+    audit = {
+        "evaluation_status": "complete_audit",
+        "branch_rescore_complete": True,
+        "evaluation_only": True,
+        "truth_used_for_search_or_proposal_selection": False,
+        "certificate_scope": "none",
+        "mode_count": 64,
+        "completed_mode_count": 64,
+        "pending_mode_count": 0,
+        "expansion_status": "completed",
+        "expansion_event_count": parallel_manifest["event_count"],
+        "expansion_event_digest": parallel_manifest["event_digest"],
+        "expansion_events_sha256": parallel_manifest["events_sha256"],
+        "expansion_rows_sha256": parallel_manifest["rows_sha256"],
+        "expansion_manifest_sha256": _sha(parallel / "manifest.json"),
+        "mode_evaluations": [{"mode_index": mode} for mode in range(64)],
+        "event_mode_counts": {
+            str(mode): {
+                "started": 2 if mode == 60 else 1,
+                "result": 2 if mode == 60 else 1,
+                "failure": 0,
+            }
+            for mode in range(64)
+        },
+    }
+    audit_path = parallel.parent / "full-audit.json"
+    _write_json(audit_path, audit)
+    assert evaluator.evaluate(serial, parallel, audit_path)["evaluation_status"] == "complete_audit"
+
+    audit["expansion_events_sha256"] = "0" * 64
+    _write_json(audit_path, audit)
+    result = evaluator.evaluate(serial, parallel, audit_path)
+    assert result["evaluation_status"] == "provisional"
+    assert result["branch_rescore_complete"] is False
+
+    audit["expansion_events_sha256"] = parallel_manifest["events_sha256"]
+    audit["event_mode_counts"]["60"]["result"] = 1
+    _write_json(audit_path, audit)
+    result = evaluator.evaluate(serial, parallel, audit_path)
+    assert result["evaluation_status"] == "provisional"
+
+    audit["event_mode_counts"]["60"]["result"] = 2
+    audit["mode_evaluations"].pop()
+    _write_json(audit_path, audit)
+    result = evaluator.evaluate(serial, parallel, audit_path)
+    assert result["evaluation_status"] == "provisional"
+
+
+@pytest.mark.parametrize("field", ("mode_count", "completed_mode_count"))
+def test_audit_missing_or_extra_mode_is_not_reusable(
+    bundles: tuple[Path, Path], field: str
+) -> None:
+    serial, parallel = bundles
+    manifest = evaluator.read_json(parallel / "manifest.json")
+    audit = {
+        "evaluation_status": "complete_audit",
+        "branch_rescore_complete": True,
+        "mode_count": 64,
+        "completed_mode_count": 64,
+        "assignment_expansion_sha256": manifest["assignment_expansion_sha256"],
+        "expansion_events_sha256": manifest["events_sha256"],
+        "expansion_rows_sha256": manifest["rows_sha256"],
+        "expansion_manifest_sha256": _sha(parallel / "manifest.json"),
+    }
+    audit[field] = 65 if field == "mode_count" else 63
+    path = parallel.parent / f"audit-{field}.json"
+    _write_json(path, audit)
+    result = evaluator.evaluate(serial, parallel, path)
+    assert result["evaluation_status"] == "provisional"
+
+
+def test_changed_package_commit_is_rejected_even_when_source_hash_is_unchanged(
+    bundles: tuple[Path, Path], tmp_path: Path
+) -> None:
+    serial, parallel = bundles
+    copy = tmp_path / "parallel-copy"
+    shutil.copytree(parallel, copy)
+    manifest = evaluator.read_json(copy / "manifest.json")
+    manifest["package_commit"] = "3" * 40
+    manifest["harness_commit"] = "3" * 40
+    _write_json(copy / "manifest.json", manifest)
+    with pytest.raises(evaluator.EvaluationError, match="immutable package commit|worker package"):
+        evaluator.evaluate(serial, copy)
+
+
+def test_parallel_producer_helpers_emit_validator_accepted_ledger(tmp_path: Path) -> None:
+    runner_path = Path(
+        "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/"
+        "worktrees/assignment-expansion-parallelization/tools/"
+        "run_parallel_assignment_expansion_diagnostic.py"
+    )
+    if not runner_path.is_file():
+        pytest.fail(f"committed parallel producer is unavailable at {runner_path}")
+    sys.path.insert(0, str(runner_path.parents[1]))
+    sys.modules.pop("tools", None)
+    spec = importlib.util.spec_from_file_location("parallel_producer_fixture", runner_path)
+    assert spec is not None and spec.loader is not None
+    producer = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = producer
+    spec.loader.exec_module(producer)
+
+    root = tmp_path / "producer"
+    root.mkdir()
+    events_path = root / evaluator.EVENTS_NAME
+    state = producer.DurableState()
+    branch = _branch(0, result=False)
+    with events_path.open("w", encoding="utf-8") as stream:
+        producer.append_event(stream, state, 0, "branch_started", branch)
+        producer.append_event(stream, state, 0, "branch_result", _branch(0, result=True))
+
+    seed = _hypothesis(3.0)
+    row = {
+        "mode_index": 0,
+        "best_hypothesis": seed,
+        "seed": seed,
+        "counters": {"visited_branches": 1},
+        "branch_event_count": 1,
+    }
+    state.outcomes[0] = row
+    manifest = {
+        "mode_count": 64,
+        "truth_used": False,
+        "evaluator_used": False,
+        "certificate_scope": "none",
+        "status": "in_progress",
+    }
+    producer._persist_state(root, manifest, state)
+    persisted = evaluator.read_json(root / "manifest.json")
+    persisted["rows_sha256"] = _sha(root / evaluator.ROWS_NAME)
+    persisted["events_sha256"] = _sha(events_path)
+    _write_json(root / "manifest.json", persisted)
+    validated_manifest, rows, events = evaluator.validate_manifest(root)
+    assert validated_manifest["event_count"] == 2
+    assert len(rows) == 1
+    assert len(events) == 2
