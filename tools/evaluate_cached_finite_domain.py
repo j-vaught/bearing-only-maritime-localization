@@ -295,8 +295,18 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
         (output_root / "hypotheses", "hypotheses_sha256"),
     ):
         declared = manifest.get(key)
-        if declared is not None and (not directory.is_dir() or declared != sha256_tree(directory)):
+        if not isinstance(declared, str) or len(declared) != 64:
+            raise ValueError(f"Manifest is missing a valid {key} binding.")
+        if not directory.is_dir() or declared != sha256_tree(directory):
             raise ValueError(f"{directory.name} tree hash mismatch.")
+    dispositions_path = output_root / "candidate-dispositions.jsonl"
+    declared_dispositions_sha = manifest.get("candidate_dispositions_sha256")
+    if not isinstance(declared_dispositions_sha, str) or len(declared_dispositions_sha) != 64:
+        raise ValueError("Manifest is missing a valid candidate_dispositions_sha256 binding.")
+    if not dispositions_path.is_file() or declared_dispositions_sha != sha256_file(
+        dispositions_path
+    ):
+        raise ValueError("Candidate disposition ledger hash mismatch.")
     resume_source = output_root / "resume-source.json"
     lineage = manifest.get("resume_lineage")
     if resume_source.is_file():

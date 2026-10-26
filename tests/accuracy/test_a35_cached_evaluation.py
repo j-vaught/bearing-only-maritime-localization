@@ -139,6 +139,7 @@ def _fixture(root: Path, *, incomplete: bool = False) -> tuple[Path, dict[str, A
         "run_identity_sha256": identity_sha,
         "chunk_results_sha256": sha256_tree(chunk_root),
         "hypotheses_sha256": sha256_tree(hyp_root),
+        "candidate_dispositions_sha256": sha256_file(root / "candidate-dispositions.jsonl"),
         "totals": {
             "all_candidates_accounted": not incomplete,
             "selected_request_complete": not incomplete,
@@ -214,7 +215,27 @@ def test_disposition_must_match_durable_chunk_action(tmp_path: Path) -> None:
         {"candidate_id": "cell:1:3", "status": "exact_scored"},
     ]
     _write_jsonl(root / "candidate-dispositions.jsonl", rows)
+    manifest = json.loads((root / "run-manifest.json").read_text())
+    manifest["candidate_dispositions_sha256"] = sha256_file(root / "candidate-dispositions.jsonl")
+    _write(root / "run-manifest.json", manifest)
     with pytest.raises(ValueError, match="differs from its durable chunk action"):
+        load_run(root, expected_bindings=expected)
+
+
+def test_tampered_disposition_ledger_fails_closed(tmp_path: Path) -> None:
+    root, expected = _fixture(tmp_path / "run")
+    with (root / "candidate-dispositions.jsonl").open("a", encoding="utf-8") as stream:
+        stream.write(json.dumps({"candidate_id": "cell:1:3", "status": "not_dispatched"}) + "\n")
+    with pytest.raises(ValueError, match="disposition ledger hash mismatch"):
+        load_run(root, expected_bindings=expected)
+
+
+def test_missing_top_level_chunk_tree_binding_fails_closed(tmp_path: Path) -> None:
+    root, expected = _fixture(tmp_path / "run")
+    manifest = json.loads((root / "run-manifest.json").read_text())
+    manifest.pop("chunk_results_sha256")
+    _write(root / "run-manifest.json", manifest)
+    with pytest.raises(ValueError, match="missing a valid chunk_results_sha256"):
         load_run(root, expected_bindings=expected)
 
 
