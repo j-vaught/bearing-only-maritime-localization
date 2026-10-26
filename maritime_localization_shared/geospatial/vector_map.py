@@ -16,6 +16,7 @@ from shapely import from_geojson, transform
 from shapely.geometry import GeometryCollection, LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
+from shapely.prepared import prep
 from shapely.strtree import STRtree
 
 from maritime_localization_shared.contracts.inputs_v2 import MapV2
@@ -58,6 +59,9 @@ class VectorMap:
         self._land = effective_land
         self._land_parts = tuple(_polygon_parts(effective_land))
         self._tree = STRtree(self._land_parts) if self._land_parts else None
+        self._prepared_coverage = prep(coverage) if coverage is not None else None
+        self._prepared_unknown = prep(unknown) if unknown is not None else None
+        self._prepared_land = prep(self._land) if not self._land.is_empty else None
 
     @classmethod
     def from_map_v2(
@@ -111,11 +115,11 @@ class VectorMap:
     def point_water_status(self, point_xy_m: Point2D) -> WaterStatus:
         """Classify a point as water, land, or unknown."""
         point = _point(point_xy_m, "point")
-        if self._unknown is not None and self._unknown.covers(point):
+        if self._prepared_unknown is not None and self._prepared_unknown.covers(point):
             return "unknown"
-        if self._coverage is None or not self._coverage.covers(point):
+        if self._prepared_coverage is None or not self._prepared_coverage.covers(point):
             return "unknown"
-        if self._land.contains(point):
+        if self._prepared_land is not None and self._prepared_land.contains(point):
             return "land"
         return "water"
 
@@ -153,7 +157,7 @@ class VectorMap:
 
         if self._crosses_known_land(ray, tolerance_m, indexed=indexed):
             return "blocked"
-        if self._coverage is None or not self._coverage.covers(ray):
+        if self._prepared_coverage is None or not self._prepared_coverage.covers(ray):
             return "unknown"
         if self._unknown is not None and _interior_overlap_exceeds(ray, self._unknown, tolerance_m):
             return "unknown"
@@ -212,8 +216,10 @@ def _polygonal_geometry(
         return None
     if isinstance(geometry, BaseGeometry):
         items = (geometry,)
+        single_geometry = True
     else:
         items = tuple(geometry)
+        single_geometry = False
         if not items:
             raise ValueError(f"{name} must not be empty.")
     polygon_items: list[BaseGeometry] = []
@@ -227,6 +233,8 @@ def _polygonal_geometry(
         if item.geom_type not in {"Polygon", "MultiPolygon"}:
             raise TypeError(f"{name} must contain Polygon or MultiPolygon geometries.")
         polygon_items.append(item)
+    if single_geometry:
+        return polygon_items[0]
     merged = unary_union(polygon_items)
     if not merged.is_valid:
         raise ValueError(f"{name} must remain valid after overlap normalization.")
