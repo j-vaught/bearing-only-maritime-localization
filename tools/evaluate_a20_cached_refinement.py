@@ -1,4 +1,4 @@
-"""Evaluator-only before/after audit for A20 cached-mode refinement."""
+"""Evaluator-only before/after audit for a truth-blind refinement of cached modes."""
 
 from __future__ import annotations
 
@@ -19,121 +19,135 @@ from tools.evaluate_cached_finite_domain import (
     sha256_tree,
 )
 
-SCHEMA = "a20-cached-mode-refinement-v1"
+
+def _hyp(raw: Any) -> Any:
+    if raw is None:
+        return None
+    if isinstance(raw, dict) and "hypothesis" in raw:
+        raw = raw["hypothesis"]
+    return decode_hypothesis(raw)
 
 
 def load_refinement(
     root: Path, source_root: Path, run: LoadedRun
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     manifest = read_json(root / "manifest.json")
-    if not isinstance(manifest, dict) or manifest.get("schema") != SCHEMA:
-        raise ValueError("Unsupported A20 refinement manifest.")
+    if not isinstance(manifest, dict) or manifest.get("schema") != "cached-mode-refinement-v1":
+        raise ValueError("Unsupported cached-mode refinement manifest.")
     source_root = source_root.resolve()
-    if Path(manifest.get("source_run_root", "")).resolve() != source_root:
-        raise ValueError("Refinement points to a different source run.")
-    bindings = {
-        "source_run_identity_sha256": run.manifest.get("run_identity_sha256"),
-        "source_candidate_plan_sha256": run.manifest.get("candidate_plan_sha256"),
-        "source_candidate_inventory_sha256": run.manifest.get("candidate_inventory_sha256"),
-        "source_candidate_dispositions_sha256": run.manifest.get("candidate_dispositions_sha256"),
-        "source_chunk_results_tree_sha256": sha256_tree(source_root / "chunk-results"),
-        "source_hypotheses_tree_sha256": sha256_tree(source_root / "hypotheses"),
-        "source_supervisor_manifest_sha256": sha256_file(source_root / "supervisor-manifest.json"),
-    }
-    for key, value in bindings.items():
-        if manifest.get(key) != value:
-            raise ValueError(f"Refinement source binding mismatch: {key}.")
-    filename = manifest.get("modes_file")
-    if not isinstance(filename, str) or Path(filename).name != filename:
-        raise ValueError("Invalid modes_file path.")
-    modes_path = root / filename
-    if manifest.get("modes_file_sha256") != sha256_file(modes_path):
-        raise ValueError("Mode records hash mismatch.")
-    rows = read_jsonl(modes_path)
-    counts = (manifest.get("selected_count"), manifest.get("refined_count"), manifest.get("cap"))
-    if any(type(x) is not int or x < 0 for x in counts):
-        raise ValueError("Invalid refinement counts.")
-    selected, refined, cap = counts
-    if cap != 64 or selected != len(rows) or selected > cap:
-        raise ValueError("Selected modes violate the explicit 64-mode cap.")
-    if (
-        type(manifest.get("complete")) is not bool
-        or type(manifest.get("deadline_reached")) is not bool
+    if Path(manifest.get("source_attempt", "")).resolve() != source_root:
+        raise ValueError("Refinement points to a different source attempt.")
+    identity = manifest.get("identity")
+    if not isinstance(identity, dict) or identity.get("identity_sha256") != run.manifest.get(
+        "run_identity_sha256"
     ):
-        raise ValueError("Completion flags must be booleans.")
-    if manifest["complete"] != (refined == selected and not manifest["deadline_reached"]):
-        raise ValueError("Completion flag contradicts mode counts or deadline.")
-    shards = manifest.get("selected_source_shard_sha256")
-    if not isinstance(shards, dict):
-        raise ValueError("Selected source shard bindings are missing.")
-    for relative, digest in shards.items():
-        path = Path(relative)
-        if path.is_absolute() or ".." in path.parts or sha256_file(source_root / path) != digest:
-            raise ValueError(f"Bad selected source shard binding: {relative}.")
-    source_by_index = {item.input_index: item for item in run.candidates}
-    seen_indices: set[int] = set()
-    seen_modes: set[str] = set()
-    successes = 0
+        raise ValueError("Refinement identity differs from source run.")
+    supervisor = source_root / "supervisor-manifest.json"
+    if manifest.get("supervisor_sha256") != sha256_file(supervisor):
+        raise ValueError("Source supervisor manifest hash mismatch.")
+    supervisor_doc = read_json(supervisor)
+    for field in (
+        "candidate_plan_sha256",
+        "candidate_inventory_sha256",
+        "candidate_dispositions_sha256",
+    ):
+        if supervisor_doc.get(field) != run.manifest.get(field):
+            raise ValueError(f"Source supervisor binding mismatch: {field}.")
+    for directory, key in (
+        ("chunk-results", "chunk_results_sha256"),
+        ("hypotheses", "hypotheses_sha256"),
+    ):
+        if supervisor_doc.get(key) != sha256_tree(source_root / directory):
+            raise ValueError(f"Source {directory} tree hash mismatch.")
+    rows_file = manifest.get("rows_file")
+    if not isinstance(rows_file, str) or Path(rows_file).name != rows_file:
+        raise ValueError("Invalid rows_file.")
+    rows_path = root / rows_file
+    if manifest.get("rows_sha256") != sha256_file(rows_path):
+        raise ValueError("Refinement rows hash mismatch.")
+    rows = read_jsonl(rows_path)
+    selected = manifest.get("selected_modes")
+    selected_count = manifest.get("selected_mode_count")
+    completed = manifest.get("completed_mode_count")
+    cap = manifest.get("mode_cap")
+    if (
+        not isinstance(selected, list)
+        or type(selected_count) is not int
+        or selected_count != len(selected)
+    ):
+        raise ValueError("Selected mode count differs from selection records.")
+    if type(completed) is not int or completed != len(rows) or completed < 0:
+        raise ValueError("Completed mode count differs from durable rows.")
+    if type(cap) is not int or cap != 64 or selected_count > cap or completed > selected_count:
+        raise ValueError("Explicit mode cap or counts are invalid.")
+    if manifest.get("full_domain_complete") is not False:
+        raise ValueError("Mode refinement cannot claim full-domain completion.")
+    by_index = {item.input_index: item for item in run.candidates}
+    selected_by_index: dict[int, dict[str, Any]] = {}
+    for seed in selected:
+        index = seed.get("input_index")
+        if type(index) is not int or index not in by_index or index in selected_by_index:
+            raise ValueError("Selected seed index is invalid or duplicated.")
+        cached = _hyp(seed.get("cached_hypothesis"))
+        source = by_index[index]
+        if seed.get("candidate_id") != source.candidate_id or cached != source.hypothesis:
+            raise ValueError("Selected cached hypothesis differs from immutable source.")
+        name = seed.get("chunk_name")
+        if not isinstance(name, str) or Path(name).name != name:
+            raise ValueError("Invalid source chunk name.")
+        chunk_path = source_root / "chunk-results" / name
+        sidecar_path = source_root / "hypotheses" / name
+        if seed.get("chunk_sha256") != sha256_file(chunk_path):
+            raise ValueError("Selected source chunk hash mismatch.")
+        if seed.get("sidecar_sha256") != sha256_file(sidecar_path):
+            raise ValueError("Selected source hypothesis shard hash mismatch.")
+        selected_by_index[index] = seed
+    if [row.get("seed_order") for row in rows] != list(range(completed)):
+        raise ValueError("Refinement rows are not in contiguous selection order.")
+    if [row.get("input_index") for row in rows] != [
+        item["input_index"] for item in selected[:completed]
+    ]:
+        raise ValueError("Refinement rows differ from selected mode order.")
     for row in rows:
-        index, mode_id = row.get("input_index"), row.get("mode_id")
-        if type(index) is not int or index not in source_by_index or index in seen_indices:
-            raise ValueError("Invalid or duplicate source input_index.")
-        if not isinstance(mode_id, str) or not mode_id or mode_id in seen_modes:
-            raise ValueError("Invalid or duplicate mode_id.")
-        source = source_by_index[index]
-        if row.get("candidate_id") != source.candidate_id:
-            raise ValueError("Candidate ID differs from source.")
-        chunk = row.get("source_chunk_path")
-        if not isinstance(chunk, str) or Path(chunk).is_absolute() or ".." in Path(chunk).parts:
-            raise ValueError("Invalid source chunk path.")
-        chunk_path = Path(chunk)
-        chunk_index = row.get("source_chunk_index")
-        if chunk_path.parts[:1] != ("chunk-results",) or type(chunk_index) is not int:
-            raise ValueError("Invalid source chunk path or index.")
-        if chunk_path.stem != f"chunk-{chunk_index:08d}":
-            raise ValueError("Source chunk path and index disagree.")
-        if row.get("source_chunk_sha256") != sha256_file(source_root / chunk_path):
-            raise ValueError("Source chunk hash mismatch.")
-        hyp_shard = f"hypotheses/{chunk_path.name}"
-        if hyp_shard not in shards:
-            raise ValueError("Selected hypothesis shard is not bound by the manifest.")
-        hyp = decode_hypothesis(row.get("source_hypothesis"))
-        if hyp != source.hypothesis:
-            raise ValueError("Source hypothesis differs from immutable cache.")
-        revalidated = row.get("revalidated_hypothesis")
-        if revalidated is not None:
-            delta = row.get("revalidated_score_delta")
-            if (
-                isinstance(delta, bool)
-                or not isinstance(delta, (int, float))
-                or not math.isfinite(delta)
-            ):
-                raise ValueError("Invalid revalidation score delta.")
-            if not math.isclose(
-                decode_hypothesis(revalidated).score - hyp.score, float(delta), abs_tol=1e-9
-            ):
-                raise ValueError("Revalidation delta does not match hypotheses.")
-        refined_hyp = row.get("refined_hypothesis")
-        if refined_hyp is not None:
-            decode_hypothesis(refined_hyp)
-            successes += 1
-        if type(row.get("iterations")) is not int or row["iterations"] < 0:
-            raise ValueError("Invalid iteration count.")
-        seen_indices.add(index)
-        seen_modes.add(mode_id)
-    if successes != refined or manifest.get("selection_order") != [r["mode_id"] for r in rows]:
-        raise ValueError("Refined count or deterministic selection order mismatch.")
+        index = row.get("input_index")
+        if type(index) is not int or index not in selected_by_index:
+            raise ValueError("Refinement row index is not selected.")
+        seed = selected_by_index[index]
+        if row.get("candidate_id") != seed["candidate_id"]:
+            raise ValueError("Refined candidate differs from selected seed.")
+        if (
+            row.get("chunk_name") != seed["chunk_name"]
+            or row.get("chunk_sha256") != seed["chunk_sha256"]
+        ):
+            raise ValueError("Refined row source chunk differs from manifest.")
+        if row.get("sidecar_sha256") != seed["sidecar_sha256"]:
+            raise ValueError("Refined row source sidecar differs from manifest.")
+        if _hyp(row.get("cached_hypothesis")) != by_index[index].hypothesis:
+            raise ValueError("Refined row cached hypothesis differs from source.")
+        revalidated = _hyp(row.get("revalidated_hypothesis"))
+        if revalidated is not None and not math.isclose(
+            revalidated.score, by_index[index].hypothesis.score, rel_tol=1e-10, abs_tol=1e-8
+        ):
+            raise ValueError("Revalidated seed score differs from cached score.")
+        mode = row.get("refined_mode")
+        if not isinstance(mode, dict):
+            raise ValueError("Missing RefinedMode record.")
+        for field in ("iterations", "stop_reason", "history", "hypothesis", "improved_hypothesis"):
+            if field not in mode:
+                raise ValueError(f"RefinedMode is missing {field}.")
+        _hyp(mode["hypothesis"])
+        _hyp(mode["improved_hypothesis"])
     return manifest, rows
 
 
 def _metrics(
     raw: Any, truth_xy: tuple[float, float], ids: dict[int, set[str]]
 ) -> dict[str, Any] | None:
-    if raw is None:
+    hyp = _hyp(raw)
+    if hyp is None:
         return None
-    hyp = decode_hypothesis(raw)
     correct = sum(a.catalog_key in ids.get(a.report_index, set()) for a in hyp.assignments)
-    components = hyp.score_components
+    comp = hyp.score_components
     return {
         "score": hyp.score,
         "position_xy_m": [hyp.east_m, hyp.north_m],
@@ -152,12 +166,12 @@ def _metrics(
             for a in hyp.assignments
         ],
         "score_components": None
-        if components is None
+        if comp is None
         else {
-            "matched_cost": components.matched_cost,
-            "clutter_cost": components.clutter_cost,
-            "missed_cost": components.missed_cost,
-            "total_cost": components.total_cost,
+            "matched_cost": comp.matched_cost,
+            "clutter_cost": comp.clutter_cost,
+            "missed_cost": comp.missed_cost,
+            "total_cost": comp.total_cost,
         },
     }
 
@@ -169,36 +183,32 @@ def evaluate_rows(
     truth_xy: tuple[float, float],
     truth_ids: dict[int, set[str]],
 ) -> list[dict[str, Any]]:
-    source_by_index = {item.input_index: item for item in run.candidates}
     result = []
     for row in rows:
+        mode = row["refined_mode"]
         stages = {
-            key: _metrics(row.get(field), truth_xy, truth_ids)
-            for key, field in (
-                ("source", "source_hypothesis"),
-                ("revalidated", "revalidated_hypothesis"),
-                ("refined", "refined_hypothesis"),
-            )
+            "source": _metrics(row["cached_hypothesis"], truth_xy, truth_ids),
+            "revalidated": _metrics(row["revalidated_hypothesis"], truth_xy, truth_ids),
+            "refined": _metrics(mode.get("hypothesis"), truth_xy, truth_ids),
+            "best_improved": _metrics(mode.get("improved_hypothesis"), truth_xy, truth_ids),
         }
-        source_metrics = stages["source"]
-        if source_metrics is None:
-            raise ValueError("Missing source hypothesis metrics.")
-        if not math.isclose(
-            source_metrics["score"],
-            source_by_index[row["input_index"]].hypothesis.score,
-            abs_tol=1e-9,
-        ):
-            raise ValueError("Source objective differs from cached hypothesis.")
         result.append(
             {
-                "mode_id": row["mode_id"],
+                "seed_order": row["seed_order"],
                 "input_index": row["input_index"],
                 "candidate_id": row["candidate_id"],
-                "iterations": row["iterations"],
-                "stop_reason": row.get("stop_reason"),
-                "improved_hypothesis": row.get("improved_hypothesis"),
-                "history": row.get("history"),
-                "revalidated_score_delta": row.get("revalidated_score_delta"),
+                "iterations": mode["iterations"],
+                "stop_reason": mode["stop_reason"],
+                "mode_history": mode["history"],
+                "mode_uncertainty": {
+                    k: mode.get(k)
+                    for k in (
+                        "uncertainty_rank",
+                        "uncertainty_singular",
+                        "uncertainty_reason",
+                        "estimated_95_radius_m",
+                    )
+                },
                 **stages,
             }
         )
@@ -212,7 +222,7 @@ def main() -> None:
     args = parser.parse_args()
     run = load_run(args.source_root, expected_bindings=read_json(args.expected_bindings))
     manifest, rows = load_refinement(args.refinement_root, args.source_root, run)
-    # Evaluator truth is opened only after the search/refinement artifacts verify.
+    # Truth is opened only after source and refinement bindings have been verified.
     truth = read_json(args.truth_dir / "truth.json")
     support = read_json(args.truth_dir / "support.json")
     if support.get("supported") is not True or support.get("valid_reference_water") is not True:
@@ -227,10 +237,7 @@ def main() -> None:
             key = str(obj.get("ais_record_id", "")).removeprefix("catalog:")
             if key:
                 ids.setdefault(int(obj["observation_index"]), set()).add(key)
-    rows_out = evaluate_rows(
-        rows, run, truth_xy=(truth_obj.observer_east_m, truth_obj.observer_north_m), truth_ids=ids
-    )
-    output = {
+    result = {
         "schema": "a35-a20-cached-refinement-evaluation-v1",
         "evaluation_only": True,
         "truth_used_for_refinement": False,
@@ -238,17 +245,23 @@ def main() -> None:
         "source_run_complete": run.complete,
         "source_run_identity_sha256": run.manifest.get("run_identity_sha256"),
         "refinement_manifest_sha256": sha256_file(args.refinement_root / "manifest.json"),
-        "refinement_complete": manifest["complete"],
-        "deadline_reached": manifest["deadline_reached"],
-        "selected_count": manifest["selected_count"],
-        "refined_count": manifest["refined_count"],
-        "explicit_mode_cap": manifest["cap"],
+        "refinement_status": manifest.get("status"),
+        "refinement_complete": manifest.get("status") == "selected_modes_completed",
+        "selected_count": manifest["selected_mode_count"],
+        "completed_count": manifest["completed_mode_count"],
+        "explicit_mode_cap": manifest["mode_cap"],
+        "full_domain_complete": False,
         "source_candidate_dispositions": run.disposition_counts,
-        "mode_evaluations": rows_out,
+        "mode_evaluations": evaluate_rows(
+            rows,
+            run,
+            truth_xy=(truth_obj.observer_east_m, truth_obj.observer_north_m),
+            truth_ids=ids,
+        ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
-        json.dumps(output, sort_keys=True, indent=2, allow_nan=False) + "\n", encoding="utf-8"
+        json.dumps(result, sort_keys=True, indent=2, allow_nan=False) + "\n", encoding="utf-8"
     )
 
 

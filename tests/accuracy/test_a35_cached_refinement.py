@@ -28,21 +28,32 @@ def _hypothesis(east: float, score: float, key: str) -> dict[str, Any]:
     }
 
 
-def test_evaluator_records_cached_revalidated_and_refined_without_changing_order() -> None:
-    source = decode_hypothesis(_hypothesis(500000.0, 2.0, "a"))
-    run = LoadedRun(
-        {}, {}, (SavedCandidate(7, "candidate-7", "exact_scored", source),), {}, {}, (), (), False
+def _run() -> LoadedRun:
+    hyp = decode_hypothesis(_hypothesis(500000.0, 2.0, "a"))
+    return LoadedRun(
+        {}, {}, (SavedCandidate(7, "candidate-7", "exact_scored", hyp),), {}, {}, (), (), False
     )
+
+
+def test_evaluator_records_source_revalidated_and_refined_metrics() -> None:
+    run = _run()
     row = {
-        "mode_id": "mode-0",
+        "seed_order": 0,
         "input_index": 7,
         "candidate_id": "candidate-7",
-        "iterations": 4,
-        "stop_reason": "score_improvement_tolerance",
-        "revalidated_score_delta": 0.0,
-        "source_hypothesis": _hypothesis(500000.0, 2.0, "a"),
+        "cached_hypothesis": _hypothesis(500000.0, 2.0, "a"),
         "revalidated_hypothesis": _hypothesis(500000.0, 2.0, "a"),
-        "refined_hypothesis": _hypothesis(500010.0, 1.5, "a"),
+        "refined_mode": {
+            "hypothesis": _hypothesis(500010.0, 1.5, "a"),
+            "improved_hypothesis": _hypothesis(500010.0, 1.5, "a"),
+            "iterations": 4,
+            "stop_reason": "score_improvement_tolerance",
+            "history": [],
+            "uncertainty_rank": 2,
+            "uncertainty_singular": False,
+            "uncertainty_reason": None,
+            "estimated_95_radius_m": 12.0,
+        },
     }
     truth_xy = Transformer.from_crs("EPSG:32618", "EPSG:32619", always_xy=True).transform(
         500000.0, 4900000.0
@@ -55,28 +66,28 @@ def test_evaluator_records_cached_revalidated_and_refined_without_changing_order
     assert result["source"]["score"] == 2.0
     assert result["revalidated"]["score"] == 2.0
     assert result["refined"]["score"] == 1.5
+    assert result["mode_uncertainty"]["uncertainty_rank"] == 2
 
 
-def test_evaluator_keeps_unsupported_refinement_null() -> None:
-    source = decode_hypothesis(_hypothesis(500000.0, 2.0, "a"))
-    run = LoadedRun(
-        {}, {}, (SavedCandidate(7, "candidate-7", "exact_scored", source),), {}, {}, (), (), False
-    )
+def test_evaluator_keeps_null_refined_hypothesis_unavailable() -> None:
     row = {
-        "mode_id": "mode-0",
+        "seed_order": 0,
         "input_index": 7,
         "candidate_id": "candidate-7",
-        "iterations": 0,
-        "stop_reason": "unsupported_seed",
-        "revalidated_score_delta": None,
-        "source_hypothesis": _hypothesis(500000.0, 2.0, "a"),
+        "cached_hypothesis": _hypothesis(500000.0, 2.0, "a"),
         "revalidated_hypothesis": None,
-        "refined_hypothesis": None,
+        "refined_mode": {
+            "hypothesis": None,
+            "improved_hypothesis": None,
+            "iterations": 0,
+            "stop_reason": "unsupported_seed",
+            "history": [],
+        },
     }
     truth_xy = Transformer.from_crs("EPSG:32618", "EPSG:32619", always_xy=True).transform(
         500000.0, 4900000.0
     )
-    result = evaluate_rows([row], run, truth_xy=truth_xy, truth_ids={0: {"a"}})[0]
+    result = evaluate_rows([row], _run(), truth_xy=truth_xy, truth_ids={0: {"a"}})[0]
     assert result["source"] is not None
     assert result["revalidated"] is None
     assert result["refined"] is None
@@ -84,6 +95,5 @@ def test_evaluator_keeps_unsupported_refinement_null() -> None:
 
 def test_refinement_loader_rejects_unknown_schema(tmp_path: Path) -> None:
     (tmp_path / "manifest.json").write_text('{"schema":"unknown"}\n', encoding="utf-8")
-    run = LoadedRun({}, {}, (), {}, {}, (), (), False)
-    with pytest.raises(ValueError, match="Unsupported A20"):
-        load_refinement(tmp_path, tmp_path, run)
+    with pytest.raises(ValueError, match="Unsupported"):
+        load_refinement(tmp_path, tmp_path, _run())
