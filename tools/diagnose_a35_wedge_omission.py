@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from math import asin, ceil, degrees
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from bearing_localization.search.scoring import CandidateScorer
 from maritime_localization_shared.contracts.inputs_v2 import CatalogV2, MapV2, MeasurementSetV2
 from maritime_localization_shared.contracts.truth import EvaluationTruth
 from maritime_localization_shared.geospatial.coordinates import LocalFrame
+from maritime_localization_shared.geospatial.reverse_bearing import solve_reverse_bearing_observer
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 from maritime_localization_shared.serialization import read_contract
 
@@ -108,11 +110,89 @@ def _witness_cell(
         "vote_count": len(by_report),
         "matching_count": _maximum_distinct_matching({r: sorted(v) for r, v in by_report.items()}),
         "unique_witness_count": len(set().union(*by_report.values())),
+        "witness_keys_by_report": {str(r): sorted(v) for r, v in by_report.items()},
         "mean_normalized_angular_residual": float(np.mean(norm_by_report))
         if norm_by_report
         else None,
         "evidence_score": float(np.sum(evidence_by_report)),
         "by_report": detail,
+    }
+
+
+def _sample_splat_check(
+    cell_i: int,
+    cell_j: int,
+    witness_keys_by_report: dict[str, list[str]],
+    catalog_by_key: dict[str, Any],
+    observations: tuple[Any, ...],
+    frame: LocalFrame,
+    *,
+    cell_size_m: float,
+    max_range_m: float,
+    tolerance_deg: float,
+    solver_tolerance_deg: float,
+) -> dict[str, Any]:
+    """Replay only predicate-eligible source pairs through exact ray sampling and splat."""
+    half_diagonal = cell_size_m * 2.0**0.5 / 2.0
+    final_distance_m = max_range_m + half_diagonal
+    step_m = cell_size_m / 2.0
+    sample_count = max(1, int(ceil(final_distance_m / step_m)) + 1)
+    sample_distances = np.arange(sample_count, dtype=np.float64) * step_m
+    sample_distances[-1] = final_distance_m
+    angular_gap_rad = 2.0 * asin(
+        min(1.0, cell_size_m / (4.0 * max(max_range_m, cell_size_m / 2.0)))
+    )
+    angular_gap_deg = degrees(angular_gap_rad)
+    angular_count = max(1, int(ceil(2.0 * tolerance_deg / angular_gap_deg)))
+    angular_offsets = np.linspace(
+        -tolerance_deg, tolerance_deg, angular_count + 1, dtype=np.float64
+    )
+    if not np.any(np.isclose(angular_offsets, 0.0, atol=1e-12)):
+        angular_offsets = np.sort(np.concatenate((angular_offsets, np.asarray([0.0]))))
+    forward = Transformer.from_crs("EPSG:4326", frame.projected_crs, always_xy=True)
+    origin_x, origin_y = forward.transform(*frame.origin_lonlat)
+    rows = []
+    for report_text, keys in sorted(witness_keys_by_report.items(), key=lambda item: int(item[0])):
+        report = int(report_text)
+        sources = np.asarray(
+            [(catalog_by_key[key].longitude_deg, catalog_by_key[key].latitude_deg) for key in keys],
+            dtype=np.float64,
+        )
+        desired = (observations[report].bearing_deg + angular_offsets[None, :, None]) % 360.0
+        solved = solve_reverse_bearing_observer(
+            sources[:, None, None, :],
+            desired,
+            sample_distances[None, None, :],
+            tolerance_deg=solver_tolerance_deg,
+        )
+        points = np.asarray(solved.observer_lonlat_deg, dtype=np.float64)
+        valid = np.all(np.isfinite(points), axis=-1) & (
+            np.asarray(solved.converged) | np.asarray(solved.degenerate)
+        )
+        x, y = forward.transform(points[..., 0], points[..., 1])
+        base_i = np.floor((np.asarray(x) - origin_x) / cell_size_m).astype(np.int64)
+        base_j = np.floor((np.asarray(y) - origin_y) / cell_size_m).astype(np.int64)
+        splat = valid & (np.abs(base_i - cell_i) <= 1) & (np.abs(base_j - cell_j) <= 1)
+        rows.append(
+            {
+                "report_index": report,
+                "predicate_eligible_source_pairs": len(keys),
+                "source_pairs_with_neighbor_splat_to_cell": int(
+                    np.count_nonzero(np.any(splat, axis=(1, 2)))
+                ),
+                "valid_sample_neighbor_hits": int(np.count_nonzero(splat)),
+            }
+        )
+    return {
+        "cell_i": cell_i,
+        "cell_j": cell_j,
+        "angular_offset_count": len(angular_offsets),
+        "range_sample_count": len(sample_distances),
+        "per_report": rows,
+        "eligible_source_pair_count": sum(row["predicate_eligible_source_pairs"] for row in rows),
+        "source_pair_count_with_neighbor_splat": sum(
+            row["source_pairs_with_neighbor_splat_to_cell"] for row in rows
+        ),
     }
 
 
@@ -151,6 +231,7 @@ def diagnose(output_path: Path) -> dict[str, Any]:
             key = str(obj.ais_record_id).removeprefix("catalog:")
             true_keys_by_report.setdefault(int(obj.observation_index), set()).add(key)
     keys = [record.key for record in catalog.records]
+    catalog_by_key = {record.key: record for record in catalog.records}
     slon = np.asarray([record.longitude_deg for record in catalog.records], dtype=np.float64)
     slat = np.asarray([record.latitude_deg for record in catalog.records], dtype=np.float64)
     sigmas = [
@@ -230,6 +311,21 @@ def diagnose(output_path: Path) -> dict[str, Any]:
                     angular_tolerance_deg=0.5,
                 )
             )
+    containing_witness = next(
+        row for row in witness_rows if row["candidate_id"] == f"cell:{ci}:{cj}"
+    )
+    containing_cell_splat = _sample_splat_check(
+        ci,
+        cj,
+        containing_witness["witness_keys_by_report"],
+        catalog_by_key,
+        measurements.measurements,
+        frame,
+        cell_size_m=250.0,
+        max_range_m=config.max_range_m,
+        tolerance_deg=0.5,
+        solver_tolerance_deg=config.proposal_solver_tolerance_deg,
+    )
     truth_xy_raw = Transformer.from_crs(truth_crs, vector_map.crs, always_xy=True).transform(
         truth.observer_east_m, truth.observer_north_m
     )
@@ -290,6 +386,7 @@ def diagnose(output_path: Path) -> dict[str, Any]:
                 "matching_vote_histogram"
             ],
             "cell_witnesses": witness_rows,
+            "containing_cell_sample_splat": containing_cell_splat,
             "evaluated_witness_count": len(evaluated),
             "evaluated_final_witness": evaluated[-1],
             "containing_cell_evaluated": f"cell:{ci}:{cj}"
