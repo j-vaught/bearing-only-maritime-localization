@@ -29,6 +29,7 @@ from tools.run_a38_execution import compact_truth, evaluator_parity
 from tools.run_a38_parallel_prep import (
     _merge_worker,
     _trial_output_relative_path,
+    _worker,
     enforce_disk_guard,
     estimated_wave_gib,
     validate_worker_ids,
@@ -268,12 +269,15 @@ def test_parallel_row_validation_rejects_missing_and_duplicate_ids() -> None:
         validate_worker_ids(["a", "b"], ["a"])
 
 
-def test_parallel_merge_accounts_for_explicit_failures_without_outputs(tmp_path: Path) -> None:
+@pytest.mark.parametrize("split", ["development", "validation"])
+def test_parallel_merge_accounts_for_explicit_failures_without_outputs(
+    tmp_path: Path, split: str
+) -> None:
     worker = tmp_path / "worker"
     canonical = tmp_path / "canonical"
-    prep = worker / "development/preparation.csv"
+    prep = worker / split / "preparation.csv"
     prep.parent.mkdir(parents=True)
-    trial_id = "development/port-001/placement-001/r0/range1000m/typeson/map_buffer"
+    trial_id = f"{split}/port-001/placement-001/r0/range1000m/typeson/map_buffer"
     with prep.open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=["trial_id", "status", "failure"])
         writer.writeheader()
@@ -285,10 +289,16 @@ def test_parallel_merge_accounts_for_explicit_failures_without_outputs(tmp_path:
             }
         )
 
-    merged = _merge_worker(worker, canonical, tmp_path / "truth.csv", tmp_path / "audit.csv")
+    merged = _merge_worker(
+        worker,
+        canonical,
+        tmp_path / "truth.csv",
+        tmp_path / "audit.csv",
+        split,
+    )
 
     assert merged == 1
-    rows = list(csv.DictReader((canonical / "development/preparation.csv").open()))
+    rows = list(csv.DictReader((canonical / split / "preparation.csv").open()))
     assert rows == [
         {
             "trial_id": trial_id,
@@ -296,7 +306,61 @@ def test_parallel_merge_accounts_for_explicit_failures_without_outputs(tmp_path:
             "failure": "Observer must lie in known water on the observation map.",
         }
     ]
-    assert not (canonical / "development/port-001/placement-001").exists()
+    assert not (canonical / split / "port-001/placement-001").exists()
+
+
+def test_parallel_worker_uses_requested_validation_split(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools import run_a38_parallel_prep
+
+    observed: dict[str, object] = {}
+
+    def fake_prepare_inputs(
+        plan: Path,
+        *,
+        catalog_path: Path,
+        map_cache: Path,
+        input_root: Path,
+        split: str,
+        placements_per_port: int,
+        only_trial_ids: set[str],
+        _allow_extension: bool,
+    ) -> None:
+        observed["split"] = split
+        assert split == "validation"
+        assert only_trial_ids == {
+            "validation/port-002/placement-015/r0/range5000m/typesoff/nominal"
+        }
+        prep = input_root / split / "preparation.csv"
+        prep.parent.mkdir(parents=True)
+        with prep.open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=["trial_id", "status"])
+            writer.writeheader()
+            writer.writerow({"trial_id": next(iter(only_trial_ids)), "status": "failed"})
+
+    monkeypatch.setattr(run_a38_parallel_prep, "prepare_inputs", fake_prepare_inputs)
+    monkeypatch.setattr(run_a38_parallel_prep, "compact_split", lambda *_args: 0)
+
+    trial_id = "validation/port-002/placement-015/r0/range5000m/typesoff/nominal"
+    result = _worker(
+        (
+            "plan.json",
+            "catalog.json",
+            "map.json",
+            str(tmp_path / "worker"),
+            [trial_id],
+            0,
+            [],
+            "validation",
+        )
+    )
+
+    assert observed["split"] == "validation"
+    assert result["trial_ids"] == [trial_id]
+    assert _trial_output_relative_path(trial_id, "validation") == (
+        "validation/port-002/placement-015/r0/5000m/types-off/nominal"
+    )
 
 
 def test_trial_id_maps_to_canonical_preparation_directory() -> None:
@@ -305,6 +369,12 @@ def test_trial_id_maps_to_canonical_preparation_directory() -> None:
             "development/port-010/placement-004/r0/range10000m/typesoff/miss"
         )
         == "development/port-010/placement-004/r0/10000m/types-off/miss"
+    )
+    assert (
+        _trial_output_relative_path(
+            "validation/port-002/placement-015/r0/range5000m/typesoff/nominal"
+        )
+        == "validation/port-002/placement-015/r0/5000m/types-off/nominal"
     )
 
 

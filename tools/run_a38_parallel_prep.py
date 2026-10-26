@@ -18,31 +18,36 @@ A38 = ROOT / ".agent-work/outputs/a38"
 
 
 def _worker(
-    args: tuple[str, str, str, str, list[str], int, list[dict[str, str]]],
+    args: tuple[str, str, str, str, list[str], int, list[dict[str, str]], str],
 ) -> dict[str, Any]:
-    plan_s, catalog_s, maps_s, temp_s, ids, worker_index, prior_attempts = args
+    plan_s, catalog_s, maps_s, temp_s, ids, worker_index, prior_attempts, split = args
     temp_root = Path(temp_s)
     plan = Path(plan_s)
     if prior_attempts:
-        _write_table(temp_root / "development/preparation-attempts.csv", prior_attempts)
+        _write_table(temp_root / split / "preparation-attempts.csv", prior_attempts)
     prepare_inputs(
         plan,
         catalog_path=Path(catalog_s),
         map_cache=Path(maps_s),
         input_root=temp_root,
-        split="development",
+        split=split,
         placements_per_port=25,
         only_trial_ids=set(ids),
         _allow_extension=False,
     )
     manifest = temp_root / f"worker-{worker_index}-truth-compaction.csv"
-    compact_split(temp_root, manifest, "development")
-    rows = _read_table(temp_root / "development/preparation.csv")
+    compact_split(temp_root, manifest, split)
+    rows = _read_table(temp_root / split / "preparation.csv")
     return {"root": str(temp_root), "rows": len(rows), "trial_ids": ids}
 
 
-def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: Path) -> int:
-    split = "development"
+def _merge_worker(
+    src: Path,
+    dest: Path,
+    truth_manifest: Path,
+    audit_manifest: Path,
+    split: str = "development",
+) -> int:
     src_split = src / split
     dest_split = dest / split
     copied = 0
@@ -82,7 +87,9 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
     if not merged_preparation_rows:
         raise RuntimeError(f"Worker {src} did not produce preparation rows")
     completed_rows = [row for row in merged_preparation_rows if row.get("status") == "completed"]
-    expected_output_paths = {_trial_output_relative_path(row["trial_id"]) for row in completed_rows}
+    expected_output_paths = {
+        _trial_output_relative_path(row["trial_id"], split) for row in completed_rows
+    }
     if moved_output_paths != expected_output_paths:
         missing = sorted(expected_output_paths - moved_output_paths)
         unexpected = sorted(moved_output_paths - expected_output_paths)
@@ -117,11 +124,13 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
     return len(merged_preparation_rows)
 
 
-def _trial_output_relative_path(trial_id: str) -> str:
+def _trial_output_relative_path(trial_id: str, expected_split: str | None = None) -> str:
     parts = trial_id.split("/")
-    if len(parts) != 7 or parts[0] != "development":
+    if len(parts) != 7 or parts[0] not in {"development", "validation"}:
         raise ValueError(f"Unexpected A38 trial ID layout: {trial_id}")
     split, port, placement, realization, range_label, type_label, condition = parts
+    if expected_split is not None and split != expected_split:
+        raise ValueError(f"Trial {trial_id} does not belong to split {expected_split}.")
     if not range_label.startswith("range") or not range_label.endswith("m"):
         raise ValueError(f"Unexpected range in A38 trial ID: {trial_id}")
     if type_label not in {"typeson", "typesoff"}:
@@ -181,14 +190,15 @@ def main() -> int:
         help="prepare only the named trial ID; repeatable",
     )
     p.add_argument("--minimum-free-gib", type=float, default=40)
+    p.add_argument("--split", choices=("development", "validation"), default="development")
     a = p.parse_args()
     if a.workers < 1 or a.chunk_size < 1:
         p.error("workers and chunk-size must be positive")
     a.input_root.mkdir(parents=True, exist_ok=True)
     plan_doc = json.loads(a.plan.read_text())
     rows = _read_table(a.plan.parent / plan_doc["trial_table"])
-    selected = [r for r in rows if r["split"] == "development"]
-    prep_path = a.input_root / "development/preparation.csv"
+    selected = [r for r in rows if r["split"] == a.split]
+    prep_path = a.input_root / a.split / "preparation.csv"
     prior = {r["trial_id"]: r for r in _read_table(prep_path)} if prep_path.exists() else {}
     required = (
         "measurements.json",
@@ -202,20 +212,22 @@ def main() -> int:
         r
         for r in selected
         if prior.get(r["trial_id"], {}).get("status") != "completed"
-        or not all((folder(a.input_root, "development", r) / name).is_file() for name in required)
+        or not all((folder(a.input_root, a.split, r) / name).is_file() for name in required)
     ]
     if a.trial_id:
         selected_ids = set(a.trial_id)
-        pending = [r for r in selected if r["trial_id"] in selected_ids]
-        if len(pending) != len(selected_ids):
+        available = {r["trial_id"]: r for r in pending}
+        if not selected_ids.issubset(available):
             raise ValueError(
                 "One or more requested trial IDs are absent or already complete in this input root"
             )
+        pending = [r for r in selected if r["trial_id"] in selected_ids]
     elif a.max_rows:
         pending = pending[: a.max_rows]
     print(
         json.dumps(
             {
+                "split": a.split,
                 "pending_rows": len(pending),
                 "workers": a.workers,
                 "chunk_size": a.chunk_size,
@@ -245,7 +257,7 @@ def main() -> int:
                 roots.append(root)
                 root.mkdir()
                 chunk_ids = {r["trial_id"] for r in chunk}
-                all_attempts_path = a.input_root / "development/preparation-attempts.csv"
+                all_attempts_path = a.input_root / a.split / "preparation-attempts.csv"
                 existing_attempts = (
                     _read_table(all_attempts_path) if all_attempts_path.exists() else []
                 )
@@ -259,6 +271,7 @@ def main() -> int:
                         [r["trial_id"] for r in chunk],
                         ix,
                         prior_attempts,
+                        a.split,
                     )
                 )
             with ProcessPoolExecutor(max_workers=len(chunks)) as pool:
@@ -279,6 +292,7 @@ def main() -> int:
                     a.input_root,
                     a.truth_manifest,
                     a.truth_manifest.with_name("identity-audit-compaction.csv"),
+                    a.split,
                 )
             if moved != len(wave):
                 raise RuntimeError(f"Merged {moved} trial directories for {len(wave)} rows")
