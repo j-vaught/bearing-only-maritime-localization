@@ -213,3 +213,15 @@ The coordinator's combined gate passed 65 tests in 0.71 seconds, scoped Ruff and
 Read-only preflight found 22,000 branches across 64 modes. The real-data run is authorized at frozen runner eb17e17, with a 1,800-second deadline and the canonical server benchmark lock. No outcome is yet available. This experiment is a local proposal comparison over selected alternatives; the underlying global search remains incomplete and cannot return an accepted release fix.
 
 The separate broad gate at 918ab7b passed 1,016 tests, 32 optional skips, and seven subtests. Ruff lint, ty and installed commands passed. Its one formatting failure was repaired separately. Wheel/source-distribution installation and final release checks remain pending.
+
+## CI packaging, refinement execution, and bound batching
+
+GitHub CI run 40325296325 completed successfully for a9ac9f202c2f53f5adcf2df12fff4e3c649f7d10. The Python job passed tests, installed command checks, wheel and source-distribution build/install checks, Ruff formatting/lint, and ty. The Typst job compiled every figure source. The optional hardware job was skipped. This supplies packaging and figure-build evidence without new server dependency downloads.
+
+The first assignment-expansion launch failed before output creation because its 50 MiB run-output limit was incorrectly measured against the shared outputs directory. Commit 6f7cdf4354fddbc7237625bde2d82763362068c8 repairs that path scope while preserving the free-space reserve. The actual running diagnostic is frozen at that commit; the earlier eb17e17 authorization identifies its predecessor, not the executed package. No search branch ran in the failed launch.
+
+Stage-one pre-visibility bound batching is integrated with unchanged canonical likelihood inputs and uncertainty variants. It reuses clutter from the empty-target calculation and prepares component membership once. The scalar-reference comparisons preserve the complete bound decomposition exactly. The combined bound/evaluator integration checks passed 36 tests. No timing gain is claimed yet, and the default pruning policy remains unchanged.
+
+Focused pytest collection exposed an existing path-order dependency in test helper imports. The shared pytest configuration now adds the repository root explicitly, so a focused test does not depend on other collected tests modifying sys.path. The previously failing four-test caller suite passes by itself. The dataset, objective, execution limits, and acceptance thresholds are unchanged.
+
+The serial real-data diagnostic remains active. A separate four-worker implementation and independent review are being prepared using the identical mode population and branch algorithm. Parallel execution will wait for the serial lock and its own correctness gate. The evaluator will retain an interrupted prefix and pending work if the serial deadline is reached.

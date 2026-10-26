@@ -45,5 +45,6 @@ python-version = "3.11"
 exclude = [".agent-work"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 norecursedirs = [".agent-work", ".git", ".venv", "build", "dist", "node_modules", "venv", "*.egg", "CVS", "_darcs", "{arch}"]
