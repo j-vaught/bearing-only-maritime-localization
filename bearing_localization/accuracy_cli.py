@@ -97,7 +97,24 @@ def _search_dispatch(
 ) -> tuple[LocalizationResult, dict[str, Any], int, bool]:
     config = scorer.config
     if algorithm == "grid":
-        run = run_grid_search_v2(scorer, grid_spacing_m=spacing_m)
+        if config.backend == "gpu":
+            from bearing_localization.search.gpu.search_adapter import (
+                GpuCandidateScorer,
+                score_candidate_positions_batched,
+            )
+            from bearing_localization.search.reference_grid import enumerate_grid_points
+
+            if not isinstance(scorer, GpuCandidateScorer):
+                raise TypeError("GPU grid search requires GpuCandidateScorer.")
+            assert config.bounds_xy is not None
+            run = score_candidate_positions_batched(
+                scorer,
+                enumerate_grid_points(config.bounds_xy, spacing_m),
+                candidate_limit=config.candidate_budget,
+                certificate_scope="finite_candidate_set",
+            )
+        else:
+            run = run_grid_search_v2(scorer, grid_spacing_m=spacing_m)
         return (
             run.localization,
             {"candidate_count": run.candidate_count, "outcome_counts": dict(run.outcome_counts)},
@@ -129,6 +146,86 @@ def _search_dispatch(
             False,
         )
     if algorithm == "reference_grid":
+        if config.backend == "gpu":
+            from itertools import islice
+
+            from bearing_localization.search.gpu.search_adapter import (
+                GpuCandidateScorer,
+                score_candidate_positions_batched,
+            )
+            from bearing_localization.search.reference_grid import (
+                CandidateCounts,
+                _local_modes,
+                enumerate_grid_points,
+                grid_shape,
+            )
+            from maritime_localization_shared.contracts.localization import LocalizationResult
+
+            if not isinstance(scorer, GpuCandidateScorer):
+                raise TypeError("GPU reference-grid search requires GpuCandidateScorer.")
+            bounds = config.bounds_xy
+            if bounds is None:
+                raise ValueError("Reference grid search requires config.bounds_xy.")
+            shape = grid_shape(bounds, spacing_m)
+            total = shape[0] * shape[1]
+            run = score_candidate_positions_batched(
+                scorer,
+                enumerate_grid_points(bounds, spacing_m),
+                candidate_limit=config.candidate_budget,
+                certificate_scope="finite_candidate_set",
+            )
+            outcome_counts = dict(run.outcome_counts)
+            evaluated = run.candidate_count
+            counts = CandidateCounts(
+                total=total,
+                evaluated=evaluated,
+                scored=outcome_counts.get("scored", 0),
+                invalid_water=outcome_counts.get("invalid_water", 0),
+                unresolved_coverage=outcome_counts.get("unresolved_coverage", 0),
+                unresolved_model=outcome_counts.get("unresolved_model", 0),
+                unevaluated=total - evaluated,
+            )
+            by_position = {
+                (round(item.east_m, 9), round(item.north_m, 9)): item
+                for item in run.localization.hypotheses
+            }
+            scored = {}
+            for ordinal, point in enumerate(
+                islice(enumerate_grid_points(bounds, spacing_m), evaluated)
+            ):
+                hypothesis = by_position.get((round(point[0], 9), round(point[1], 9)))
+                if hypothesis is not None:
+                    scored[(ordinal // shape[1], ordinal % shape[1])] = hypothesis
+            modes = _local_modes(
+                scored,
+                nx=shape[0],
+                ny=shape[1],
+                absolute_tolerance=config.absolute_score_tolerance,
+                relative_tolerance=config.relative_score_tolerance,
+            )
+            hypotheses = tuple(mode.hypothesis for mode in modes)
+            localization = LocalizationResult(
+                hypotheses=hypotheses,
+                elapsed_s=run.localization.elapsed_s,
+                decision_status="ambiguous" if hypotheses else "no_fix",
+                search_status=run.localization.search_status,
+                certificate_scope=run.localization.certificate_scope,
+                budget_limit=run.localization.budget_limit,
+                budget_used=run.localization.budget_used,
+                report_count=run.localization.report_count,
+                objective_version=run.localization.objective_version,
+            )
+            complete = localization.certificate_scope == "finite_candidate_set"
+            return (
+                localization,
+                {
+                    "candidate_counts": asdict(counts),
+                    "grid_shape": shape,
+                    "mode_count": len(modes),
+                },
+                evaluated,
+                complete,
+            )
         run = search_reference_grid(
             scorer.measurements, scorer.catalog, scorer.vector_map, config, spacing_m=spacing_m
         )
@@ -276,6 +373,7 @@ def search_v2_files(
     refine_initial_step_m: float = 100.0,
     refine_iterations: int = 50,
     telemetry_path: str | Path | None = None,
+    device_ids: Sequence[int] | None = None,
 ) -> LocalizationResult:
     """Execute one truth-free v2 search and write result plus telemetry sidecar."""
     out = Path(output_path).expanduser().resolve()
@@ -299,10 +397,16 @@ def search_v2_files(
     selected_algorithm = algorithm or config.algorithm
     if selected_algorithm != config.algorithm:
         raise ValueError("CLI algorithm must match SearchConfig.algorithm.")
-    if config.backend != "cpu":
-        raise RuntimeError(
-            f"Search backend {config.backend!r} is unsupported by this CLI integration."
-        )
+    selected_devices = tuple(device_ids or ())
+    if config.backend == "gpu":
+        if not selected_devices:
+            raise ValueError("GPU search requires one or more explicit --device-id values.")
+        if any(type(device_id) is not int or device_id < 0 for device_id in selected_devices):
+            raise ValueError("GPU device IDs must be nonnegative integers.")
+        if len(set(selected_devices)) != len(selected_devices):
+            raise ValueError("GPU device IDs must be distinct.")
+    elif selected_devices:
+        raise ValueError("--device-id can only be used with a GPU SearchConfig.")
     if config.bounds_xy is None:
         raise ValueError("SearchConfig.bounds_xy is required for v2 CLI search.")
     scope_verified = False
@@ -316,14 +420,30 @@ def search_v2_files(
         )
         scope_verified = True
 
-    telemetry = SearchTelemetry(objective_version=config.objective_version, backend="cpu")
+    telemetry = SearchTelemetry(
+        objective_version=config.objective_version,
+        backend=config.backend,
+        device_ids=selected_devices,
+    )
     with telemetry.stage("load_inputs"):
         measurements = read_contract(measurements_path, MeasurementSetV2)
         catalog = read_contract(catalog_path, CatalogV2)
         map_input = read_contract(map_path, MapV2)
     with telemetry.stage("project_map"):
         vector_map = VectorMap.from_map_v2(map_input, target_crs=projected_crs)
-    scorer = CandidateScorer(measurements, catalog, vector_map, config)
+    if config.backend == "gpu":
+        from bearing_localization.search.gpu.search_adapter import GpuCandidateScorer
+
+        scorer = GpuCandidateScorer(
+            measurements,
+            catalog,
+            vector_map,
+            config,
+            device_ids=selected_devices,
+            telemetry=telemetry,
+        )
+    else:
+        scorer = CandidateScorer(measurements, catalog, vector_map, config)
     telemetry.record_memory()
     with telemetry.stage("candidate_search"):
         result, diagnostics, candidate_count, coverage_complete = _search_dispatch(
@@ -576,6 +696,13 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--refine-modes", type=int, default=8)
     parser.add_argument("--refine-initial-step-m", type=float, default=100.0)
     parser.add_argument("--refine-iterations", type=int, default=50)
+    parser.add_argument(
+        "--device-id",
+        type=int,
+        action="append",
+        default=None,
+        help="GPU device index. Repeat to use multiple GPUs; required for GPU backend.",
+    )
     parser.add_argument("--telemetry-output", type=Path)
     args = parser.parse_args(argv)
     if (
@@ -585,6 +712,11 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
         or args.branch_max_regions < 1
     ):
         parser.error("spacing, cell size, refinement, and region budgets must be positive")
+    if args.device_id is not None and (
+        any(device_id < 0 for device_id in args.device_id)
+        or len(set(args.device_id)) != len(args.device_id)
+    ):
+        parser.error("device IDs must be distinct nonnegative integers")
     try:
         result = search_v2_files(
             args.measurements,
@@ -607,6 +739,7 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             refine_initial_step_m=args.refine_initial_step_m,
             refine_iterations=args.refine_iterations,
             telemetry_path=args.telemetry_output,
+            device_ids=args.device_id,
         )
     except (OSError, TypeError, ValueError, RuntimeError, KeyError) as exc:
         parser.error(str(exc))
