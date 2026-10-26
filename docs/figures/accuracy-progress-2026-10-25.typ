@@ -22,7 +22,7 @@
   columns: (1fr, 1fr),
   column-gutter: 8mm,
   lq.diagram(
-    title: [Development preparation. 2,600 of 6,630 rows, 6 of 24 ports],
+    title: [Development preparation. 2,600 of 6,630 rows, 6 development ports processed],
     xlabel: [Rows in initial development plan],
     xlim: (0, 7000),
     ylim: (0.35, 1.65),
@@ -79,7 +79,7 @@
     diagnostic.at("candidate_elapsed_ms"),
     candidate-ids,
     label: [Fixed-candidate evaluations],
-    mark: "o",
+    mark: "s",
   ),
   lq.plot(
     (diagnostic.at("candidate_elapsed_ms_median"),) * 2,
