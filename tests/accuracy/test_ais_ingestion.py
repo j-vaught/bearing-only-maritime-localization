@@ -115,7 +115,7 @@ def test_observer_is_excluded_and_mmsi_keys_are_stable() -> None:
 def test_legacy_csv_uses_source_key_without_inventing_mmsi() -> None:
     root = Path(__file__).parents[2]
     catalog = read_ais_csv(
-        root / "data/ais/eastern-seaboard_2023-07-15T1200Z.csv",
+        root / "data/eastern-seaboard_2023-07-15T1200Z.csv",
         target_time_utc="2023-07-15T12:00:30Z",
     )
     record = catalog.records[0]

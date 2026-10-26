@@ -48,16 +48,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "runs/east-coast")
     args = parser.parse_args()
-    catalog_folder = ROOT / "data/catalogs/accuracy-inputs-v2"
-    catalog = json.loads((catalog_folder / "manifest.json").read_text())
+    catalog_folder = ROOT / "data"
+    catalog = json.loads((catalog_folder / "objects.manifest.json").read_text())
     unpack(
         ROOT / catalog["archive_path"],
         args.output_dir / "catalog.json",
         catalog["archive_sha256"],
         catalog["raw_sha256"],
     )
-    map_folder = ROOT / "data/maps/accuracy-inputs-v3"
-    map_payload = json.loads((map_folder / "manifest.json").read_text())["map_payload"]
+    map_folder = ROOT / "data"
+    map_payload = json.loads((map_folder / "map.manifest.json").read_text())["map_payload"]
     unpack(
         map_folder / map_payload["archive_filename"],
         args.output_dir / "map.json",

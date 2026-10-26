@@ -16,10 +16,10 @@
     "area_km2": 3383691.3309591026
   },
   "map_payload": {
-    "filename": "noaa-enc-east-coast-fullcoast-map-v3-candidate.json",
+    "filename": "map.json",
     "original_bytes": 56326616,
     "original_sha256": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
-    "archive_filename": "noaa-enc-east-coast-fullcoast-map-v3-candidate.json.gz",
+    "archive_filename": "map.json.gz",
     "archive_bytes": 14214363,
     "archive_sha256": "fda522364582a20d74a643e7e854844b2ce2490a45e469cb210fd9a8babd13de",
     "compression": "gzip -n -9"
@@ -29,7 +29,7 @@
     "known_area_km2": 2580408.063055927,
     "known_fraction": 0.7626014936547164,
     "unknown_area_km2": 803283.267903166,
-    "unknown_fraction": 0.23739850634528075,
+    "unknown_fraction": 0.23739850634528076,
     "unknown_is_not_inferred_as_water": true
   },
   "port_detail": {
@@ -72,5 +72,5 @@
   ],
   "source_map_builder_commit": "7bc886e52c71b520fb70f2a31ea660ff4849e7e8",
   "integration_commit": "7dc0d6cbc7d080157d942093545cc74f0e3e8ae8",
-  "source_validation_manifest_filename": "source-validation-manifest.json"
+  "source_validation_manifest_filename": "map-source-validation.json"
 }

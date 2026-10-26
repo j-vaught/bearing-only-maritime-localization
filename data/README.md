@@ -1,13 +1,24 @@
-# Real input data
+# Shared input data
 
-The current normalized catalog is `catalogs/accuracy-inputs-v2/east-coast-fullcoast-catalog-v2.json.gz`. It contains 66,668 source records. Its manifest records compressed and raw hashes, 2,268 AIS rows, and 64,400 chart-aid components.
+Every data file is directly in this folder. All search examples use the same full East Coast object catalog and vector map.
 
-The current map is `maps/accuracy-inputs-v3/noaa-enc-east-coast-fullcoast-map-v3-candidate.json.gz`. The adjacent manifest records hashes, coverage and source provenance. Coordinates are geographic EPSG:4326; the example search projects into EPSG:32618. Unknown map coverage remains explicit.
+| File | Contents |
+|---|---|
+| `objects.json.gz` | Current search catalog with 2,268 AIS records and 64,400 chart-aid components. |
+| `map.json.gz` | Current land geometry and explicit known/unknown coverage. |
+| `objects.manifest.json`, `map.manifest.json` | Compressed and uncompressed checksums, coordinate conventions, counts and source information. |
+| `map-source-validation.json` | Source geometry validation record. |
+| `observer_locations.csv` | 24 East Coast port-area observer locations for simulation and evaluation. |
+| `chesapeake-observer-locations.csv` | Original Chesapeake B1–B5 locations. |
+| `east-coast-observers-b1-b10.csv` | Earlier ten-port observer locations. |
+| `*2023-07-15T1200Z.csv` | Selected AIS snapshot source tables. |
+| `*-enc-aids.csv` | Chart feature source tables before catalog normalization. |
+| `chesapeake-water-mask-500m.*` | Legacy raster input retained for the pairwise regression case. |
 
-Run `uv run python examples/unpack_east_coast.py` from the repository root to verify and unpack these inputs into `runs/east-coast/`.
+Adjacent source-table manifests retain original extraction details. AIS row identifiers are snapshot keys; the original extraction omitted vessel names and MMSIs. Chart components can have unresolved physical identities. Source manifests can mention historical server paths or filenames; those are provenance, not files needed at runtime.
 
-The `ais/` CSV files retain Chesapeake and East Coast positions from the NOAA 2023-07-15 one-minute snapshot. MMSI and vessel names were omitted during the original extraction; row IDs are snapshot keys. The `chart-aids/` CSV files preserve NOAA ENC feature types, chart identifiers and available source attributes. Their adjacent manifests retain acquisition details and hashes. Raw chart rows can represent the same physical feature at several scales.
+Observer coordinates are simulator/evaluator truth, never search inputs. Identifiers belong to their individual observer tables. These points were originally selected using a coarse mask; the examples must check them against the current vector map before simulation.
 
-The small legacy Chesapeake raster mask remains under `maps/` for older algorithm experiments. The current version-2 example uses the vector map instead. Port anchor tables remain under `sites/`.
+The catalog and map use EPSG:4326. The declared search domain uses EPSG:32618. Approximately 23.7 percent of the map region has unknown coverage, which is not inferred as water.
 
-Sources are [NOAA historical AIS](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2023/AIS_2023_07_15.zip) and [NOAA ENC Direct](https://nauticalcharts.noaa.gov/learn/encdirect/). Some source manifests name historical server paths; those are provenance, not required local paths. The unpack helper uses only files inside this repository.
+Data sources are [NOAA historical AIS](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2023/AIS_2023_07_15.zip), [NOAA ENC Direct](https://nauticalcharts.noaa.gov/learn/encdirect/), and [USACE port statistics](https://www.iwr.usace.army.mil/Missions/Navigation/Navigation-Data-and-Information/US-Port-Statistics/).

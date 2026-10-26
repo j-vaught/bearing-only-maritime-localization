@@ -196,11 +196,11 @@ def _load_b1_inputs() -> tuple[
     dict[str, tuple[float, float]],
     tuple[float, float, float, float],
 ]:
-    with (ROOT / "data/ais/chesapeake_2023-07-15T1200Z.csv").open(newline="") as stream:
+    with (ROOT / "data/chesapeake_2023-07-15T1200Z.csv").open(newline="") as stream:
         ais_rows = list(csv.DictReader(stream))
-    with (ROOT / "data/chart-aids/chesapeake-enc-aids.csv").open(newline="") as stream:
+    with (ROOT / "data/chesapeake-enc-aids.csv").open(newline="") as stream:
         aid_rows = list(csv.DictReader(stream))
-    with (ROOT / "data/sites/b1-b5.csv").open(newline="") as stream:
+    with (ROOT / "data/chesapeake-observer-locations.csv").open(newline="") as stream:
         site_rows = list(csv.DictReader(stream))
 
     ais: list[LegacyAISRecord] = []
@@ -231,7 +231,7 @@ def _load_b1_inputs() -> tuple[
         ),
     )
 
-    packed = np.load(ROOT / "data/maps/chesapeake-water-mask-500m.npz")
+    packed = np.load(ROOT / "data/chesapeake-water-mask-500m.npz")
     water = tuple(tuple(bool(cell) for cell in row) for row in packed["water"])
     map_input = MapInput(
         crs=str(packed["crs"]),

@@ -14,9 +14,9 @@ from maritime_localization_shared.geospatial.vector_map import VectorMap
 
 def test_approved_candidate_map_bytes_match_manifest() -> None:
     root = Path(__file__).resolve().parents[2]
-    manifest = json.loads((root / "data/maps/accuracy-inputs-v3/manifest.json").read_text())
+    manifest = json.loads((root / "data/map.manifest.json").read_text())
     payload = manifest["map_payload"]
-    archive = root / "data/maps/accuracy-inputs-v3" / payload["archive_filename"]
+    archive = root / "data" / payload["archive_filename"]
     archive_bytes = archive.read_bytes()
     raw_bytes = gzip.decompress(archive_bytes)
 
