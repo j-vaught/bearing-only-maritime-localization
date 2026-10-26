@@ -8,8 +8,30 @@
       "sha256": "e0c1b989f82b7a29e3a09dfde541ed0f437edcc82a4a15ab162fd8e01422d3a8"
     },
     "expansion_artifact": {
-      "path": ".agent-work/outputs/a35-cached-evaluation/assignment-expansion-provisional.json",
-      "sha256": "b7e3541a77a86943e5553f449769cdc12329696a3c3b96cf69d4199e54f279a5"
+      "commit": "9a7f5f4 (integrated at ecaf55b)",
+      "path": "reports/experiments/a35-cached-evaluation/assignment-expansion-full-audit.json",
+      "sha256": "7111b39f72caf0df53e655681cb4460118b781a08bbbafdd396056774523bbf8",
+      "schema": "a35-assignment-expansion-evaluation-v1",
+      "evaluation_status": "complete_audit",
+      "expansion_status": "interrupted",
+      "mode_count": 64,
+      "completed_mode_count": 60,
+      "pending_mode_count": 4,
+      "branch_rescore_complete": true,
+      "durable_branch_result_event_count": 20435,
+      "expansion_event_count": 40871,
+      "full_domain_complete": false,
+      "accepted_fix_claim": false,
+      "certificate_scope": "none",
+      "expanded_best_error_m": 11.127008292425764,
+      "expanded_best_score": 5.026904167180264,
+      "expanded_best_score_rank_row": 4,
+      "expanded_modes_within_100m": 1,
+      "branch_result_reconciliation": {
+        "exact_rescored_poses": 12204,
+        "invalid_water": 8225,
+        "max_nfev_without_exact_score": 6
+      }
     },
     "prior_wrong_mode_after_expansion": {
       "assignment_count": 4,
@@ -102,7 +124,12 @@
         "selection_scope": "60 completed expansion modes; 4 pending",
         "stage": "single_addition_expansion"
       }
-    ]
+    ],
+    "pre_audit_provisional_expansion_artifact": {
+      "path": ".agent-work/outputs/a35-cached-evaluation/assignment-expansion-provisional.json",
+      "sha256": "b7e3541a77a86943e5553f449769cdc12329696a3c3b96cf69d4199e54f279a5",
+      "status": "pre-audit provisional artifact; retained as history"
+    }
   },
   "assigned_manifest_sha256": "ecde0ac0eaab7eef8569638f306e2a8c6300a78a1c54716f6ab30d6c5994ba01",
   "assigned_rows_sha256": "d8e921d46b5067c1e12cacbd3eff930f5acb48c27192ed2527cef3159e3c9955",
@@ -115,33 +142,49 @@
     "timing_scope": "all 64 score-selected modes and 128 starts; selected-mode diagnostic only"
   },
   "assignment_expansion_artifact": {
-    "accepted_fix_claim": false,
-    "branch_rescore_complete": false,
-    "certificate_scope": "none",
-    "completed_mode_count": 60,
-    "expansion_event_digest": "70a682e2766f18fb6fb83819ed945e078b2958cf3ac465ecdb990f79ed87f3ae",
-    "expansion_events_sha256": "a92acc79294bd045605f5bcce9e76e26ab7ccddc03ccba1ace0df69eb982b7bf",
-    "expansion_manifest_sha256": "290c2645f8252a951491a99e2fa6bca6b29d2222d04cec8c9935a75b27db5e23",
-    "expansion_rows_sha256": "2bb8a9f2f3e0e46f4456c7ead57efda5afab6776465552156ea863a8574a7c7c",
-    "full_domain_complete": false,
+    "commit": "9a7f5f4 (integrated at ecaf55b)",
+    "path": "reports/experiments/a35-cached-evaluation/assignment-expansion-full-audit.json",
+    "sha256": "7111b39f72caf0df53e655681cb4460118b781a08bbbafdd396056774523bbf8",
+    "schema": "a35-assignment-expansion-evaluation-v1",
+    "evaluation_status": "complete_audit",
+    "expansion_status": "interrupted",
     "mode_count": 64,
-    "path": ".agent-work/outputs/a35-cached-evaluation/assignment-expansion-provisional.json",
+    "completed_mode_count": 60,
     "pending_mode_count": 4,
-    "run_status": "interrupted",
-    "serial_runtime_s": 1800.016071,
-    "sha256": "b7e3541a77a86943e5553f449769cdc12329696a3c3b96cf69d4199e54f279a5",
-    "status": "provisional",
-    "timing_scope": "single-addition branch expansion over the fixed selected-mode prefix; 60 of 64 mode rows completed; diagnostic runner time, not end-to-end or per-frame latency"
+    "branch_rescore_complete": true,
+    "durable_branch_result_event_count": 20435,
+    "expansion_event_count": 40871,
+    "full_domain_complete": false,
+    "accepted_fix_claim": false,
+    "certificate_scope": "none",
+    "expanded_best_error_m": 11.127008292425764,
+    "expanded_best_score": 5.026904167180264,
+    "expanded_best_score_rank_row": 4,
+    "expanded_modes_within_100m": 1,
+    "branch_result_reconciliation": {
+      "exact_rescored_poses": 12204,
+      "invalid_water": 8225,
+      "max_nfev_without_exact_score": 6
+    },
+    "timing_scope": "single-addition branch expansion over the fixed selected-mode prefix; 60 of 64 mode rows completed; diagnostic runner time, not end-to-end or per-frame latency",
+    "serial_runtime_s": 1800.016071
   },
   "assignment_expansion_summary": {
-    "accepted_fix_claim": false,
-    "branch_rescore_complete": false,
-    "certificate_scope": "none",
+    "status": "full branch audit complete for completed prefix; expansion interrupted",
     "completed_modes": 60,
-    "expanded_modes_within_100m": 1,
     "pending_modes": 4,
     "serial_runtime_s": 1800.016071,
-    "status": "provisional interrupted evaluation; full branch replay pending"
+    "expanded_modes_within_100m": 1,
+    "branch_rescore_complete": true,
+    "durable_branch_result_event_count": 20435,
+    "branch_result_reconciliation": {
+      "exact_rescored_poses": 12204,
+      "invalid_water": 8225,
+      "max_nfev_without_exact_score": 6
+    },
+    "full_domain_complete": false,
+    "accepted_fix_claim": false,
+    "certificate_scope": "none"
   },
   "assignment_expansion_winner": {
     "candidate_id": "cell:cell:1594:4160",
@@ -219,7 +262,10 @@
     },
     "seed_score_rank_within_completed_modes": 16,
     "source_score_rank": 5,
-    "summary": "Provisional score and error winner among the 60 completed modes. Four selected modes remain pending, so this is not a certificate or acceptance claim."
+    "summary": "Audited score and error winner among the 60 completed modes. Four selected modes remain pending, so this is not a global result, certificate, or acceptance claim.",
+    "audit_source_sha256": "7111b39f72caf0df53e655681cb4460118b781a08bbbafdd396056774523bbf8",
+    "audit_source_path": "reports/experiments/a35-cached-evaluation/assignment-expansion-full-audit.json",
+    "audit_status": "independently audited full branch replay for completed modes"
   },
   "author": "J.C. Vaught",
   "completed_count": 64,
@@ -1644,7 +1690,7 @@
     }
   ],
   "plot_error_max_m": 2500000,
-  "schema": "a39-cached-refinement-figure-v3",
+  "schema": "a39-cached-refinement-figure-v4",
   "selected_count": 64,
   "selection_rule": "64 modes selected by source search score before evaluator-only truth access",
   "source_artifact_commit": "a2dcc34799f00b9abd5f145b5661324b749e3ea1",
