@@ -113,11 +113,61 @@ def screen_candidate_visibility(
     stop_after_minimum_groups: int | None = None,
     scan_all_members: bool = False,
 ) -> VisibilityScreenResult:
-    """Certify one surviving group per clear pre-LOS circular component.
+    """Certify one surviving group per clear pre-LOS circular component."""
+    return _screen_candidate_visibility(
+        observer_xy_m,
+        prepared_context,
+        stop_after_minimum_groups=stop_after_minimum_groups,
+        scan_all_members=scan_all_members,
+        use_batched_los=False,
+    )
 
-    Shared grouping separates components at gaps larger than the threshold.
-    Removing occluded members only widens retained gaps, so components cannot join.
-    """
+
+def _screen_candidate_visibility_batched(
+    observer_xy_m: tuple[float, float],
+    prepared_context: PreparedPredictionContext,
+    *,
+    stop_after_minimum_groups: int | None = None,
+    scan_all_members: bool = False,
+) -> VisibilityScreenResult:
+    """Full-scan batch implementation retained pending measured path selection."""
+    return _screen_candidate_visibility(
+        observer_xy_m,
+        prepared_context,
+        stop_after_minimum_groups=stop_after_minimum_groups,
+        scan_all_members=scan_all_members,
+        use_batched_los=True,
+    )
+
+
+def _screen_candidate_visibility_scalar(
+    observer_xy_m: tuple[float, float],
+    prepared_context: PreparedPredictionContext,
+    *,
+    stop_after_minimum_groups: int | None = None,
+    scan_all_members: bool = False,
+) -> VisibilityScreenResult:
+    """Scalar LOS oracle retained for exact parity checks and fallback diagnosis."""
+    return _screen_candidate_visibility(
+        observer_xy_m,
+        prepared_context,
+        stop_after_minimum_groups=stop_after_minimum_groups,
+        scan_all_members=scan_all_members,
+        use_batched_los=False,
+    )
+
+
+def _screen_candidate_visibility(
+    observer_xy_m: tuple[float, float],
+    prepared_context: PreparedPredictionContext,
+    *,
+    stop_after_minimum_groups: int | None,
+    scan_all_members: bool,
+    use_batched_los: bool,
+) -> VisibilityScreenResult:
+    """Implementation shared by the batch path and scalar reference."""
+    # Shared grouping separates components at gaps larger than the threshold.
+    # Removing occluded members only widens retained gaps, so components cannot join.
     if not isinstance(prepared_context, PreparedPredictionContext):
         raise TypeError("prepared_context must be a PreparedPredictionContext.")
     if stop_after_minimum_groups is not None and (
@@ -183,6 +233,22 @@ def screen_candidate_visibility(
         for key, (item, geom, _) in targets.items()
     ]
     groups = group_angular_detections(detections, cast(float, sig[4])).truth_groups
+    batch_visibility_by_key: dict[str, str] | None = None
+    if (
+        use_batched_los
+        and scan_all_members
+        and stop_after_minimum_groups is None
+        and observer_status == "water"
+    ):
+        ray_keys = tuple(
+            key
+            for members in groups
+            for key in sorted(members, key=lambda member: (targets[member][1].distance_m, member))
+        )
+        ray_states = vector_map.line_visibility_many(
+            observer, tuple(targets[key][2] for key in ray_keys)
+        )
+        batch_visibility_by_key = dict(zip(ray_keys, ray_states, strict=True))
     evidence: list[ComponentEvidence] = []
     visibility: dict[str, str] = {}
     unresolved: set[str] = set()
@@ -207,7 +273,11 @@ def screen_candidate_visibility(
                 continue
             checked.append(key)
             rays += 1
-            state = vector_map.line_visibility(observer, targets[key][2])
+            state = (
+                batch_visibility_by_key[key]
+                if batch_visibility_by_key is not None
+                else vector_map.line_visibility(observer, targets[key][2])
+            )
             visibility[key] = state
             if state == "clear":
                 clear.append(key)
