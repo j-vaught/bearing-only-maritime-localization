@@ -835,8 +835,8 @@ def _search_dispatch(
         return result, diagnostics, scoring_run.candidate_count, False
     if algorithm in ("wedge_geodesic", "wedge_geodesic_seeded"):
         seeded = algorithm == "wedge_geodesic_seeded"
-        if seeded and config.backend != "cpu":
-            raise ValueError("wedge_geodesic_seeded requires the CPU backend.")
+        if seeded and config.backend == "gpu" and config.candidate_workers != 1:
+            raise ValueError("GPU-seeded geodesic search requires candidate_workers=1.")
         bounds = config.bounds_xy
         if bounds is None:
             raise ValueError("Geodesic wedge search requires finite config.bounds_xy.")
@@ -1123,11 +1123,27 @@ def _search_dispatch(
                     telemetry.stage("exact_scoring") if telemetry is not None else nullcontext()
                 )
                 with scoring_stage:
-                    scoring_run = score_candidate_positions(
-                        scorer,
-                        [candidate.position_xy for candidate in candidate_inputs],
-                        candidate_limit=config.candidate_budget,
-                    )
+                    candidate_positions = [candidate.position_xy for candidate in candidate_inputs]
+                    if config.backend == "gpu":
+                        from maritime.search.gpu.search_adapter import (
+                            GpuCandidateScorer,
+                            score_candidate_positions_batched,
+                        )
+
+                        if not isinstance(scorer, GpuCandidateScorer):
+                            raise TypeError("GPU-seeded search requires GpuCandidateScorer.")
+                        scoring_run = score_candidate_positions_batched(
+                            scorer,
+                            candidate_positions,
+                            batch_size=8,
+                            candidate_limit=config.candidate_budget,
+                        )
+                    else:
+                        scoring_run = score_candidate_positions(
+                            scorer,
+                            candidate_positions,
+                            candidate_limit=config.candidate_budget,
+                        )
             else:
                 pool: PersistentCandidatePool | None = None
                 startup_stage = (
