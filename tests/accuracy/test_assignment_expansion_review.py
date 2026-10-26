@@ -13,13 +13,13 @@ from typing import cast
 
 import numpy as np
 import pytest
+from pyproj import Geod, Transformer
+from shapely.geometry import box
+
 from bearing_localization.search.assignment_expansion import (
     ExpansionConfig,
     expand_assignments,
 )
-from pyproj import Geod, Transformer
-from shapely.geometry import box
-
 from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.scoring import CandidateScorer
 from maritime_localization_shared.contracts.inputs_v2 import (
