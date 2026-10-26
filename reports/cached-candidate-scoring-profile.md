@@ -26,13 +26,13 @@ A second workload was declared before scoring as 2,048 evenly spaced cache indic
 | Workers | Status | Startup (s) | Steady request (s) | Wall time (s) | Steady candidates/s | Peak worker RSS (MiB) | Sum worker RSS (GiB) | Exact evaluations | Exact scored | Best score |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 1 | completed | 6.613 | 51.227 | 60.222 | 39.979 | 1,021.2 | 1.00 | 2,048 | 992 | 24.1270900878417 |
-| 4 | completed | 16.945 | 14.530 | 34.018 | 140.945 | 1,023.2 | 3.89 | 2,048 | 992 | 24.1270900878417 |
-| 8 | completed | 28.157 | 8.136 | 38.888 | 251.729 | 1,023.6 | 7.94 | 2,048 | 992 | 24.1270900878417 |
+| 4 | completed | 16.945 | 14.530 | 34.018 | 140.945 | 1,023.2 | 3.99 | 2,048 | 992 | 24.1270900878417 |
+| 8 | completed | 28.157 | 8.136 | 38.888 | 251.729 | 1,023.6 | 7.96 | 2,048 | 992 | 24.1270900878417 |
 | 16 | timeout_or_failure | worker startup timed out after 53.073 s | — | 53.073 | — | — | — | 0 | 0 |
 
 The completed cases agreed on the best objective and tie ID `cell:-35:2251` within the required tolerances. The previous 255-candidate tie `cell:74:2578` was not selected by the evenly spaced sample, so these sampled best values are not full-domain objectives. The 16-worker case dispatched zero candidates and retained its startup failure disposition. The public result manifest is 2,738,342 bytes and its selection manifest is 200,027 bytes. The two files occupy 2,938,369 bytes.
 
-Using the same startup-once formula with the 2,048-candidate steady request stages gives diagnostic full-domain estimates of 10.13 h at one worker, 2.88 h at four workers, and 1.62 h at eight workers. The 16-worker timeout prevents an estimate. The eight-worker steady request stage was faster than four workers, but its startup was 28.157 s and aggregate worker RSS was 8.14 GiB. The 4-worker case had lower wall time because its startup was 11.212 s shorter. The profile supports exact-mode trials at four and eight workers under an actual memory budget. It does not establish release throughput or a linear scaling law, and it does not justify a 16-worker choice after the observed startup timeout.
+Using the same startup-once formula with the 2,048-candidate steady request stages gives diagnostic full-domain estimates of 10.13 h at one worker, 2.88 h at four workers, and 1.62 h at eight workers. The 16-worker timeout prevents an estimate. The eight-worker steady request stage was faster than four workers, but its startup was 28.157 s and aggregate worker RSS was 7.96 GiB. The 4-worker case had lower wall time because its startup was 11.212 s shorter. The profile supports exact-mode trials at four and eight workers under an actual memory budget. It does not establish release throughput or a linear scaling law, and it does not justify a 16-worker choice after the observed startup timeout.
 
 The measured original raw files occupy 521,715 bytes. The scaling raw files occupy 2,938,369 bytes. These are actual output volumes for the recorded samples. A full-domain output volume depends on whether every audit is retained and must be measured from the continuation output format.
 
