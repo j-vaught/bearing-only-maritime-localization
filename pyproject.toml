@@ -33,9 +33,17 @@ package = true
 
 [tool.ruff]
 line-length = 100
+extend-exclude = [".agent-work"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
 [tool.ty.environment]
 python-version = "3.11"
+
+[tool.ty.src]
+exclude = [".agent-work"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".agent-work", ".git", ".venv", "build", "dist", "node_modules", "venv", "*.egg", "CVS", "_darcs", "{arch}"]
