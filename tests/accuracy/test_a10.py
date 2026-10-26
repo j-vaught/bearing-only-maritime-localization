@@ -129,7 +129,9 @@ def test_legacy_aliases_unknown_wildcards_and_custom_mapping() -> None:
     assert compatible_types("ships", "vessel")
     assert compatible_types("buoy", "physical aid")
     assert compatible_types("unknown", "shoreline")
-    assert compatible_types("mystery label", "vessel")
+    assert compatible_types("unknown", "vessel")
+    assert not compatible_types("other", "boat")
+    assert compatible_types("other", "other")
     mapping = {"ship": {"class_a"}}
     assert compatible_types("ship", "class_a", sensor_to_ais=mapping)
     assert not compatible_types("ship", "vessel", sensor_to_ais=mapping)
