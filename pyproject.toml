@@ -8,7 +8,10 @@ version = "0.1.0"
 description = "Simulation benchmarks for bearing-only maritime localization with incomplete object identity."
 authors = [{ name = "J.C. Vaught", email = "jvaught@sc.edu" }]
 requires-python = ">=3.11"
-dependencies = ["numpy>=2.0", "scipy>=1.14"]
+dependencies = ["numpy>=2.0", "scipy>=1.14", "shapely>=2.0", "pyproj>=3.6"]
+
+[project.optional-dependencies]
+gpu = ["cupy-cuda12x[ctk]>=13.0; sys_platform == \"linux\""]
 
 [project.scripts]
 bearing-localization = "bearing_localization.cli:main"
@@ -22,7 +25,7 @@ dev = ["pytest>=8.0", "ruff>=0.9", "ty>=0.0.1a0"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["bearing_localization*", "maritime_localization_shared*"]
+include = ["bearing_localization*", "maritime_localization_shared*", "maritime_localization_ingest*"]
 namespaces = false
 
 [tool.uv]
