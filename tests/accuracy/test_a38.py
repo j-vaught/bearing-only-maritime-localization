@@ -191,12 +191,28 @@ def test_parallel_merge_rejects_completed_row_without_output(tmp_path: Path) -> 
     prep = worker / "development/preparation.csv"
     prep.parent.mkdir(parents=True)
     with prep.open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=["trial_id", "status"])
+        fields = [
+            "trial_id",
+            "status",
+            "port_id",
+            "placement_id",
+            "realization",
+            "range_m",
+            "report_types",
+            "sensor_condition",
+        ]
+        writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         writer.writerow(
             {
                 "trial_id": "development/port-001/placement-001/r0/range1000m/typeson/nominal",
                 "status": "completed",
+                "port_id": "port-001",
+                "placement_id": "placement-001",
+                "realization": "0",
+                "range_m": "1000",
+                "report_types": "True",
+                "sensor_condition": "nominal",
             }
         )
     with pytest.raises(RuntimeError, match="missing completed"):
