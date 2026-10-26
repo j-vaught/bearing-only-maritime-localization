@@ -17,34 +17,34 @@ Each of the six range and type conditions requires at least 90% unique-fix avail
 | A05 | Object taxonomy | Passed taxonomy checks; integrated 53809f9 |
 | A06 | Independent reference fixtures | Passed independent assignment-reference checks; integrated b01dcd6 and 38ceea5 |
 | A07 | AIS and sensor normalization | Passed normalization checks; integrated 405acfb |
-| A08 | ENC and map ingestion | Running ingestion and source acquisition |
-| A09 | Likelihood costs | Running likelihood implementation |
-| A10 | Exact association | Awaiting prerequisites |
+| A08 | ENC and map ingestion | Finishing ingestion, coverage manifests, and chart-only CatalogV2 export |
+| A09 | Likelihood costs | Passed likelihood checks; integrated b5f3241 |
+| A10 | Exact association | Passed exhaustive assignment parity and legacy label checks; integrated 0dd5145 |
 | A11 | Vector water and visibility | Passed vector geometry checks; integrated 84135c9 |
-| A12 | Conservative map summaries | Running conservative summaries |
+| A12 | Conservative map summaries | Passed conservative geometry checks; integrated 69b198c |
 | A13 | Exact spatial queries | Passed Python 3.11 spatial checks; integrated 873ae88 |
-| A14 | Predicted visible groups | Running candidate visibility and grouping |
-| A15 | Simulator mismatch experiments | Awaiting prerequisites |
-| A16 | Evaluation metrics | Running release metrics |
-| A17 | Existing algorithm adapters | Awaiting prerequisites |
-| A18 | Exhaustive reference search | Awaiting prerequisites |
-| A19 | Pairwise proposals | Running pairwise proposal implementation |
-| A20 | Continuous refinement | Awaiting prerequisites |
-| A21 | Region lower bounds | Awaiting prerequisites |
-| A22 | Branch-and-bound controller | Awaiting prerequisites |
-| A23 | Reverse-wedge proposals | Awaiting prerequisites |
-| A24 | Acceptance and ambiguity | Awaiting prerequisites |
-| A25 | Scene difficulty | Awaiting prerequisites |
-| A26 | Dataset and benchmark controller | Awaiting prerequisites |
-| A27 | GPU cost generation | Awaiting prerequisites |
-| A28 | GPU proposals | Awaiting prerequisites |
-| A29 | Assignment acceleration experiment | Awaiting prerequisites |
-| A30 | Multiple-GPU runtime | Awaiting prerequisites |
+| A14 | Predicted visible groups | Passed visibility and grouping checks; integrated e4c8f23 |
+| A15 | Simulator mismatch experiments | Passed simulator mismatch checks; integrated 48b8d77 |
+| A16 | Evaluation metrics | Passed denominator and failure fixtures; integrated 7eb3212 |
+| A17 | Existing algorithm adapters | Passed adapter and autonomous search checks; integrated 4888558 |
+| A18 | Exhaustive reference search | Passed exhaustive finite-grid checks; integrated 83bf3b9 |
+| A19 | Pairwise proposals | Passed proposal checks; integrated 99a33f9 |
+| A20 | Continuous refinement | Passed continuous refinement checks; integrated 34fee96 |
+| A21 | Region lower bounds | Passed bound checks; integrated f4b2817; spatial bounds remain weak |
+| A22 | Branch-and-bound controller | Passed queue and budget checks; integrated 79f59af |
+| A23 | Reverse-wedge proposals | Passed wedge proposal checks; integrated 169f629 |
+| A24 | Acceptance and ambiguity | Passed calibration contract checks; integrated 9626e36; empirical calibration pending |
+| A25 | Scene difficulty | Passed difficulty checks; integrated ce40379 |
+| A26 | Dataset and benchmark controller | Controller checks passed; repairing aggregate support-extension rule |
+| A27 | GPU cost generation | Passed CPU and device-1 cost parity; integrated 3600ff6 |
+| A28 | GPU proposals | Passed device-2 planar proposal parity; integrated 8695a64 |
+| A29 | Assignment acceleration experiment | Assignment acceleration deferred by measured bottleneck rule; integrated 0917632 |
+| A30 | Multiple-GPU runtime | Running multi-device implementation and hardware checks |
 | A31 | Search telemetry | Passed telemetry and real GPU timing checks; integrated 25ab68e |
-| A32 | CLI and main orchestration | Awaiting prerequisites |
+| A32 | CLI and main orchestration | Running standalone CLI integration |
 | A33 | Contract and process integration | Awaiting prerequisites |
 | A34 | Data and geometry integration | Awaiting prerequisites |
-| A35 | Search integration | Awaiting prerequisites |
+| A35 | Search integration | Passed search integration checks; integrated 718c11e |
 | A36 | GPU correctness integration | Awaiting prerequisites |
 | A37 | Independent regression and CI | Awaiting prerequisites |
 | A38 | Performance and held-out evaluation | Awaiting prerequisites |
@@ -60,3 +60,7 @@ Authored by J.C. Vaught.
 ## Integrated check at 873ae88
 
 The Python 3.11 CPU suite passed 312 tests with one optional GPU test skipped and seven subtests passed. Separate CuPy kernel checks ran successfully on devices 2 and 3. These checks do not establish localization accuracy or complete-search latency.
+
+## Integration update
+
+Thirty-three specialist agents have been dispatched. Accuracy and held-out evaluation remain pending. Device-level parity is established only for the documented cases; geographic proposal preparation remains on the CPU. The development assignment profile found proposal preparation dominant and assignment below the 20 percent acceleration threshold.
