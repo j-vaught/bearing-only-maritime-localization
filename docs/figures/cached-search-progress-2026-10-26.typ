@@ -29,7 +29,7 @@
     yaxis: (ticks: ((1, [1 worker]), (2, [4 workers]), (3, [8 workers])), subticks: none),
     width: 250mm,
     height: 48mm,
-    lq.hbar(scale.map(row => row.at("startup_s")), (1, 2, 3), label: [Startup]),
+    lq.hbar(scale.map(row => row.at("startup_s")), (1, 2, 3)),
   )
 ]
 #v(1mm)
@@ -43,18 +43,20 @@
     yaxis: (ticks: ((1, [1 worker]), (2, [4 workers]), (3, [8 workers])), subticks: none),
     width: 250mm,
     height: 48mm,
-    lq.hbar(scale.map(row => row.at("request_s")), (1, 2, 3), label: [Request]),
+    lq.hbar(scale.map(row => row.at("request_s")), (1, 2, 3)),
   )
 ]
 #v(1mm)
 #align(center)[
   #table(
-    columns: (1fr, 1.1fr, 1.1fr, 1.2fr, 1.4fr),
+    columns: (0.7fr, 1fr, 1fr, 0.9fr, 0.9fr, 1fr, 1.4fr),
     inset: 2.5pt,
     stroke: 0.5pt + black,
-    [Workers], [Candidates], [Exact scored], [Best objective], [Best candidate ID],
+    [Workers], [Startup (s)], [Request (s)], [Candidates], [Exact scored], [Best objective], [Best candidate ID],
     ..scale.map(row => (
       [#str(row.at("workers"))],
+      [#row.at("startup_display_s")],
+      [#row.at("request_display_s")],
       [#str(row.at("candidate_count"))],
       [#str(row.at("exact_scored"))],
       [#str(calc.round(row.at("best_score") * 1000000) / 1000000)],
@@ -79,7 +81,7 @@
     yaxis: (ticks: ((1, [1 worker exact]), (2, [1 worker screened]), (3, [4 workers exact]), (4, [4 workers screened])), subticks: none),
     width: 250mm,
     height: 55mm,
-    lq.hbar(small.map(row => row.at("wall_s")), (1, 2, 3, 4), label: [Mode]),
+    lq.hbar(small.map(row => row.at("wall_s")), (1, 2, 3, 4)),
   )
 ]
 #v(1mm)
@@ -105,5 +107,5 @@
 #line(length: 100%, stroke: 0.6pt + black)
 #v(1mm)
 #text(size: 7pt)[
-  Both workloads use diagnostic samples from a frozen 1,457,546-cell proposal cache with the same exact objective. Timings were measured on a busy shared host and are not controlled latency or release-throughput measurements. The 2,048-candidate workload is an evenly spaced cache sample; the initial 255-candidate workload is cache-order sampled. Sampled best candidates do not establish full-domain correctness or localization accuracy. Source report SHA-256: #data.at("source_report_sha256"). Scaling JSON SHA-256: #data.at("scaling_source_sha256"). Initial profile JSON SHA-256: #data.at("initial_profile_source_sha256"). Authorship J.C. Vaught.
+  Both workloads use diagnostic samples from a frozen 1,457,546-cell proposal cache with the same exact objective. Timings were measured on a busy shared host and are not controlled latency or release-throughput measurements. The 2,048-candidate workload is an evenly spaced cache sample; the initial 255-candidate workload is cache-order sampled. Sampled best candidates do not establish full-domain correctness or localization accuracy. Source report revision #data.at("source_report_revision") SHA-256: #data.at("source_report_sha256"). Scaling JSON SHA-256: #data.at("scaling_source_sha256"). Initial profile JSON SHA-256: #data.at("initial_profile_source_sha256"). Authorship J.C. Vaught.
 ]

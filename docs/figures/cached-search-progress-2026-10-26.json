@@ -3,7 +3,7 @@
   "author": "J.C. Vaught",
   "captured_utc": "2026-10-26T10:40:47.550774+00:00",
   "source_report": "reports/cached-candidate-scoring-profile.md",
-  "source_report_sha256": "7f8e6175460fec4987c1bb9616c14840969bb964a8292995b5b283cd8b37b91b",
+  "source_report_sha256": "a3a5d3529e45ca331efdf1336f66ecd490e7c460d73f2abff3eebabd0cd42a5a",
   "scaling_source": "reports/experiments/cached-candidate-scaling/scaling-2048-results.json",
   "scaling_source_sha256": "dfafd0829e5479489b600ce0f857b8683a9a6a4f5d6403460d72a34ecbc5a58e",
   "initial_profile_source": "reports/experiments/cached-candidate-scoring/profile-results.json",
@@ -24,7 +24,9 @@
       "tie_ids": [
         "cell:-35:2251"
       ],
-      "status": "completed"
+      "status": "completed",
+      "startup_display_s": "6.613",
+      "request_display_s": "51.227"
     },
     {
       "workers": 4,
@@ -38,7 +40,9 @@
       "tie_ids": [
         "cell:-35:2251"
       ],
-      "status": "completed"
+      "status": "completed",
+      "startup_display_s": "16.945",
+      "request_display_s": "14.530"
     },
     {
       "workers": 8,
@@ -52,7 +56,9 @@
       "tie_ids": [
         "cell:-35:2251"
       ],
-      "status": "completed"
+      "status": "completed",
+      "startup_display_s": "28.157",
+      "request_display_s": "8.136"
     }
   ],
   "startup_failure": {
@@ -129,5 +135,6 @@
   "initial_tie_ids": [
     "cell:74:2578"
   ],
-  "scope": "Shared-host diagnostic profile. No full-domain localization success or full-coast accuracy result."
+  "scope": "Shared-host diagnostic profile. No full-domain localization success or full-coast accuracy result.",
+  "source_report_revision": "03ee598"
 }
