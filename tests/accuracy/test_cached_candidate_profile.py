@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parents[2]))
 from tools.profile_cached_candidate_scoring import (
     best_score_and_ties,
     compare_best,
+    evenly_spaced_indices,
     fixed_sample_indices,
 )
 
@@ -25,6 +26,14 @@ def test_fixed_sample_indices_is_cache_ordered_and_stable() -> None:
 def test_fixed_sample_indices_deduplicates_small_domain() -> None:
     assert fixed_sample_indices(4, prefix=4, evenly_spaced=4) == (0, 1, 2, 3)
     assert fixed_sample_indices(5, prefix=0, evenly_spaced=3) == (0, 2, 4)
+
+
+def test_evenly_spaced_indices_has_declared_endpoints_and_count() -> None:
+    indices = evenly_spaced_indices(1_457_546, 2_048)
+    assert len(indices) == 2_048
+    assert indices == tuple(dict.fromkeys(indices))
+    assert indices[0] == 0
+    assert indices[-1] == 1_457_545
 
 
 def test_fixed_sample_indices_rejects_invalid_total() -> None:

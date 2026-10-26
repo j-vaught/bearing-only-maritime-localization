@@ -6,6 +6,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import os
 import subprocess
 import time
 from collections.abc import Generator, Sequence
@@ -47,6 +48,16 @@ EXPECTED_INPUT_SHA256 = {
 }
 ABS_TOL = 1e-8
 REL_TOL = 1e-10
+THREAD_ENV_KEYS = (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+)
+
+
+def execution_settings() -> dict[str, Any]:
+    return {key: os.environ.get(key, "<unset>") for key in THREAD_ENV_KEYS}
 
 
 def sha256_file(path: Path) -> str:
@@ -371,9 +382,24 @@ def run_exact_scaling_case(
             "audits": [_audit_json(audit) for audit in audits],
             "chunks": chunks,
         }
-    except ParallelScreenedError as exc:
+    except (ParallelScreenedError, TimeoutError) as exc:
         timings = pool.last_timings if pool is not None else None
-        disposition = exc.disposition
+        disposition = getattr(exc, "disposition", None)
+        disposition_fields = (
+            "consumed_candidate_ids",
+            "submitted_candidate_ids",
+            "committed_candidate_ids",
+            "pending_candidate_ids",
+            "failed_candidate_ids",
+            "outstanding_candidate_ids",
+            "not_dispatched_candidate_ids",
+        )
+        disposition_json = {
+            field.removesuffix("_candidate_ids") + "_count": (
+                len(getattr(disposition, field, ())) if disposition is not None else 0
+            )
+            for field in disposition_fields
+        }
         return {
             "status": "timeout_or_failure",
             "workers": workers,
@@ -381,15 +407,7 @@ def run_exact_scaling_case(
             "candidate_count": len(audits),
             "elapsed_s": time.perf_counter() - started,
             "error": f"{type(exc).__name__}: {exc}",
-            "disposition": {
-                "consumed_count": len(disposition.consumed_candidate_ids),
-                "submitted_count": len(disposition.submitted_candidate_ids),
-                "committed_count": len(disposition.committed_candidate_ids),
-                "pending_count": len(disposition.pending_candidate_ids),
-                "failed_count": len(disposition.failed_candidate_ids),
-                "outstanding_count": len(disposition.outstanding_candidate_ids),
-                "not_dispatched_count": len(disposition.not_dispatched_candidate_ids),
-            },
+            "disposition": disposition_json,
             "pool_startup_s": timings.pool_startup_s if timings else None,
             "scorer_setup_s": timings.scorer_setup_s if timings else None,
             "ipc_s": timings.ipc_s if timings else None,
@@ -627,6 +645,7 @@ def profile_evenly_spaced_scaling(
             "candidate_budget": config.candidate_budget,
         },
         "scoring_source_sha": scoring_source_sha,
+        "execution_settings": execution_settings(),
         "harness_sha": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=Path.cwd(), text=True
         ).strip(),
