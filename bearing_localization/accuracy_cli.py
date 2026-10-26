@@ -802,6 +802,7 @@ def _search_dispatch(
         candidate_pool_failure: dict[str, int | str] | None = None
         candidate_inputs: list[CandidatePositionInput] = []
         evaluated_candidate_ids: list[str] = []
+        planned_candidate_ids: list[str] = []
         pool_startup_wall_s = 0.0
         if seeded:
             selected_seed_indexes = proposal_order[: config.seed_cell_budget]
@@ -839,28 +840,43 @@ def _search_dispatch(
                         range_tolerance_m=1e-9,
                     )
             assert seed_result is not None
-            for index in proposal_order:
-                candidate_inputs.append(
-                    CandidatePositionInput(
-                        f"cell:{proposals.proposals[index].candidate_id}",
-                        ordered_positions[len(candidate_inputs)],
-                    )
-                )
             to_map = Transformer.from_crs("EPSG:4326", scorer.vector_map.crs, always_xy=True)
+            seeds_by_cell: dict[str, list[Any]] = {}
             for witness_seed in seed_result.seeds:
-                longitude, latitude = frame.to_geographic(witness_seed.east_m, witness_seed.north_m)
-                east_m, north_m = to_map.transform(longitude, latitude)
-                candidate_inputs.append(
-                    CandidatePositionInput(
-                        f"seed:{witness_seed.seed_id}", (float(east_m), float(north_m))
+                seeds_by_cell.setdefault(witness_seed.cell_candidate_id, []).append(witness_seed)
+            ordered_seed_candidates: list[CandidatePositionInput] = []
+            max_seeds_per_cell = max(
+                (len(cell_seeds) for cell_seeds in seeds_by_cell.values()), default=0
+            )
+            for seed_round in range(max_seeds_per_cell):
+                for proposal in selected_seed_proposals:
+                    cell_seeds = seeds_by_cell.get(proposal.candidate_id, ())
+                    if seed_round >= len(cell_seeds):
+                        continue
+                    witness_seed = cell_seeds[seed_round]
+                    longitude, latitude = frame.to_geographic(
+                        witness_seed.east_m, witness_seed.north_m
                     )
+                    east_m, north_m = to_map.transform(longitude, latitude)
+                    ordered_seed_candidates.append(
+                        CandidatePositionInput(
+                            f"seed:{witness_seed.seed_id}", (float(east_m), float(north_m))
+                        )
+                    )
+            ordered_cell_candidates = [
+                CandidatePositionInput(
+                    f"cell:{proposals.proposals[index].candidate_id}",
+                    ordered_positions[position_index],
                 )
+                for position_index, index in enumerate(proposal_order)
+            ]
+            candidate_inputs = ordered_seed_candidates + ordered_cell_candidates
             seen_positions: set[tuple[float, float]] = set()
             for candidate in candidate_inputs:
                 key = (round(candidate.position_xy[0], 9), round(candidate.position_xy[1], 9))
                 if key not in seen_positions:
                     seen_positions.add(key)
-                    evaluated_candidate_ids.append(str(candidate.candidate_id))
+                    planned_candidate_ids.append(str(candidate.candidate_id))
             if config.candidate_workers == 1:
                 startup_stage = (
                     telemetry.stage("candidate_pool_startup")
@@ -957,7 +973,7 @@ def _search_dispatch(
             outcome_counts = dict(scoring_run.outcome_counts)
             scoring_status = scoring_run.localization.search_status
             scoring_incomplete = scoring_status == "budget_exhausted"
-            evaluated_candidate_ids = evaluated_candidate_ids[:candidate_count]
+            evaluated_candidate_ids = planned_candidate_ids[:candidate_count]
             result = scoring_run.localization
         else:
             candidate_count = (
@@ -1038,10 +1054,28 @@ def _search_dispatch(
                 budget_used=exhausted_used,
             )
 
-        evaluated_cell_count = (
-            sum(candidate_id.startswith("cell:") for candidate_id in evaluated_candidate_ids)
+        scored_seed_ids = (
+            [item for item in evaluated_candidate_ids if item.startswith("seed:")] if seeded else []
+        )
+        scored_cell_ids = (
+            [item for item in evaluated_candidate_ids if item.startswith("cell:")] if seeded else []
+        )
+        seed_cell_by_id = (
+            {
+                f"seed:{seed_item.seed_id}": seed_item.cell_candidate_id
+                for seed_item in seed_result.seeds
+            }
             if seeded
-            else candidate_count
+            else {}
+        )
+        scored_seed_cells = {
+            seed_cell_by_id[item] for item in scored_seed_ids if item in seed_cell_by_id
+        }
+        evaluated_cell_count = len(scored_cell_ids) if seeded else candidate_count
+        remaining_unique_candidates = (
+            max(0, len(planned_candidate_ids) - candidate_count)
+            if seeded and scoring_run is not None
+            else None
         )
         evaluated_indexes = proposal_order[: min(evaluated_cell_count, len(proposal_order))]
         evaluated_proposals = [proposals.proposals[index] for index in evaluated_indexes]
@@ -1126,6 +1160,15 @@ def _search_dispatch(
                 ),
                 "proposal_count": len(proposals.proposals),
                 "evaluated_proposal_count": evaluated_cell_count,
+                "scored_seed_candidate_count": len(scored_seed_ids),
+                "scored_cell_center_candidate_count": len(scored_cell_ids),
+                "scored_seed_cell_count": len(scored_seed_cells),
+                "scored_seed_cell_ids": sorted(scored_seed_cells),
+                "candidate_stream_policy": (
+                    "seed_round_robin_by_selected_ranked_cell_then_all_ranked_cell_centers"
+                    if seeded
+                    else "all_ranked_cell_centers"
+                ),
             },
             "seed_generation": None
             if not seeded
@@ -1175,6 +1218,11 @@ def _search_dispatch(
                 "candidate_count": scoring_candidate_count,
                 "outcome_counts": scoring_outcomes,
                 "evaluated_candidate_ids": evaluated_candidate_ids if seeded else [],
+                "scored_seed_candidate_count": len(scored_seed_ids),
+                "scored_cell_center_candidate_count": len(scored_cell_ids),
+                "scored_seed_cell_count": len(scored_seed_cells),
+                "scored_seed_cell_ids": sorted(scored_seed_cells),
+                "remaining_unique_candidates": remaining_unique_candidates,
                 "evaluated_proposal_witnesses": evaluated_witness_records,
             },
             "result_elapsed_s_scope": (
