@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools.accuracy_eligibility import (
     EligibilityError,
+    _support_manifest,
     freeze_eligibility_manifest,
     verify_eligibility_manifest,
 )
@@ -390,3 +392,89 @@ def test_invalid_extension_history_is_rejected(
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     with pytest.raises(EligibilityError):
         freeze_eligibility_manifest(plan, support, tmp_path / "eligibility.json", "development")
+
+
+def test_optional_supported_flag_preserves_eligibility_record(
+    complete_support: Path, tmp_path: Path
+) -> None:
+    with_flag = tmp_path / "with-flag"
+    without_flag = tmp_path / "without-flag"
+    shutil.copytree(complete_support, with_flag)
+    shutil.copytree(complete_support, without_flag)
+    row = _split_rows("nominal")[0]
+    unflagged_path = without_flag / _support_rel(row)
+    document = json.loads(unflagged_path.read_text(encoding="utf-8"))
+    document.pop("supported")
+    unflagged_path.write_text(json.dumps(document) + "\n", encoding="utf-8")
+
+    flagged = freeze_eligibility_manifest(
+        PLAN_DIR, with_flag, tmp_path / "flagged.json", "development"
+    )
+    unflagged = freeze_eligibility_manifest(
+        PLAN_DIR, without_flag, tmp_path / "unflagged.json", "development"
+    )
+    flagged_trial = next(trial for trial in flagged.trials if trial.trial_id == row["trial_id"])
+    unflagged_trial = next(trial for trial in unflagged.trials if trial.trial_id == row["trial_id"])
+    assert replace(unflagged_trial, support_sha256=flagged_trial.support_sha256) == flagged_trial
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "correct_true",
+        "correct_false",
+        "correct_false_threshold",
+        "mismatch_true",
+        "mismatch_false",
+        "nonboolean_flag",
+        "boolean_count",
+        "negative_count",
+        "string_count",
+        "nonboolean_water",
+        "unknown_field",
+    ],
+)
+def test_support_manifest_optional_flag_and_strict_fields(mutation: str) -> None:
+    payload = {
+        "valid_reference_water": True,
+        "detected_physical_catalog_matched_groups": 3,
+        "port_id": "port-001",
+        "placement_id": "placement-001",
+    }
+    expected = True
+    if mutation == "correct_true":
+        payload["supported"] = True
+    elif mutation == "correct_false":
+        payload["valid_reference_water"] = False
+        payload["supported"] = False
+        expected = False
+    elif mutation == "correct_false_threshold":
+        payload["detected_physical_catalog_matched_groups"] = 2
+        payload["supported"] = False
+        expected = False
+    elif mutation == "mismatch_true":
+        payload["supported"] = False
+    elif mutation == "mismatch_false":
+        payload["detected_physical_catalog_matched_groups"] = 2
+        payload["supported"] = True
+    elif mutation == "nonboolean_flag":
+        payload["supported"] = 1
+    elif mutation == "boolean_count":
+        payload["detected_physical_catalog_matched_groups"] = True
+    elif mutation == "negative_count":
+        payload["detected_physical_catalog_matched_groups"] = -1
+    elif mutation == "string_count":
+        payload["detected_physical_catalog_matched_groups"] = "3"
+    elif mutation == "nonboolean_water":
+        payload["valid_reference_water"] = 1
+    elif mutation == "unknown_field":
+        payload["unexpected"] = "rejected"
+
+    if mutation.startswith("correct_"):
+        assert _support_manifest(payload) == (
+            expected,
+            payload["detected_physical_catalog_matched_groups"],
+        )
+    else:
+        with pytest.raises(EligibilityError):
+            _support_manifest(payload)

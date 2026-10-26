@@ -140,16 +140,31 @@ def _support_relative_path(row: Mapping[str, str]) -> Path:
     )
 
 
-def _support_count(support: Mapping[str, Any]) -> int:
-    for field in (
-        "detected_physical_catalog_matched_groups",
-        "detected_physical_group_count",
-        "support_count",
-    ):
+def _support_manifest(support: Mapping[str, Any]) -> tuple[bool, int]:
+    """Validate the evaluator's support schema and return its derived decision."""
+    required = {"valid_reference_water", "detected_physical_catalog_matched_groups"}
+    optional = {"port_id", "placement_id", "supported"}
+    keys = set(support)
+    if not required.issubset(keys) or not keys.issubset(required | optional):
+        raise EligibilityError("Support JSON does not match the SupportManifest schema.")
+    valid_water = support["valid_reference_water"]
+    count = support["detected_physical_catalog_matched_groups"]
+    if type(valid_water) is not bool:
+        raise EligibilityError("Support valid_reference_water must be bool.")
+    if type(count) is not int or count < 0:
+        raise EligibilityError("Support matched-group count must be a nonnegative integer.")
+    for field in ("port_id", "placement_id"):
         value = support.get(field)
-        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
-            return value
-    raise EligibilityError("Support JSON lacks a nonnegative physical matched-group count.")
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise EligibilityError(f"Support {field} must be a nonempty string or null.")
+    derived = valid_water and count >= 3
+    if "supported" in support:
+        value = support["supported"]
+        if type(value) is not bool:
+            raise EligibilityError("Support supported must be bool when present.")
+        if value is not derived:
+            raise EligibilityError("Support supported disagrees with its source fields.")
+    return derived, count
 
 
 def _stable_seed(*parts: object) -> int:
@@ -283,7 +298,8 @@ def _validate_extension_history(
                         f"{evidence_path}."
                     )
                 evidence = _read_json(evidence_path)
-                if evidence.get("supported") is True:
+                evidence_supported, _ = _support_manifest(evidence)
+                if evidence_supported:
                     gate = (int(row["range_m"]), row["report_types"])
                     units.setdefault(gate, set()).add(
                         (row["port_id"], row["placement_id"], row["realization"])
@@ -597,19 +613,11 @@ def _build_snapshot(
                 )
             support_hash = _sha256(support_path)
             support_doc = _read_json(support_path)
-            if support_doc.get("supported") not in (True, False):
-                raise EligibilityError(f"Support status is not boolean for {row['trial_id']}.")
-            support_count = _support_count(support_doc)
-            supported = support_doc["supported"]
-            if support_doc.get("port_id") != row["port_id"]:
+            supported, support_count = _support_manifest(support_doc)
+            if support_doc.get("port_id") not in (None, row["port_id"]):
                 raise EligibilityError(f"Support port mismatch for {row['trial_id']}.")
-            if support_doc.get("placement_id") != row["placement_id"]:
+            if support_doc.get("placement_id") not in (None, row["placement_id"]):
                 raise EligibilityError(f"Support placement mismatch for {row['trial_id']}.")
-            expected_supported = (
-                support_doc.get("valid_reference_water") is True and support_count >= 3
-            )
-            if supported is not expected_supported:
-                raise EligibilityError(f"Support decision/count mismatch for {row['trial_id']}.")
             status = (
                 ("supported" if supported else "unsupported")
                 if nominal
