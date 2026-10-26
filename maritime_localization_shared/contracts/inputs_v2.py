@@ -14,6 +14,7 @@ from math import isfinite
 from typing import Any
 
 SCHEMA_VERSION = 2
+_JSON_ENCODER = json.JSONEncoder(allow_nan=False, sort_keys=True)
 
 
 def _nonempty(value: str, name: str) -> None:
@@ -38,7 +39,7 @@ def _finite(value: float, name: str) -> None:
 
 def _json_value(value: Any, name: str) -> None:
     try:
-        json.dumps(value, allow_nan=False, sort_keys=True)
+        _JSON_ENCODER.encode(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must contain finite JSON-compatible values.") from exc
 
@@ -199,11 +200,13 @@ class CatalogRecordV2:
         if (self.reference_latitude_deg is None) != (self.reference_longitude_deg is None):
             raise ValueError("Reference latitude and longitude must be supplied together.")
         for name, pairs in (("metadata", self.metadata), ("provenance", self.provenance)):
-            if not isinstance(pairs, tuple) or any(
-                not isinstance(pair, tuple) or len(pair) != 2 for pair in pairs
-            ):
+            if not isinstance(pairs, tuple):
                 raise TypeError(f"{name} must be a tuple of (key, value) pairs.")
-            keys = [pair[0] for pair in pairs]
+            keys = []
+            for pair in pairs:
+                if not isinstance(pair, tuple) or len(pair) != 2:
+                    raise TypeError(f"{name} must be a tuple of (key, value) pairs.")
+                keys.append(pair[0])
             if any(not isinstance(key, str) or not key for key in keys):
                 raise ValueError(f"{name} keys must be nonempty strings.")
             if len(keys) != len(set(keys)):
@@ -228,11 +231,13 @@ class CatalogV2:
         _timestamp(self.timestamp_utc, "timestamp_utc")
         for name in ("source", "catalog_version", "catalog_id"):
             _nonempty(getattr(self, name), name)
-        if not isinstance(self.records, tuple) or any(
-            not isinstance(item, CatalogRecordV2) for item in self.records
-        ):
+        if not isinstance(self.records, tuple):
             raise TypeError("records must be a tuple of CatalogRecordV2 records.")
-        keys = [record.key for record in self.records]
+        keys = []
+        for record in self.records:
+            if not isinstance(record, CatalogRecordV2):
+                raise TypeError("records must be a tuple of CatalogRecordV2 records.")
+            keys.append(record.key)
         if len(keys) != len(set(keys)):
             raise ValueError("Catalog record keys must be unique.")
 
