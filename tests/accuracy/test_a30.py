@@ -192,3 +192,23 @@ def test_early_iterator_close_drains_workers_and_releases_bounded_queues() -> No
     assert next(rows).candidate_id == _candidate_rows(1)[0].candidate_id
     rows.close()
     assert consumed == 12
+
+
+@pytest.mark.parametrize("corruption", ["lost", "duplicate"])
+def test_worker_rejects_lost_or_duplicate_output(monkeypatch, corruption: str) -> None:
+    runtime = importlib.import_module("bearing_localization.search.gpu.runtime")
+    original = runtime.iter_candidate_likelihood_costs_cupy
+
+    def corrupt(measurements, candidates, config, **kwargs):
+        values = tuple(original(measurements, candidates, config, **kwargs))
+        if corruption == "lost":
+            return iter(values[:-1])
+        return iter(values + values[:1])
+
+    monkeypatch.setattr(runtime, "iter_candidate_likelihood_costs_cupy", corrupt)
+    with pytest.raises(RuntimeError, match="no complete result set"):
+        list(
+            iter_candidate_likelihood_costs_multi_gpu(
+                [0.2], _candidate_rows(1), SearchConfig(), device_ids=(0,), batch_size=1
+            )
+        )
