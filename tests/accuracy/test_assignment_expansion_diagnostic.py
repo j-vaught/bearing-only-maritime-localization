@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import ast
 import hashlib
 import json
@@ -8,8 +9,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from bearing_localization.search.assignment_expansion import ExpansionConfig
 
+from bearing_localization.search.assignment_expansion import ExpansionConfig
 from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
 from tools.run_assignment_expansion_diagnostic import (
     FLOOR_BYTES,
@@ -122,7 +123,7 @@ def test_timeout_propagation_is_explicit() -> None:
 def test_partial_durable_output_has_explicit_noresume(tmp_path: Path) -> None:
     output = tmp_path / "output"
     output.mkdir()
-    args = SimpleNamespace(timeout_s=1.0, output=output, lock=canonical_lock_path())
+    args = argparse.Namespace(timeout_s=1.0, output=output, lock=canonical_lock_path())
     with pytest.raises(FileExistsError, match="resume"):
         run(args)
 
