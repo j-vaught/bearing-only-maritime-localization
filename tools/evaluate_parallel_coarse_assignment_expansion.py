@@ -29,7 +29,9 @@ def _row_mapping(value: Any) -> dict[str, Any]:
     require(is_dataclass(value), "source mode row is not a mapping or dataclass")
     converted = asdict(value)
     require(type(converted) is dict, "source mode row dataclass did not serialize to object")
-    return converted
+    normalized = json.loads(parallel_eval.canonical_bytes(converted))
+    require(type(normalized) is dict, "normalized source mode row is not an object")
+    return cast(dict[str, Any], normalized)
 
 
 def verify_coarse_selection(
