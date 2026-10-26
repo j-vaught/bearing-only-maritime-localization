@@ -1,0 +1,44 @@
+{
+  "snapshot_date": "2026-10-25",
+  "snapshot_time": "Not recorded in the progress update",
+  "figure_compiled_at": "2026-10-25 23:50 EDT (2026-10-26 03:50 UTC)",
+  "development_preparation": {
+    "definition": "physical-preparation rows completed, not estimator search results",
+    "rows_complete": 2600,
+    "rows_planned": 6630,
+    "ports_processed": 6,
+    "ports_total": 24
+  },
+  "nominal_support": {
+    "definition": "supported placement-realizations per label mode, not estimator outcomes",
+    "range_km": [1, 5, 10],
+    "placement_realizations_per_label_mode": [101, 196, 203]
+  },
+  "catalog": {
+    "record_count": 66668,
+    "ais_rows": 2268,
+    "chart_rows": 64400,
+    "chart_linkage_resolved": 19820,
+    "chart_identity_limited_geometry_retained": 44580
+  },
+  "a14_candidate_preparation_diagnostic": {
+    "classification": "CPU diagnostic, not a clean benchmark or accuracy run",
+    "source_summary": ".agent-work/outputs/a14-profile/summary.json",
+    "root_commit": "cb0493bfa4b90101048249948fad94e87ad2c7ca",
+    "catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+    "measurement_count": 4,
+    "map_coverage_status": "known",
+    "candidate_status": ["scored", "scored", "scored"],
+    "candidate_elapsed_ms": [489.782069, 467.314128, 488.047959],
+    "candidate_elapsed_ms_median": 488.047959,
+    "isolated_static_preparation_median_ms": 478.8,
+    "static_preparation_fraction_of_candidate_median_approx": 0.981,
+    "interpretation": "Directional overlap from isolated loops, not a controlled benchmark or a precisely measured subtractive stage timing."
+  },
+  "status": {
+    "accuracy_results": "not measured in this snapshot",
+    "held_out_results": "not measured in this snapshot",
+    "current_gpu_speedup": "not measured in this snapshot",
+    "field_validation": "pending measured bearings and independent truth"
+  }
+}
