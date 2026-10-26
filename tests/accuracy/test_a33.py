@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+
+import pytest
+
+from bearing_localization.search.config import SearchConfig
+from bearing_localization.search.config_serialization import (
+    loads_search_config,
+    search_config_from_dict,
+    search_config_to_dict,
+    write_search_config,
+)
+from maritime_localization_shared.contracts import (
+    EvaluationTruth,
+    Hypothesis,
+    LocalizationResult,
+    MeasurementSet,
+    Observation,
+    PositionEstimate,
+    TrueObject,
+)
+from maritime_localization_shared.serialization import (
+    contract_from_dict,
+    contract_to_dict,
+    loads_contract,
+    read_contract,
+)
+
+
+def test_completed_result_can_use_final_budget_unit_but_exhaustion_cannot_be_accepted() -> None:
+    hypothesis = Hypothesis(1.0, 2.0, 0.0)
+    completed = LocalizationResult(
+        (hypothesis,),
+        0.1,
+        "accepted",
+        "completed",
+        accepted_index=0,
+        budget_limit=10,
+        budget_used=10,
+    )
+    assert completed.accepted_index == 0
+
+    with pytest.raises(ValueError, match="unless the search completed"):
+        LocalizationResult(
+            (hypothesis,),
+            0.1,
+            "accepted",
+            "budget_exhausted",
+            accepted_index=0,
+            budget_limit=10,
+            budget_used=10,
+        )
+
+
+def test_legacy_v1_json_without_optional_tags_remains_readable() -> None:
+    old_document = {
+        "east_m": 10.0,
+        "north_m": 20.0,
+        "score": 1.0,
+        "elapsed_s": 0.01,
+        "algorithm": "historical-grid",
+        "matched_pairs": [[0, "legacy-feature"]],
+    }
+    estimate = contract_from_dict(PositionEstimate, old_document)
+    assert estimate == PositionEstimate(
+        10.0, 20.0, 1.0, 0.01, "historical-grid", ((0, "legacy-feature"),)
+    )
+
+    measurement = MeasurementSet(
+        observations=(Observation(15.0, 0.5, "vessel", 0.1),),
+        trial_id="old-trial",
+        timestamp_utc="2026-10-25T12:00:00Z",
+    )
+    assert loads_contract(json.dumps(contract_to_dict(measurement)), MeasurementSet) == measurement
+
+
+def test_strict_readers_reject_unknown_nested_fields_and_nonfinite_json(tmp_path) -> None:
+    truth = EvaluationTruth(1.0, 2.0, 3.0, (TrueObject("t", "vessel", 4.0, 5.0),))
+    payload = contract_to_dict(truth)
+    payload["objects"][0]["future_field"] = "x"
+    with pytest.raises(ValueError, match="Unexpected TrueObject fields"):
+        contract_from_dict(EvaluationTruth, payload)
+
+    bad = tmp_path / "nan.json"
+    bad.write_text('{"east_m":NaN}')
+    with pytest.raises(ValueError, match="Non-finite JSON"):
+        read_contract(bad, PositionEstimate)
+
+
+def test_search_config_rejects_untagged_or_unknown_documents() -> None:
+    config = SearchConfig(bounds_xy=(0.0, 10.0, 0.0, 10.0))
+    tagged = search_config_to_dict(config)
+    with pytest.raises(ValueError, match="contract_type"):
+        search_config_from_dict(
+            {key: value for key, value in tagged.items() if key != "contract_type"}
+        )
+    tagged["future_field"] = 1
+    with pytest.raises(ValueError, match="Unexpected SearchConfig"):
+        search_config_from_dict(tagged)
+    with pytest.raises(ValueError, match="Non-finite JSON"):
+        loads_search_config('{"contract_type":"SearchConfig","candidate_budget":NaN}')
+
+
+def test_malformed_cli_stages_fail_cleanly_and_gpu_is_explicitly_unsupported(tmp_path) -> None:
+    fixture = tmp_path / "bad-scene.json"
+    fixture.write_text("{}")
+    measurements = tmp_path / "measurements.json"
+    truth = tmp_path / "truth.json"
+    diagnostics = tmp_path / "diagnostics.json"
+    malformed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bearing_localization.simulator.cli",
+            "--schema-version",
+            "2",
+            "--fixture",
+            str(fixture),
+            "--projected-crs",
+            "EPSG:32618",
+            "--measurements-out",
+            str(measurements),
+            "--truth-out",
+            str(truth),
+            "--diagnostics-out",
+            str(diagnostics),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert malformed.returncode == 2
+    assert "KeyError" not in malformed.stderr
+    assert not measurements.exists()
+    assert not truth.exists()
+    assert not diagnostics.exists()
+
+    config_path = tmp_path / "gpu-config.json"
+    write_search_config(
+        config_path,
+        SearchConfig(backend="gpu", bounds_xy=(0.0, 10.0, 0.0, 10.0)),
+    )
+    result_path = tmp_path / "gpu-result.json"
+    unsupported = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bearing_localization.search_cli",
+            "--schema-version",
+            "2",
+            "--measurements",
+            str(tmp_path / "missing-measurements.json"),
+            "--catalog",
+            str(tmp_path / "missing-catalog.json"),
+            "--map",
+            str(tmp_path / "missing-map.json"),
+            "--config",
+            str(config_path),
+            "--projected-crs",
+            "EPSG:32618",
+            "--output",
+            str(result_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert unsupported.returncode == 2
+    assert "unsupported by this CLI integration" in unsupported.stderr
+    assert not result_path.exists()
+
+
+def test_missing_required_contract_fields_fail_as_schema_errors() -> None:
+    with pytest.raises(ValueError, match="Missing PositionEstimate fields"):
+        contract_from_dict(PositionEstimate, {"east_m": 1.0, "north_m": 2.0})

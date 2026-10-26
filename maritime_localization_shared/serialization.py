@@ -8,7 +8,7 @@ other executable serialization format is used.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, fields
+from dataclasses import MISSING, asdict, fields
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
@@ -85,10 +85,19 @@ def contract_to_dict(value: object) -> dict[str, Any]:
 
 
 def _strict_fields(model: type, payload: dict[str, Any]) -> None:
-    accepted = {field.name for field in fields(cast(Any, model))} | {"contract_type"}
+    model_fields = fields(cast(Any, model))
+    accepted = {field.name for field in model_fields} | {"contract_type"}
     unexpected = set(payload) - accepted
     if unexpected:
         raise ValueError(f"Unexpected {model.__name__} fields: {sorted(unexpected)}.")
+    required = {
+        field.name
+        for field in model_fields
+        if field.default is MISSING and field.default_factory is MISSING
+    }
+    missing = required - set(payload)
+    if missing:
+        raise ValueError(f"Missing {model.__name__} fields: {sorted(missing)}.")
 
 
 def _nested(model: type[Contract], payload: Any) -> Contract:

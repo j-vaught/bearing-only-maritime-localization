@@ -163,8 +163,8 @@ class LocalizationResult:
                 raise ValueError("An accepted result must select a hypothesis.")
             if self.search_status != "completed":
                 raise ValueError("A result cannot be accepted unless the search completed.")
-            if self.budget_limit is not None and self.budget_used == self.budget_limit:
-                raise ValueError("A result cannot be accepted after exhausting its budget.")
+            # Natural completion can consume the final available budget unit.
+            # Only budget_exhausted represents an interrupted search.
         elif self.accepted_index is not None:
             raise ValueError("Only an accepted result may set accepted_index.")
         if self.report_count is not None and (
