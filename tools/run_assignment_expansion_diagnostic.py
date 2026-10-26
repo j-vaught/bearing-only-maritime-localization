@@ -317,6 +317,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             with events_path.open("a") as events_stream:
 
                 def record(mode_index: int, phase: str, event: dict[str, Any]) -> None:
+                    if time.perf_counter() - started >= args.timeout_s:
+                        raise TimeoutError("whole diagnostic deadline exceeded")
                     check_resources(args.output)
                     _append_event(events_stream, state, mode_index, phase, event)
                     check_resources(args.output)
