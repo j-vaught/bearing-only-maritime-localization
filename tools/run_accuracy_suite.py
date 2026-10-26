@@ -226,7 +226,6 @@ def _sample_placements(
     anchor_lat = float(port["anchor_latitude_deg"])
     rng = np.random.default_rng(stable_seed("20261025", port_split, port["port_id"], "placements"))
     placements: list[dict[str, object]] = []
-    projected: list[tuple[float, float]] = []
     attempts = 0
     while len(placements) < count and attempts < count * 20_000:
         attempts += 1
@@ -235,8 +234,6 @@ def _sample_placements(
         lon, lat, _ = _GEOD.fwd(anchor_lon, anchor_lat, bearing, distance)
         x, y = forward.transform(lon, lat)
         if vector_map.point_water_status((x, y)) != "water":
-            continue
-        if any(math.hypot(x - old_x, y - old_y) < 200.0 for old_x, old_y in projected):
             continue
         placement_id = f"placement-{len(placements) + 1:03d}"
         placements.append(
@@ -249,7 +246,6 @@ def _sample_placements(
                 "reference_map_sha256": sha256_file(map_path),
             }
         )
-        projected.append((x, y))
     if len(placements) != count:
         raise ValueError(
             f"Only found {len(placements)} reference-water placements within 3 km for "
@@ -441,6 +437,7 @@ def _load_command_config(path: Path) -> dict[str, Any]:
         "search_config",
         "search_domain_scope",
         "search_map_scope",
+        "projected_crs",
     }
     missing = required - set(config)
     if missing:
@@ -464,10 +461,23 @@ def _load_command_config(path: Path) -> dict[str, Any]:
         "{search_catalog_path}",
         "{search_map_path}",
         "{search_config_path}",
+        "{search_scope_manifest_path}",
         "{estimate_path}",
     )
     if any(not any(token in item for item in search_argv) for token in required_search):
         raise ValueError("search_argv must explicitly use each full-coast estimator input.")
+    if not isinstance(config["projected_crs"], str) or not config["projected_crs"].strip():
+        raise ValueError("projected_crs must be a nonempty string.")
+    for option, expected_value in (
+        ("--projected-crs", str(config["projected_crs"])),
+        ("--scope-manifest", "{search_scope_manifest_path}"),
+    ):
+        try:
+            option_index = search_argv.index(option)
+        except ValueError as exc:
+            raise ValueError(f"search_argv must include {option}.") from exc
+        if option_index + 1 >= len(search_argv) or search_argv[option_index + 1] != expected_value:
+            raise ValueError(f"search_argv must pass {expected_value} after {option}.")
     forbidden = ("{truth_path}", "{diagnostics_path}", "{support_path}", "{difficulty_path}")
     if any(token in item for item in search_argv for token in forbidden):
         raise ValueError("search_argv may not include evaluator-only file placeholders.")
@@ -506,6 +516,7 @@ def prepare_inputs(
     table_path = plan_path.parent / str(plan["trial_table"])
     table = _read_table(table_path)
     port_placements: dict[str, list[dict[str, Any]]] = {}
+    placement_failures: dict[str, str] = {}
     maps: dict[str, tuple[Path, VectorMap]] = {}
     sensor_fields = {
         "detection_probability",
@@ -527,17 +538,42 @@ def prepare_inputs(
     def prepare_row(row: dict[str, Any]) -> None:
         trial_id = row["trial_id"]
         port_id = row["port_id"]
+        if port_id in placement_failures:
+            raise RuntimeError(placement_failures[port_id])
         if port_id not in maps:
             port_number = int(port_id.rsplit("-", 1)[1])
             map_path = map_cache / f"noaa-enc-port-B{port_number}-15km.map-v2.json"
-            vector_map, _, _ = _water_sampler(ports[port_id], map_path)
+            try:
+                vector_map, _, _ = _water_sampler(ports[port_id], map_path)
+                port_placements[port_id] = _sample_placements(
+                    ports[port_id],
+                    map_path,
+                    count=placements_per_port,
+                    port_split=split,
+                )
+            except Exception as exc:
+                sampling_path = input_root / split / "placement-sampling-attempts.csv"
+                sampling_rows = _read_table(sampling_path) if sampling_path.exists() else []
+                sampling_rows.append(
+                    {
+                        "attempt_id": f"{split}/{port_id}#{len(sampling_rows) + 1}",
+                        "split": split,
+                        "port_id": port_id,
+                        "requested_placements": placements_per_port,
+                        "placement_radius_m": PLACEMENT_RADIUS_M,
+                        "reference_map": str(map_path),
+                        "reference_map_sha256": (
+                            sha256_file(map_path) if map_path.is_file() else ""
+                        ),
+                        "source_sha": _git_head(),
+                        "status": "failed",
+                        "failure": f"{type(exc).__name__}: {exc}",
+                    }
+                )
+                _write_table(sampling_path, sampling_rows)
+                placement_failures[port_id] = f"{type(exc).__name__}: {exc}"
+                raise
             maps[port_id] = (map_path, vector_map)
-            port_placements[port_id] = _sample_placements(
-                ports[port_id],
-                map_path,
-                count=placements_per_port,
-                port_split=split,
-            )
         placement_number = int(row["placement_id"].rsplit("-", 1)[1])
         placement = port_placements[port_id][placement_number - 1]
         profile_name = row["sensor_condition"]
@@ -700,12 +736,11 @@ def prepare_inputs(
         _write_table(preparation_path, list(preparation_rows.values()))
         _write_table(preparation_attempts_path, preparation_attempts)
     if _allow_extension:
-        added_ids = _extend_nominal_plan_if_needed(
+        while added_ids := _extend_nominal_plan_if_needed(
             plan_path,
             input_root=input_root,
             split=split,
-        )
-        if added_ids:
+        ):
             prepare_inputs(
                 plan_path,
                 catalog_path=catalog_path,
@@ -741,22 +776,24 @@ def _extend_nominal_plan_if_needed(
     input_root: Path,
     split: str,
 ) -> list[str]:
-    """Add placements 26-100 only when pre-search support is below 100."""
+    """Add one deterministic 25-placement batch when split support is below 100."""
     plan: dict[str, Any] = json.loads(plan_path.read_text(encoding="utf-8"))
     table_path = plan_path.parent / str(plan["trial_table"])
     rows = _read_table(table_path)
     existing = {row["trial_id"] for row in rows}
     max_placement: dict[str, int] = {}
-    support_trials: dict[tuple[str, int, str], set[tuple[str, str]]] = {}
-    missing_support: set[str] = set()
+    initial_rows_by_port: dict[str, int] = {}
+    supported_units: dict[tuple[int, str], set[tuple[str, str, str]]] = {}
+    incomplete_initial_support = False
     for row in rows:
         if row["split"] != split or row["sensor_condition"] != "nominal":
             continue
         port_id = row["port_id"]
-        max_placement[port_id] = max(
-            max_placement.get(port_id, 0),
-            int(row["placement_id"].rsplit("-", 1)[1]),
-        )
+        placement_index = int(row["placement_id"].rsplit("-", 1)[1])
+        max_placement[port_id] = max(max_placement.get(port_id, 0), placement_index)
+        if placement_index > INITIAL_PLACEMENTS:
+            continue
+        initial_rows_by_port[port_id] = initial_rows_by_port.get(port_id, 0) + 1
         support_path = (
             input_root
             / split
@@ -769,80 +806,117 @@ def _extend_nominal_plan_if_needed(
             / "support.json"
         )
         if not support_path.is_file():
-            missing_support.add(port_id)
+            incomplete_initial_support = True
             continue
         support = json.loads(support_path.read_text(encoding="utf-8"))
         if support.get("supported") is True:
-            # Count each label gate separately while deduplicating any future
-            # repeated rows for the same physical placement and realization.
-            label_key = (port_id, int(row["range_m"]), row["report_types"])
-            support_trials.setdefault(label_key, set()).add(
-                (row["placement_id"], row["realization"])
+            gate = (int(row["range_m"]), row["report_types"])
+            # The unit within a gate is a physical placement-realization. Paired
+            # report-label rows belong to separate gates and are never pooled.
+            supported_units.setdefault(gate, set()).add(
+                (port_id, row["placement_id"], row["realization"])
             )
+    # Wait for complete nominal support across every port in this split before
+    # deciding whether any additional scenes are needed.
+    expected_initial_rows_per_port = (
+        INITIAL_PLACEMENTS * REALIZATIONS * len(RANGES_M) * len(LABEL_MODES)
+    )
+    if any(count != expected_initial_rows_per_port for count in initial_rows_by_port.values()):
+        incomplete_initial_support = True
+    split_manifest_name = plan.get("split_manifest")
+    if split_manifest_name:
+        split_manifest_path = plan_path.parent / str(split_manifest_name)
+        if split_manifest_path.is_file():
+            split_manifest = json.loads(split_manifest_path.read_text(encoding="utf-8"))
+            expected_ports = set(split_manifest["split_port_ids"][split])
+            if set(initial_rows_by_port) != expected_ports:
+                incomplete_initial_support = True
+    if incomplete_initial_support:
+        return []
+    deficient_gates = [
+        (range_m, report_types)
+        for range_m in RANGES_M
+        for report_types in ("True", "False")
+        if len(supported_units.get((int(range_m), report_types), set())) < 100
+    ]
+    if not deficient_gates:
+        return []
+    eligible_ports = [
+        port_id for port_id in sorted(max_placement) if max_placement[port_id] < MAX_PLACEMENTS
+    ]
+    if not eligible_ports:
+        return []
+    # Extend one port at a time in stable order. Preparation then computes the
+    # new A25 support before another 25-placement batch can be considered.
+    port_id = eligible_ports[0]
+    first_placement = max_placement[port_id] + 1
+    last_placement = min(first_placement + 24, MAX_PLACEMENTS)
     added: list[dict[str, Any]] = []
-    extended_ports: list[str] = []
-    for port_id, max_index in sorted(max_placement.items()):
-        if max_index < INITIAL_PLACEMENTS:
-            continue
-        # Do not make a placement decision from an incomplete preparation run.
-        # Missing support files remain visible in preparation-attempts.csv and
-        # the operator can resume preparation before this gate is evaluated.
-        if port_id in missing_support:
-            continue
-        needs_extension = any(
-            len(support_trials.get((port_id, range_m, label_mode), set())) < 100
-            for range_m in RANGES_M
-            for label_mode in ("True", "False")
-        )
-        if not needs_extension or max_index >= MAX_PLACEMENTS:
-            continue
-        extended_ports.append(port_id)
-        for placement_index in range(
-            max(INITIAL_PLACEMENTS + 1, max_index + 1), MAX_PLACEMENTS + 1
-        ):
-            placement_id = f"placement-{placement_index:03d}"
-            for realization in range(REALIZATIONS):
-                for range_m in RANGES_M:
-                    seed = stable_seed(
-                        20261025,
-                        split,
-                        port_id,
-                        placement_id,
-                        realization,
-                        int(range_m),
+    for placement_index in range(first_placement, last_placement + 1):
+        placement_id = f"placement-{placement_index:03d}"
+        for realization in range(REALIZATIONS):
+            for range_m in RANGES_M:
+                seed = stable_seed(
+                    20261025,
+                    split,
+                    port_id,
+                    placement_id,
+                    realization,
+                    int(range_m),
+                )
+                for report_types in LABEL_MODES:
+                    trial_id = (
+                        f"{split}/{port_id}/{placement_id}/r{realization}/"
+                        f"range{int(range_m)}m/types{'on' if report_types else 'off'}/nominal"
                     )
-                    for report_types in LABEL_MODES:
-                        type_mode = "on" if report_types else "off"
-                        trial_id = (
-                            f"{split}/{port_id}/{placement_id}/r{realization}/"
-                            f"range{int(range_m)}m/types{type_mode}/nominal"
-                        )
-                        if trial_id in existing:
-                            continue
-                        added.append(
-                            {
-                                "trial_id": trial_id,
-                                "split": split,
-                                "port_id": port_id,
-                                "source_site_id": f"B{int(port_id.rsplit('-', 1)[1])}",
-                                "placement_id": placement_id,
-                                "realization": realization,
-                                "range_m": int(range_m),
-                                "report_types": report_types,
-                                "physical_seed": seed,
-                                "sensor_condition": "nominal",
-                                "profile_parameters": "{}",
-                                "status": "planned",
-                            }
-                        )
+                    if trial_id in existing:
+                        continue
+                    added.append(
+                        {
+                            "trial_id": trial_id,
+                            "split": split,
+                            "port_id": port_id,
+                            "source_site_id": f"B{int(port_id.rsplit('-', 1)[1])}",
+                            "placement_id": placement_id,
+                            "realization": realization,
+                            "range_m": int(range_m),
+                            "report_types": report_types,
+                            "physical_seed": seed,
+                            "sensor_condition": "nominal",
+                            "profile_parameters": "{}",
+                            "status": "planned",
+                        }
+                    )
     if not added:
         return []
     rows.extend(added)
     _write_table(table_path, rows)
     plan["trial_table_sha256"] = sha256_file(table_path)
     plan["trial_count"] = len(rows)
-    plan["extended_ports"] = sorted(extended_ports)
-    plan["extension_rule"] = "pre-search supported nominal rows below 100, up to 100 placements"
+    history = list(plan.get("support_extension_batches", []))
+    history.append(
+        {
+            "split": split,
+            "port_id": port_id,
+            "first_placement": first_placement,
+            "last_placement": last_placement,
+            "deficient_gates_before_batch": [
+                {"range_m": int(range_m), "report_types": report_types}
+                for range_m, report_types in deficient_gates
+            ],
+            "supported_units_before_batch": {
+                f"{range_m}m/types{'on' if report_types == 'True' else 'off'}": len(
+                    supported_units.get((int(range_m), report_types), set())
+                )
+                for range_m, report_types in deficient_gates
+            },
+        }
+    )
+    plan["support_extension_batches"] = history
+    plan["extension_rule"] = (
+        "split-level support below 100 in any range/label gate; add deterministic 25-placement "
+        "batches to one port at a time, up to 100, and reevaluate from pre-search support"
+    )
     _atomic_json(plan_path, plan)
     return [str(row["trial_id"]) for row in added]
 
@@ -967,6 +1041,28 @@ def run_trials(
         raise FileNotFoundError(
             "Full-coast search catalog, coast map, and search config must exist."
         )
+    search_config_document = json.loads(search_config_path.read_text(encoding="utf-8"))
+    bounds_xy = search_config_document.get("bounds_xy")
+    if (
+        search_config_document.get("contract_type") != "SearchConfig"
+        or not isinstance(bounds_xy, list)
+        or len(bounds_xy) != 4
+    ):
+        raise ValueError(
+            "SearchConfig must declare contract_type SearchConfig and four projected bounds_xy "
+            "values."
+        )
+    scope_manifest_path = run_root / "scope-manifest.json"
+    scope_manifest = {
+        "schema_version": 1,
+        "geographic_scope": "full_coast",
+        "catalog_sha256": sha256_file(catalog_path),
+        "map_sha256": sha256_file(search_map_path),
+        "projected_crs": str(command_config["projected_crs"]),
+        "bounds_xy_m": bounds_xy,
+    }
+    _atomic_json(scope_manifest_path, scope_manifest)
+    scope_manifest_sha256 = sha256_file(scope_manifest_path)
     for row in rows:
         if row["split"] != split:
             continue
@@ -1005,6 +1101,7 @@ def run_trials(
             "search_catalog_sha256": sha256_file(catalog_path),
             "search_map_sha256": sha256_file(search_map_path),
             "search_config_sha256": sha256_file(search_config_path),
+            "search_scope_manifest_sha256": scope_manifest_sha256,
             "measurements_sha256": sha256_file(measurements_path)
             if measurements_path.is_file()
             else "",
@@ -1061,6 +1158,7 @@ def run_trials(
             "search_catalog_path": catalog_path,
             "search_map_path": search_map_path,
             "search_config_path": search_config_path,
+            "search_scope_manifest_path": scope_manifest_path,
             "estimate_path": estimate_path,
             "evaluation_path": evaluation_path,
         }

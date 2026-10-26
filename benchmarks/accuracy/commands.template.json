@@ -12,7 +12,9 @@
     "--config",
     "{search_config_path}",
     "--projected-crs",
-    "EPSG:32618",
+    "{projected_crs}",
+    "--scope-manifest",
+    "{search_scope_manifest_path}",
     "--output",
     "{estimate_path}"
   ],
@@ -33,5 +35,6 @@
   "search_map": "/absolute/path/to/full-coast-map-v2.json",
   "search_config": "/absolute/path/to/frozen-search-config-v2.json",
   "search_domain_scope": "full_coast",
-  "search_map_scope": "full_coast"
+  "search_map_scope": "full_coast",
+  "projected_crs": "EPSG:32618"
 }

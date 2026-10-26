@@ -76,6 +76,10 @@ def test_command_config_requires_full_coast_search_and_hides_truth(tmp_path: Pat
             "{search_catalog_path}",
             "{search_map_path}",
             "{search_config_path}",
+            "--projected-crs",
+            "EPSG:32618",
+            "--scope-manifest",
+            "{search_scope_manifest_path}",
             "{estimate_path}",
         ],
         "evaluator_argv": [
@@ -90,6 +94,7 @@ def test_command_config_requires_full_coast_search_and_hides_truth(tmp_path: Pat
         "search_config": "search.json",
         "search_domain_scope": "full_coast",
         "search_map_scope": "full_coast",
+        "projected_crs": "EPSG:32618",
     }
     path = tmp_path / "commands.json"
     path.write_text(json.dumps(config))
@@ -124,8 +129,11 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
             }
         )
     )
-    for name in ("catalog.json", "coast-map.json", "search.json"):
+    for name in ("catalog.json", "coast-map.json"):
         (tmp_path / name).write_text("{}")
+    (tmp_path / "search.json").write_text(
+        json.dumps({"contract_type": "SearchConfig", "bounds_xy": [-10.0, 10.0, -20.0, 20.0]})
+    )
     catalog_hash = hashlib.sha256((tmp_path / "catalog.json").read_bytes()).hexdigest()
     (input_dir / "physical-identity-audit.json").write_text(
         json.dumps({"catalog_sha256": catalog_hash})
@@ -141,6 +149,10 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
                     "{search_catalog_path}",
                     "{search_map_path}",
                     "{search_config_path}",
+                    "--projected-crs",
+                    "EPSG:32618",
+                    "--scope-manifest",
+                    "{search_scope_manifest_path}",
                     "{estimate_path}",
                 ],
                 "evaluator_argv": [
@@ -156,6 +168,7 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
                 "search_config": str(tmp_path / "search.json"),
                 "search_domain_scope": "full_coast",
                 "search_map_scope": "full_coast",
+                "projected_crs": "EPSG:32618",
             }
         )
     )
@@ -184,6 +197,15 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
     )
     first = list(csv.DictReader(state_path.open()))
     assert first[0]["status"] == "search_failed"
+    scope_manifest = json.loads((run_root / "scope-manifest.json").read_text())
+    assert scope_manifest == {
+        "schema_version": 1,
+        "geographic_scope": "full_coast",
+        "catalog_sha256": catalog_hash,
+        "map_sha256": hashlib.sha256((tmp_path / "coast-map.json").read_bytes()).hexdigest(),
+        "projected_crs": "EPSG:32618",
+        "bounds_xy_m": [-10.0, 10.0, -20.0, 20.0],
+    }
     attempts_path = run_root / "attempts.csv"
     prior_attempts = list(csv.DictReader(attempts_path.open()))
     assert len(prior_attempts) == 1
@@ -205,23 +227,82 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
     assert [row["status"] for row in attempts] == ["failed", "completed", "completed"]
 
 
-def test_support_extension_waits_for_complete_initial_support(tmp_path: Path) -> None:
+def _write_nominal_support_fixture(
+    tmp_path: Path, ports: tuple[str, ...]
+) -> tuple[Path, Path, int]:
     plan = tmp_path / "config.json"
     table = tmp_path / "trials.csv"
-    plan.write_text(json.dumps({"trial_table": "trials.csv", "trial_count": 1}))
-    table.write_text(
-        "trial_id,split,port_id,placement_id,realization,range_m,report_types,physical_seed,sensor_condition\n"
-        "trial-1,development,port-001,placement-025,0,1000,True,123,nominal\n"
-    )
+    plan.write_text(json.dumps({"trial_table": "trials.csv", "trial_count": 0}))
+    rows = []
+    input_root = tmp_path / "inputs"
+    for port_id in ports:
+        for placement in range(1, 26):
+            placement_id = f"placement-{placement:03d}"
+            for realization in range(2):
+                for range_m in (1000, 5000, 10000):
+                    for report_types in (True, False):
+                        row = {
+                            "trial_id": (
+                                f"development/{port_id}/{placement_id}/r{realization}/"
+                                f"{range_m}/{report_types}"
+                            ),
+                            "split": "development",
+                            "port_id": port_id,
+                            "placement_id": placement_id,
+                            "realization": str(realization),
+                            "range_m": str(range_m),
+                            "report_types": str(report_types),
+                            "physical_seed": "123",
+                            "sensor_condition": "nominal",
+                        }
+                        rows.append(row)
+                        type_mode = "types-on" if report_types else "types-off"
+                        support_path = (
+                            input_root
+                            / "development"
+                            / port_id
+                            / placement_id
+                            / f"r{realization}"
+                            / f"{range_m}m"
+                            / type_mode
+                            / "nominal"
+                            / "support.json"
+                        )
+                        support_path.parent.mkdir(parents=True, exist_ok=True)
+                        support_path.write_text(json.dumps({"supported": True}))
+    with table.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    return plan, input_root, len(rows)
 
-    added = _extend_nominal_plan_if_needed(
-        plan,
-        input_root=tmp_path / "inputs",
-        split="development",
+
+def test_support_extension_uses_split_aggregate_across_ports(tmp_path: Path) -> None:
+    plan, input_root, initial_count = _write_nominal_support_fixture(
+        tmp_path, ("port-001", "port-002")
     )
+    table = tmp_path / "trials.csv"
+
+    added = _extend_nominal_plan_if_needed(plan, input_root=input_root, split="development")
 
     assert added == []
-    assert len(list(csv.DictReader(table.open()))) == 1
+    assert len(list(csv.DictReader(table.open()))) == initial_count
+
+
+def test_support_extension_adds_one_deterministic_25_placement_batch(tmp_path: Path) -> None:
+    plan, input_root, initial_count = _write_nominal_support_fixture(tmp_path, ("port-001",))
+    table = tmp_path / "trials.csv"
+
+    added = _extend_nominal_plan_if_needed(plan, input_root=input_root, split="development")
+
+    assert len(added) == 25 * 2 * 3 * 2
+    rows = list(csv.DictReader(table.open()))
+    added_rows = [row for row in rows if row["trial_id"] in set(added)]
+    assert len(rows) == initial_count + len(added)
+    assert {row["port_id"] for row in added_rows} == {"port-001"}
+    assert {row["placement_id"] for row in added_rows} == {
+        f"placement-{index:03d}" for index in range(26, 51)
+    }
 
 
 def test_subprocess_timeout_is_an_explicit_outcome(monkeypatch) -> None:
