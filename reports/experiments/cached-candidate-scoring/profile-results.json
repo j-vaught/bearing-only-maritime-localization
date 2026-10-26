@@ -1,239 +1,44 @@
 {
   "activity_at_lock": {
-    "cpu_processes": [
-      {
-        "comm": "plymouthd",
-        "pcpu": 3.8,
-        "pid": 1234,
-        "pmem": 0.0
-      },
-      {
-        "comm": "rclone",
-        "pcpu": 11.9,
-        "pid": 958598,
-        "pmem": 0.5
-      },
-      {
-        "comm": "python",
-        "pcpu": 162.0,
-        "pid": 960044,
-        "pmem": 0.4
-      },
-      {
-        "comm": "claude",
-        "pcpu": 1.8,
-        "pid": 986423,
-        "pmem": 0.0
-      },
-      {
-        "comm": "claude",
-        "pcpu": 1.8,
-        "pid": 1438871,
-        "pmem": 0.0
-      },
-      {
-        "comm": "claude",
-        "pcpu": 1.3,
-        "pid": 1444951,
-        "pmem": 0.0
-      },
-      {
-        "comm": "pt_data_worker",
-        "pcpu": 26.1,
-        "pid": 1727824,
-        "pmem": 0.3
-      },
-      {
-        "comm": "pt_data_worker",
-        "pcpu": 26.1,
-        "pid": 1727825,
-        "pmem": 0.3
-      },
-      {
-        "comm": "pt_data_worker",
-        "pcpu": 26.0,
-        "pid": 1727826,
-        "pmem": 0.3
-      },
-      {
-        "comm": "pt_data_worker",
-        "pcpu": 24.1,
-        "pid": 1727827,
-        "pmem": 0.3
-      },
-      {
-        "comm": "python3",
-        "pcpu": 123.0,
-        "pid": 1742790,
-        "pmem": 0.4
-      },
-      {
-        "comm": "pytest",
-        "pcpu": 3840.0,
-        "pid": 1745573,
-        "pmem": 0.0
-      },
-      {
-        "comm": "grep",
-        "pcpu": 99.9,
-        "pid": 1856764,
-        "pmem": 0.0
-      },
-      {
-        "comm": "find",
-        "pcpu": 94.8,
-        "pid": 2078513,
-        "pmem": 0.0
-      },
-      {
-        "comm": "claude",
-        "pcpu": 1.9,
-        "pid": 2386842,
-        "pmem": 0.0
-      },
-      {
-        "comm": "python",
-        "pcpu": 36.8,
-        "pid": 2882462,
-        "pmem": 0.4
-      },
-      {
-        "comm": "ruby",
-        "pcpu": 135.0,
-        "pid": 3823947,
-        "pmem": 0.7
-      },
-      {
-        "comm": "ruby",
-        "pcpu": 11.2,
-        "pid": 3983516,
-        "pmem": 0.4
-      }
+    "cpu_memory_percent_sum": 4.0,
+    "cpu_percent_max": 3840.0,
+    "cpu_percent_sum": 4627.5,
+    "cpu_process_count": 18,
+    "cpu_process_count_over_1pct": 18,
+    "gpu_memory_mib_max": 25042.0,
+    "gpu_memory_mib_total": 49640.0,
+    "gpu_process_count": 2,
+    "load_average_1m_5m_15m": [
+      14.55,
+      12.02,
+      12.2
     ],
-    "gpu_processes": [
-      "2882462, /home/gpan/tc.venv/bin/python, 24598 MiB",
-      "960044, /home/whisenaj/anaconda3/envs/YOLO_Workspace/bin/python, 25042 MiB"
-    ],
-    "loadavg": "14.55 12.02 12.20 7/6228 1745705"
+    "load_average_process_counts": [
+      "7/6228",
+      "1745705"
+    ]
   },
   "activity_before_lock": {
-    "cpu_processes": [
-      {
-        "comm": "plymouthd",
-        "pcpu": 3.8,
-        "pid": 1234,
-        "pmem": 0.0
-      },
-      {
-        "comm": "rclone",
-        "pcpu": 11.9,
-        "pid": 958598,
-        "pmem": 0.5
-      },
-      {
-        "comm": "python",
-        "pcpu": 162.0,
-        "pid": 960044,
-        "pmem": 0.4
-      },
-      {
-        "comm": "claude",
-        "pcpu": 1.8,
-        "pid": 986423,
-        "pmem": 0.0
-      },
-      {
-        "comm": "claude",
-        "pcpu": 1.8,
-        "pid": 1438871,
-        "pmem": 0.0
-      },
-      {
-        "comm": "claude",
-        "pcpu": 1.3,
-        "pid": 1444951,
-        "pmem": 0.0
-      },
-      {
-        "comm": "pt_data_worker",
-        "pcpu": 26.2,
-        "pid": 1727824,
-        "pmem": 0.3
-      },
-      {
-        "comm": "pt_data_worker",
-        "pcpu": 26.1,
-        "pid": 1727825,
-        "pmem": 0.3
-      },
-      {
-        "comm": "pt_data_worker",
-        "pcpu": 26.0,
-        "pid": 1727826,
-        "pmem": 0.3
-      },
-      {
-        "comm": "pt_data_worker",
-        "pcpu": 24.1,
-        "pid": 1727827,
-        "pmem": 0.3
-      },
-      {
-        "comm": "python3",
-        "pcpu": 123.0,
-        "pid": 1742790,
-        "pmem": 0.4
-      },
-      {
-        "comm": "pytest",
-        "pcpu": 4291.0,
-        "pid": 1745573,
-        "pmem": 0.0
-      },
-      {
-        "comm": "grep",
-        "pcpu": 99.9,
-        "pid": 1856764,
-        "pmem": 0.0
-      },
-      {
-        "comm": "find",
-        "pcpu": 94.8,
-        "pid": 2078513,
-        "pmem": 0.0
-      },
-      {
-        "comm": "claude",
-        "pcpu": 1.9,
-        "pid": 2386842,
-        "pmem": 0.0
-      },
-      {
-        "comm": "python",
-        "pcpu": 36.8,
-        "pid": 2882462,
-        "pmem": 0.4
-      },
-      {
-        "comm": "ruby",
-        "pcpu": 135.0,
-        "pid": 3823947,
-        "pmem": 0.7
-      },
-      {
-        "comm": "ruby",
-        "pcpu": 11.2,
-        "pid": 3983516,
-        "pmem": 0.4
-      }
+    "cpu_memory_percent_sum": 4.0,
+    "cpu_percent_max": 4291.0,
+    "cpu_percent_sum": 5078.6,
+    "cpu_process_count": 18,
+    "cpu_process_count_over_1pct": 18,
+    "gpu_memory_mib_max": 25042.0,
+    "gpu_memory_mib_total": 49640.0,
+    "gpu_process_count": 2,
+    "load_average_1m_5m_15m": [
+      14.55,
+      12.02,
+      12.2
     ],
-    "gpu_processes": [
-      "2882462, /home/gpan/tc.venv/bin/python, 24598 MiB",
-      "960044, /home/whisenaj/anaconda3/envs/YOLO_Workspace/bin/python, 25042 MiB"
-    ],
-    "loadavg": "14.55 12.02 12.20 70/6228 1745702"
+    "load_average_process_counts": [
+      "70/6228",
+      "1745702"
+    ]
   },
   "activity_classification": "Shared-host CPU/GPU activity was sampled for diagnostics; timings are diagnostic if other work was active.",
+  "activity_public_fields": "Aggregated process counts, CPU/load summaries, and GPU memory totals only.",
   "benchmark_lock": "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/benchmark.lock",
   "cache_candidate_count": 1457546,
   "cache_context_sha256": "3e450d04fd82d4bec5c5786d9e49960d51a0dab4615e7237b55bc493251aea44",
