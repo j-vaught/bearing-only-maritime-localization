@@ -122,6 +122,8 @@ class CandidateScorer:
             observer_crs=self.vector_map.crs,
             visibility_radius_m=self.config.max_range_m,
             vector_map=self.vector_map,
+            minimum_range_m=self.config.min_range_m,
+            range_inclusive=self.config.range_inclusive,
             angular_resolution_deg=self.config.circular_merge_tolerance_deg,
             type_labels_enabled=self.config.use_types,
             spatial_index=self._spatial_index,
@@ -143,9 +145,7 @@ class CandidateScorer:
                 "candidate visibility intersects unknown map coverage",
             )
 
-        groups = tuple(
-            group for group in predicted.groups if group.range_m >= self.config.min_range_m
-        )
+        groups = predicted.groups
         costs = build_likelihood_costs(
             self.measurements,
             [group.bearing_deg for group in groups],
