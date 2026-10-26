@@ -303,9 +303,16 @@ def _search_dispatch(
             if not isinstance(scorer, GpuCandidateScorer):
                 raise TypeError("GPU grid search requires GpuCandidateScorer.")
             assert config.bounds_xy is not None
+            from bearing_localization.search.candidate_order import order_candidate_positions
+
+            positions = order_candidate_positions(
+                enumerate_grid_points(config.bounds_xy, spacing_m),
+                water_status=scorer.vector_map.point_water_status,
+                bounds=config.bounds_xy,
+            )
             run = score_candidate_positions_batched(
                 scorer,
-                enumerate_grid_points(config.bounds_xy, spacing_m),
+                positions,
                 candidate_limit=config.candidate_budget,
                 certificate_scope="finite_candidate_set",
             )
