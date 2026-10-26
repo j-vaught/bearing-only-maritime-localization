@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from bearing_localization.search.config_serialization import read_search_config
+from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.scoring import CandidateScorer
 from bearing_localization.search.screened_search import (
     CandidatePosition,
@@ -109,7 +109,10 @@ def main() -> int:
     measurements = read_contract(args.static / "measurements.json", MeasurementSetV2)
     catalog = read_contract(args.static / "catalog.json", CatalogV2)
     map_input = read_contract(args.static / "map.json", MapV2)
-    config = read_search_config(args.config)
+    config_payload = json.loads(args.config.read_text())
+    config_payload.pop("contract_type", None)
+    config_payload.pop("proposal_cache_path", None)
+    config = SearchConfig(**config_payload)
     vector_map = VectorMap.from_map_v2(map_input, target_crs="EPSG:32618")
     scorer = CandidateScorer(measurements, catalog, vector_map, config)
     setup_elapsed = time.perf_counter() - started
@@ -199,6 +202,8 @@ def main() -> int:
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
         ).stdout.strip(),
         "selected_manifest_sha256": sha256(args.selected),
+        "config_sha256": sha256(args.config),
+        "effective_config": {key: value for key, value in config_payload.items()},
         "selected_count": len(candidates),
         "selected_ids": [candidate.candidate_id for candidate in candidates],
         "selected_positions_map_epsg32618": [
