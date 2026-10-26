@@ -9,11 +9,9 @@ Every data file is directly in this folder. All search examples use the same ful
 | `objects.manifest.json`, `map.manifest.json` | Compressed and uncompressed checksums, coordinate conventions, counts and source information. |
 | `map-source-validation.json` | Source geometry validation record. |
 | `observer_locations.csv` | 24 East Coast port-area observer locations for simulation and evaluation. |
-| `chesapeake-observer-locations.csv` | Original Chesapeake B1–B5 locations. |
 | `east-coast-observers-b1-b10.csv` | Earlier ten-port observer locations. |
 | `*2023-07-15T1200Z.csv` | Selected AIS snapshot source tables. |
 | `*-enc-aids.csv` | Chart feature source tables before catalog normalization. |
-| `chesapeake-water-mask-500m.*` | Legacy raster input retained for the pairwise regression case. |
 
 Adjacent source-table manifests retain original extraction details. AIS row identifiers are snapshot keys; the original extraction omitted vessel names and MMSIs. Chart components can have unresolved physical identities. Source manifests can mention historical server paths or filenames; those are provenance, not files needed at runtime.
 
