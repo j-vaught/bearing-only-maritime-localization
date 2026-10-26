@@ -37,6 +37,10 @@ class EligibilityTrial:
     support_count: int | None
     support_path: str | None
     support_sha256: str | None
+    preparation_status: str
+    preparation_reason: str
+    eligibility_status: str
+    eligibility_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,8 @@ class EligibilitySnapshot:
     splits_sha256: str
     trial_table_sha256: str
     preparation_sha256: str | None
+    expected_trial_count: int
+    expected_trial_ids_sha256: str
     expected_nominal_count: int
     expected_nominal_ids_sha256: str
     trials: tuple[EligibilityTrial, ...]
@@ -237,10 +243,14 @@ def _check_plan(
         )
     if {row["port_id"] for row in expected} != selected_ports:
         raise EligibilityError(f"Nominal rows do not cover the complete {chosen} port set.")
+    split_ids = [row["trial_id"] for row in rows if row["split"] == chosen]
+    hashes["expected_trial_ids_sha256"] = _canonical_ids_sha256(split_ids)
+    hashes["expected_trial_count"] = len(split_ids)
     hashes["expected_nominal_ids_sha256"] = _canonical_ids_sha256(nominal_ids)
     hashes["expected_nominal_count"] = expected_count
     hashes["selected_split"] = chosen
     hashes["by_id"] = by_id
+    hashes["expected_trial_ids"] = split_ids
     hashes["expected_nominal_ids"] = nominal_ids
     return config, splits, rows, hashes
 
@@ -275,9 +285,12 @@ def _build_snapshot(
     chosen = hashes["selected_split"]
     table_by_id = hashes["by_id"]
     expected_ids = hashes["expected_nominal_ids"]
+    expected_all_ids = hashes["expected_trial_ids"]
     prep_path = support_root / chosen / "preparation.csv"
-    prep_rows = _read_csv(prep_path) if prep_path.is_file() else []
-    preparation_sha256 = _sha256(prep_path) if prep_path.is_file() else None
+    if not prep_path.is_file():
+        raise EligibilityError(f"Missing preparation ledger for split {chosen}.")
+    prep_rows = _read_csv(prep_path)
+    preparation_sha256 = _sha256(prep_path)
     prep_by_id: dict[str, dict[str, str]] = {}
     for item in prep_rows:
         trial_id = item.get("trial_id", "")
@@ -297,7 +310,16 @@ def _build_snapshot(
         ):
             if name in item and item[name] != planned.get(name):
                 raise EligibilityError(f"Preparation metadata mismatch for {trial_id}: {name}.")
+        if item.get("status") not in {"completed", "failed"}:
+            raise EligibilityError(f"Invalid preparation status for {trial_id}.")
         prep_by_id[trial_id] = item
+    if set(prep_by_id) != set(expected_all_ids):
+        missing = sorted(set(expected_all_ids) - set(prep_by_id))
+        unexpected = sorted(set(prep_by_id) - set(expected_all_ids))
+        raise EligibilityError(
+            f"Preparation ledger population mismatch; missing={missing[:3]}, "
+            f"unexpected={unexpected[:3]}."
+        )
 
     frozen_by_id = {record["trial_id"]: record for record in frozen_records or []}
     records: list[EligibilityTrial] = []
@@ -307,8 +329,14 @@ def _build_snapshot(
         nominal = row["sensor_condition"] == "nominal"
         support_rel = _support_relative_path(row)
         support_path = support_root / support_rel
-        prep = prep_by_id.get(row["trial_id"])
+        prep = prep_by_id[row["trial_id"]]
+        prep_status = prep["status"]
+        prep_reason = prep.get("failure", "")
         if support_path.is_file():
+            if prep_status != "completed":
+                raise EligibilityError(
+                    f"Failed preparation has support output for {row['trial_id']}."
+                )
             support_hash = _sha256(support_path)
             support_doc = _read_json(support_path)
             if support_doc.get("supported") not in (True, False):
@@ -344,12 +372,12 @@ def _build_snapshot(
                 support_count=support_count,
                 support_path=support_rel.as_posix(),
                 support_sha256=support_hash,
+                preparation_status=prep_status,
+                preparation_reason=prep_reason,
+                eligibility_status="supported" if supported else "unsupported",
+                eligibility_reason=None,
             )
-            old = frozen_by_id.get(row["trial_id"])
-            if old is not None and old != _record_dict(record):
-                raise EligibilityError(f"Frozen support evidence changed for {row['trial_id']}.")
-            records.append(record)
-        elif nominal and prep is not None and prep.get("status") == "failed":
+        elif prep_status == "failed":
             record = EligibilityTrial(
                 trial_id=row["trial_id"],
                 split=chosen,
@@ -359,26 +387,36 @@ def _build_snapshot(
                 range_m=int(row["range_m"]),
                 report_types=row["report_types"] == "True",
                 physical_seed=int(row["physical_seed"]),
-                sensor_condition="nominal",
+                sensor_condition=row["sensor_condition"],
                 status="unresolved",
                 supported=None,
                 support_count=None,
-                support_path=support_rel.as_posix(),
+                support_path=None,
                 support_sha256=None,
+                preparation_status=prep_status,
+                preparation_reason=prep_reason,
+                eligibility_status="unresolved",
+                eligibility_reason=prep_reason,
             )
-            old = frozen_by_id.get(row["trial_id"])
-            if old is not None and old != _record_dict(record):
-                raise EligibilityError(f"Frozen unresolved status changed for {row['trial_id']}.")
-            records.append(record)
-        elif nominal:
-            raise EligibilityError(f"Missing support for planned nominal trial {row['trial_id']}.")
-        # Stress rows are recorded only when support evidence is available.
+        else:
+            raise EligibilityError(f"Missing support for completed trial {row['trial_id']}.")
+        old = frozen_by_id.get(row["trial_id"])
+        if old is not None and old != _record_dict(record):
+            raise EligibilityError(f"Frozen trial evidence changed for {row['trial_id']}.")
+        records.append(record)
 
-    nominal_records = tuple(record for record in records if record.sensor_condition == "nominal")
+    all_records = tuple(records)
+    if tuple(record.trial_id for record in all_records) != tuple(expected_all_ids):
+        raise EligibilityError("Manifest does not cover the exact planned trial population.")
+    nominal_records = tuple(
+        record for record in all_records if record.sensor_condition == "nominal"
+    )
     if tuple(record.trial_id for record in nominal_records) != tuple(expected_ids):
         raise EligibilityError(
             "Manifest does not cover the exact planned nominal trial population."
         )
+    if any(record.supported is None for record in nominal_records):
+        raise EligibilityError("Unresolved nominal support blocks eligibility freeze.")
     projections = {
         (range_m, report_types): tuple(
             record
@@ -402,11 +440,36 @@ def _build_snapshot(
         splits_sha256=hashes["splits_sha256"],
         trial_table_sha256=hashes["trial_table_sha256"],
         preparation_sha256=preparation_sha256,
+        expected_trial_count=hashes["expected_trial_count"],
+        expected_trial_ids_sha256=hashes["expected_trial_ids_sha256"],
         expected_nominal_count=hashes["expected_nominal_count"],
         expected_nominal_ids_sha256=hashes["expected_nominal_ids_sha256"],
-        trials=tuple(records),
+        trials=all_records,
         nominal_projections=MappingProxyType(projections),
     )
+
+
+def _record_dict(record: EligibilityTrial) -> dict[str, Any]:
+    return {
+        "trial_id": record.trial_id,
+        "split": record.split,
+        "port_id": record.port_id,
+        "placement_id": record.placement_id,
+        "realization": record.realization,
+        "range_m": record.range_m,
+        "report_types": record.report_types,
+        "physical_seed": record.physical_seed,
+        "sensor_condition": record.sensor_condition,
+        "status": record.status,
+        "supported": record.supported,
+        "support_count": record.support_count,
+        "support_path": record.support_path,
+        "support_sha256": record.support_sha256,
+        "preparation_status": record.preparation_status,
+        "preparation_reason": record.preparation_reason,
+        "eligibility_status": record.eligibility_status,
+        "eligibility_reason": record.eligibility_reason,
+    }
 
 
 def _manifest_doc(snapshot: EligibilitySnapshot) -> dict[str, Any]:
@@ -419,6 +482,8 @@ def _manifest_doc(snapshot: EligibilitySnapshot) -> dict[str, Any]:
         "splits_sha256": snapshot.splits_sha256,
         "trial_table_sha256": snapshot.trial_table_sha256,
         "preparation_sha256": snapshot.preparation_sha256,
+        "expected_trial_count": snapshot.expected_trial_count,
+        "expected_trial_ids_sha256": snapshot.expected_trial_ids_sha256,
         "expected_nominal_count": snapshot.expected_nominal_count,
         "expected_nominal_ids_sha256": snapshot.expected_nominal_ids_sha256,
         "supported_nominal_count": snapshot.supported_denominator,
