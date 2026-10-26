@@ -144,9 +144,25 @@ def compact_truth(path: Path, manifest: Path, split: str) -> dict[str, Any] | No
             if prior and source_sha == prior.get("compact_truth_sha256"):
                 pass
             elif source != full_raw:
-                raise RuntimeError(
-                    f"Truth source matches neither full archive nor compact manifest: {path}"
-                )
+                if prior is not None:
+                    raise RuntimeError(
+                        f"Truth source matches neither full archive nor compact manifest: {path}"
+                    )
+                keep_from_archive = [
+                    obj for obj in objects if obj.get("observation_index") is not None
+                ]
+                compact_from_archive = {
+                    key: value for key, value in doc.items() if key != "objects"
+                }
+                compact_from_archive["objects"] = keep_from_archive
+                expected_compact = (
+                    json.dumps(compact_from_archive, indent=2, sort_keys=True, allow_nan=False)
+                    + "\n"
+                ).encode()
+                if source != expected_compact:
+                    raise RuntimeError(
+                        f"Orphan compact truth does not match its full archive: {path}"
+                    )
 
     keep = [obj for obj in objects if obj.get("observation_index") is not None]
     compact = {key: value for key, value in doc.items() if key != "objects"}
