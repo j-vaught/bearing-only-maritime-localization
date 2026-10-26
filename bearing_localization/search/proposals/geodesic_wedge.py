@@ -77,6 +77,8 @@ class GeodesicWedgeProposalResult:
     range_step_m: float
     angular_sample_gap_deg: float
     angular_sample_count: int
+    solver_tolerance_deg: float
+    max_solver_residual_deg: float
 
     @property
     def proposal_ids(self) -> tuple[str, ...]:
@@ -162,6 +164,7 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
     source_chunk_size: int = 256,
     range_step_m: float | None = None,
     observation_sigmas_deg: Mapping[int, float] | None = None,
+    solver_tolerance_deg: float = 1e-7,
 ) -> GeodesicWedgeProposalResult:
     """Generate cells from sampled WGS84 reverse rays.
 
@@ -184,6 +187,8 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
         raise ValueError("source_chunk_size must be a positive integer.")
     if range_step_m is not None and (not isfinite(range_step_m) or range_step_m <= 0.0):
         raise ValueError("range_step_m must be finite and positive when supplied.")
+    if not isfinite(solver_tolerance_deg) or solver_tolerance_deg <= 0.0:
+        raise ValueError("solver_tolerance_deg must be finite and positive.")
 
     obs = tuple(sorted(observations, key=lambda item: item.report_index))
     objects = tuple(sorted(catalog, key=lambda item: item.key))
@@ -216,6 +221,13 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
     from maritime_localization_shared.geospatial.reverse_bearing import (
         solve_reverse_bearing_observer,
     )
+
+    maximum_solver_tolerance = min(0.001, 0.01 * min(sigma_by_report.values()))
+    if solver_tolerance_deg > maximum_solver_tolerance:
+        raise ValueError(
+            "solver_tolerance_deg must not exceed min(0.001 degrees, "
+            "0.01 times the minimum effective observation sigma)."
+        )
 
     source_lonlat = np.asarray(
         [(item.longitude_deg, item.latitude_deg) for item in objects],
@@ -260,6 +272,7 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
     sample_total = 0
     sample_failed = 0
     sample_degenerate = 0
+    max_solver_residual = 0.0
     budget_reason: Literal["none", "source_pairs", "candidate_cells"] = "none"
 
     for observation in obs:
@@ -280,6 +293,7 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
                 source_chunk[:, None, None, :],
                 desired,
                 ranges,
+                tolerance_deg=solver_tolerance_deg,
             )
             points = np.asarray(solved.observer_lonlat_deg, dtype=np.float64)
             converged = np.asarray(solved.converged, dtype=bool)
@@ -290,6 +304,10 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
             sample_total += int(points.shape[0] * points.shape[1] * points.shape[2])
             sample_failed += int(np.count_nonzero(failed_mask))
             sample_degenerate += int(np.count_nonzero(degenerate))
+            max_solver_residual = max(
+                max_solver_residual,
+                float(np.max(np.abs(solved.angular_residual_deg), initial=0.0)),
+            )
             failed_pairs += int(np.count_nonzero(np.any(failed_mask, axis=(1, 2))))
 
             projected_x, projected_y = forward.transform(points[..., 0], points[..., 1])
@@ -403,6 +421,8 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
         range_step_m=float(step_m),
         angular_sample_gap_deg=float(angular_gap_deg),
         angular_sample_count=int(angular_offsets_deg.size),
+        solver_tolerance_deg=float(solver_tolerance_deg),
+        max_solver_residual_deg=float(max_solver_residual),
     )
 
 
