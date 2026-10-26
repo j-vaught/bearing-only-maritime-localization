@@ -1,0 +1,239 @@
+{
+  "geometry": {
+    "method": "bearing_localization.evaluation.difficulty.evaluate_scene_difficulty",
+    "sigma_fallback_deg": 0.5,
+    "sigma_floor_deg": 0.05,
+    "summary": {
+      "catalog_match_count_all": {
+        "count": 3600,
+        "max": 133,
+        "median": 11.0,
+        "min": 0
+      },
+      "catalog_match_count_supported": {
+        "count": 2310,
+        "max": 133,
+        "median": 18.0,
+        "min": 3
+      },
+      "gates": [
+        {
+          "catalog_match_count_all": {
+            "count": 600,
+            "max": 27,
+            "median": 4.0,
+            "min": 0
+          },
+          "catalog_match_count_supported": {
+            "count": 269,
+            "max": 27,
+            "median": 7,
+            "min": 3
+          },
+          "geometry_strata_all": {
+            "25-100m": 41,
+            "<=25m": 368,
+            ">100m": 13,
+            "singular": 178
+          },
+          "geometry_strata_supported": {
+            "25-100m": 12,
+            "<=25m": 257,
+            ">100m": 0,
+            "singular": 0
+          },
+          "nominal_trial_count": 600,
+          "range_m": 1000,
+          "report_types": true,
+          "supported_trial_count": 269,
+          "unsupported_trial_count": 331
+        },
+        {
+          "catalog_match_count_all": {
+            "count": 600,
+            "max": 27,
+            "median": 4.0,
+            "min": 0
+          },
+          "catalog_match_count_supported": {
+            "count": 269,
+            "max": 27,
+            "median": 7,
+            "min": 3
+          },
+          "geometry_strata_all": {
+            "25-100m": 41,
+            "<=25m": 368,
+            ">100m": 13,
+            "singular": 178
+          },
+          "geometry_strata_supported": {
+            "25-100m": 12,
+            "<=25m": 257,
+            ">100m": 0,
+            "singular": 0
+          },
+          "nominal_trial_count": 600,
+          "range_m": 1000,
+          "report_types": false,
+          "supported_trial_count": 269,
+          "unsupported_trial_count": 331
+        },
+        {
+          "catalog_match_count_all": {
+            "count": 600,
+            "max": 100,
+            "median": 18.0,
+            "min": 0
+          },
+          "catalog_match_count_supported": {
+            "count": 438,
+            "max": 100,
+            "median": 26.0,
+            "min": 3
+          },
+          "geometry_strata_all": {
+            "25-100m": 69,
+            "<=25m": 444,
+            ">100m": 39,
+            "singular": 48
+          },
+          "geometry_strata_supported": {
+            "25-100m": 47,
+            "<=25m": 382,
+            ">100m": 9,
+            "singular": 0
+          },
+          "nominal_trial_count": 600,
+          "range_m": 5000,
+          "report_types": true,
+          "supported_trial_count": 438,
+          "unsupported_trial_count": 162
+        },
+        {
+          "catalog_match_count_all": {
+            "count": 600,
+            "max": 100,
+            "median": 18.0,
+            "min": 0
+          },
+          "catalog_match_count_supported": {
+            "count": 438,
+            "max": 100,
+            "median": 26.0,
+            "min": 3
+          },
+          "geometry_strata_all": {
+            "25-100m": 69,
+            "<=25m": 444,
+            ">100m": 39,
+            "singular": 48
+          },
+          "geometry_strata_supported": {
+            "25-100m": 47,
+            "<=25m": 382,
+            ">100m": 9,
+            "singular": 0
+          },
+          "nominal_trial_count": 600,
+          "range_m": 5000,
+          "report_types": false,
+          "supported_trial_count": 438,
+          "unsupported_trial_count": 162
+        },
+        {
+          "catalog_match_count_all": {
+            "count": 600,
+            "max": 133,
+            "median": 21.0,
+            "min": 0
+          },
+          "catalog_match_count_supported": {
+            "count": 448,
+            "max": 133,
+            "median": 29.0,
+            "min": 3
+          },
+          "geometry_strata_all": {
+            "25-100m": 68,
+            "<=25m": 444,
+            ">100m": 42,
+            "singular": 46
+          },
+          "geometry_strata_supported": {
+            "25-100m": 47,
+            "<=25m": 390,
+            ">100m": 11,
+            "singular": 0
+          },
+          "nominal_trial_count": 600,
+          "range_m": 10000,
+          "report_types": true,
+          "supported_trial_count": 448,
+          "unsupported_trial_count": 152
+        },
+        {
+          "catalog_match_count_all": {
+            "count": 600,
+            "max": 133,
+            "median": 21.0,
+            "min": 0
+          },
+          "catalog_match_count_supported": {
+            "count": 448,
+            "max": 133,
+            "median": 29.0,
+            "min": 3
+          },
+          "geometry_strata_all": {
+            "25-100m": 68,
+            "<=25m": 444,
+            ">100m": 42,
+            "singular": 46
+          },
+          "geometry_strata_supported": {
+            "25-100m": 47,
+            "<=25m": 390,
+            ">100m": 11,
+            "singular": 0
+          },
+          "nominal_trial_count": 600,
+          "range_m": 10000,
+          "report_types": false,
+          "supported_trial_count": 448,
+          "unsupported_trial_count": 152
+        }
+      ],
+      "geometry_strata_all": {
+        "25-100m": 356,
+        "<=25m": 2512,
+        ">100m": 188,
+        "singular": 544
+      },
+      "geometry_strata_supported": {
+        "25-100m": 212,
+        "<=25m": 2058,
+        ">100m": 40,
+        "singular": 0
+      },
+      "nominal_trial_count": 3600,
+      "supported_trial_count": 2310,
+      "unsupported_trial_count": 1290
+    }
+  },
+  "population": {
+    "heldout_rows_read": false,
+    "interpretation": "Known-association geometry diagnostics; not localization accuracy.",
+    "nominal_trials": 3600,
+    "search_outputs_read": false,
+    "split": "development",
+    "supported_trials": 2310,
+    "unsupported_trials": 1290
+  },
+  "schema": "development-scene-difficulty-v1",
+  "source": {
+    "eligibility_manifest_sha256": "2330090802952093bab1d5ec6cb97c6298cce27ee2050804f6eab91d66e8d050",
+    "input_root_view": "a38-anchor-corrected-dev-hardlinked/inputs",
+    "preparation_sha256": "f84072c6cd77af4dfebece37632d80a6675880be0ab8607636be37f27cab1928"
+  }
+}
