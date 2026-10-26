@@ -13,7 +13,7 @@ from typing import Literal, cast
 
 from pyproj import CRS, Transformer
 from shapely import from_geojson, transform
-from shapely.geometry import GeometryCollection, LineString, Point, Polygon
+from shapely.geometry import GeometryCollection, LineString, Point, Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 from shapely.prepared import prep
@@ -159,16 +159,121 @@ class VectorMap:
             return "blocked"
         if self._prepared_coverage is None or not self._prepared_coverage.covers(ray):
             return "unknown"
-        if self._unknown is not None and _interior_overlap_exceeds(ray, self._unknown, tolerance_m):
+        if (
+            self._unknown is not None
+            and self._prepared_unknown is not None
+            and self._prepared_unknown.intersects(ray)
+            and _interior_overlap_exceeds(ray, self._unknown, tolerance_m)
+        ):
             return "unknown"
         return "clear"
 
+    def line_visibility_many(
+        self,
+        observer_xy_m: Point2D,
+        targets_xy_m: Sequence[Point2D],
+        *,
+        tolerance_m: float = 1e-6,
+        indexed: bool = True,
+    ) -> tuple[Visibility, ...]:
+        """Classify multiple rays from one observer using a temporary local map crop.
+
+        The crop encloses the observer and every target with a positive margin.
+        Every ray therefore lies strictly inside the crop, so clipping polygonal
+        map layers to the crop preserves each ray's exact intersections.
+        """
+        observer = _point(observer_xy_m, "observer")
+        targets = tuple(_point(target_xy_m, "target") for target_xy_m in targets_xy_m)
+        if not isfinite(tolerance_m) or tolerance_m < 0.0:
+            raise ValueError("tolerance_m must be finite and nonnegative.")
+        if not targets:
+            return ()
+        if len(targets) == 1:
+            return (
+                self.line_visibility(
+                    observer_xy_m,
+                    targets_xy_m[0],
+                    tolerance_m=tolerance_m,
+                    indexed=indexed,
+                ),
+            )
+
+        margin = max(1.0, 2.0 * tolerance_m)
+        ray_min_x = min(observer.x, *(target.x for target in targets))
+        ray_min_y = min(observer.y, *(target.y for target in targets))
+        ray_max_x = max(observer.x, *(target.x for target in targets))
+        ray_max_y = max(observer.y, *(target.y for target in targets))
+        min_x = ray_min_x - margin
+        min_y = ray_min_y - margin
+        max_x = ray_max_x + margin
+        max_y = ray_max_y + margin
+        if (
+            not all(isfinite(value) for value in (margin, min_x, min_y, max_x, max_y))
+            or min_x >= ray_min_x
+            or min_y >= ray_min_y
+            or max_x <= ray_max_x
+            or max_y <= ray_max_y
+        ):
+            return tuple(
+                self.line_visibility(
+                    observer_xy_m,
+                    target_xy_m,
+                    tolerance_m=tolerance_m,
+                    indexed=indexed,
+                )
+                for target_xy_m in targets_xy_m
+            )
+
+        crop = box(min_x, min_y, max_x, max_y)
+        cropped = _cropped_context(self, crop)
+        return tuple(
+            cropped.line_visibility(
+                observer_xy_m,
+                target_xy_m,
+                tolerance_m=tolerance_m,
+                indexed=indexed,
+            )
+            for target_xy_m in targets_xy_m
+        )
+
     def _crosses_known_land(self, ray: LineString, tolerance_m: float, *, indexed: bool) -> bool:
         if indexed and self._tree is not None:
-            candidates = [self._land_parts[int(i)] for i in self._tree.query(ray)]
+            candidates = [
+                self._land_parts[int(i)] for i in self._tree.query(ray, predicate="intersects")
+            ]
         else:
+            if self._prepared_land is None or not self._prepared_land.intersects(ray):
+                return False
             candidates = self._land_parts
         return any(_interior_overlap_exceeds(ray, land, tolerance_m) for land in candidates)
+
+
+def _cropped_context(vector_map: VectorMap, crop: BaseGeometry) -> VectorMap:
+    """Create an independent map context with polygon layers clipped to crop."""
+    context = object.__new__(VectorMap)
+    context._crs = vector_map._crs
+    context._coverage = (
+        _polygonal_clip(vector_map._coverage, crop) if vector_map._coverage is not None else None
+    )
+    context._unknown = (
+        _polygonal_clip(vector_map._unknown, crop) if vector_map._unknown is not None else None
+    )
+    context._land = _polygonal_clip(vector_map._land, crop)
+    context._land_parts = tuple(_polygonal_parts(context._land))
+    context._tree = STRtree(context._land_parts) if context._land_parts else None
+    context._prepared_coverage = prep(context._coverage) if context._coverage is not None else None
+    context._prepared_unknown = prep(context._unknown) if context._unknown is not None else None
+    context._prepared_land = prep(context._land) if not context._land.is_empty else None
+    return context
+
+
+def _polygonal_clip(geometry: BaseGeometry, crop: BaseGeometry) -> BaseGeometry:
+    """Clip a polygon geometry and discard crop-boundary-only line remnants."""
+    clipped = geometry.intersection(crop)
+    polygons = tuple(_polygonal_parts(clipped))
+    if not polygons:
+        return GeometryCollection()
+    return unary_union(polygons)
 
 
 def point_water_status(vector_map: VectorMap, point_xy_m: Point2D) -> WaterStatus:
@@ -255,6 +360,14 @@ def _polygon_parts(geometry: BaseGeometry):
         yield cast(Polygon, geometry)
     elif geometry.geom_type == "MultiPolygon":
         yield from geometry.geoms
+
+
+def _polygonal_parts(geometry: BaseGeometry):
+    if geometry.geom_type == "Polygon":
+        yield cast(Polygon, geometry)
+    elif geometry.geom_type in {"MultiPolygon", "GeometryCollection"}:
+        for part in geometry.geoms:
+            yield from _polygonal_parts(part)
 
 
 def _point(point_xy_m: Point2D, name: str) -> Point:

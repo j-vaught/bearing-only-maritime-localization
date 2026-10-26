@@ -3,9 +3,16 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections.abc import Iterable
+from math import hypot
 from pathlib import Path
 
 import pytest
+from shapely.geometry import LineString, Point, box
+from shapely.geometry.base import BaseGeometry
+
+import maritime_localization_shared.geospatial.vector_map as vector_map_module
+from maritime_localization_shared.geospatial.vector_map import VectorMap
 
 
 def test_bounded_profile_writes_partial_artifacts_on_timeout(tmp_path: Path) -> None:
@@ -402,3 +409,250 @@ def test_geodesic_polar_falls_back_for_submicron_catalog_separation() -> None:
         (-73.88006033640767, 35.18212735680013),
     )
     assert sum(len(batch.proposals) for batch in actual) == 0
+
+
+def _line_parts(geometry: BaseGeometry) -> Iterable[LineString]:
+    if geometry.geom_type == "LineString":
+        yield geometry  # type: ignore[misc]
+    elif geometry.geom_type in {"MultiLineString", "GeometryCollection"}:
+        for part in geometry.geoms:  # type: ignore[attr-defined]
+            yield from _line_parts(part)
+
+
+def _reference_overlap_exceeds(ray: LineString, polygon: BaseGeometry, tolerance_m: float) -> bool:
+    """Independent copy of the pre-optimization constructive-intersection rule."""
+    intersection = ray.intersection(polygon)
+    for line in _line_parts(intersection):
+        coordinates = tuple(line.coords)
+        for start, end in zip(coordinates, coordinates[1:]):
+            if hypot(end[0] - start[0], end[1] - start[1]) <= tolerance_m:
+                continue
+            midpoint = Point((start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0)
+            if polygon.contains(midpoint):
+                return True
+    return False
+
+
+def _reference_visibility(
+    vector_map: VectorMap,
+    observer_xy_m: tuple[float, float],
+    target_xy_m: tuple[float, float],
+    *,
+    tolerance_m: float = 1e-6,
+) -> str:
+    """Original scalar algorithm without STRtree or prepared-intersection guards."""
+    observer = Point(observer_xy_m)
+    target = Point(target_xy_m)
+    if vector_map._unknown is not None and vector_map._unknown.covers(observer):
+        observer_status = "unknown"
+    elif vector_map._coverage is None or not vector_map._coverage.covers(observer):
+        observer_status = "unknown"
+    elif vector_map._land.contains(observer):
+        observer_status = "land"
+    else:
+        observer_status = "water"
+    if observer_status == "land":
+        return "blocked"
+    if observer_status == "unknown":
+        return "unknown"
+
+    ray = LineString((observer.coords[0], target.coords[0]))
+    if ray.length == 0.0:
+        return "clear"
+    parts = tuple(vector_map._land_parts)
+    if any(_reference_overlap_exceeds(ray, part, tolerance_m) for part in parts):
+        return "blocked"
+    if vector_map._coverage is None or not vector_map._coverage.covers(ray):
+        return "unknown"
+    if vector_map._unknown is not None and _reference_overlap_exceeds(
+        ray, vector_map._unknown, tolerance_m
+    ):
+        return "unknown"
+    return "clear"
+
+
+def test_intersection_guards_match_original_scalar_algorithm_adversarially() -> None:
+    coverage = box(0.0, 0.0, 10.0, 10.0)
+    land_with_hole = box(2.0, 2.0, 8.0, 8.0).difference(box(4.9, 2.0, 5.1, 8.0))
+    unknown = box(6.0, 6.0, 7.0, 7.0)
+    vector_map = VectorMap(
+        land_with_hole,
+        crs="EPSG:32618",
+        coverage_geometry=coverage,
+        unknown_geometry=unknown,
+    )
+    rays = (
+        ((5.0, 1.0), (5.0, 9.0)),  # polygon hole
+        ((1.0, 1.0), (9.0, 9.0)),  # land crossing before unknown
+        ((1.0, 5.0), (2.0, 5.0)),  # endpoint on shoreline
+        ((1.0, 2.0), (9.0, 2.0)),  # shoreline contact
+        ((1.0, 6.5), (9.0, 6.5)),  # known land before unknown
+        ((5.0, 5.0), (5.0, 5.0)),  # zero length in the hole
+        ((6.5, 6.5), (9.0, 6.5)),  # unknown observer
+        ((0.0, 5.0), (11.0, 5.0)),  # uncovered ray tail
+    )
+    for observer, target in rays:
+        expected = _reference_visibility(vector_map, observer, target)
+        assert vector_map.line_visibility(observer, target, indexed=True) == expected
+        assert vector_map.line_visibility(observer, target, indexed=False) == expected
+
+
+@pytest.mark.parametrize("indexed", [True, False])
+def test_tolerance_and_observer_decisions_match_original(indexed: bool) -> None:
+    coverage = box(-1.0, -2.0, 11.0, 2.0)
+    narrow_land = box(4.0, -0.00025, 4.0005, 0.00025)
+    vector_map = VectorMap(
+        narrow_land,
+        crs="EPSG:32618",
+        coverage_geometry=coverage,
+    )
+    for tolerance in (0.0, 0.0001, 0.001):
+        rays = (
+            ((0.0, 0.0), (10.0, 0.0)),
+            ((4.00025, 0.0), (4.00025, 0.0)),
+            ((0.0, 1.0), (10.0, 1.0)),
+            ((-2.0, 0.0), (10.0, 0.0)),
+        )
+        for observer, target in rays:
+            assert vector_map.line_visibility(
+                observer, target, tolerance_m=tolerance, indexed=indexed
+            ) == _reference_visibility(vector_map, observer, target, tolerance_m=tolerance)
+
+
+def test_exact_intersection_guards_skip_bbox_only_disjoint_geometries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    coverage = box(0.0, 0.0, 10.0, 10.0)
+    triangle = vector_map_module.Polygon(((4.0, 4.0), (6.0, 4.0), (5.0, 6.0), (4.0, 4.0)))
+    # The ray's bounding box overlaps the triangle envelope, but the ray lies
+    # just left of the triangle and has no exact geometric intersection.
+    observer = (3.0, 5.9)
+    target = (4.1, 5.9)
+
+    land_map = VectorMap(
+        triangle,
+        crs="EPSG:32618",
+        coverage_geometry=coverage,
+    )
+    unknown_map = VectorMap(
+        None,
+        crs="EPSG:32618",
+        coverage_geometry=coverage,
+        unknown_geometry=triangle,
+    )
+    original = vector_map_module._interior_overlap_exceeds
+    calls = 0
+
+    def counted(ray: LineString, polygon: BaseGeometry, tolerance_m: float) -> bool:
+        nonlocal calls
+        calls += 1
+        return original(ray, polygon, tolerance_m)
+
+    monkeypatch.setattr(vector_map_module, "_interior_overlap_exceeds", counted)
+    for indexed in (True, False):
+        assert land_map.line_visibility(observer, target, indexed=indexed) == "clear"
+    assert calls == 0
+
+    for indexed in (True, False):
+        assert unknown_map.line_visibility(observer, target, indexed=indexed) == "clear"
+    assert calls == 0
+
+
+def test_intersection_guards_keep_touching_and_tolerance_intersections() -> None:
+    coverage = box(0.0, -2.0, 10.0, 2.0)
+    land = box(4.0, 0.0, 6.0, 1.0)
+    unknown = box(7.0, 0.0, 8.0, 1.0)
+    vector_map = VectorMap(
+        land,
+        crs="EPSG:32618",
+        coverage_geometry=coverage,
+        unknown_geometry=unknown,
+    )
+    cases = (
+        ((0.0, 0.0), (4.0, 0.0), 1e-6),  # shoreline touch remains clear
+        ((0.0, 0.1), (10.0, 0.1), 0.2),  # short interior overlap remains tolerated
+        ((0.0, 0.1), (10.0, 0.1), 0.01),  # same overlap blocks
+        ((6.5, 0.5), (9.0, 0.5), 1e-6),  # unknown observer priority
+        ((6.0, -1.0), (9.0, -1.0), 1e-6),  # unknown polygon boundary only
+    )
+    for observer, target, tolerance in cases:
+        expected = _reference_visibility(vector_map, observer, target, tolerance_m=tolerance)
+        assert (
+            vector_map.line_visibility(observer, target, tolerance_m=tolerance, indexed=True)
+            == expected
+        )
+        assert (
+            vector_map.line_visibility(observer, target, tolerance_m=tolerance, indexed=False)
+            == expected
+        )
+
+
+def test_batched_local_crop_matches_independent_scalar_oracle() -> None:
+    coverage = box(-20.0, -20.0, 20.0, 20.0)
+    land_with_hole = box(2.0, 2.0, 8.0, 8.0).difference(box(4.9, 2.0, 5.1, 8.0))
+    unknown = box(10.0, 10.0, 11.0, 11.0)
+    vector_map = VectorMap(
+        land_with_hole,
+        crs="EPSG:32618",
+        coverage_geometry=coverage,
+        unknown_geometry=unknown,
+    )
+    observer = (0.0, 0.0)
+    targets = (
+        (5.0, 10.0),  # Crosses land and its hole.
+        (2.0, 0.0),  # Ends on a shoreline.
+        (8.0, 8.0),  # Tangential land corner contact.
+        (10.5, 10.5),  # Unknown area after land-free path.
+        (12.0, 12.0),  # Unknown interior crossing.
+        (0.0, 0.0),  # Zero-length ray.
+        (19.0, 0.0),  # Clear ray.
+    )
+    for indexed in (True, False):
+        for tolerance_m in (0.0, 1e-6, 0.25):
+            expected = tuple(
+                _reference_visibility(vector_map, observer, target, tolerance_m=tolerance_m)
+                for target in targets
+            )
+            actual = vector_map.line_visibility_many(
+                observer, targets, tolerance_m=tolerance_m, indexed=indexed
+            )
+            assert actual == expected
+            assert actual == tuple(
+                vector_map.line_visibility(
+                    observer, target, tolerance_m=tolerance_m, indexed=indexed
+                )
+                for target in targets
+            )
+
+
+def test_batched_local_crop_preserves_observer_status_and_empty_input() -> None:
+    coverage = box(-5.0, -5.0, 5.0, 5.0)
+    land = box(-1.0, -1.0, 1.0, 1.0)
+    unknown = box(2.0, 2.0, 3.0, 3.0)
+    vector_map = VectorMap(
+        land,
+        crs="EPSG:32618",
+        coverage_geometry=coverage,
+        unknown_geometry=unknown,
+    )
+    targets = ((4.0, 4.0), (0.0, 4.0))
+    for observer in ((0.0, 0.0), (2.5, 2.5), (4.0, 0.0)):
+        assert vector_map.line_visibility_many(observer, targets) == tuple(
+            _reference_visibility(vector_map, observer, target) for target in targets
+        )
+    assert vector_map.line_visibility_many((0.0, 0.0), ()) == ()
+
+
+def test_batched_local_crop_falls_back_when_margin_is_not_representable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vector_map = VectorMap(None, crs="EPSG:32618")
+
+    def fail_if_crop_is_built(*args, **kwargs):
+        raise AssertionError("unrepresentable crop margin must use scalar fallback")
+
+    monkeypatch.setattr(vector_map_module, "_cropped_context", fail_if_crop_is_built)
+    observer = (1e20, 1e20)
+    targets = ((1e20, 1e20 + 16384.0), (1e20 + 16384.0, 1e20))
+    expected = tuple(vector_map.line_visibility(observer, target) for target in targets)
+    assert vector_map.line_visibility_many(observer, targets) == expected
