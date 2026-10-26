@@ -15378,6 +15378,7 @@
   },
   "config_path": "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/outputs/a26-screened-cache-diagnostic-v4/cache-build/search-config.json",
   "created_utc": "2026-10-26T10:23:04.454702+00:00",
+  "harness_sha": "60447c81d0ac81a0413cd64a183eedb4d9de1f54",
   "input_sha256": {
     "catalog.json": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
     "map.json": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
@@ -15395,6 +15396,7 @@
   ],
   "sampling": "first 128 cache indices plus 128 evenly spaced indices across full cache, stable deduplication",
   "schema": "cached-candidate-scoring-profile-v1",
+  "scoring_source_sha": "0d34a17",
   "selected_count": 255,
   "selected_ids_recorded_before_measurements": true,
   "selected_manifest": "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/cached-profile/reports/experiments/cached-candidate-scoring/selected-candidates.json",
