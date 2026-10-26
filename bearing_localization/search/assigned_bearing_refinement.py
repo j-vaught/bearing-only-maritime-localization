@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import atan2, degrees, hypot, isfinite
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 from pyproj import Geod, Transformer
@@ -25,7 +25,7 @@ from maritime_localization_shared.contracts.localization import Hypothesis
 from .scoring import CandidateEvaluation, CandidateScorer
 
 AssignedBearingStatus = Literal[
-    "accepted",
+    "improved",
     "no_improvement",
     "invalid_bounds",
     "invalid_assignment",
@@ -33,6 +33,7 @@ AssignedBearingStatus = Literal[
     "unsupported_calibration",
     "unsupported_covariance",
     "invalid_seed",
+    "stale_hypothesis",
     "invalid_water",
     "unresolved_coverage",
     "unresolved_model",
@@ -126,61 +127,67 @@ def refine_assigned_bearing(
     if not isinstance(hypothesis, Hypothesis):
         raise TypeError("hypothesis must be a Hypothesis instance.")
 
-    empty: dict[str, Any] = dict(
-        original_hypothesis=hypothesis,
-        proposed_pose=None,
-        exact_hypothesis=None,
-        solver_status=None,
-        nfev=0,
-        njev=None,
-        residual_count=0,
-        residual_evaluations=0,
-        assignment_count=len(hypothesis.assignments),
-    )
+    def make_result(
+        status: AssignedBearingStatus,
+        *,
+        proposed_pose: tuple[float, float] | None = None,
+        exact_hypothesis: Hypothesis | None = None,
+        solver_status: int | None = None,
+        nfev: int = 0,
+        njev: int | None = None,
+        residual_count: int = 0,
+        residual_evaluations: int = 0,
+        canonical_evaluations: int = 0,
+        message: str | None = None,
+    ) -> AssignedBearingRefinementResult:
+        return AssignedBearingRefinementResult(
+            original_hypothesis=hypothesis,
+            proposed_pose=proposed_pose,
+            exact_hypothesis=exact_hypothesis,
+            status=status,
+            solver_status=solver_status,
+            nfev=nfev,
+            njev=njev,
+            residual_count=residual_count,
+            residual_evaluations=residual_evaluations,
+            assignment_count=len(hypothesis.assignments),
+            canonical_evaluations=canonical_evaluations,
+            message=message,
+        )
 
     config = scorer.config
     bounds = config.bounds_xy
     if bounds is None:
-        return AssignedBearingRefinementResult(
-            **empty, status="invalid_bounds", message="SearchConfig.bounds_xy is required."
-        )
+        return make_result("invalid_bounds", message="SearchConfig.bounds_xy is required.")
 
     measurements = scorer.measurements
     if config.common_bearing_bias_prior_deg is not None or (
         measurements.calibrated_common_bias_mean_deg not in (None, 0.0)
         or measurements.calibrated_common_bias_sigma_deg not in (None, 0.0)
     ):
-        return AssignedBearingRefinementResult(
-            **empty,
-            status="unsupported_calibration",
+        return make_result(
+            "unsupported_calibration",
             message="Common-bearing-bias calibration is unsupported by this proposal.",
         )
     if measurements.covariance_deg2 is not None:
-        covariance = np.asarray(measurements.covariance_deg2, dtype=float)
-        if not np.allclose(covariance, np.diag(np.diag(covariance)), rtol=0.0, atol=1e-12):
-            return AssignedBearingRefinementResult(
-                **empty,
-                status="unsupported_covariance",
-                message="Non-diagonal measurement covariance requires a joint likelihood.",
-            )
+        return make_result(
+            "unsupported_covariance",
+            message="Measurement covariance is unsupported by this independent residual fit.",
+        )
 
     xmin, xmax, ymin, ymax = bounds
     seed = (float(hypothesis.east_m), float(hypothesis.north_m))
     if not (xmin <= seed[0] <= xmax and ymin <= seed[1] <= ymax):
-        return AssignedBearingRefinementResult(
-            **empty, status="invalid_seed", message="Hypothesis lies outside configured bounds."
-        )
+        return make_result("invalid_seed", message="Hypothesis lies outside configured bounds.")
     if len(hypothesis.assignments) < 2:
-        return AssignedBearingRefinementResult(
-            **empty,
-            status="insufficient_assignments",
+        return make_result(
+            "insufficient_assignments",
             message="At least two assigned bearings are required for a 2D pose proposal.",
         )
     report_count = len(measurements.measurements)
     if any(assignment.report_index >= report_count for assignment in hypothesis.assignments):
-        return AssignedBearingRefinementResult(
-            **empty,
-            status="invalid_assignment",
+        return make_result(
+            "invalid_assignment",
             message="An assignment refers to a report outside MeasurementSetV2.",
         )
 
@@ -192,17 +199,13 @@ def refine_assigned_bearing(
         status: AssignedBearingStatus = (
             "unsupported_covariance" if isinstance(exc, NotImplementedError) else "invalid_seed"
         )
-        return AssignedBearingRefinementResult(
-            **empty, status=status, canonical_evaluations=canonical_evaluations, message=str(exc)
-        )
+        return make_result(status, canonical_evaluations=canonical_evaluations, message=str(exc))
     if seed_evaluation.status != "scored" or seed_evaluation.predicted is None:
-        return AssignedBearingRefinementResult(
-            **empty,
-            status=_status_for_evaluation(seed_evaluation),
+        return make_result(
+            _status_for_evaluation(seed_evaluation),
             canonical_evaluations=canonical_evaluations,
             message=seed_evaluation.reason,
         )
-
     groups_by_key = {group.representative_key: group for group in seed_evaluation.predicted.groups}
     records_by_key = {record.key: record for record in scorer.catalog.records}
     frozen: list[tuple[int, CatalogRecordV2, float]] = []
@@ -210,9 +213,8 @@ def refine_assigned_bearing(
         group = groups_by_key.get(assignment.catalog_key)
         record = records_by_key.get(assignment.catalog_key)
         if group is None or record is None:
-            return AssignedBearingRefinementResult(
-                **empty,
-                status="invalid_assignment",
+            return make_result(
+                "invalid_assignment",
                 canonical_evaluations=canonical_evaluations,
                 message=(
                     f"Assignment key {assignment.catalog_key!r} is not a visible representative."
@@ -226,11 +228,27 @@ def refine_assigned_bearing(
         sigma = max(config.sigma_floor_deg, hypot(report_sigma, group_sigma))
         frozen.append((assignment.report_index, record, sigma))
 
+    if seed_evaluation.hypothesis != hypothesis:
+        return make_result(
+            "stale_hypothesis",
+            canonical_evaluations=canonical_evaluations,
+            message="Input hypothesis does not exactly match the canonical seed score.",
+        )
+
     inverse = Transformer.from_crs(scorer.vector_map.crs, "EPSG:4326", always_xy=True)
-    target_lonlat = {
-        record.key: _target_lonlat(record, groups_by_key[record.key].visible_feature_offset_quality)
-        for _report_index, record, _sigma in frozen
-    }
+    try:
+        target_lonlat = {
+            record.key: _target_lonlat(
+                record, groups_by_key[record.key].visible_feature_offset_quality
+            )
+            for _report_index, record, _sigma in frozen
+        }
+    except ValueError as exc:
+        return make_result(
+            "unresolved_model",
+            canonical_evaluations=canonical_evaluations,
+            message=str(exc),
+        )
     observed = np.asarray(
         [
             measurements.measurements[report_index].bearing_deg
@@ -273,9 +291,8 @@ def refine_assigned_bearing(
         np.asarray((xmax, ymax), dtype=float), np.asarray(seed) + _LOCAL_RADIUS_M
     )
     if np.any(local_lower >= local_upper):
-        return AssignedBearingRefinementResult(
-            **empty,
-            status="invalid_bounds",
+        return make_result(
+            "invalid_bounds",
             canonical_evaluations=canonical_evaluations,
             message="The clipped local bounds have no positive width.",
         )
@@ -288,9 +305,8 @@ def refine_assigned_bearing(
             max_nfev=_MAX_NFEV,
         )
     except (TypeError, ValueError, RuntimeError) as exc:
-        return AssignedBearingRefinementResult(
-            **empty,
-            status="solver_failed",
+        return make_result(
+            "solver_failed",
             canonical_evaluations=canonical_evaluations,
             residual_count=len(frozen),
             residual_evaluations=residual_evaluations,
@@ -300,61 +316,80 @@ def refine_assigned_bearing(
     solver_nfev = int(solve.nfev)
     solver_njev = None if solve.njev is None else int(solve.njev)
     proposal = (float(solve.x[0]), float(solve.x[1])) if np.isfinite(solve.x).all() else None
-    common: dict[str, Any] = dict(
-        original_hypothesis=hypothesis,
-        proposed_pose=proposal,
-        solver_status=int(solve.status),
-        nfev=solver_nfev,
-        njev=solver_njev,
-        residual_count=len(frozen),
-        residual_evaluations=residual_evaluations,
-        assignment_count=len(frozen),
-        message=str(solve.message),
-    )
     if proposal is None:
-        return AssignedBearingRefinementResult(
-            **common, status="solver_failed", canonical_evaluations=canonical_evaluations
+        return make_result(
+            "solver_failed",
+            canonical_evaluations=canonical_evaluations,
+            solver_status=int(solve.status),
+            nfev=solver_nfev,
+            njev=solver_njev,
+            residual_count=len(frozen),
+            residual_evaluations=residual_evaluations,
+            message=str(solve.message),
         )
     if not solve.success:
-        return AssignedBearingRefinementResult(
-            **common,
-            status="max_nfev" if solve.status == 0 else "solver_failed",
+        return make_result(
+            "max_nfev" if solve.status == 0 else "solver_failed",
             canonical_evaluations=canonical_evaluations,
+            proposed_pose=proposal,
+            solver_status=int(solve.status),
+            nfev=solver_nfev,
+            njev=solver_njev,
+            residual_count=len(frozen),
+            residual_evaluations=residual_evaluations,
+            message=str(solve.message),
         )
 
     try:
         proposal_evaluation = scorer.evaluate(proposal)
         canonical_evaluations += 1
     except (NotImplementedError, ValueError) as exc:
-        return AssignedBearingRefinementResult(
-            **common,
-            status=(
-                "unsupported_covariance"
-                if isinstance(exc, NotImplementedError)
-                else "solver_failed"
-            ),
+        return make_result(
+            "unsupported_covariance" if isinstance(exc, NotImplementedError) else "solver_failed",
             canonical_evaluations=canonical_evaluations,
+            proposed_pose=proposal,
+            solver_status=int(solve.status),
+            nfev=solver_nfev,
+            njev=solver_njev,
+            residual_count=len(frozen),
+            residual_evaluations=residual_evaluations,
             message=str(exc),
         )
     if proposal_evaluation.status != "scored" or proposal_evaluation.hypothesis is None:
-        return AssignedBearingRefinementResult(
-            **common,
-            status=_status_for_evaluation(proposal_evaluation),
+        return make_result(
+            _status_for_evaluation(proposal_evaluation),
             canonical_evaluations=canonical_evaluations,
+            proposed_pose=proposal,
+            solver_status=int(solve.status),
+            nfev=solver_nfev,
+            njev=solver_njev,
+            residual_count=len(frozen),
+            residual_evaluations=residual_evaluations,
             message=proposal_evaluation.reason,
         )
     if proposal_evaluation.hypothesis.score >= hypothesis.score:
-        return AssignedBearingRefinementResult(
-            **common,
-            exact_hypothesis=None,
-            status="no_improvement",
+        return make_result(
+            "no_improvement",
             canonical_evaluations=canonical_evaluations,
+            proposed_pose=proposal,
+            solver_status=int(solve.status),
+            nfev=solver_nfev,
+            njev=solver_njev,
+            residual_count=len(frozen),
+            residual_evaluations=residual_evaluations,
+            message=str(solve.message),
         )
-    return AssignedBearingRefinementResult(
-        **common,
-        status="accepted",
-        exact_hypothesis=proposal_evaluation.hypothesis,
+    return make_result(
+        "improved",
         canonical_evaluations=canonical_evaluations,
+        proposed_pose=proposal,
+        exact_hypothesis=proposal_evaluation.hypothesis,
+        solver_status=int(solve.status),
+        nfev=solver_nfev,
+        njev=solver_njev,
+        residual_count=len(frozen),
+        residual_evaluations=residual_evaluations,
+        message=str(solve.message),
     )
 
 
