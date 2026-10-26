@@ -165,6 +165,20 @@ def test_disk_reserve_is_enforced(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         check_resources(tmp_path)
 
 
+def test_existing_parent_bytes_do_not_consume_new_output_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = tmp_path / "shared-output-parent"
+    parent.mkdir()
+    (parent / "prior-run-records.bin").write_bytes(b"x" * (MAX_OUTPUT_BYTES + 1))
+    output = parent / "new-run"
+    monkeypatch.setattr(
+        "tools.run_assignment_expansion_diagnostic.shutil.disk_usage",
+        lambda _path: SimpleNamespace(free=FLOOR_BYTES + MAX_OUTPUT_BYTES),
+    )
+    assert check_resources(parent, output) == FLOOR_BYTES + MAX_OUTPUT_BYTES
+
+
 def test_output_cap_has_room_for_all_branch_events() -> None:
     assert MAX_OUTPUT_BYTES == 50 * 1024**2
 
