@@ -17,7 +17,7 @@ import pytest
 
 from bearing_localization.accuracy_cli import search_v2_files
 
-from .test_a32 import _v2_fixture
+from .test_standalone_cli import _v2_fixture
 
 
 def test_direct_coarse_flag_without_master_fails_closed(tmp_path: Path) -> None:

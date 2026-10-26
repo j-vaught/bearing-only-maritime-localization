@@ -12,7 +12,7 @@ from bearing_localization.search.scoring import CandidateEvaluation, CandidateSc
 from maritime_localization_shared.contracts.inputs_v2 import MeasurementSetV2
 from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
 
-from .test_a20 import _inputs, _xy
+from .test_continuous_refinement import _inputs, _xy
 
 
 def _scorer(*, noisy: bool = True, measurements: MeasurementSetV2 | None = None):

@@ -11,11 +11,11 @@ from bearing_localization.search.assignment_expansion import (
     expand_assignments,
 )
 
-from .test_a20 import _xy
 from .test_assignment_expansion import (
     _scorer_with_fifth,
     _single_addition_seed,
 )
+from .test_continuous_refinement import _xy
 
 
 def _assert_zero_timings(result: Any) -> None:

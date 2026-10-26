@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from accuracy.test_a22_screened import _scenario
+from accuracy.test_screened_search import _scenario
 from bearing_localization.search.parallel_screened import (
     CandidateAudit,
     ParallelScreenedCandidatePool,

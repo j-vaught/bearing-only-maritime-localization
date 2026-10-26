@@ -8,7 +8,7 @@ import pytest
 from pyproj import CRS, Transformer
 from shapely.geometry import box
 
-from accuracy.test_a14_screen import GEOD, catalog, record, vmap, xy
+from accuracy.test_visibility_screen import GEOD, catalog, record, vmap, xy
 from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.scoring import CandidateScorer
 from bearing_localization.search.screened_search import (

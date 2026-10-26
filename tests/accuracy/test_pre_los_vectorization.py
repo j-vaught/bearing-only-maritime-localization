@@ -13,7 +13,7 @@ from maritime_localization_shared.geometry.angular_grouping import (
     group_angular_detections,
 )
 
-from .test_a21_pre_los import _measurements, _prepared_bundle, _records
+from .test_pre_los_bound import _measurements, _prepared_bundle, _records
 
 
 def _scalar_reference(measurements, bundle, config, numerical_margin=1e-10):

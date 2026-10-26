@@ -21,7 +21,7 @@ from bearing_localization.search.parallel_candidates import (
 from bearing_localization.search.scoring import CandidateScorer, score_candidate_positions
 from maritime_localization_shared.contracts.inputs_v2 import CatalogV2
 
-from .test_a37 import _catalog, _map, _measurements, _origin_xy, _record
+from .test_architecture_regressions import _catalog, _map, _measurements, _origin_xy, _record
 
 
 def _exit_after_unpickle(exit_code: int) -> None:

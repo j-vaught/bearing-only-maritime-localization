@@ -22,7 +22,7 @@ from maritime_localization_shared.contracts.inputs_v2 import (
 )
 from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
 
-from .test_a20 import ORIGIN, _inputs, _xy
+from .test_continuous_refinement import ORIGIN, _inputs, _xy
 
 _GEOD = Geod(ellps="WGS84")
 

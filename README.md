@@ -40,7 +40,6 @@ Edit `examples/tiny/scene.json` to change the simulator's observer, objects, noi
 
 Edit `examples/tiny/search-config.json` to change the search bounds, range, type policy or candidate budget. All projected search coordinates use EPSG:32618. Bearings are degrees clockwise from true north.
 
-[The debugging guide](docs/DEBUGGING.md) covers breakpoints, algorithm selection, real East Coast inputs, result fields, and GPU setup.
 
 ## Code
 

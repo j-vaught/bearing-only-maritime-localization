@@ -35,8 +35,8 @@ from maritime_localization_shared.serialization import (
     write_contract,
 )
 
-from .test_a20 import _xy
 from .test_assignment_expansion import _scorer_with_fifth
+from .test_continuous_refinement import _xy
 
 ROOT = Path(__file__).resolve().parents[2]
 

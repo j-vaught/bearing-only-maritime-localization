@@ -91,9 +91,7 @@ def _run(scene=None, *, sensor=None, mismatch=None, vector_map=None, seed=3):
 
 
 def test_default_sensor_fixture_records_requested_physical_defaults():
-    fixture = json.loads(
-        (Path(__file__).parent / "fixtures" / "a15_sensor_defaults.json").read_text()
-    )
+    fixture = json.loads((Path(__file__).parent / "fixtures" / "sensor_defaults.json").read_text())
     defaults = SensorConfigurationV2()
     for key, value in fixture.items():
         assert getattr(defaults, key) == value

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from accuracy.test_a18 import _catalog, _map, _measurements, _xy
+from accuracy.test_reference_grid import _catalog, _map, _measurements, _xy
 from bearing_localization.search.bounds import BoundsResult
 from bearing_localization.search.branch_bound import (
     branch_and_bound_search,
