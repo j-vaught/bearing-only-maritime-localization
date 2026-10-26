@@ -249,7 +249,7 @@ def main() -> None:
     document["run_state_sha256"] = hfile(run_path) if run_path.is_file() else None
     document["run_root"] = str(args.run_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(document, indent=2, sort_keys=True, allow_nan=False) + "\\n")
+    args.output.write_text(json.dumps(document, indent=2, sort_keys=True, allow_nan=False) + "\n")
     print(
         json.dumps(
             {
