@@ -19,6 +19,12 @@
     {"candidate": 2, "score": 31.45217140478276, "groups": 3, "identity_limited": 3},
     {"candidate": 3, "score": 26.02598193152521, "groups": 4, "identity_limited": 4}
   ],
+  "evidence_record_sha256": {
+    "a14_audit_md": "092f4572e2c816ce4937db432d29b60fed79e069ba03be45b690bf0edfddd0c6",
+    "baseline_run_json": "5f68278208c163a4837614b61db6130e82d1c56a1257a75e4120c92be96633c0",
+    "prepared_run_json": "a6b4c558e7168b5d27c9eb1666a8bbb4313bef97638c624a570af67e190d73ee"
+  },
+  "profile_source_revision": "cb0493bfa4b90101048249948fad94e87ad2c7ca",
   "input_hashes": {
     "catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
     "map_sha256": "392b70946655bc54d29260722d743d92baa1f99f89af4ce8848e496eb217df73",
