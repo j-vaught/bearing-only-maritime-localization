@@ -1,0 +1,82 @@
+{
+  "schema": "a29-assignment-share-refresh-v1",
+  "status": "inconclusive_bounded_timeout",
+  "acceleration_decision": "defer_acceleration_pending_complete_current_profile",
+  "reason": "No complete search serialized telemetry, so assignment share of total search time cannot be calculated. No accelerated assignment prototype is justified by incomplete timing.",
+  "profile_mode": "read-only CPU profiling adapter; exact assignment solver and objective unchanged",
+  "algorithm": "pairwise",
+  "candidate_budget": 64,
+  "objective_version": "bearing_set_map_v1",
+  "per_case_timeout_s": 150,
+  "denominator_definition": "SearchTelemetry.elapsed_wall_s through serialized search result, including input/map setup, candidate search, refinement, decision, and serialization; excludes process startup.",
+  "input_provenance": {
+    "split": "development",
+    "eligibility_manifest_sha256": "2330090802952093bab1d5ec6cb97c6298cce27ee2050804f6eab91d66e8d050",
+    "catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+    "map_sha256": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
+    "bounds_xy_m_epsg32618": [
+      -220366.49772326474,
+      1424309.6784374337,
+      2699585.3102704627,
+      5088044.413143414
+    ],
+    "source_commit": "859e85c0c6f1fc939f53f9ebd46db67e27ea4442",
+    "source_commit_time_edt": "2026-10-26 01:08:03",
+    "profile_process_start_edt": "2026-10-26 01:08:05",
+    "source_hashes_sha256": {
+      "bearing_localization/search/assignment.py": "213ed1dcfac5318e0b3703e3ed0fea1eff955ca407dd292415709d5f1f88f493",
+      "bearing_localization/search/scoring.py": "f8c8caeba0222ed80d11f56a5567bb0eb921699468c6390304d6c02946205d30",
+      "bearing_localization/search/prediction.py": "8e0a580c44c91a70c084d1483fa55cbee2a41883cf63eeaea8f23c39f471b895",
+      "bearing_localization/search/pairwise.py": "fd4f351e7e3928e39c2e6b75ef1629aff6d9defd346f05a3a2cb7d225bfc001b",
+      "bearing_localization/search/telemetry.py": "dc64880a19e766b64f6ffe8f759aa2629e2a032516a57bee3a80519caf43be33",
+      "bearing_localization/accuracy_cli.py": "2691adc842ba553d72014c553ce3fe49e449a9d55dcfc54f0bbb0454ac7829f5",
+      "maritime_localization_shared/geospatial/vector_map.py": "01d82f9efa0b6deccdf4a512f42702120ff4a51380f9e0b61c693f2adff6a250"
+    }
+  },
+  "cases": [
+    {
+      "trial_id": "development/port-001/placement-002/r0/range1000m/typeson/nominal",
+      "relative_input_path": "development/port-001/placement-002/r0/1000m/types-on/nominal/measurements.json",
+      "measurements_sha256": "b9c2886b24a1b80a8d765394662bd8ef725385b1308d63c857ee6cde383c8cd5",
+      "status": "timeout",
+      "elapsed_s": 150.10526057705283,
+      "telemetry_written": false,
+      "assignment_wall_s": null,
+      "assignment_fraction": null,
+      "validity": "bounded timeout; no completed end-to-end denominator"
+    },
+    {
+      "trial_id": "development/port-001/placement-001/r1/range5000m/typesoff/nominal",
+      "relative_input_path": "development/port-001/placement-001/r1/5000m/types-off/nominal/measurements.json",
+      "measurements_sha256": "31e83f497e3928e39c2e6b75ef1629aff6d9defd346f05a3a2cb7d225bfc001b",
+      "status": "manually_stopped_after_timeout_orphan_overlap",
+      "elapsed_s": null,
+      "telemetry_written": false,
+      "assignment_wall_s": null,
+      "assignment_fraction": null,
+      "validity": "invalid timing; overlapped with an orphan process from the first timeout"
+    },
+    {
+      "trial_id": "development/port-001/placement-001/r0/range10000m/typeson/nominal",
+      "relative_input_path": "development/port-001/placement-001/r0/10000m/types-on/nominal/measurements.json",
+      "measurements_sha256": "2daf7ea83df36f99ceddc97cb9eb33e7da6f5f1b3f40e3b089b851886e598340",
+      "status": "not_started",
+      "elapsed_s": null,
+      "telemetry_written": false,
+      "assignment_wall_s": null,
+      "assignment_fraction": null,
+      "validity": "not attempted"
+    }
+  ],
+  "contamination": [
+    "The first subprocess wrapper timed out the uv launcher but did not terminate its Python descendant.",
+    "The second run overlapped with the remaining first child and was manually terminated; no outcomes from either overlap are used.",
+    "A separate CPU gate ran concurrently during the attempt window, so wall-time observations would be diagnostic even if they had completed."
+  ],
+  "gpu": {
+    "used": false,
+    "device0_timing_claim": false,
+    "device_activity": "no GPU assignment run"
+  },
+  "follow_up": "Repeat a bounded profile against an integrated optimized proposal path using an immutable source worktree and the shared benchmark lock. The new A29 helper starts a new process group and terminates the whole group on timeout."
+}
