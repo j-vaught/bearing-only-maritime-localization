@@ -91,6 +91,7 @@ def test_bound_is_below_exhaustive_complete_objective(
         k,
         config,
         visibility_count_certified=True,
+        variance_model_supported=True,
         observation_types=report_types,
         observation_sigmas_deg=report_sigmas,
     )
@@ -125,7 +126,12 @@ def test_k_zero_and_actual_group_count_above_k_are_sound():
     )
     for k in (0, 1, 2):
         result = candidate_objective_lower_bound(
-            bearings, k, config, visibility_count_certified=True, observation_sigmas_deg=sigmas
+            bearings,
+            k,
+            config,
+            visibility_count_certified=True,
+            variance_model_supported=True,
+            observation_sigmas_deg=sigmas,
         )
         assert result.supported and result.bound is not None
         assert result.bound <= _oracle_score(actual) + 1e-12
@@ -137,7 +143,7 @@ def test_zero_clutter_intensity_still_bounds_the_all_matched_case():
     config = SearchConfig(expected_unmatched_reports=0.0)
     observations = [45.0, 225.0]
     result = candidate_objective_lower_bound(
-        observations, 1, config, visibility_count_certified=True
+        observations, 1, config, visibility_count_certified=True, variance_model_supported=True
     )
     assert result.supported and result.bound is not None
     costs = build_likelihood_costs(
@@ -164,6 +170,7 @@ def test_negative_zero_residual_floors_use_sigma_floor_and_q_at_most_one():
         2,
         config,
         visibility_count_certified=True,
+        variance_model_supported=True,
         observation_types=["vessel", "physical_aid"],
         observation_sigmas_deg=[0.0, 0.05],
     )
@@ -183,7 +190,11 @@ def test_measurement_set_v2_and_diagonal_covariance_use_canonical_variance_rules
         covariance_deg2=((0.04, 0.0), (0.0, 4.0)),
     )
     result = candidate_objective_lower_bound(
-        measurements, 1, SearchConfig(), visibility_count_certified=True
+        measurements,
+        1,
+        SearchConfig(),
+        visibility_count_certified=True,
+        variance_model_supported=True,
     )
     assert result.supported and result.bound is not None
     assert result.per_report_match_floors[0] < result.per_report_match_floors[1]
@@ -246,7 +257,7 @@ def test_uncertified_or_unsupported_variance_and_objective_return_unresolved():
         covariance_deg2=((1.0, 0.25), (0.25, 1.0)),
     )
     unsupported = candidate_objective_lower_bound(
-        correlated, 1, config, visibility_count_certified=True
+        correlated, 1, config, visibility_count_certified=True, variance_model_supported=True
     )
     assert not unsupported.supported and unsupported.bound is None
     assert unsupported.reason is not None
@@ -260,6 +271,7 @@ def test_type_bias_disabled_for_global_minimum_does_not_change_actual_objective(
         1,
         config,
         visibility_count_certified=True,
+        variance_model_supported=True,
         observation_types=["vessel"],
         observation_sigmas_deg=[0.05],
     )
@@ -286,7 +298,7 @@ def test_type_bias_disabled_for_global_minimum_does_not_change_actual_objective(
 
 def test_pruning_is_strict_and_requires_supported_bound_and_feasible_score():
     result = candidate_objective_lower_bound(
-        [0.0], 2, SearchConfig(), visibility_count_certified=True
+        [0.0], 2, SearchConfig(), visibility_count_certified=True, variance_model_supported=True
     )
     assert result.supported and result.bound is not None
     assert not should_prune_candidate(result, result.bound - 1e-10)
@@ -331,6 +343,7 @@ def test_prepared_bound_matches_one_shot_for_multiple_k(
     prepared = prepare_candidate_objective_bound(
         observations,
         config,
+        variance_model_supported=True,
         observation_types=types,
         observation_sigmas_deg=sigmas,
     )
@@ -342,6 +355,7 @@ def test_prepared_bound_matches_one_shot_for_multiple_k(
             k,
             config,
             visibility_count_certified=True,
+            variance_model_supported=True,
             observation_types=types,
             observation_sigmas_deg=sigmas,
         )
@@ -358,6 +372,7 @@ def test_prepared_input_storage_is_immutable_and_does_not_alias_callers():
     prepared = prepare_candidate_objective_bound(
         bearings,
         config,
+        variance_model_supported=True,
         observation_types=types,
         observation_sigmas_deg=sigmas,
     )
@@ -388,7 +403,7 @@ def test_prepared_unsupported_state_and_certificate_behavior_matches_wrapper():
         )
         assert cached == direct
     legacy_config = SearchConfig(objective_version="legacy_corrected_v0")
-    legacy = prepare_candidate_objective_bound([0.0], legacy_config)
+    legacy = prepare_candidate_objective_bound([0.0], legacy_config, variance_model_supported=True)
     assert legacy.bound(1, True) == candidate_objective_lower_bound(
         [0.0], 1, legacy_config, visibility_count_certified=True
     )
