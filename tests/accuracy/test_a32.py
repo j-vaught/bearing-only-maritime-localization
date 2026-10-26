@@ -15,6 +15,7 @@ import bearing_localization.search as search_api
 from bearing_localization.accuracy_cli import _validate_scope_manifest
 from bearing_localization.algorithms import SearchResult
 from bearing_localization.evaluation.metrics import SupportManifest
+from bearing_localization.search.assignment_expansion import ExpansionConfig, expand_assignments
 from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.config_serialization import read_search_config, write_search_config
 from maritime_localization_shared.contracts import (
@@ -33,6 +34,9 @@ from maritime_localization_shared.serialization import (
     read_contract,
     write_contract,
 )
+
+from .test_a20 import _xy
+from .test_assignment_expansion import _scorer_with_fifth
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -577,6 +581,124 @@ def test_branch_deadline_preserves_candidate_budget_and_pending_mode(
     assert expansion["mode_results"][0]["status"] == "request_deadline_exhausted"
     assert expansion["mode_results"][0]["counters"]["pending_branch_count"] is None
     assert not truth_path.exists()
+
+
+def test_truth_free_coarse_assignment_expansion_skips_pattern_refinement(
+    tmp_path: Path,
+) -> None:
+    measurement_path, catalog_path, map_path, config_path, truth_path = _v2_fixture(tmp_path)
+    config = read_search_config(config_path)
+    write_search_config(config_path, replace(config, algorithm="reference_grid"))
+    result_path = tmp_path / "coarse-expanded-result.json"
+    truth_path.unlink()
+
+    process = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bearing_localization.search_cli",
+            "--schema-version",
+            "2",
+            "--measurements",
+            str(measurement_path),
+            "--catalog",
+            str(catalog_path),
+            "--map",
+            str(map_path),
+            "--config",
+            str(config_path),
+            "--projected-crs",
+            "EPSG:32618",
+            "--output",
+            str(result_path),
+            "--algorithm",
+            "reference_grid",
+            "--spacing-m",
+            "100",
+            "--no-refine",
+            "--refine-modes",
+            "4",
+            "--expand-assignments-from-coarse",
+            "--expansion-local-radius-m",
+            "800",
+            "--expansion-max-nfev",
+            "20",
+            "--expansion-max-branches",
+            "20",
+        ],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    result = read_contract(result_path, LocalizationResult)
+    telemetry = json.loads(
+        result_path.with_suffix(".json.telemetry.json").read_text(encoding="utf-8")
+    )
+    diagnostics = telemetry["diagnostics"]
+    expansion = diagnostics["assignment_expansion"]
+    stages = [item["name"] for item in telemetry["telemetry"]["stages"]]
+
+    assert not truth_path.exists()
+    assert result.search_status == "completed"
+    assert result.decision_status == "ambiguous"
+    assert result.certificate_scope == "none"
+    assert expansion["seed_stage"] == "coarse"
+    assert expansion["selected_mode_count"] == 1
+    assert expansion["pending_mode_count"] == 0
+    assert expansion["unselected_mode_count"] == 0
+    assert diagnostics["assignment_expansion_seed_selection"]["available_candidate_count"] == 1
+    assert diagnostics["assignment_expansion_seed_selection"]["selected_mode_count"] == 1
+    assert "continuous_refinement" not in stages
+    assert "assignment_expansion" in stages
+    assert all(item["seed_east_m"] and item["seed_north_m"] for item in expansion["mode_results"])
+    assert expansion["mode_results"][0]["status"] == "no_unmatched_reports"
+    assert process.returncode == 0
+
+
+def test_production_scorer_expansion_improves_a_coarse_four_match_seed() -> None:
+    scorer = _scorer_with_fifth(bearing=320.0)
+    east_m, north_m = _xy()
+    seed = scorer.evaluate((east_m + 20.0, north_m - 20.0)).hypothesis
+    assert seed is not None
+    assert len(seed.assignments) == 4
+
+    expanded = expand_assignments(
+        scorer,
+        seed,
+        config=ExpansionConfig(max_branches=20),
+    )
+
+    assert expanded.completed
+    assert expanded.improved
+    assert expanded.best_hypothesis.score < seed.score
+    assert len(expanded.best_hypothesis.assignments) == 5
+    assert expanded.counters["improved_branches"] >= 1
+
+
+def test_coarse_assignment_expansion_and_refined_flag_are_mutually_exclusive() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bearing_localization.search_cli",
+            "--schema-version",
+            "2",
+            "--measurements",
+            "measurements.json",
+            "--config",
+            "config.json",
+            "--output",
+            "estimate.json",
+            "--expand-assignments",
+            "--expand-assignments-from-coarse",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "not allowed with argument" in result.stderr
 
 
 def test_assignment_expansion_gpu_backend_fails_explicitly(tmp_path: Path) -> None:
