@@ -632,17 +632,6 @@ def main() -> None:
     parser.add_argument("--search-crs", default="EPSG:32618")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    # Truth files are loaded only by this evaluator process after immutable search output exists.
-
-    truth_path = args.truth_dir / "truth.json"
-    truth = read_json(truth_path)
-    truth_crs_doc = read_json(args.truth_dir / "truth-crs.json")
-    from maritime_localization_shared.contracts.truth import EvaluationTruth
-    from maritime_localization_shared.serialization import read_contract
-
-    truth_contract = read_contract(truth_path, EvaluationTruth)
-    if truth_contract.trial_id != _EXPECTED_TRIAL_ID or truth.get("trial_id") != _EXPECTED_TRIAL_ID:
-        raise ValueError("Truth does not identify the frozen development trial.")
     expected = read_json(args.expected_bindings)
     if not isinstance(expected, dict):
         raise ValueError("Expected binding file must contain a JSON object.")
@@ -659,12 +648,35 @@ def main() -> None:
     if args.search_crs != "EPSG:32618":
         raise ValueError("This frozen trial requires search coordinates in EPSG:32618.")
     run = load_run(args.output_root, expected_bindings=expected)
+
+    # Truth files are opened only after immutable search output has been verified.
+    truth_path = args.truth_dir / "truth.json"
+    support_path = args.truth_dir / "support.json"
+    truth = read_json(truth_path)
+    support = read_json(support_path)
+    truth_crs_doc = read_json(args.truth_dir / "truth-crs.json")
+    from maritime_localization_shared.contracts.truth import EvaluationTruth
+    from maritime_localization_shared.serialization import read_contract
+
+    truth_contract = read_contract(truth_path, EvaluationTruth)
+    if truth_contract.trial_id != _EXPECTED_TRIAL_ID or truth.get("trial_id") != _EXPECTED_TRIAL_ID:
+        raise ValueError("Truth does not identify the frozen development trial.")
+    if not isinstance(support, dict) or support.get("supported") is not True:
+        raise ValueError("Frozen evaluator support record does not mark this trial supported.")
+    if support.get("valid_reference_water") is not True:
+        raise ValueError("Frozen evaluator support record does not validate reference water.")
+    if (
+        support.get("port_id") != "port-001"
+        or support.get("placement_id") != "placement-001"
+        or type(support.get("detected_physical_catalog_matched_groups")) is not int
+    ):
+        raise ValueError("Frozen evaluator support record does not match the selected trial.")
     truth_xy = (truth_contract.observer_east_m, truth_contract.observer_north_m)
     if truth_crs_doc.get("trial_id") not in (None, truth.get("trial_id")):
         raise ValueError("Truth CRS metadata belongs to a different trial.")
     truth_crs = truth_crs_doc.get("coordinate_reference_system")
-    if not isinstance(truth_crs, str):
-        raise ValueError("Truth CRS metadata is missing.")
+    if truth_crs != "EPSG:32619":
+        raise ValueError("This frozen trial requires truth coordinates in EPSG:32619.")
     true_ids: dict[int, set[str]] = {}
     for obj in truth.get("objects", []):
         if obj.get("observation_index") is not None:
@@ -678,11 +690,19 @@ def main() -> None:
         search_crs=args.search_crs,
         truth_ids_by_report=true_ids,
     )
+    result["evaluator_support"] = {
+        "supported": support["supported"],
+        "valid_reference_water": support["valid_reference_water"],
+        "detected_physical_catalog_matched_groups": support[
+            "detected_physical_catalog_matched_groups"
+        ],
+    }
     result["input_sha256"] = {
         "measurements": sha256_file(args.static_input_dir / "measurements.json"),
         "catalog": sha256_file(args.static_input_dir / "catalog.json"),
         "map": sha256_file(args.static_input_dir / "map.json"),
         "truth": sha256_file(args.truth_dir / "truth.json"),
+        "truth_support": sha256_file(args.truth_dir / "support.json"),
         "truth_crs": sha256_file(args.truth_dir / "truth-crs.json"),
         "run_manifest": sha256_file(args.output_root / "run-manifest.json"),
     }
