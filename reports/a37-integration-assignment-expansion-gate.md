@@ -45,3 +45,17 @@ The 32 skips do not establish hardware behavior. This CPU regression gate is not
 The source remained pinned to `03d34590afcac28cc7961d9b560b17aa39284bc3`. The eight tests above were rerun together using the same CPU environment with `PATH=$ENV/bin:$PATH`, `PYTHONPATH=$WT`, and `--basetemp=$ROOT/.agent-work/tmp/a37-03d3459-failed-tests-20261026/pytest`. Result: **8 passed in 5.04 seconds**. The exact short pytest output is committed in `reports/a37-integration-assignment-expansion-rerun.log`.
 
 The two standalone tests had failed previously because their subprocess could not find `bearing-localization-search` with the original PATH. All six proposal-cache tests passed in the corrected rerun. The earlier full run was performed at the storage safety floor; after deleting only its owned 1.7 GiB pytest temporary tree, free space returned above the floor before this rerun. This supports classifying those six failures as environment reserve pressure rather than source regressions; the full-trace output for the prior run had shown the cache save error but was truncated before its lower-level cause. No code or test was changed between runs.
+
+
+
+## Integration gate at `603240cb5cab8b0a21fb29208a827ff771be161d`
+
+The existing isolated A37 worktree was pinned to the clean source commit `603240cb5cab8b0a21fb29208a827ff771be161d`; the root checkout and CPU environment were not modified. The lockfile remained at SHA-256 `b51fff7ca48f5b331b9cfcb6face02fea64dd7f3`. The same CPU environment was used without sync or downloads.
+
+The targeted command set `PATH=$ENV/bin:$PATH` and `PYTHONPATH=$WT`, then ran the A26 core, A26 assignment expansion and cached-domain driver, A32, A33 cache CLI, A35 assignment expansion/evaluation/diagnostics, standalone and parallel expansion, evaluation contracts/metrics/CLI, and search contract tests. It completed with **165 passed and 1 skipped in 75.57 seconds**. The passing targeted cases include assignment-expansion CLI and metadata evaluator regressions.
+
+Ruff format check passed with 393 files already formatted. Ruff check passed. `uv run --no-sync ty check .` passed. Help checks passed for all five installed CLI commands and the cached-domain driver. The source worktree remained clean at the pinned SHA.
+
+Hosted CI run 196 (run ID `40339336620`) was still in progress when inspected. Its Typst figure build job had completed successfully; its Python job had completed sync and CPU-only environment checks, but its full `pytest` step was still in progress. The explicit GPU job was skipped. Hosted CI therefore does not yet provide a completed full-suite result.
+
+No wheel or source-distribution build was run locally because the hosted CI job covers those steps and disk space was near the project reserve. The 176 MiB pytest temporary directory from this targeted run was removed after capturing the results. No large outputs, datasets, held-out runs, or production changes were created by this gate.
