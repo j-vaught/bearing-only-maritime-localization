@@ -144,6 +144,7 @@ def test_resolved_enc_component_coordinate_provenance_is_geometry_inert():
         ("observation_association_status", "candidate_geometry_only"),
         ("identity_resolution", "same_chart_name_and_proximity"),
         ("physical_entity_id", "physical-aid-1"),
+        ("source_attributes", {"objnam": "East Light", "height": 12.0}),
         ("source_component_count", 1),
         (
             "source_components",
