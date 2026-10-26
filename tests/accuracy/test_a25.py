@@ -6,6 +6,7 @@ from math import atan2, degrees, radians
 
 import numpy as np
 import pytest
+from pyproj import Geod
 
 from bearing_localization.evaluation.difficulty import (
     build_support_manifest,
@@ -241,3 +242,52 @@ def test_singular_geometry_remains_supported_with_three_detected_catalog_groups(
     assert result.geometry_stratum == "singular"
     assert result.support_manifest.supported
     assert result.support_manifest.detected_physical_catalog_matched_groups == 3
+
+
+def test_global_bearing_jacobian_agrees_with_wgs84_geodesic_reference():
+    geod = Geod(ellps="WGS84")
+    origin = (-76.3, 37.0)
+    target_bearings = (35.0, 145.0, 260.0)
+    target_ranges = (2000.0, 4000.0, 6000.0)
+    objects = []
+    measurements = []
+    target_lonlats = []
+    for index, (azimuth, distance) in enumerate(zip(target_bearings, target_ranges)):
+        lon, lat, _ = geod.fwd(*origin, azimuth, distance)
+        target_lonlats.append((lon, lat))
+        angle = radians(azimuth)
+        objects.append(
+            TrueObject(
+                f"g{index}",
+                "aid",
+                distance * np.sin(angle),
+                distance * np.cos(angle),
+                f"c{index}",
+                index,
+            )
+        )
+        measurements.append(MeasurementV2(azimuth, STAMP, sigma_deg=0.5))
+    truth = EvaluationTruth(0.0, 0.0, 0.0, tuple(objects))
+    reports = MeasurementSetV2(tuple(measurements))
+    result = evaluate_scene_difficulty(truth, reports, valid_reference_water=True)
+    assert result.fisher_information_m_inv2 is not None
+    got = np.asarray(result.fisher_information_m_inv2)
+
+    def wrap_radians(value: float) -> float:
+        return (value + np.pi) % (2 * np.pi) - np.pi
+
+    step_m = 1.0
+    expected = np.zeros((2, 2))
+    sigma_rad = radians(0.5)
+    for target in target_lonlats:
+        jacobian = []
+        for plus_azimuth, minus_azimuth in ((90.0, 270.0), (0.0, 180.0)):
+            plus = geod.fwd(*origin, plus_azimuth, step_m)[:2]
+            minus = geod.fwd(*origin, minus_azimuth, step_m)[:2]
+            plus_bearing = radians(geod.inv(*plus, *target)[0])
+            minus_bearing = radians(geod.inv(*minus, *target)[0])
+            jacobian.append(wrap_radians(plus_bearing - minus_bearing) / (2 * step_m))
+        vector = np.asarray(jacobian)
+        expected += np.outer(vector, vector) / sigma_rad**2
+
+    np.testing.assert_allclose(got, expected, rtol=5e-4, atol=1e-10)
