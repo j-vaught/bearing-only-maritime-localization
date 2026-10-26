@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import queue
+import time
+from typing import Any, cast
+
 import pytest
 
 from accuracy.test_a22_screened import _scenario
-from bearing_localization.search.parallel_screened import ParallelScreenedCandidatePool
+from bearing_localization.search.parallel_screened import (
+    CandidateAudit,
+    ParallelScreenedCandidatePool,
+    ParallelScreenedError,
+    _Chunk,
+    _Msg,
+)
 
 
 @pytest.mark.parametrize("workers", [1, 2, 4])
@@ -261,3 +271,178 @@ def test_worker_exit_fails_promptly_with_outstanding_count(exit_mode: str) -> No
     assert error.value.completed_count == 0
     assert error.value.failed_count == 0
     assert error.value.outstanding_count == 1
+
+
+class _FakeTaskQueue:
+    def __init__(self, *, fail_put: bool = False) -> None:
+        self.tasks = []
+        self.fail_put = fail_put
+
+    def put(self, task, timeout: float) -> None:
+        del timeout
+        if self.fail_put:
+            raise queue.Full
+        self.tasks.append(task)
+
+
+class _FakeResultQueue:
+    def __init__(self, messages, *, delay_s: float = 0.0) -> None:
+        self.messages = list(messages)
+        self.delay_s = delay_s
+
+    def get(self, timeout: float):
+        del timeout
+        if self.delay_s:
+            time.sleep(self.delay_s)
+            self.delay_s = 0.0
+        if not self.messages:
+            raise queue.Empty
+        return self.messages.pop(0)
+
+
+def _synthetic_chunk(index: int, candidate_id: str) -> _Chunk:
+    audit = CandidateAudit(
+        candidate_id,
+        index,
+        (float(index), 0.0),
+        "exact_invalid_water",
+        None,
+        None,
+        None,
+        None,
+        "invalid_water",
+    )
+    return _Chunk(index, (audit,), (), 0, 1, 1, 0, 0, 0, 0, 0.0, 0.0)
+
+
+def _synthetic_message(index: int, candidate_id: str, *, error: str | None = None) -> _Msg:
+    return _Msg(
+        "chunk",
+        0,
+        9000 + index,
+        0,
+        index,
+        None if error else _synthetic_chunk(index, candidate_id),
+        error=error,
+    )
+
+
+def _coordinator_only_pool(
+    result_queue, *, request_timeout_s: float | None = None, fail_put: bool = False
+):
+    pool = cast(Any, object.__new__(ParallelScreenedCandidatePool))
+    pool.window = 3
+    pool.chunk_size = 1
+    pool.request_timeout_s = request_timeout_s
+    pool._active = False
+    pool._startup = 0.0
+    pool._rssmap = {}
+    pool._procs = []
+    pool._tasks = _FakeTaskQueue(fail_put=fail_put)
+    pool._results = result_queue
+    pool._timings = None
+    pool._memory = lambda estimate: None
+    pool._abort = lambda: setattr(pool, "_failed", True)
+    return pool
+
+
+def test_out_of_order_results_are_partitioned_on_worker_failure() -> None:
+    scorer, points, _ = _scenario(True)
+    messages = [
+        _synthetic_message(2, points[2].candidate_id),
+        _synthetic_message(1, points[1].candidate_id, error="worker evaluation failed"),
+        _synthetic_message(0, points[0].candidate_id),
+    ]
+    pool = _coordinator_only_pool(_FakeResultQueue(messages))
+    stream = pool._request(
+        scorer.measurements,
+        scorer.config,
+        points[:3],
+        "exact",
+        3,
+        1,
+    )
+    with pytest.raises(ParallelScreenedError) as error:
+        list(stream)
+    disposition = error.value.disposition
+    assert disposition.submitted_candidate_ids == tuple(p.candidate_id for p in points[:3])
+    assert disposition.committed_candidate_ids == (points[0].candidate_id,)
+    assert disposition.failed_candidate_ids == (points[1].candidate_id,)
+    assert disposition.pending_candidate_ids == (points[2].candidate_id,)
+    assert disposition.outstanding_candidate_ids == ()
+    assert error.value.completed_count == 1
+    assert error.value.failed_count == 1
+    assert error.value.pending_count == 1
+
+
+def test_timeout_reports_completed_pending_and_outstanding_ids() -> None:
+    scorer, points, _ = _scenario(True)
+    pool = _coordinator_only_pool(
+        _FakeResultQueue([_synthetic_message(2, points[2].candidate_id)], delay_s=0.05),
+        request_timeout_s=0.01,
+    )
+    stream = pool._request(
+        scorer.measurements,
+        scorer.config,
+        points[:3],
+        "exact",
+        3,
+        1,
+    )
+    with pytest.raises(ParallelScreenedError) as error:
+        list(stream)
+    disposition = error.value.disposition
+    assert disposition.committed_candidate_ids == ()
+    assert disposition.pending_candidate_ids == (points[2].candidate_id,)
+    assert disposition.outstanding_candidate_ids == tuple(p.candidate_id for p in points[:2])
+    assert disposition.failed_candidate_ids == ()
+
+
+def test_cancellation_keeps_pending_and_outstanding_id_ledger() -> None:
+    scorer, points, _ = _scenario(True)
+    messages = [
+        _synthetic_message(1, points[1].candidate_id),
+        _synthetic_message(0, points[0].candidate_id),
+    ]
+    pool = _coordinator_only_pool(_FakeResultQueue(messages))
+    stream = pool._request(
+        scorer.measurements,
+        scorer.config,
+        points[:3],
+        "exact",
+        3,
+        1,
+    )
+    first = next(stream)
+    assert first.chunk_index == 0
+    stream.close()
+    disposition = pool.last_disposition
+    assert disposition.committed_candidate_ids == (points[0].candidate_id,)
+    assert disposition.pending_candidate_ids == (points[1].candidate_id,)
+    assert disposition.outstanding_candidate_ids == (points[2].candidate_id,)
+
+
+def test_queue_submission_failure_identifies_not_dispatched_ids() -> None:
+    scorer, points, _ = _scenario(True)
+    pool = _coordinator_only_pool(
+        _FakeResultQueue([]),
+        request_timeout_s=0.01,
+        fail_put=True,
+    )
+    stream = pool._request(
+        scorer.measurements,
+        scorer.config,
+        points[:2],
+        "exact",
+        2,
+        1,
+    )
+    with pytest.raises(ParallelScreenedError) as error:
+        list(stream)
+    disposition = error.value.disposition
+    assert disposition.submitted_candidate_ids == ()
+    assert disposition.not_dispatched_candidate_ids == (points[0].candidate_id,)
+    assert disposition.committed_candidate_ids == ()
+    assert disposition.pending_candidate_ids == ()
+    assert disposition.failed_candidate_ids == ()
+    assert disposition.outstanding_candidate_ids == ()
