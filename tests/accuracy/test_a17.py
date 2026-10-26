@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
+from bearing_localization.algorithms import associate
 from bearing_localization.search.config import SearchConfig
+from bearing_localization.search.grid import run_grid_search_v2
+from bearing_localization.search.hierarchical import run_hierarchical_search_v2
+from bearing_localization.search.pairwise import run_pairwise_search_v2
+from bearing_localization.search.randomized import run_randomized_search_v2
 from bearing_localization.search.scoring import CandidateScorer
 from maritime_localization_shared.contracts.inputs_v2 import (
     CatalogRecordV2,
@@ -135,3 +141,71 @@ def test_candidate_scorer_does_not_score_unsupported_nearby_model() -> None:
 
     assert result.status == "unresolved_model"
     assert result.hypothesis is None
+
+
+def test_mixed_label_legacy_association_does_not_match_wrong_type() -> None:
+    score, matches = associate(
+        np.asarray([0.0, 0.0]),
+        [("vessel", 0.0), (None, 90.0)],
+        np.asarray([[0.0, 1_000.0]]),
+        ["other"],
+        sigma_deg=0.5,
+        use_types=True,
+    )
+
+    assert matches == ()
+    assert score == pytest.approx(48.0)
+
+
+def test_v2_dispatch_entrypoints_share_candidate_scores_and_never_accept() -> None:
+    scorer = CandidateScorer(
+        _measurements((0.0, 0.5)),
+        _catalog(_record("north")),
+        _map(),
+        SearchConfig(max_range_m=5_000.0),
+    )
+    positions = [_xy()]
+    runs = (
+        run_grid_search_v2(scorer, iter(positions)),
+        run_hierarchical_search_v2(scorer, iter(positions)),
+        run_randomized_search_v2(scorer, iter(positions)),
+    )
+
+    expected = scorer(_xy())
+    assert expected.hypothesis is not None
+    assert [run.hypotheses[0].score for run in runs] == pytest.approx(
+        [expected.hypothesis.score] * 3
+    )
+    for run in runs:
+        assert run.localization.decision_status == "ambiguous"
+        assert run.localization.certificate_scope == "none"
+        assert run.localization.search_status == "completed"
+
+
+def test_pairwise_v2_uses_a19_stream_and_keeps_completion_uncertified() -> None:
+    x, y = _xy()
+    scorer = CandidateScorer(
+        _measurements((0.0, 0.5), (90.0, 0.5)),
+        _catalog(_record("north", 0.0), _record("east", 90.0)),
+        _map(),
+        SearchConfig(
+            max_range_m=5_000.0,
+            candidate_budget=100,
+            bounds_xy=(x - 2_000.0, x + 2_000.0, y - 2_000.0, y + 2_000.0),
+        ),
+    )
+
+    run = run_pairwise_search_v2(scorer, batch_size=8)
+
+    assert run.localization.search_status == "completed"
+    assert run.localization.decision_status == "ambiguous"
+    assert run.localization.certificate_scope == "none"
+    assert run.candidate_count > 0
+    first = run.hypotheses[0]
+    position = [(first.east_m, first.north_m)]
+    parity_runs = (
+        run_grid_search_v2(scorer, position),
+        run_hierarchical_search_v2(scorer, position),
+        run_randomized_search_v2(scorer, position),
+    )
+    assert [item.hypotheses[0].score for item in parity_runs] == pytest.approx([first.score] * 3)

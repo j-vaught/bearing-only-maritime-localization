@@ -9,6 +9,7 @@ benchmarks, not a production tracker.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from time import perf_counter
 
@@ -36,7 +37,7 @@ def associate(
     observations: list[tuple[str | None, float]],
     ais_xy: np.ndarray,
     ais_types: list[str | None],
-    sigma_deg: float = 0.5,
+    sigma_deg: float | Sequence[float] | np.ndarray = 0.5,
     unmatched_penalty_deg: float = 12.0,
     use_types: bool = True,
     visibility_radius_m: float = float("inf"),
@@ -52,20 +53,32 @@ def associate(
     complete sensor report is available, ``penalize_missing_ais`` also charges for
     AIS objects predicted in range but absent from the report.
     """
-    if sigma_deg <= 0 or unmatched_penalty_deg <= 0 or visibility_radius_m <= 0:
+    sigmas = np.asarray(sigma_deg, dtype=float)
+    if sigmas.ndim == 0:
+        sigmas = np.full(len(observations), float(sigmas))
+    if (
+        sigmas.shape != (len(observations),)
+        or not np.isfinite(sigmas).all()
+        or np.any(sigmas <= 0.0)
+        or unmatched_penalty_deg <= 0
+        or visibility_radius_m <= 0
+    ):
         raise ValueError("sigma, unmatched penalty, and visibility radius must be positive.")
+    unmatched_costs = unmatched_penalty_deg / sigmas
+    fallback_sigma = float(sigmas[0]) if len(sigmas) else 0.5
+    fallback_unmatched = unmatched_penalty_deg / fallback_sigma
     xy = np.asarray(ais_xy, dtype=float).reshape((-1, 2))
     if len(ais_types) != len(xy):
         raise ValueError("ais_types must have one entry per AIS coordinate.")
     if xy.size == 0:
-        return float(len(observations) * unmatched_penalty_deg / sigma_deg), ()
+        return float(unmatched_costs.sum()), ()
     distance = np.linalg.norm(xy - np.asarray(position, dtype=float)[None, :], axis=1)
     candidate_indices = np.flatnonzero(distance <= visibility_radius_m)
     if not len(candidate_indices):
-        return float(len(observations) * unmatched_penalty_deg / sigma_deg), ()
+        return float(unmatched_costs.sum()), ()
     if not observations:
         missing = len(candidate_indices) if penalize_missing_ais else 0
-        return float(missing * unmatched_penalty_deg / sigma_deg), ()
+        return float(missing * fallback_unmatched), ()
     xy = xy[candidate_indices]
     candidate_types = [ais_types[i] for i in candidate_indices]
     obs_b = np.asarray([o[1] for o in observations], dtype=float)
@@ -73,7 +86,6 @@ def associate(
     # Sensor bearings are globally referenced to north, so ship heading is not
     # an unknown in the localization problem.
     predicted = np.asarray(wrap_deg(abs_b))
-    unmatched = unmatched_penalty_deg / sigma_deg
 
     def solve_group(
         observation_indices: np.ndarray, candidate_local_indices: np.ndarray
@@ -84,10 +96,11 @@ def associate(
                     predicted[candidate_local_indices][None, :] - obs_b[observation_indices, None]
                 )
             )
-            / sigma_deg
+            / sigmas[observation_indices, None]
         )
+        local_unmatched = unmatched_costs[observation_indices]
         if not penalize_missing_ais:
-            dummy = np.full((len(observation_indices), len(observation_indices)), unmatched)
+            dummy = np.repeat(local_unmatched[:, None], len(observation_indices), axis=1)
             matrix = np.concatenate((costs, dummy), axis=1)
             rows, cols = linear_sum_assignment(matrix)
             pairs = [
@@ -96,14 +109,12 @@ def associate(
                     int(candidate_indices[candidate_local_indices[c]]),
                 )
                 for r, c in zip(rows, cols)
-                if c < len(candidate_local_indices) and costs[r, c] < unmatched
+                if c < len(candidate_local_indices) and costs[r, c] < local_unmatched[r]
             ]
         else:
-            detection_dummy = np.full(
-                (len(observation_indices), len(observation_indices)), unmatched
-            )
+            detection_dummy = np.repeat(local_unmatched[:, None], len(observation_indices), axis=1)
             ais_dummy = np.full(
-                (len(candidate_local_indices), len(candidate_local_indices)), unmatched
+                (len(candidate_local_indices), len(candidate_local_indices)), fallback_unmatched
             )
             fill = np.zeros((len(candidate_local_indices), len(observation_indices)))
             matrix = np.block([[costs, detection_dummy], [ais_dummy, fill]])
@@ -116,7 +127,7 @@ def associate(
                 for r, c in zip(rows, cols)
                 if r < len(observation_indices)
                 and c < len(candidate_local_indices)
-                and costs[r, c] < 2.0 * unmatched
+                and costs[r, c] < 2.0 * local_unmatched[r]
             ]
         return float(matrix[rows, cols].sum()), pairs
 
@@ -137,21 +148,49 @@ def associate(
                 dtype=int,
             )
             if not len(candidate_local_indices) and penalize_missing_ais:
-                total_cost += len(observation_indices) * unmatched
+                total_cost += float(unmatched_costs[observation_indices].sum())
             else:
                 cost, matches = solve_group(observation_indices, candidate_local_indices)
                 total_cost += cost
                 all_matches.extend(matches)
         if penalize_missing_ais:
             missing_type_count = sum(kind not in observed_kinds for kind in candidate_types)
-            total_cost += missing_type_count * unmatched
+            total_cost += missing_type_count * fallback_unmatched
         return total_cost, tuple(all_matches)
 
     if use_types:
-        all_costs = np.abs(wrap_deg(predicted[None, :] - obs_b[:, None])) / sigma_deg
+        all_costs = np.abs(wrap_deg(predicted[None, :] - obs_b[:, None])) / sigmas[:, None]
         for i, (kind, _) in enumerate(observations):
             if kind is not None:
-                all_costs[i, np.asarray([t != kind for t in candidate_types])] = 2.0 * unmatched
+                all_costs[i, np.asarray([t != kind for t in candidate_types])] = (
+                    2.0 * unmatched_costs[i]
+                )
+        # Mixed labeled/unlabeled reports use the per-edge matrix above. The
+        # untyped branch inside solve_group would otherwise erase label penalties.
+        rows, cols = linear_sum_assignment(
+            np.concatenate(
+                (
+                    all_costs,
+                    np.repeat(unmatched_costs[:, None], len(observations), axis=1),
+                ),
+                axis=1,
+            )
+        )
+        pairs = [
+            (int(r), int(candidate_indices[c]))
+            for r, c in zip(rows, cols)
+            if c < len(candidate_indices) and all_costs[r, c] < unmatched_costs[r]
+        ]
+        score = float(
+            np.concatenate(
+                (
+                    all_costs,
+                    np.repeat(unmatched_costs[:, None], len(observations), axis=1),
+                ),
+                axis=1,
+            )[rows, cols].sum()
+        )
+        return score, tuple(pairs)
     score, matches = solve_group(np.arange(len(observations)), np.arange(len(candidate_indices)))
     return score, tuple(matches)
 
@@ -161,7 +200,7 @@ def grid_search(
     ais_xy: np.ndarray,
     ais_types: list[str | None],
     bounds_xy: tuple[float, float, float, float],
-    sigma_deg: float = 0.5,
+    sigma_deg: float | Sequence[float] | np.ndarray = 0.5,
     grid_spacing_m: float = 250.0,
     use_types: bool = True,
     unmatched_penalty_deg: float = 12.0,
@@ -177,7 +216,14 @@ def grid_search(
     benchmark.  Bearings are referenced to north, so only position is searched.
     """
     started = perf_counter()
-    if sigma_deg <= 0 or grid_spacing_m <= 0:
+    sigma_values = np.asarray(sigma_deg, dtype=float)
+    if (
+        not np.isfinite(sigma_values).all()
+        or np.any(sigma_values <= 0.0)
+        or (sigma_values.ndim == 1 and sigma_values.shape != (len(observations),))
+        or sigma_values.ndim > 1
+        or grid_spacing_m <= 0
+    ):
         raise ValueError("sigma and grid spacing must be positive.")
     xmin, xmax, ymin, ymax = bounds_xy
     if xmin >= xmax or ymin >= ymax:
@@ -222,9 +268,14 @@ def grid_search(
                     for observation_index, ais_index in coarse_matches:
                         dx, dy = np.asarray(ais_xy)[ais_index] - v[:2]
                         predicted = np.rad2deg(np.arctan2(dx, dy))
+                        report_sigma = (
+                            float(sigma_values)
+                            if sigma_values.ndim == 0
+                            else float(sigma_values[observation_index])
+                        )
                         vals.append(
                             float(wrap_deg(predicted - observations[observation_index][1]))
-                            / sigma_deg
+                            / report_sigma
                         )
                     return np.asarray(vals)
 

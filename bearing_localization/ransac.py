@@ -10,7 +10,7 @@ optionally penalize AIS objects that should have been visible but were not.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from itertools import permutations
 from time import perf_counter
 
@@ -28,7 +28,7 @@ def randomized_hypothesis_search(
     ais_xy: np.ndarray,
     ais_types: list[str | None],
     bounds_xy: tuple[float, float, float, float],
-    sigma_deg: float = 0.5,
+    sigma_deg: float | Sequence[float] | np.ndarray = 0.5,
     visibility_radius_m: float = float("inf"),
     unmatched_penalty_deg: float = 12.0,
     use_types: bool = True,
@@ -37,6 +37,7 @@ def randomized_hypothesis_search(
     seed: int | None = 0,
     water_predicate: WaterPredicate | None = None,
     line_of_sight_predicate: LineOfSightPredicate | None = None,
+    report_sigmas_deg: Sequence[float] | np.ndarray | None = None,
 ) -> SearchResult:
     """Estimate position with randomized three-correspondence hypotheses.
 
@@ -50,7 +51,18 @@ def randomized_hypothesis_search(
     the Hungarian association itself remains the main serial scoring step.
     """
     started = perf_counter()
-    if sigma_deg <= 0 or visibility_radius_m <= 0 or unmatched_penalty_deg <= 0:
+    sigmas = np.asarray(
+        report_sigmas_deg if report_sigmas_deg is not None else sigma_deg, dtype=float
+    )
+    if sigmas.ndim == 0:
+        sigmas = np.full(len(observations), float(sigmas))
+    if (
+        sigmas.shape != (len(observations),)
+        or not np.isfinite(sigmas).all()
+        or np.any(sigmas <= 0.0)
+        or visibility_radius_m <= 0
+        or unmatched_penalty_deg <= 0
+    ):
         raise ValueError("sigma, visibility radius, and unmatched penalty must be positive.")
     if iterations < 1:
         raise ValueError("iterations must be positive.")
@@ -101,7 +113,7 @@ def randomized_hypothesis_search(
             observations,
             xy[candidate_indices],
             [ais_types[int(index)] for index in candidate_indices],
-            sigma_deg,
+            sigmas,
             unmatched_penalty_deg,
             use_types,
             float("inf"),
@@ -144,7 +156,7 @@ def randomized_hypothesis_search(
             dy = xy[candidate_indices, 1] - v[1]
             predicted = np.degrees(np.arctan2(dx, dy))
             measured = np.asarray([observations[int(i)][1] for i in obs_indices])
-            return np.asarray(wrap_deg(predicted - measured), dtype=float) / sigma_deg
+            return np.asarray(wrap_deg(predicted - measured), dtype=float) / sigmas[obs_indices]
 
         fit = least_squares(
             residual,
