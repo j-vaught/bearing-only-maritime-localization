@@ -499,10 +499,27 @@ def test_resume_reuses_only_identity_matched_durable_chunks(tmp_path: Path) -> N
     chunk_document = json.loads(chunk.read_text())
     chunk_document["hypotheses_sha256"] = sha256_file(hypothesis)
     chunk.write_text(json.dumps(chunk_document))
+    dispositions = source / "candidate-dispositions.jsonl"
+    dispositions.write_text(
+        json.dumps(
+            {
+                "candidate_id": "cell:a",
+                "plan_index": 0,
+                "status": "exact_scored",
+                "evidence": {
+                    "action": "exact_scored",
+                    "input_index": 0,
+                    "chunk_index": 0,
+                },
+            }
+        )
+        + "\n"
+    )
     (source / "run-manifest.json").write_text(
         json.dumps(
             {
                 "run_identity_sha256": envelope["identity_sha256"],
+                "candidate_dispositions_sha256": sha256_file(dispositions),
                 "chunk_results_sha256": sha256_tree(source / "chunk-results"),
                 "hypotheses_sha256": sha256_tree(source / "hypotheses"),
             }
