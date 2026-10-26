@@ -372,6 +372,7 @@ def expand_assignments(
     *,
     config: ExpansionConfig,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    result_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> ExpansionResult:
     """Explore one unmatched report plus one unused physical catalog record.
 
@@ -481,6 +482,8 @@ def expand_assignments(
         if exact is None:
             counters["rejected_branches"] += 1
             events.append(event)
+            if result_callback is not None:
+                result_callback(dict(event))
             continue
         event["exact_score"] = exact.score
         event["added_assignment_retained"] = any(
@@ -495,6 +498,8 @@ def expand_assignments(
             event["status"] = "no_improvement"
             counters["rejected_branches"] += 1
         events.append(event)
+        if result_callback is not None:
+            result_callback(dict(event))
     counters["unvisited_branches"] = 0
     return ExpansionResult(
         seed, best, "completed", True, False, counters, tuple(events), perf_counter() - started

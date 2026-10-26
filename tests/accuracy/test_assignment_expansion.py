@@ -96,6 +96,27 @@ def test_four_association_basin_can_be_rescued_by_fifth_single_addition():
     assert result.counters["pool_digest"]
 
 
+def test_unmocked_production_scorer_four_matches_rescued_by_fifth():
+    scorer = _scorer_with_fifth(bearing=320.0)
+    x, y = _xy()
+    seed = scorer.evaluate((x + 20.0, y - 20.0)).hypothesis
+    assert seed is not None
+    assert tuple(item.report_index for item in seed.assignments) == (1, 2, 3, 4)
+
+    result = expand_assignments(scorer, seed, config=ExpansionConfig())
+    assert result.status == "completed"
+    assert result.best_hypothesis.score < seed.score
+    assert tuple(item.report_index for item in result.best_hypothesis.assignments) == (
+        0,
+        1,
+        2,
+        3,
+        4,
+    )
+    assert result.best_hypothesis.assignments[-1].catalog_key == "target-4"
+    assert any(event["status"] == "improved" for event in result.branch_events)
+
+
 def test_clutter_addition_rejected_when_exact_score_worsens():
     scorer = _scorer_with_fifth(bearing=340.0)
     seed, _ = _single_addition_seed(scorer)
@@ -215,6 +236,21 @@ def test_budget_callback_and_event_order():
     assert result.counters["unvisited_branches"] == 0
     assert len(seen) == 1
     assert result.branch_events[0]["branch_id"] == seen[0][0]
+
+
+def test_result_callback_receives_each_completed_event_after_append():
+    scorer = _scorer_with_fifth()
+    seed, _ = _single_addition_seed(scorer)
+    seen: list[dict[str, object]] = []
+
+    result = expand_assignments(
+        scorer,
+        seed,
+        config=ExpansionConfig(max_branches=1),
+        result_callback=lambda event: seen.append(event),
+    )
+    assert len(seen) == len(result.branch_events)
+    assert seen == list(result.branch_events)
 
 
 def test_callback_exception_is_not_swallowed():
