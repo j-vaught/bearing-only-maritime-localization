@@ -122,3 +122,32 @@ def test_gpu_seeded_random_full_domain_and_antimeridian():
         assert result.chunks_processed == int(np.ceil(n / chunk))
         assert result.host_to_device_bytes == n * 32
         assert result.device_to_host_bytes == n * 48
+
+
+def test_gpu_internal_half_tolerance_resolves_captured_a04_roundoff_case():
+    cp = _cupy()
+    catalog = (-80.98065189999943, 31.796930200000133)
+    desired_bearing = 215.65789052601954
+    range_m = 625.0
+    result = solve_reverse_bearing_cupy(catalog, desired_bearing, range_m, cupy_module=cp)
+    geod = Geod(ellps="WGS84")
+    inverse_bearing, _, distance = geod.inv(
+        float(result.observer_lonlat_deg[0]),
+        float(result.observer_lonlat_deg[1]),
+        catalog[0],
+        catalog[1],
+    )
+    angular_error = (inverse_bearing - desired_bearing + 180.0) % 360.0 - 180.0
+    assert bool(result.converged)
+    assert abs(float(result.angular_residual_deg)) <= 1e-7
+    assert abs(angular_error) <= 1e-7
+    assert distance == pytest.approx(range_m, abs=1e-3)
+
+
+def test_default_stable_ids_are_lazy_numeric_indices():
+    result = solve_reverse_bearing_cupy(
+        [[-70.0, 35.0], [-71.0, 36.0]], [15.0, 20.0], [0.0, 0.0], cupy_module=object()
+    )
+    assert isinstance(result.stable_ids, range)
+    assert result.stable_ids[0] == 0
+    assert result.stable_ids[-1] == 1
