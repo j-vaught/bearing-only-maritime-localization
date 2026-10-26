@@ -103,10 +103,10 @@ def _load_ports(path: Path) -> list[dict[str, Any]]:
 
 def _distance_m(a: dict[str, Any], b: dict[str, Any]) -> float:
     _, _, distance = _GEOD.inv(
-        float(a["longitude_deg"]),
-        float(a["latitude_deg"]),
-        float(b["longitude_deg"]),
-        float(b["latitude_deg"]),
+        float(a["anchor_longitude_deg"]),
+        float(a["anchor_latitude_deg"]),
+        float(b["anchor_longitude_deg"]),
+        float(b["anchor_latitude_deg"]),
     )
     return float(distance)
 
@@ -184,7 +184,7 @@ def build_split_manifest(ports_path: Path = PORTS_CSV) -> dict[str, Any]:
     except ValueError:
         source_label = str(ports_path.resolve())
     return {
-        "schema": "accuracy-split-manifest-v1",
+        "schema": "accuracy-split-manifest-v2",
         "port_source": source_label,
         "port_source_sha256": sha256_file(ports_path),
         "legacy_b1_b5_separate": True,
@@ -192,7 +192,7 @@ def build_split_manifest(ports_path: Path = PORTS_CSV) -> dict[str, Any]:
             "placement_radius_m": PLACEMENT_RADIUS_M,
             "catalog_footprint_radius_m": 10_000.0,
             "overlap_anchor_threshold_m": 26_000.0,
-            "method": "connected_components_geodesic_overlap_groups_moved_whole_to_development",
+            "method": "connected_components_reference_anchor_geodesic_overlap_groups",
         },
         "ports": port_rows,
         "overlap_decisions": decisions,
