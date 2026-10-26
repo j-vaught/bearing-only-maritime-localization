@@ -241,7 +241,7 @@ def test_uncertified_or_unsupported_visibility_falls_back_to_exact_scoring():
     )
     visit = result.visits[1]
     assert visit.action == "exact_unresolved"
-    assert visit.visibility is not None and not visit.visibility.certified
+    assert visit.visibility is None
     assert visit.evaluation_status == unknown.status == "unresolved_coverage"
     assert result.certificate_scope == "none"
 
@@ -386,3 +386,83 @@ def test_early_group_bound_cannot_hide_unknown_los_members():
     assert result.pruned_count == 0
     assert result.unresolved_count == 1
     assert result.certificate_scope == "none"
+
+
+def test_land_and_unknown_candidates_use_exact_water_status_without_visibility_screen(monkeypatch):
+    import bearing_localization.search.screened_search as search_module
+
+    scorer, points, _observer_b = _scenario(True)
+
+    def unexpected_screen(*_args, **_kwargs):
+        pytest.fail("land and unknown-water candidates must bypass visibility screening")
+
+    monkeypatch.setattr(search_module, "screen_candidate_visibility", unexpected_screen)
+    result = screened_candidate_search(
+        scorer,
+        (points[0], points[2], points[3]),
+        visit_budget=3,
+        complete_candidate_count=3,
+    )
+
+    assert tuple(visit.action for visit in result.visits) == (
+        "exact_scored",
+        "exact_invalid_water",
+        "exact_unresolved",
+    )
+    assert tuple(visit.evaluation_status for visit in result.visits) == (
+        "scored",
+        "invalid_water",
+        "unresolved_coverage",
+    )
+    assert result.exact_evaluation_count == 3
+    assert result.exact_scored_count == 1
+    assert result.invalid_water_count == 1
+    assert result.unresolved_count == 1
+    assert result.pruned_count == 0
+    assert result.certificate_scope == "none"
+
+
+def test_useful_group_threshold_is_cached_while_incumbent_and_margin_hold(monkeypatch):
+    import bearing_localization.search.screened_search as search_module
+
+    x, y = xy()
+    scorer = CandidateScorer(
+        MeasurementSetV2((MeasurementV2(0.0, TIMESTAMP, 0.5, "vessel"),)),
+        catalog(),
+        vmap(),
+        SearchConfig(bounds_xy=(x - 1_000, x + 1_000, y - 1_000, y + 1_000)),
+    )
+    points = (
+        CandidatePosition("first", (x - 500, y)),
+        CandidatePosition("second", (x, y)),
+        CandidatePosition("third", (x + 500, y)),
+    )
+    original = search_module._minimum_useful_group_threshold
+    call_count = 0
+
+    def counted_threshold(*args):
+        nonlocal call_count
+        call_count += 1
+        return original(*args)
+
+    monkeypatch.setattr(
+        search_module,
+        "_minimum_useful_group_threshold",
+        counted_threshold,
+    )
+    result = screened_candidate_search(
+        scorer,
+        points,
+        visit_budget=3,
+        complete_candidate_count=3,
+    )
+
+    assert tuple(visit.action for visit in result.visits) == (
+        "exact_scored",
+        "exact_scored",
+        "exact_scored",
+    )
+    assert len(result.hypotheses) == 3
+    assert result.hypotheses[0].score == result.hypotheses[1].score
+    assert result.hypotheses[1].score == result.hypotheses[2].score
+    assert call_count == 1
