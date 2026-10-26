@@ -81,6 +81,19 @@ class WedgeProposal:
     east_m: float
     north_m: float
     vote_count: int
+    normalized_angular_residual: float = float("inf")
+    evidence_score: float = 0.0
+
+    @property
+    def ranking_key(self) -> tuple[int, float, float, int, int]:
+        """Return an opt-in deterministic priority key for this proposal."""
+        return (
+            -self.vote_count,
+            self.normalized_angular_residual,
+            -self.evidence_score,
+            self.cell_i,
+            self.cell_j,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +178,14 @@ class WedgeProposalResult:
         return result
 
     @property
+    def vote_histogram(self) -> tuple[tuple[int, int], ...]:
+        """Return (vote_count, cell_count) pairs in descending vote order."""
+        counts: dict[int, int] = {}
+        for proposal in self.proposals:
+            counts[proposal.vote_count] = counts.get(proposal.vote_count, 0) + 1
+        return tuple(sorted(counts.items(), reverse=True))
+
+    @property
     def catalog_metadata(self) -> dict[str, object]:
         """Return stable catalog keys, type labels, and copied coordinates for consumers."""
         coords = np.array(self.catalog_xy_m, dtype=np.float64, copy=True)
@@ -199,6 +220,39 @@ class _CandidateRasterBudgetExceeded(Exception):
 
 def _angle_error_deg(first_deg: float, second_deg: float) -> float:
     return abs((first_deg - second_deg + 180.0) % 360.0 - 180.0)
+
+
+def _normalized_cell_angular_evidence(
+    source_east_m: float,
+    source_north_m: float,
+    cell_i: int,
+    cell_j: int,
+    bearing_deg: float,
+    *,
+    cell_size_m: float,
+    angular_tolerance_deg: float,
+) -> tuple[float, float]:
+    """Return residual and precision-weighted evidence for one accepted claim."""
+    half_diagonal = cell_size_m * 2.0**0.5 / 2.0
+    center_east = (cell_i + 0.5) * cell_size_m
+    center_north = (cell_j + 0.5) * cell_size_m
+    delta_east = source_east_m - center_east
+    delta_north = source_north_m - center_north
+    distance_m = hypot(delta_east, delta_north)
+    if distance_m <= half_diagonal:
+        # The raster rule intentionally accepts every bearing in this
+        # enclosure. It is a valid vote but carries no angular evidence.
+        return 1.0, 0.0
+    center_bearing = degrees(atan2(delta_east, delta_north)) % 360.0
+    quantization_deg = degrees(asin(min(1.0, half_diagonal / distance_m)))
+    threshold_deg = angular_tolerance_deg + quantization_deg
+    angle_error_deg = _angle_error_deg(center_bearing, bearing_deg)
+    if threshold_deg <= 0.0:
+        residual = 0.0 if angle_error_deg <= 1e-12 else float("inf")
+        return residual, 1.0 if residual == 0.0 else 0.0
+    residual = min(1.0, max(0.0, angle_error_deg / threshold_deg))
+    precision = min(1.0, angular_tolerance_deg / threshold_deg)
+    return residual, precision * (1.0 - residual)
 
 
 def _candidate_cells_for_source(
@@ -551,12 +605,15 @@ def generate_reverse_wedge_proposals_complete(
     catalog_xy.setflags(write=False)
     source_total = len(obs) * len(objects)
     votes: dict[tuple[int, int], int] = {}
+    residual_sums: dict[tuple[int, int], float] = {}
+    evidence_sums: dict[tuple[int, int], float] = {}
     processed_pairs = 0
     budget_reason: Literal["none", "source_pairs", "candidate_cells"] = "none"
     max_source_cells = max(1_024, max_candidate_cells)
 
     for observation in obs:
         observation_cells: set[tuple[int, int]] = set()
+        observation_residuals: dict[tuple[int, int], tuple[float, float]] = {}
         chunk_start = 0
         while chunk_start < len(objects):
             remaining_pairs = max_source_pairs - processed_pairs
@@ -577,14 +634,27 @@ def generate_reverse_wedge_proposals_complete(
             except _CandidateRasterBudgetExceeded:
                 budget_reason = "candidate_cells"
                 break
-            for source_cells in source_cells_batch:
+            for source, source_cells in zip(chunk, source_cells_batch):
                 for cell in sorted(source_cells):
-                    if cell in observation_cells:
+                    residual, evidence = _normalized_cell_angular_evidence(
+                        source.east_m,
+                        source.north_m,
+                        cell[0],
+                        cell[1],
+                        observation.bearing_deg,
+                        cell_size_m=cell_size_m,
+                        angular_tolerance_deg=angular_tolerance_deg,
+                    )
+                    previous_residual = observation_residuals.get(cell)
+                    if previous_residual is not None:
+                        if residual < previous_residual[0]:
+                            observation_residuals[cell] = (residual, evidence)
                         continue
                     if cell not in votes and len(votes) >= max_candidate_cells:
                         budget_reason = "candidate_cells"
                         break
                     observation_cells.add(cell)
+                    observation_residuals[cell] = (residual, evidence)
                     votes.setdefault(cell, 0)
                 if budget_reason == "candidate_cells":
                     break
@@ -594,6 +664,9 @@ def generate_reverse_wedge_proposals_complete(
             chunk_start += len(chunk)
         for cell in observation_cells:
             votes[cell] += 1
+            residual, evidence = observation_residuals[cell]
+            residual_sums[cell] = residual_sums.get(cell, 0.0) + residual
+            evidence_sums[cell] = evidence_sums.get(cell, 0.0) + evidence
         if budget_reason != "none":
             break
 
@@ -607,6 +680,8 @@ def generate_reverse_wedge_proposals_complete(
             east_m=(cell_i + 0.5) * cell_size_m,
             north_m=(cell_j + 0.5) * cell_size_m,
             vote_count=vote_count,
+            normalized_angular_residual=residual_sums[(cell_i, cell_j)] / vote_count,
+            evidence_score=evidence_sums[(cell_i, cell_j)],
         )
         for (cell_i, cell_j), vote_count in votes.items()
     ]

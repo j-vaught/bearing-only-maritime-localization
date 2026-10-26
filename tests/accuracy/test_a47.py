@@ -180,3 +180,25 @@ def test_geographic_complete_mode_retains_tile_metadata_and_votes():
     assert result.coordinate_model == "local_projected_tile"
     assert result.catalog_lonlat_deg is not None
     assert result.catalog_lonlat_deg.tolist() == [[-80.0, 32.0], [-80.01, 32.0]]
+
+
+def test_complete_mode_exposes_neutral_histogram_and_opt_in_priority_metadata():
+    result = generate_reverse_wedge_proposals_complete(
+        [WedgeObservation(0, 0.0), WedgeObservation(1, 90.0)],
+        [WedgeCatalogObject("near", 51.0, 51.0)],
+        max_range_m=1_500.0,
+        cell_size_m=100.0,
+        angular_tolerance_deg=0.5,
+        max_source_pairs=2,
+        max_candidate_cells=100_000,
+        source_chunk_size=1,
+    )
+    assert sum(count for _, count in result.vote_histogram) == result.candidate_cells_total
+    assert result.vote_histogram == tuple(sorted(result.vote_histogram, reverse=True))
+    assert all(item.ranking_key[:1] == (-item.vote_count,) for item in result.proposals)
+    near_cell = next(item for item in result.proposals if item.candidate_id == "cell:0:0")
+    assert near_cell.normalized_angular_residual == 1.0
+    assert near_cell.evidence_score == 0.0
+    assert tuple(item.ranking_key for item in result.proposals) == tuple(
+        item.ranking_key for item in result.proposals
+    )
