@@ -155,6 +155,8 @@ class LoadedRun:
     candidates: tuple[SavedCandidate, ...]
     disposition_counts: dict[str, int]
     status_counts: dict[str, int]
+    orphan_hypothesis_chunk_indices: tuple[int, ...]
+    orphan_hypothesis_input_indices: tuple[int, ...]
     complete: bool
 
 
@@ -209,17 +211,18 @@ def verify_expected_bindings(manifest: Mapping[str, Any], expected: Mapping[str,
             raise ValueError(f"Run manifest does not match caller-pinned {key}.")
 
 
-def _read_chunks(output_root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _read_chunks(
+    output_root: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[tuple[int, list[Any]]]]:
     chunk_root = output_root / "chunk-results"
     hypothesis_root = output_root / "hypotheses"
     if not chunk_root.is_dir() or not hypothesis_root.is_dir():
         raise ValueError("Both chunk-results and hypotheses directories are required.")
     chunk_paths = sorted(chunk_root.glob("chunk-*.json"))
     hypothesis_paths = {path.name: path for path in hypothesis_root.glob("chunk-*.json")}
-    if not chunk_paths:
-        return [], []
     chunk_records = []
     hyp_records = []
+    orphan_hypotheses: list[tuple[int, list[Any]]] = []
     seen_chunk_indices: set[int] = set()
     for path in chunk_paths:
         chunk = read_json(path)
@@ -228,6 +231,8 @@ def _read_chunks(output_root: Path) -> tuple[list[dict[str, Any]], list[dict[str
         index = chunk["chunk_index"]
         if index in seen_chunk_indices:
             raise ValueError(f"Duplicate chunk index {index}.")
+        if path.stem != f"chunk-{index:08d}":
+            raise ValueError(f"Chunk filename does not match its record index: {path.name}.")
         seen_chunk_indices.add(index)
         sidecar_path = hypothesis_paths.get(path.name)
         if sidecar_path is None:
@@ -241,9 +246,35 @@ def _read_chunks(output_root: Path) -> tuple[list[dict[str, Any]], list[dict[str
             raise ValueError(f"Hypothesis sidecar must be a list: {sidecar_path}.")
         chunk_records.append(chunk)
         hyp_records.extend(sidecar)
-    if set(hypothesis_paths) != {path.name for path in chunk_paths}:
-        raise ValueError("Hypothesis sidecars contain missing or orphaned chunk files.")
-    return chunk_records, hyp_records
+    chunk_names = {path.name for path in chunk_paths}
+    missing_hypotheses = chunk_names - set(hypothesis_paths)
+    if missing_hypotheses:
+        raise ValueError(
+            f"Durable chunks have missing hypothesis sidecars: {sorted(missing_hypotheses)[:3]}."
+        )
+    if seen_chunk_indices and sorted(seen_chunk_indices) != list(
+        range(max(seen_chunk_indices) + 1)
+    ):
+        raise ValueError("Durable chunk indices are not contiguous from zero.")
+    orphan_names = set(hypothesis_paths) - chunk_names
+    expected_orphan_index = max(seen_chunk_indices, default=-1) + 1
+    orphan_indices = []
+    for name in sorted(orphan_names):
+        path = hypothesis_paths[name]
+        try:
+            index = int(path.stem.removeprefix("chunk-"))
+        except ValueError as exc:
+            raise ValueError(f"Invalid orphan hypothesis filename: {name}.") from exc
+        if path.stem != f"chunk-{index:08d}":
+            raise ValueError(f"Orphan hypothesis filename is not canonical: {name}.")
+        sidecar = read_json(path)
+        if not isinstance(sidecar, list):
+            raise ValueError(f"Orphan hypothesis sidecar must be a list: {path}.")
+        orphan_indices.append(index)
+        orphan_hypotheses.append((index, sidecar))
+    if orphan_indices and orphan_indices != [expected_orphan_index]:
+        raise ValueError("Only the trailing uncommitted hypothesis sidecar is permitted.")
+    return chunk_records, hyp_records, orphan_hypotheses
 
 
 def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None = None) -> LoadedRun:
@@ -392,7 +423,7 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
     domain_count = identity.get("candidate_domain_count")
     if type(domain_count) is not int or domain_count < 0 or len(plan_by_id) != domain_count:
         raise ValueError("Candidate plan count differs from the identity's complete domain count.")
-    chunks, hypothesis_rows = _read_chunks(output_root)
+    chunks, hypothesis_rows, orphan_hypotheses = _read_chunks(output_root)
     if set(plan_by_index) and set(plan_by_index) != set(range(len(plan_by_index))):
         raise ValueError("Candidate plan input_index values are not contiguous from zero.")
     candidate_rows: dict[str, dict[str, Any]] = {}
@@ -446,6 +477,24 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
         hyp_by_index[index] = hypothesis
         saved.append(SavedCandidate(index, candidate_id, "exact_scored", hypothesis))
 
+    orphan_input_indices: list[int] = []
+    for _, orphan_rows in orphan_hypotheses:
+        for row in orphan_rows:
+            if not isinstance(row, dict):
+                raise ValueError("Orphan hypothesis sidecar contains a malformed row.")
+            index = row.get("input_index")
+            if type(index) is not int or index not in plan_by_index:
+                raise ValueError("Orphan hypothesis sidecar has an invalid candidate index.")
+            if plan_by_index[index] in candidate_rows:
+                raise ValueError("Orphan hypothesis unexpectedly duplicates a durable candidate.")
+            if index in orphan_input_indices:
+                raise ValueError("Orphan hypothesis sidecar repeats a candidate index.")
+            orphan_hyp = decode_hypothesis(row.get("hypothesis"))
+            candidate_id = plan_by_index[index]
+            plan_xy = plan_by_id[candidate_id]["position_xy_m"]
+            if (orphan_hyp.east_m, orphan_hyp.north_m) != tuple(map(float, plan_xy)):
+                raise ValueError("Orphan hypothesis coordinates differ from the frozen plan.")
+            orphan_input_indices.append(index)
     exact_indices = {
         row["input_index"] for row in candidate_rows.values() if row.get("action") == "exact_scored"
     }
@@ -502,8 +551,45 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
     ) != len(candidate_rows):
         raise ValueError("Manifest completed-candidate count differs from durable chunks.")
     declared_dispositions = manifest.get("candidate_disposition_counts")
-    if declared_dispositions is not None and declared_dispositions != disposition_counts:
-        raise ValueError("Disposition ledger counts differ from the run manifest.")
+    if declared_dispositions is not None:
+        expected_disposition_keys = {
+            "committed",
+            "failed",
+            "failed_unattributed",
+            "not_selected",
+            "dispatched_uncommitted_or_unknown",
+            "not_dispatched",
+            "unvisited_after_worker_exit",
+        }
+        if (
+            not isinstance(declared_dispositions, dict)
+            or set(declared_dispositions) != expected_disposition_keys
+            or any(type(value) is not int or value < 0 for value in declared_dispositions.values())
+        ):
+            raise ValueError("Run manifest has malformed disposition category counts.")
+        committed_actions = {"exact_scored", "exact_invalid_water", "exact_unresolved", "pruned"}
+        not_selected_actions = {
+            "not_selected_by_explicit_prefix_profile",
+            "prefix_ordering_not_reached_before_interruption",
+        }
+        ledger_category_counts = {
+            "committed": sum(status_counts.get(action, 0) for action in committed_actions),
+            "failed": disposition_counts.get("worker_reported_failure", 0),
+            "not_selected": sum(
+                disposition_counts.get(status, 0) for status in not_selected_actions
+            ),
+            "dispatched_uncommitted_or_unknown": disposition_counts.get(
+                "worker_state_unknown_at_interruption", 0
+            ),
+            "not_dispatched": disposition_counts.get("not_dispatched", 0),
+            "unvisited_after_worker_exit": disposition_counts.get("unvisited_after_worker_exit", 0),
+        }
+        if any(
+            declared_dispositions[key] != value for key, value in ledger_category_counts.items()
+        ) or sum(
+            value for key, value in declared_dispositions.items() if key != "failed_unattributed"
+        ) != len(disposition_rows):
+            raise ValueError("Disposition ledger category counts differ from the run manifest.")
     complete = bool(totals.get("all_candidates_accounted")) and bool(
         totals.get("selected_request_complete")
     )
@@ -515,6 +601,8 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
         candidates=tuple(saved),
         disposition_counts=disposition_counts,
         status_counts=dict(status_counts),
+        orphan_hypothesis_chunk_indices=tuple(index for index, _ in orphan_hypotheses),
+        orphan_hypothesis_input_indices=tuple(orphan_input_indices),
         complete=complete,
     )
 
@@ -549,11 +637,29 @@ def evaluate_candidates(
 ) -> dict[str, Any]:
     """Summarize score rank and evaluator-only error rank deterministically."""
     rows = []
+    correct_assignment_total = 0
+    assignment_total = 0
+    candidates_with_correct_assignment = 0
+    candidates_with_all_assignments_correct = 0
+    search_to_wgs84 = Transformer.from_crs(search_crs, "EPSG:4326", always_xy=True)
+    truth_to_wgs84 = Transformer.from_crs(truth_crs, "EPSG:4326", always_xy=True)
+    truth_lon, truth_lat = truth_to_wgs84.transform(*truth_xy)
+    if not math.isfinite(truth_lon) or not math.isfinite(truth_lat):
+        raise ValueError("Truth coordinate transformation returned nonfinite values.")
     for rank, item in enumerate(run.candidates, 1):
         hyp = item.hypothesis
+        candidate_lon, candidate_lat = search_to_wgs84.transform(hyp.east_m, hyp.north_m)
+        if not math.isfinite(candidate_lon) or not math.isfinite(candidate_lat):
+            raise ValueError("Candidate coordinate transformation returned nonfinite values.")
         direct_correct = sum(
             assignment.catalog_key in truth_ids_by_report.get(assignment.report_index, set())
             for assignment in hyp.assignments
+        )
+        correct_assignment_total += direct_correct
+        assignment_total += len(hyp.assignments)
+        candidates_with_correct_assignment += direct_correct > 0
+        candidates_with_all_assignments_correct += bool(hyp.assignments) and (
+            direct_correct == len(hyp.assignments)
         )
         rows.append(
             {
@@ -562,11 +668,8 @@ def evaluate_candidates(
                 "candidate_id": item.candidate_id,
                 "score": hyp.score,
                 "position_xy_m": [hyp.east_m, hyp.north_m],
-                "geodesic_error_m": geodesic_error_m(
-                    (hyp.east_m, hyp.north_m),
-                    truth_xy,
-                    candidate_crs=search_crs,
-                    truth_crs=truth_crs,
+                "geodesic_error_m": abs(
+                    _GEOD.inv(truth_lon, truth_lat, candidate_lon, candidate_lat)[2]
                 ),
                 "assignment_count": len(hyp.assignments),
                 "direct_truth_key_assignment_count": direct_correct,
@@ -594,6 +697,14 @@ def evaluate_candidates(
     by_error = sorted(
         rows, key=lambda row: (row["geodesic_error_m"], row["score"], row["input_index"])
     )
+    point_limit = 2000
+    if len(rows) <= point_limit:
+        score_error_sample = rows
+    else:
+        indices = {
+            round(index * (len(rows) - 1) / (point_limit - 1)) for index in range(point_limit)
+        }
+        score_error_sample = [rows[index] for index in sorted(indices)]
     return {
         "schema": "a35-cached-finite-domain-evaluation-v1",
         "evaluation_only": True,
@@ -615,6 +726,21 @@ def evaluate_candidates(
         ),
         "status_counts": run.status_counts,
         "disposition_counts": run.disposition_counts,
+        "association_summary": {
+            "candidate_count": len(rows),
+            "assigned_catalog_key_total": assignment_total,
+            "direct_truth_key_match_total": correct_assignment_total,
+            "direct_truth_key_match_rate": (
+                correct_assignment_total / assignment_total if assignment_total else None
+            ),
+            "candidates_with_any_direct_truth_key_match": candidates_with_correct_assignment,
+            "candidates_with_all_assignments_direct_truth_matches": (
+                candidates_with_all_assignments_correct
+            ),
+            "scope": "all durable exact-scored candidates; evaluator-only",
+        },
+        "uncommitted_orphan_hypothesis_chunk_indices": list(run.orphan_hypothesis_chunk_indices),
+        "uncommitted_orphan_hypothesis_row_count": len(run.orphan_hypothesis_input_indices),
         "run_totals": run.manifest.get("totals"),
         "pool_error": run.manifest.get("pool_error"),
         "supervisor_status": run.manifest.get("status"),
@@ -622,13 +748,19 @@ def evaluate_candidates(
         "minimum_error_ranked": by_error[:20],
         "best_score_candidate": rows[0] if rows else None,
         "minimum_error_candidate_evaluator_only": by_error[0] if by_error else None,
-        "score_error_points": [
+        "score_error_points_sampling": (
+            "all saved exact-scored hypotheses"
+            if len(score_error_sample) == len(rows)
+            else "uniform score-rank sample; best and worst score ranks included"
+        ),
+        "score_error_points_total_count": len(rows),
+        "score_error_points_sample": [
             {
                 "score": row["score"],
                 "error_m": row["geodesic_error_m"],
                 "input_index": row["input_index"],
             }
-            for row in rows
+            for row in score_error_sample
         ],
     }
 
@@ -714,8 +846,11 @@ def main() -> None:
         "truth": sha256_file(args.truth_dir / "truth.json"),
         "truth_support": sha256_file(args.truth_dir / "support.json"),
         "truth_crs": sha256_file(args.truth_dir / "truth-crs.json"),
-        "run_manifest": sha256_file(args.output_root / "run-manifest.json"),
     }
+    result_manifest_path = args.output_root / "run-manifest.json"
+    if not result_manifest_path.is_file():
+        result_manifest_path = args.output_root / "supervisor-manifest.json"
+    result["input_sha256"]["attempt_manifest"] = sha256_file(result_manifest_path)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, sort_keys=True, indent=2, allow_nan=False) + "\n")
 

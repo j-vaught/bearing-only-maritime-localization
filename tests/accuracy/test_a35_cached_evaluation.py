@@ -140,6 +140,15 @@ def _fixture(root: Path, *, incomplete: bool = False) -> tuple[Path, dict[str, A
         "chunk_results_sha256": sha256_tree(chunk_root),
         "hypotheses_sha256": sha256_tree(hyp_root),
         "candidate_dispositions_sha256": sha256_file(root / "candidate-dispositions.jsonl"),
+        "candidate_disposition_counts": {
+            "committed": len(candidate_rows),
+            "failed": 0,
+            "failed_unattributed": 0,
+            "not_selected": 0,
+            "dispatched_uncommitted_or_unknown": 2 - len(candidate_rows),
+            "not_dispatched": 0,
+            "unvisited_after_worker_exit": 0,
+        },
         "totals": {
             "all_candidates_accounted": not incomplete,
             "selected_request_complete": not incomplete,
@@ -206,6 +215,34 @@ def test_continuation_lineage_binds_parent_manifest_and_chunk_trees(tmp_path: Pa
     _write(child_root / "resume-source.json", source)
     with pytest.raises(ValueError, match="tree differs"):
         load_run(child_root, expected_bindings=expected)
+
+
+def test_trailing_hypothesis_without_durable_chunk_is_reported_but_not_ranked(
+    tmp_path: Path,
+) -> None:
+    root, expected = _fixture(tmp_path / "run", incomplete=True)
+    _write(
+        root / "hypotheses" / "chunk-00000001.json",
+        [
+            {
+                "input_index": 1,
+                "hypothesis": {
+                    "east_m": 500250.0,
+                    "north_m": 4900000.0,
+                    "score": 1.0,
+                    "assignments": [],
+                },
+            }
+        ],
+    )
+    manifest = json.loads((root / "run-manifest.json").read_text())
+    manifest["hypotheses_sha256"] = sha256_tree(root / "hypotheses")
+    _write(root / "run-manifest.json", manifest)
+    loaded = load_run(root, expected_bindings=expected)
+    assert not loaded.complete
+    assert [candidate.input_index for candidate in loaded.candidates] == [0]
+    assert loaded.orphan_hypothesis_chunk_indices == (1,)
+    assert loaded.orphan_hypothesis_input_indices == (1,)
 
 
 def test_disposition_must_match_durable_chunk_action(tmp_path: Path) -> None:
