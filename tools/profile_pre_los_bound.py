@@ -344,6 +344,7 @@ def main() -> int:
     )
     exact_reference = profile_metadata["cases"]["1"]["exact"]
     a22_exact_audits = score_artifact["exact_audits"]
+    a22_positions = score_artifact["selected_positions_map_epsg32618"]
     a22_scores = {item["candidate_id"]: item for item in a22_exact_audits}
     score_by_id = {
         item["candidate_id"]: item["score"]
@@ -381,7 +382,11 @@ def main() -> int:
     for key, expected in profile_metadata["config"].items():
         if config_data.get(key) != expected:
             raise ValueError(f"Effective config field differs from exact reference: {key}")
-    if len(a22_exact_audits) != len(candidates) or len(a22_scores) != len(candidates):
+    if (
+        len(a22_exact_audits) != len(candidates)
+        or len(a22_positions) != len(candidates)
+        or len(a22_scores) != len(candidates)
+    ):
         raise ValueError(
             "A22 exact score artifact does not contain one audit per selected candidate"
         )
@@ -389,11 +394,11 @@ def main() -> int:
         item["candidate_id"] for item in exact_reference["audits"]
     ]:
         raise ValueError("Candidate ID order differs from exact score-only artifact")
-    for candidate, audit, profile_audit in zip(
-        candidates, a22_exact_audits, exact_reference["audits"], strict=True
+    for candidate, audit, profile_audit, a22_position in zip(
+        candidates, a22_exact_audits, exact_reference["audits"], a22_positions, strict=True
     ):
         if candidate.candidate_id != audit["candidate_id"] or candidate.position_xy_m != tuple(
-            audit["position_xy_m"]
+            a22_position
         ):
             raise ValueError(f"Candidate position/ID mismatch for {candidate.candidate_id}")
         if candidate.candidate_id != profile_audit[
