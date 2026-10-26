@@ -112,6 +112,7 @@ def _validated_condition_contexts(
     if set(bindings) != expected_keys:
         raise ValueError("Run manifest condition_contexts must bind all six formal gates.")
     normalized: dict[str, dict[str, Any]] = {}
+    execution_fingerprints: set[str] = set()
     for key, binding in bindings.items():
         if not isinstance(binding, dict) or set(binding) != {
             "calibration_condition",
@@ -121,7 +122,10 @@ def _validated_condition_contexts(
         bound_condition = CalibrationOperatingCondition.from_dict(
             binding.get("calibration_condition")
         )
-        CalibrationContext.from_dict(binding.get("calibration_context"))
+        bound_context = CalibrationContext.from_dict(binding.get("calibration_context"))
+        if bound_context.search_execution_sha256 in execution_fingerprints:
+            raise ValueError("Each formal gate must bind its own search execution fingerprint.")
+        execution_fingerprints.add(bound_context.search_execution_sha256)
         if key != _condition_context_key(bound_condition):
             raise ValueError(f"Condition context key does not match condition at {key}.")
         if (
@@ -214,10 +218,31 @@ def build_condition_document(
     plan_by_id = {row["trial_id"]: row for row in plan_rows}
     if len(plan_by_id) != len(plan_rows):
         raise ValueError("Frozen split plan has duplicate trial IDs.")
-    planned_by_id = {row["trial_id"]: row for row in selected}
     eligibility_by_id = {item.trial_id: item for item in eligibility_snapshot.all_trials}
-    if set(planned_by_id) - set(eligibility_by_id):
-        raise ValueError("Frozen eligibility does not cover all plan rows for this condition.")
+    if len(eligibility_by_id) != len(eligibility_snapshot.all_trials):
+        raise ValueError("Frozen eligibility contains duplicate trial IDs.")
+    if set(plan_by_id) != set(eligibility_by_id):
+        raise ValueError("Plan rows do not exactly match the full verified eligibility population.")
+    for trial_id, planned_row in plan_by_id.items():
+        eligible_row = eligibility_by_id[trial_id]
+        expected_values = {
+            "split": planned_row["split"],
+            "port_id": planned_row["port_id"],
+            "placement_id": planned_row["placement_id"],
+            "realization": str(planned_row["realization"]),
+            "range_m": int(planned_row["range_m"]),
+            "report_types": planned_row["report_types"] == "True",
+            "physical_seed": int(planned_row["physical_seed"]),
+            "sensor_condition": planned_row["sensor_condition"],
+        }
+        for key, expected_value in expected_values.items():
+            actual_value = getattr(eligible_row, key, None)
+            if key == "realization":
+                actual_value = str(actual_value)
+            if actual_value != expected_value:
+                raise ValueError(
+                    f"Plan metadata differs from verified eligibility for {trial_id}: {key}."
+                )
 
     run_entries = run_manifest.get("trials")
     if not isinstance(run_entries, list):
