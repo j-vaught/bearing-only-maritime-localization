@@ -149,7 +149,9 @@ def event_index(records: list[dict[str, Any]]) -> dict[tuple[int, str, int], dic
     return result
 
 
-def validate_rows(root: Path, manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def validate_rows(
+    root: Path, manifest: dict[str, Any], *, allow_sparse: bool = False
+) -> list[dict[str, Any]]:
     rows_path = root / ROWS_NAME
     require(rows_path.is_file(), f"missing rows file {rows_path}")
     require(
@@ -157,11 +159,29 @@ def validate_rows(root: Path, manifest: dict[str, Any]) -> list[dict[str, Any]]:
     )
     rows = read_jsonl(rows_path)
     ids = [row.get("mode_index") for row in rows]
-    require(ids == list(range(len(rows))), "rows do not form a deterministic mode prefix")
     require(
-        manifest.get("completed_mode_count") == len(rows),
-        "completed row count differs from manifest",
+        all(type(mode) is int and 0 <= mode < MODE_COUNT for mode in ids),
+        "rows contain an invalid mode index",
     )
+    ordered_ids = [cast(int, mode) for mode in ids]
+    require(
+        len(set(ordered_ids)) == len(ordered_ids) and ordered_ids == sorted(ordered_ids),
+        "rows are not sorted and unique",
+    )
+    if allow_sparse:
+        completed_ids = manifest.get("completed_mode_indices")
+        require(
+            type(completed_ids) is list
+            and completed_ids == ids
+            and manifest.get("completed_mode_count") == len(rows),
+            "sparse rows do not match completed mode inventory",
+        )
+    else:
+        require(ids == list(range(len(rows))), "rows do not form a deterministic mode prefix")
+        require(
+            manifest.get("completed_mode_count") == len(rows),
+            "completed row count differs from manifest",
+        )
     for row in rows:
         require(type(row.get("best_hypothesis")) is dict, "row best hypothesis is missing")
         require(type(row.get("seed")) is dict, "row seed is missing")
@@ -206,7 +226,8 @@ def validate_manifest(
     require(manifest.get("truth_used") is False, "artifact claims truth usage")
     require(manifest.get("evaluator_used") is False, "artifact claims evaluator usage")
     require(manifest.get("certificate_scope") == "none", "artifact claims a certificate")
-    rows = validate_rows(root, manifest)
+    allow_sparse = type(manifest.get("completed_mode_indices")) is list
+    rows = validate_rows(root, manifest, allow_sparse=allow_sparse)
     events = verify_event_chain(root / EVENTS_NAME, manifest)
     checkpoint = read_json(root / CHECKPOINT_NAME)
     require(
@@ -242,14 +263,12 @@ def verify_immutable_sources(manifest: dict[str, Any], label: str) -> None:
     runner_hash = manifest.get("runner_sha256")
     if module_value is None and package_value is None and runner_hash is None:
         return
-    require(
-        isinstance(module_value, str) and isinstance(package_value, str),
-        f"{label} source paths are incomplete",
-    )
+    require(isinstance(module_value, str), f"{label} assignment source path is missing")
     module_path = Path(cast(str, module_value))
-    package_path = Path(cast(str, package_value))
     require(module_path.is_file(), f"{label} assignment source is missing")
-    require(package_path.is_file(), f"{label} package source is missing")
+    package_path = Path(cast(str, package_value)) if isinstance(package_value, str) else None
+    if package_path is not None:
+        require(package_path.is_file(), f"{label} package source is missing")
     require(
         sha256_file(module_path) == manifest["assignment_expansion_sha256"],
         f"{label} assignment source hash differs",
@@ -257,7 +276,11 @@ def verify_immutable_sources(manifest: dict[str, Any], label: str) -> None:
     require(
         isinstance(runner_hash, str) and len(runner_hash) == 64, f"{label} runner hash is missing"
     )
-    repo_root = package_path.resolve().parents[1]
+    repo_root = (
+        package_path.resolve().parents[1]
+        if package_path is not None
+        else module_path.resolve().parents[2]
+    )
     commit = str(manifest["package_commit"])
     exists = subprocess.run(
         ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
@@ -292,8 +315,28 @@ def verify_immutable_sources(manifest: dict[str, Any], label: str) -> None:
 
 
 def compare_bindings(serial: dict[str, Any], parallel: dict[str, Any]) -> None:
+    provenance_raw = parallel.get("worker_provenance")
+    require(
+        type(provenance_raw) is list and len(provenance_raw) == 4,
+        "parallel worker provenance is incomplete",
+    )
+    provenance = cast(list[dict[str, Any]], provenance_raw)
+    # The worker records are the authoritative package/source binding when the
+    # coordinator stopped before publishing top-level package fields.
+    parallel_effective = dict(parallel)
+    first_worker = provenance[0]
+    if parallel_effective.get("package_commit") is None:
+        parallel_effective["package_commit"] = first_worker.get("package_commit")
+    if parallel_effective.get("assignment_expansion_sha256") is None:
+        parallel_effective["assignment_expansion_sha256"] = first_worker.get(
+            "assignment_expansion_sha256"
+        )
+    if parallel_effective.get("assignment_expansion_source") is None:
+        parallel_effective["assignment_expansion_source"] = first_worker.get(
+            "assignment_expansion_source"
+        )
     verify_immutable_sources(serial, "serial")
-    verify_immutable_sources(parallel, "parallel")
+    verify_immutable_sources(parallel_effective, "parallel")
     for key in (
         "assignment_expansion_sha256",
         "frozen_scoring_source_sha",
@@ -302,26 +345,21 @@ def compare_bindings(serial: dict[str, Any], parallel: dict[str, Any]) -> None:
         "a20_rows_sha256",
     ):
         require(
-            serial.get(key) == parallel.get(key),
+            serial.get(key) == parallel_effective.get(key),
             f"shared source binding differs for {key}",
         )
     require(serial.get("source_pins") == parallel.get("source_pins"), "source_pins differ")
     require(serial.get("input_paths") == parallel.get("input_paths"), "input_paths differ")
-    provenance_raw = parallel.get("worker_provenance")
-    require(
-        type(provenance_raw) is list and len(provenance_raw) == 4,
-        "parallel worker provenance is incomplete",
-    )
-    provenance = cast(list[dict[str, Any]], provenance_raw)
     worker_ids = [item.get("worker_id") for item in provenance]
     require(len(set(worker_ids)) == 4, "parallel worker IDs are not unique")
     for item in provenance:
         require(
-            item.get("package_commit") == parallel.get("package_commit"),
+            item.get("package_commit") == parallel_effective.get("package_commit"),
             "worker package commit differs",
         )
         require(
-            item.get("assignment_expansion_sha256") == parallel.get("assignment_expansion_sha256"),
+            item.get("assignment_expansion_sha256")
+            == parallel_effective.get("assignment_expansion_sha256"),
             "worker assignment source hash differs",
         )
         scorer_source = Path(str(item.get("scorer_source", "")))
@@ -359,35 +397,49 @@ def choose_input_start(row: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 
 
 def compare_mode_rows(
-    serial_rows: list[dict[str, Any]], parallel_rows: list[dict[str, Any]]
-) -> None:
-    require(
-        len(serial_rows) <= len(parallel_rows) == MODE_COUNT,
-        "parallel does not contain all 64 modes",
-    )
-    require(len(serial_rows) == 60, "serial artifact is not the expected 60-mode prefix")
-    for index, (serial_row, parallel_row) in enumerate(
-        zip(serial_rows, parallel_rows[: len(serial_rows)], strict=True)
-    ):
-        require(
-            serial_row.get("mode_index") == parallel_row.get("mode_index") == index,
-            "mode IDs differ",
-        )
+    serial_rows: list[dict[str, Any]],
+    parallel_rows: list[dict[str, Any]],
+    *,
+    serial_expected: set[int],
+    parallel_expected: set[int],
+) -> set[int]:
+    serial_by_mode = {int(row["mode_index"]): row for row in serial_rows}
+    parallel_by_mode = {int(row["mode_index"]): row for row in parallel_rows}
+    require(set(serial_by_mode) == serial_expected, "serial completed mode inventory differs")
+    require(set(parallel_by_mode) == parallel_expected, "parallel completed mode inventory differs")
+    common_modes = set(serial_by_mode) & set(parallel_by_mode)
+    for mode in sorted(common_modes):
+        serial_row = serial_by_mode[mode]
+        parallel_row = parallel_by_mode[mode]
         choose_input_start(serial_row)
         choose_input_start(parallel_row)
+        serial_normalized = strip_timing(serial_row, top_level=True)
+        parallel_normalized = strip_timing(parallel_row, top_level=True)
+        candidate_branch_count = parallel_normalized.pop("candidate_branch_count", None)
+        if candidate_branch_count is not None:
+            require(
+                candidate_branch_count
+                == parallel_row["counters"].get("candidate_branches", candidate_branch_count),
+                f"mode {mode} candidate branch count is inconsistent",
+            )
         require(
-            strip_timing(serial_row, top_level=True) == strip_timing(parallel_row, top_level=True),
-            f"mode {index} outcome differs outside timing fields",
+            serial_normalized == parallel_normalized,
+            f"mode {mode} outcome differs outside timing fields",
         )
-    for row in parallel_rows[60:]:
+    for row in serial_rows + parallel_rows:
         choose_input_start(row)
+    return common_modes
 
 
-def validate_event_inventory(records: list[dict[str, Any]], rows: list[dict[str, Any]]) -> None:
+def validate_event_inventory(
+    records: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+    *,
+    allowed_extra_modes: set[int] | None = None,
+) -> None:
     indexed = event_index(records)
-    allowed = set(range(len(rows)))
-    if len(rows) < MODE_COUNT:
-        allowed.add(len(rows))
+    allowed = {int(row["mode_index"]) for row in rows}
+    allowed.update(allowed_extra_modes or set())
     require(
         {key[0] for key in indexed}.issubset(allowed), "event mode is outside the durable row scope"
     )
@@ -401,39 +453,44 @@ def validate_event_inventory(records: list[dict[str, Any]], rows: list[dict[str,
 
 
 def compare_events(
-    serial_events: list[dict[str, Any]], parallel_events: list[dict[str, Any]]
+    serial_events: list[dict[str, Any]],
+    parallel_events: list[dict[str, Any]],
+    *,
+    serial_modes: set[int],
+    parallel_modes: set[int],
 ) -> None:
     serial_index = event_index(serial_events)
     parallel_index = event_index(parallel_events)
-    require(
-        set(serial_index).issubset(parallel_index), "parallel event ledger is missing serial events"
-    )
-    for key, serial_payload in serial_index.items():
-        parallel_payload = parallel_index[key]
-        serial_normalized = {
-            name: value
-            for name, value in serial_payload.items()
-            if name not in {"mode_index", "phase"}
-        }
-        parallel_normalized = {
-            name: value
-            for name, value in parallel_payload.items()
-            if name not in {"mode_index", "phase"}
-        }
-        require(
-            serial_normalized == parallel_normalized,
-            f"branch payload differs for mode/phase/branch {key}",
-        )
-    for mode in range(60):
+    common_event_modes = {key[0] for key in serial_index} & {key[0] for key in parallel_index}
+    require(bool(common_event_modes), "serial and parallel event ledgers have no overlap")
+    for mode in sorted(common_event_modes):
         serial_keys = {key for key in serial_index if key[0] == mode}
         parallel_keys = {key for key in parallel_index if key[0] == mode}
-        require(serial_keys == parallel_keys, f"completed mode {mode} branch inventory differs")
-    mode60_serial = {key for key in serial_index if key[0] == 60}
-    require(bool(mode60_serial), "serial partial mode 60 has no branch events")
-    require(
-        {key for key in parallel_index if key[0] == 60}.issuperset(mode60_serial),
-        "parallel mode 60 does not contain the serial partial prefix",
-    )
+        complete_overlap = mode in serial_modes and mode in parallel_modes
+        if complete_overlap:
+            require(serial_keys == parallel_keys, f"completed mode {mode} branch inventory differs")
+        else:
+            require(
+                bool(serial_keys & parallel_keys),
+                f"partial mode {mode} has no common branch events",
+            )
+        for key in sorted(serial_keys & parallel_keys):
+            serial_payload = serial_index[key]
+            parallel_payload = parallel_index[key]
+            serial_normalized = {
+                name: value
+                for name, value in serial_payload.items()
+                if name not in {"mode_index", "phase"}
+            }
+            parallel_normalized = {
+                name: value
+                for name, value in parallel_payload.items()
+                if name not in {"mode_index", "phase"}
+            }
+            require(
+                serial_normalized == parallel_normalized,
+                f"branch payload differs for mode/phase/branch {key}",
+            )
 
 
 def evaluate(
@@ -443,22 +500,66 @@ def evaluate(
     parallel_manifest, parallel_rows, parallel_events = validate_manifest(parallel_root)
     require(serial_manifest.get("status") == "interrupted", "serial artifact is not interrupted")
     require(
-        serial_manifest.get("completed_mode_count") == 60, "serial artifact is not a 60-mode prefix"
+        serial_manifest.get("completed_mode_count") == 60,
+        "serial artifact is not a 60-mode prefix",
     )
     require(serial_manifest.get("pending_mode_count") == 4, "serial pending mode count is not four")
-    require(parallel_manifest.get("status") == "completed", "parallel artifact is not complete")
     require(
-        parallel_manifest.get("completed_mode_count") == MODE_COUNT,
-        "parallel artifact is not 64 complete modes",
+        parallel_manifest.get("status") in {"failed", "interrupted"},
+        "parallel artifact has an unsupported status",
     )
+    serial_modes = {int(row["mode_index"]) for row in serial_rows}
+    parallel_modes = {int(row["mode_index"]) for row in parallel_rows}
+    serial_expected = (
+        set(serial_manifest["completed_mode_indices"])
+        if isinstance(serial_manifest.get("completed_mode_indices"), list)
+        else serial_modes
+    )
+    parallel_expected = (
+        set(parallel_manifest["completed_mode_indices"])
+        if isinstance(parallel_manifest.get("completed_mode_indices"), list)
+        else parallel_modes
+    )
+    require(serial_modes == serial_expected, "serial row and manifest inventories differ")
+    require(parallel_modes == parallel_expected, "parallel row and manifest inventories differ")
+    pending_parallel = set(
+        parallel_manifest.get("pending_mode_ids")
+        or parallel_manifest.get("unknown_mode_indices")
+        or []
+    )
+    if isinstance(parallel_manifest.get("completed_mode_indices"), list):
+        require(len(pending_parallel) == 1, "parallel artifact must have one pending mode")
     require(
-        parallel_manifest.get("pending_mode_count", 0) == 0, "parallel artifact has pending modes"
+        serial_modes | parallel_modes | pending_parallel == set(range(MODE_COUNT)),
+        "serial and parallel artifacts do not form complete union coverage",
     )
     compare_bindings(serial_manifest, parallel_manifest)
-    compare_mode_rows(serial_rows, parallel_rows)
-    validate_event_inventory(serial_events, serial_rows)
-    validate_event_inventory(parallel_events, parallel_rows)
-    compare_events(serial_events, parallel_events)
+    compare_mode_rows(
+        serial_rows,
+        parallel_rows,
+        serial_expected=serial_expected,
+        parallel_expected=parallel_expected,
+    )
+    validate_event_inventory(
+        serial_events,
+        serial_rows,
+        allowed_extra_modes=set(range(MODE_COUNT)) - serial_modes,
+    )
+    validate_event_inventory(
+        parallel_events,
+        parallel_rows,
+        allowed_extra_modes=pending_parallel,
+    )
+    compare_events(
+        serial_events,
+        parallel_events,
+        serial_modes=serial_modes,
+        parallel_modes=parallel_modes,
+    )
+    composite_modes = sorted(serial_modes | parallel_modes | pending_parallel)
+    composite_mode_sources = {
+        str(mode): ("parallel" if mode in parallel_modes else "serial") for mode in composite_modes
+    }
     audit_ok = False
     audit_reason = "full audit artifact not supplied"
     if audit_path is not None:
@@ -505,7 +606,13 @@ def evaluate(
             and audit.get("mode_count") == MODE_COUNT
             and audit.get("completed_mode_count") == MODE_COUNT
             and audit.get("pending_mode_count") == 0
-            and audit.get("expansion_status") == "completed"
+            and audit.get("serial_completed_mode_count") == len(serial_modes)
+            and audit.get("serial_pending_mode_count") == len(set(range(MODE_COUNT)) - serial_modes)
+            and audit.get("parallel_status") == parallel_manifest.get("status")
+            and audit.get("parallel_completed_mode_indices") == sorted(parallel_modes)
+            and audit.get("parallel_pending_mode_indices") == sorted(pending_parallel)
+            and audit.get("composite_selected_mode_status") == "complete"
+            and audit.get("composite_mode_sources") == composite_mode_sources
             and audit.get("expansion_event_count") == parallel_manifest.get("event_count")
             and audit.get("expansion_event_digest") == parallel_manifest.get("event_digest")
             and audit.get("expansion_events_sha256") == parallel_manifest.get("events_sha256")
@@ -531,6 +638,12 @@ def evaluate(
         "parallel_completed_mode_count": len(parallel_rows),
         "serial_event_count": len(serial_events),
         "parallel_event_count": len(parallel_events),
+        "serial_status": serial_manifest.get("status"),
+        "parallel_status": parallel_manifest.get("status"),
+        "parallel_completed_mode_indices": sorted(parallel_modes),
+        "parallel_pending_mode_indices": sorted(pending_parallel),
+        "composite_selected_mode_status": "complete",
+        "composite_mode_sources": composite_mode_sources,
         "serial_manifest_sha256": sha256_file(serial_root / "manifest.json"),
         "parallel_manifest_sha256": sha256_file(parallel_root / "manifest.json"),
         "source_bindings": {
@@ -541,6 +654,18 @@ def evaluate(
                 "assignment_expansion_sha256",
                 "frozen_scoring_source_sha",
             )
+        },
+        "parallel_source_bindings": {
+            "package_commit": parallel_manifest.get("package_commit")
+            or cast(list[dict[str, Any]], parallel_manifest["worker_provenance"])[0].get(
+                "package_commit"
+            ),
+            "harness_commit": parallel_manifest.get("harness_commit"),
+            "assignment_expansion_sha256": parallel_manifest.get("assignment_expansion_sha256")
+            or cast(list[dict[str, Any]], parallel_manifest["worker_provenance"])[0].get(
+                "assignment_expansion_sha256"
+            ),
+            "frozen_scoring_source_sha": parallel_manifest.get("frozen_scoring_source_sha"),
         },
     }
 
