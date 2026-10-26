@@ -1,41 +1,37 @@
-from __future__ import annotations
-
-import importlib.util
 from pathlib import Path
+from runpy import run_path
+from types import SimpleNamespace
 
-from pyproj import Transformer
+import numpy as np
+from pyproj import Geod
 
-MODULE_PATH = Path(__file__).resolve().parents[2] / "tools" / "diagnose_a35_frozen_objective.py"
-SPEC = importlib.util.spec_from_file_location("diagnose_a35_frozen_objective", MODULE_PATH)
-assert SPEC is not None and SPEC.loader is not None
-MODULE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(MODULE)
-_geodesic_error_m = MODULE._geodesic_error_m
-_spatial_modes = MODULE._spatial_modes
+_witness_cell = run_path(
+    str(Path(__file__).resolve().parents[2] / "tools" / "diagnose_a35_wedge_omission.py")
+)["_witness_cell"]
 
 
-def test_geodesic_error_transforms_truth_and_candidate_from_distinct_utm_zones() -> None:
-    lon, lat = -68.88951866523595, 44.455393145950055
-    truth_xy = Transformer.from_crs("EPSG:4326", "EPSG:32619", always_xy=True).transform(lon, lat)
-    candidate_xy = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True).transform(
-        lon, lat
+def test_exact_cell_predicate_includes_quantization_and_rejects_outside_range() -> None:
+    geod = Geod(ellps="WGS84")
+    lon0, lat0 = -68.0, 44.0
+    accepted_lon, accepted_lat, _ = geod.fwd(lon0, lat0, 1.5, 10_000.0)
+    rejected_lon, rejected_lat, _ = geod.fwd(lon0, lat0, 1.7, 10_000.0)
+    far_lon, far_lat, _ = geod.fwd(lon0, lat0, 0.0, 10_500.0)
+    keys = ["true-a", "false-b", "far-c"]
+    result = _witness_cell(
+        4,
+        9,
+        lon0,
+        lat0,
+        (SimpleNamespace(bearing_deg=0.0),),
+        keys,
+        np.asarray([accepted_lon, rejected_lon, far_lon]),
+        np.asarray([accepted_lat, rejected_lat, far_lat]),
+        {0: {"true-a"}},
+        [0.5],
+        cell_size_m=250.0,
+        max_range_m=10_000.0,
+        angular_tolerance_deg=0.5,
     )
-
-    error = _geodesic_error_m(
-        candidate_xy,
-        truth_xy,
-        candidate_crs="EPSG:32618",
-        truth_crs="EPSG:32619",
-    )
-
-    assert error < 1e-6
-
-
-def test_spatial_modes_cluster_only_hypotheses_within_geodesic_radius() -> None:
-    hypotheses = [
-        {"east_m": 500_000.0, "north_m": 4_900_000.0},
-        {"east_m": 500_010.0, "north_m": 4_900_000.0},
-        {"east_m": 501_000.0, "north_m": 4_900_000.0},
-    ]
-
-    assert _spatial_modes(hypotheses, radius_m=100.0) == [[0, 1], [2]]
+    assert result["matching_count"] == 1
+    assert result["by_report"]["0"]["witness_count"] == 1
+    assert result["by_report"]["0"]["true_group_member_hits"] == 1
