@@ -1038,6 +1038,7 @@ def _v2_fixture(tmp_path: Path):
         split="development",
         plan_sha256="f" * 64,
         config_sha256="1" * 64,
+        splits_sha256="3" * 64,
         trial_table_sha256="2" * 64,
         all_trials=tuple(eligibility),
     )
@@ -1046,20 +1047,52 @@ def _v2_fixture(tmp_path: Path):
     run_dir = tmp_path / "run-1"
     run_dir.mkdir()
     run_manifest_path = run_dir / "run-manifest.json"
+    condition_contexts = {}
+    for range_m in (1000, 5000, 10000):
+        for use_types in (True, False):
+            gate_condition = CalibrationOperatingCondition(
+                range_m=float(range_m),
+                use_types=use_types,
+                objective_version=condition.objective_version,
+                algorithm=condition.algorithm,
+            )
+            key = f"{range_m}m_types{'on' if use_types else 'off'}"
+            condition_contexts[key] = {
+                "calibration_condition": gate_condition.as_dict(),
+                "calibration_context": context.as_dict(),
+            }
     manifest = {
         "schema_version": 1,
         "run_id": "run-1",
         "split": "development",
-        "calibration_condition": condition.as_dict(),
-        "calibration_context": context.as_dict(),
+        "plan_sha256": snapshot.config_sha256,
+        "config_sha256": snapshot.config_sha256,
+        "splits_sha256": snapshot.splits_sha256,
+        "trial_table_sha256": snapshot.trial_table_sha256,
+        "eligibility_plan_sha256": snapshot.plan_sha256,
         "eligibility_manifest_sha256": hashlib.sha256(
             eligibility_manifest.read_bytes()
         ).hexdigest(),
-        "plan_sha256": snapshot.plan_sha256,
-        "config_sha256": snapshot.config_sha256,
-        "trial_table_sha256": snapshot.trial_table_sha256,
+        "condition_contexts": condition_contexts,
         "trials": [],
     }
+    identity_fields = (
+        "plan_sha256",
+        "eligibility_plan_sha256",
+        "eligibility_manifest_sha256",
+        "config_sha256",
+        "splits_sha256",
+        "trial_table_sha256",
+        "condition_contexts",
+    )
+    identity = {key: manifest[key] for key in identity_fields}
+    manifest["run_identity_sha256"] = hashlib.sha256(
+        json.dumps(
+            {"schema": "accuracy-formal-run-identity-v1", **identity},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
     run_manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     return plans, snapshot, eligibility_manifest, run_manifest_path, manifest, condition, context
 
@@ -1102,6 +1135,8 @@ def test_v2_condition_document_keeps_full_population_and_failure_rows(tmp_path: 
 def test_v2_condition_projection_accepts_other_conditions_in_split_manifest(
     tmp_path: Path,
 ) -> None:
+    import hashlib
+
     plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
         tmp_path
     )
@@ -1129,6 +1164,9 @@ def test_v2_condition_projection_accepts_other_conditions_in_split_manifest(
             support_count=2,
         ),
     )
+    other_eligibility = snapshot.all_trials[-1]
+    other_key = "5000m_typeson"
+    other_binding = manifest["condition_contexts"][other_key]
     manifest["trials"] = [
         {
             "trial_id": other["trial_id"],
@@ -1142,6 +1180,31 @@ def test_v2_condition_projection_accepts_other_conditions_in_split_manifest(
             "sensor_condition": "nominal",
             "status": "failed",
             "failure": "controlled fixture",
+            "condition_context_key": other_key,
+            "condition_context_sha256": hashlib.sha256(
+                json.dumps(other_binding, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest(),
+            "calibration_condition_sha256": hashlib.sha256(
+                json.dumps(
+                    other_binding["calibration_condition"],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest(),
+            "calibration_context_sha256": hashlib.sha256(
+                json.dumps(
+                    other_binding["calibration_context"],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest(),
+            "eligibility_record_sha256": hashlib.sha256(
+                json.dumps(
+                    vars(other_eligibility),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest(),
         }
     ]
     document = build_condition_document(

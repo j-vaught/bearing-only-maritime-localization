@@ -740,7 +740,10 @@ def main() -> None:
             CalibrationContext,
             CalibrationOperatingCondition,
         )
-        from tools.a38_calibration_v2 import build_condition_document
+        from tools.a38_calibration_v2 import (
+            _condition_context_key,
+            build_condition_document,
+        )
         from tools.accuracy_eligibility import verify_eligibility_manifest
 
         if (
@@ -766,7 +769,13 @@ def main() -> None:
             objective_version=args.objective_version,
             algorithm=args.algorithm,
         )
-        context = CalibrationContext.from_dict(run_manifest.get("calibration_context"))
+        condition_contexts = run_manifest.get("condition_contexts")
+        if not isinstance(condition_contexts, dict):
+            parser.error("Formal run manifest lacks pre-search condition_contexts bindings.")
+        binding = condition_contexts.get(_condition_context_key(condition))
+        if not isinstance(binding, dict):
+            parser.error("Requested condition is absent from pre-search condition_contexts.")
+        context = CalibrationContext.from_dict(binding.get("calibration_context"))
         document = build_condition_document(
             trial_rows=trials,
             run_manifest=run_manifest,
