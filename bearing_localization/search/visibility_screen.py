@@ -20,6 +20,7 @@ from maritime_localization_shared.geospatial.coordinates import (
 )
 
 _GEOD = Geod(ellps="WGS84")
+_BATCHED_FULL_SCAN_MIN_RAYS = 32
 Status = Literal["visible", "blocked", "unresolved", "unexamined"]
 _OFFSET_KEYS = frozenset({"visible_feature_offset_east_m", "visible_feature_offset_north_m"})
 _SAFE_METADATA_KEYS = frozenset(
@@ -119,7 +120,8 @@ def screen_candidate_visibility(
         prepared_context,
         stop_after_minimum_groups=stop_after_minimum_groups,
         scan_all_members=scan_all_members,
-        use_batched_los=False,
+        use_batched_los=True,
+        batch_minimum_rays=_BATCHED_FULL_SCAN_MIN_RAYS,
     )
 
 
@@ -130,13 +132,14 @@ def _screen_candidate_visibility_batched(
     stop_after_minimum_groups: int | None = None,
     scan_all_members: bool = False,
 ) -> VisibilityScreenResult:
-    """Full-scan batch implementation retained pending measured path selection."""
+    """Force the batch implementation for full-scan parity and timing checks."""
     return _screen_candidate_visibility(
         observer_xy_m,
         prepared_context,
         stop_after_minimum_groups=stop_after_minimum_groups,
         scan_all_members=scan_all_members,
         use_batched_los=True,
+        batch_minimum_rays=0,
     )
 
 
@@ -154,6 +157,7 @@ def _screen_candidate_visibility_scalar(
         stop_after_minimum_groups=stop_after_minimum_groups,
         scan_all_members=scan_all_members,
         use_batched_los=False,
+        batch_minimum_rays=0,
     )
 
 
@@ -164,6 +168,7 @@ def _screen_candidate_visibility(
     stop_after_minimum_groups: int | None,
     scan_all_members: bool,
     use_batched_los: bool,
+    batch_minimum_rays: int,
 ) -> VisibilityScreenResult:
     """Implementation shared by the batch path and scalar reference."""
     # Shared grouping separates components at gaps larger than the threshold.
@@ -245,10 +250,11 @@ def _screen_candidate_visibility(
             for members in groups
             for key in sorted(members, key=lambda member: (targets[member][1].distance_m, member))
         )
-        ray_states = vector_map.line_visibility_many(
-            observer, tuple(targets[key][2] for key in ray_keys)
-        )
-        batch_visibility_by_key = dict(zip(ray_keys, ray_states, strict=True))
+        if len(ray_keys) >= batch_minimum_rays:
+            ray_states = vector_map.line_visibility_many(
+                observer, tuple(targets[key][2] for key in ray_keys)
+            )
+            batch_visibility_by_key = dict(zip(ray_keys, ray_states, strict=True))
     evidence: list[ComponentEvidence] = []
     visibility: dict[str, str] = {}
     unresolved: set[str] = set()
