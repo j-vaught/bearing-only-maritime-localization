@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -148,6 +149,54 @@ def _validated_condition_contexts(
     return normalized
 
 
+def _validated_execution_protocol(run_manifest: dict[str, Any]) -> dict[str, Any]:
+    protocol = run_manifest.get("execution_protocol")
+    expected_keys = {
+        "schema",
+        "timeout_s",
+        "timeout_scope",
+        "deadline_clock",
+        "timeout_status",
+        "termination_policy",
+    }
+    if not isinstance(protocol, dict) or set(protocol) != expected_keys:
+        raise ValueError("Run manifest lacks a complete execution_protocol binding.")
+    timeout_s = protocol.get("timeout_s")
+    if (
+        protocol.get("schema") != "accuracy-execution-protocol-v1"
+        or isinstance(timeout_s, bool)
+        or not isinstance(timeout_s, (int, float))
+        or not math.isfinite(float(timeout_s))
+        or timeout_s <= 0
+        or protocol.get("timeout_scope") != "per_command_subprocess"
+        or protocol.get("deadline_clock") != "monotonic_wall_clock_from_spawn"
+        or protocol.get("timeout_status") != "search_timeout"
+    ):
+        raise ValueError("Run manifest execution_protocol has invalid timeout semantics.")
+    termination = protocol.get("termination_policy")
+    if not isinstance(termination, dict) or set(termination) != {
+        "start_new_session",
+        "timeout_signal",
+        "grace_s",
+        "escalation_signal",
+        "reap_process_group",
+    }:
+        raise ValueError("Run manifest execution_protocol termination policy is malformed.")
+    grace_s = termination.get("grace_s")
+    if (
+        termination.get("start_new_session") is not True
+        or termination.get("timeout_signal") != "SIGTERM"
+        or isinstance(grace_s, bool)
+        or not isinstance(grace_s, (int, float))
+        or not math.isfinite(float(grace_s))
+        or grace_s < 0
+        or termination.get("escalation_signal") != "SIGKILL"
+        or termination.get("reap_process_group") is not True
+    ):
+        raise ValueError("Run manifest execution_protocol termination policy is invalid.")
+    return protocol
+
+
 def _validate_run_identity(run_manifest: dict[str, Any]) -> None:
     identity_fields = (
         "plan_sha256",
@@ -157,6 +206,7 @@ def _validate_run_identity(run_manifest: dict[str, Any]) -> None:
         "splits_sha256",
         "trial_table_sha256",
         "condition_contexts",
+        "execution_protocol",
     )
     identity = {key: run_manifest.get(key) for key in identity_fields}
     expected = hashlib.sha256(
@@ -188,6 +238,8 @@ def build_condition_document(
     condition_contexts = _validated_condition_contexts(
         run_manifest, condition=condition, context=context
     )
+    execution_protocol = _validated_execution_protocol(run_manifest)
+    execution_protocol_sha = hashlib.sha256(canonical_json(execution_protocol)).hexdigest()
 
     eligibility_sha = hfile(eligibility_manifest_path)
     if run_manifest.get("eligibility_manifest_sha256") != eligibility_sha:
@@ -292,6 +344,18 @@ def build_condition_document(
         expected_eligibility_sha = hashlib.sha256(canonical_json(eligibility_payload)).hexdigest()
         if row.get("eligibility_record_sha256") != expected_eligibility_sha:
             raise ValueError(f"Run row eligibility record hash mismatch for {trial_id}.")
+        expected_supported = eligibility_record.supported
+        if (
+            "supported" not in row
+            or type(row["supported"]) is not type(expected_supported)
+            or row["supported"] != expected_supported
+        ):
+            raise ValueError(f"Run row supported flag mismatch for {trial_id}.")
+        expected_support_sha = getattr(eligibility_record, "support_sha256", None) or ""
+        if "support_sha256" not in row or row["support_sha256"] != expected_support_sha:
+            raise ValueError(f"Run row support hash mismatch for {trial_id}.")
+        if row.get("execution_protocol_sha256") != execution_protocol_sha:
+            raise ValueError(f"Run row execution-protocol hash mismatch for {trial_id}.")
         run_by_id[trial_id] = row
 
     all_trials: list[dict[str, Any]] = []
@@ -450,7 +514,9 @@ def build_condition_document(
         "frozen": False,
         "operating_condition": condition.as_dict(),
         "context": context.as_dict(),
+        "execution_protocol": execution_protocol,
         "provenance": {
+            "execution_protocol_sha256": execution_protocol_sha,
             "plan_sha256": eligibility_snapshot.plan_sha256,
             "trial_table_sha256": eligibility_snapshot.trial_table_sha256,
             "run_manifest_sha256": hfile(manifest_path),
