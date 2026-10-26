@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
 import bearing_localization.search.prediction as prediction_module
+from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.prediction import (
     predict_visible_groups,
     prepare_prediction_context,
 )
-from maritime_localization_shared.contracts.inputs_v2 import CatalogRecordV2, CatalogV2
+from bearing_localization.search.scoring import CandidateScorer
+from maritime_localization_shared.contracts.inputs_v2 import (
+    CatalogRecordV2,
+    CatalogV2,
+    MeasurementSetV2,
+    MeasurementV2,
+)
 from maritime_localization_shared.geospatial.spatial_index import GeographicSpatialIndex
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 
@@ -141,3 +149,36 @@ def test_prediction_reuses_zero_offset_inverse_but_keeps_nonzero_offset_inverse(
     offset_group = next(group for group in result.groups if "offset" in group.member_keys)
     assert offset_group.bearing_deg == pytest.approx(float(expected_offset_bearing) % 360.0)
     assert offset_group.range_m == pytest.approx(float(expected_offset_distance))
+
+
+def test_mixed_offset_candidate_score_matches_recomputed_inverse_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, catalog, observer, vector_map, _ = _fixture()
+    measurements = MeasurementSetV2(measurements=(MeasurementV2(0.0, "2026-10-26T12:00:00Z"),))
+    config = SearchConfig(max_range_m=10_000.0)
+    reused = CandidateScorer(measurements, catalog, vector_map, config).evaluate(observer)
+    original_query = GeographicSpatialIndex.query_radius_with_geometry
+
+    def recomputed_geometry(index, longitude_deg, latitude_deg, radius_m):
+        rows = original_query(index, longitude_deg, latitude_deg, radius_m)
+        result = []
+        for record_index, _, _ in rows:
+            record_lon, record_lat = index.points[record_index]
+            geometry = prediction_module.geodesic_bearing_distance(
+                (longitude_deg, latitude_deg), (record_lon, record_lat)
+            )
+            result.append((record_index, geometry.true_bearing_deg, geometry.distance_m))
+        return tuple(result)
+
+    monkeypatch.setattr(GeographicSpatialIndex, "query_radius_with_geometry", recomputed_geometry)
+    recomputed = CandidateScorer(measurements, catalog, vector_map, config).evaluate(observer)
+
+    assert reused.status == recomputed.status == "scored"
+    assert reused.predicted == recomputed.predicted
+    assert reused.costs is not None and recomputed.costs is not None
+    assert np.array_equal(reused.costs.matched_costs, recomputed.costs.matched_costs)
+    assert np.array_equal(reused.costs.report_clutter_costs, recomputed.costs.report_clutter_costs)
+    assert np.array_equal(reused.costs.group_miss_costs, recomputed.costs.group_miss_costs)
+    assert np.array_equal(reused.costs.residuals_deg, recomputed.costs.residuals_deg)
+    assert reused.hypothesis == recomputed.hypothesis
