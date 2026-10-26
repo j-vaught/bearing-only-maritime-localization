@@ -2,29 +2,22 @@
 
 This pilot measures full-domain search execution and records algorithm-reported proposal counts separately from scorer telemetry. It does not run the evaluator, inspect truth contents, calibrate thresholds, execute validation, or open held-out trials. A completed search status is an execution result only. A budget-exhausted search is retained as such and cannot count as a completed search over the full proposal stream or as an accepted localization.
 
-The selection is generated from the development plan, preparation status, and pre-search support files. It chooses one supported nominal trial for each of the six range and label gates, one prepared unsupported nominal trial, and one preparation failure when available. The trial-table order resolves ties. Search never receives truth, support, or preparation diagnostics. The unsupported trial is still run when its measurements exist. The failed row remains in every run manifest without a process invocation when its measurements are missing.
+The controller selects one supported nominal trial for each range and label gate, one prepared unsupported nominal trial, and one preparation failure when available. It validates the frozen A42 eligibility manifest against the anchor-corrected versioned plan and prepared support files. It binds support status and hashes to the selection manifest before search. Search receives measurements, the full-coast catalog, the declared full-coast map, and its scope manifest. It never receives truth, support, or preparation diagnostics. The unsupported trial remains in the pilot when measurements exist, and the failed row remains in every run manifest without a search process when its measurements are missing.
 
-The checked-in configuration compares pairwise, wedge, hierarchical, grid, and reference-grid search at candidate budgets 64 and 256. Every algorithm uses the same `bearing_set_map_v1` objective, the same six-gate trial inputs, a 10 km grid spacing, and a common full-domain projected bounding rectangle. The rectangle is calculated from the union of the supplied MapV2 known-coverage and explicit-unknown geometries in EPSG:32618, then padded by 10 km. The pilot keeps the partial map's unknown regions explicit. It does not use the unapproved candidate map export or restrict search to a trial's reference-water map.
+The checked-in configuration compares pairwise, wedge, hierarchical, grid, and reference-grid search at candidate budgets 64 and 256. Every algorithm uses the same bearing-set objective and selected trial rows, a 10 km grid spacing, and a common full-domain projected bounding rectangle. The rectangle is calculated from the union of known and explicit-unknown MapV2 geometries in EPSG:32618 and padded by 10 km. The partial map's unknown regions remain explicit. This development pilot uses the A34 map v3 candidate with SHA-256 cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93. The canonical map remains unchanged.
 
-Run selection-only first so its pre-search case list can be inspected. Then use the same command without `--select-only`. Outputs belong under a separate `.agent-work/outputs/a26-pilot` directory and include selected rows, source hashes, scope manifests, per-trial SearchConfig files, commands, estimates, telemetry, logs, and run manifests. No output is written into A38's prepared inputs.
+Run selection-only into a separate preflight directory to inspect the pre-search case list. Then start execution in a fresh output directory and resume that same run directory after a boundary pause. The controller copies the catalog, map, eligibility manifest, and selected measurements into hash-named static-inputs. A pause file or --stop-after-searches N stops only at a trial boundary. Continue a paused run with --resume. Existing failed attempts are retained and are not retried unless --retry-failures is explicit. Use the anchor-corrected development plan and A38 prepared root. The exact invocation sequence is:
 
-```sh
-uv run python tools/run_accuracy_pilot.py \
-  --trial-table .agent-work/outputs/a38-corrected-dev/plan/trials.csv \
-  --preparation-manifest .agent-work/outputs/a38-corrected-dev/inputs/development/preparation.csv \
-  --input-root .agent-work/outputs/a38-corrected-dev/inputs \
-  --catalog .agent-work/cache/maps/noaa-enc-east-coast-fullcoast-catalog-v2.json \
-  --map .agent-work/cache/maps/noaa-enc-east-coast-fullcoast-map-v2.json \
-  --output-root .agent-work/outputs/a26-pilot \
-  --select-only
+The small budgets deliberately expose proposal and scoring caps. The full-domain 10 km grid exceeds 20,000 cells, so even a complete 20,000-candidate budget must remain marked budget-exhausted. Per-run records distinguish proposal-generation counters from scorer-generated, evaluated, and retained telemetry. The search CLI times the combined candidate-search stage, so runtime projections are labeled linear combined-stage extrapolations and do not claim separate proposal-generation or scoring latency. Pilot outputs do not change the release support threshold, eligibility rules, or confidence-interval population.
 
-uv run python tools/run_accuracy_pilot.py \
-  --trial-table .agent-work/outputs/a38-corrected-dev/plan/trials.csv \
-  --preparation-manifest .agent-work/outputs/a38-corrected-dev/inputs/development/preparation.csv \
-  --input-root .agent-work/outputs/a38-corrected-dev/inputs \
-  --catalog .agent-work/cache/maps/noaa-enc-east-coast-fullcoast-catalog-v2.json \
-  --map .agent-work/cache/maps/noaa-enc-east-coast-fullcoast-map-v2.json \
-  --output-root .agent-work/outputs/a26-pilot
-```
+    ROOT=/home/jvaught2/projects/bearing-only-maritime-localization
+    INPUTS=$ROOT/.agent-work/outputs/a38-anchor-corrected-dev-hardlinked/inputs
+    ELIGIBILITY=$ROOT/.agent-work/outputs/a38-anchor-corrected-dev-hardlinked/eligibility/development-a42-full-v2.json
+    CATALOG=$ROOT/.agent-work/cache/maps/noaa-enc-east-coast-fullcoast-catalog-v2.json
+    MAP=$ROOT/.agent-work/outputs/a26-pilot-anchor-corrected/static-inputs/cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93.json
 
-The current configuration is a feasibility probe. The small budgets deliberately expose proposal and scoring caps. The 10 km full-domain rectangular grid contains more than 20,000 cells, so even a complete 20,000-candidate budget must remain marked budget-exhausted. Per-run records distinguish algorithm-reported proposal-generation counts from scorer-generated/evaluated/retained telemetry. The CLI currently times the combined candidate-search stage, so 20,000-candidate runtime projections are labeled linear combined-stage extrapolations and do not claim a separate proposal-generation or scoring latency. They do not change the release support threshold, eligibility rules, or confidence-interval population.
+    uv run python tools/run_accuracy_pilot.py --trial-table benchmarks/accuracy/plans/anchor-corrected-2026-10-26/trials.csv --preparation-manifest $INPUTS/development/preparation.csv --input-root $INPUTS --catalog $CATALOG --map $MAP --eligibility-manifest $ELIGIBILITY --output-root $ROOT/.agent-work/outputs/a26-pilot-v3-preflight --select-only
+
+    uv run python tools/run_accuracy_pilot.py --trial-table benchmarks/accuracy/plans/anchor-corrected-2026-10-26/trials.csv --preparation-manifest $INPUTS/development/preparation.csv --input-root $INPUTS --catalog $CATALOG --map $MAP --eligibility-manifest $ELIGIBILITY --output-root $ROOT/.agent-work/outputs/a26-pilot-v3 --stop-after-searches 2
+
+    uv run python tools/run_accuracy_pilot.py --trial-table benchmarks/accuracy/plans/anchor-corrected-2026-10-26/trials.csv --preparation-manifest $INPUTS/development/preparation.csv --input-root $INPUTS --catalog $CATALOG --map $MAP --eligibility-manifest $ELIGIBILITY --output-root $ROOT/.agent-work/outputs/a26-pilot-v3 --resume
