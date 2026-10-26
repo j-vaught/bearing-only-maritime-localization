@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import cast
 
@@ -152,7 +153,7 @@ def test_first_candidate_is_exact_scored_without_an_incumbent_and_no_float_incum
         )
 
 
-def test_exact_incumbent_can_be_reused_only_with_its_originating_scorer():
+def test_exact_incumbent_is_revalidated_by_the_receiving_scorer():
     scorer, points, _observer_b = _scenario(True)
     first = screened_candidate_search(
         scorer,
@@ -168,15 +169,25 @@ def test_exact_incumbent_can_be_reused_only_with_its_originating_scorer():
         complete_candidate_count=len(points) - 1,
         feasible_incumbent=first.best_scored_candidate,
     )
-    assert resumed.best_scored_candidate is first.best_scored_candidate
+    assert resumed.incumbent_validation_count == 1
+    assert resumed.best_scored_candidate is not None
+    assert resumed.best_scored_candidate.candidate_id == "incumbent"
+    assert resumed.best_scored_candidate.score == pytest.approx(
+        first.best_scored_candidate.score, abs=1e-12
+    )
     other_scorer, _, _ = _scenario(True)
-    with pytest.raises(ValueError, match="this CandidateScorer instance"):
-        screened_candidate_search(
-            other_scorer,
-            points[1:],
-            visit_budget=len(points) - 1,
-            feasible_incumbent=first.best_scored_candidate,
-        )
+    revalidated = screened_candidate_search(
+        other_scorer,
+        points[1:],
+        visit_budget=len(points) - 1,
+        feasible_incumbent=first.best_scored_candidate,
+    )
+    assert revalidated.incumbent_validation_count == 1
+    assert revalidated.best_scored_candidate is not None
+    assert revalidated.best_scored_candidate.score == pytest.approx(
+        other_scorer.evaluate(points[0].position_xy_m).hypothesis.score,
+        abs=1e-12,
+    )
 
 
 def test_visit_budget_reports_unvisited_candidates_and_withholds_certificate():
@@ -270,6 +281,7 @@ def test_unknown_length_iterator_reports_partial_remaining_count_without_certifi
     assert result.unvisited_count is None
     assert result.first_unvisited_candidate_id == "busy-bridge-groups"
     assert result.unvisited_candidate_ids == ("busy-bridge-groups",)
+    assert list(result.remaining_candidates) == list(points[1:])
 
 
 def test_declared_candidate_count_must_match_consumed_finite_stream():
@@ -281,3 +293,96 @@ def test_declared_candidate_count_must_match_consumed_finite_stream():
             visit_budget=2,
             complete_candidate_count=2,
         )
+
+
+def test_feasible_incumbents_cannot_be_fabricated_from_a_score_object():
+    scorer, points, _observer_b = _scenario(True)
+    evaluation = scorer.evaluate(points[0].position_xy_m)
+    constructor = cast(Callable[..., FeasibleIncumbent], FeasibleIncumbent)
+    with pytest.raises(TypeError):
+        constructor(
+            "forged",
+            points[0].position_xy_m,
+            evaluation,
+            scorer,
+        )
+
+
+def test_early_group_bound_cannot_hide_unknown_los_members():
+    x, y = xy()
+    candidate_lon, candidate_lat = ORIGIN_LONLAT
+    target_records = []
+    for index, bearing in enumerate((0, 30, 60, 90, 120, 150, 180, 210, 240)):
+        lon, lat, _ = GEOD.fwd(candidate_lon, candidate_lat, bearing, 800.0)
+        target_records.append(
+            CatalogRecordV2(
+                key=f"visible-{index}",
+                longitude_deg=lon,
+                latitude_deg=lat,
+                normalized_type="vessel",
+            )
+        )
+    near_lon, near_lat, _ = GEOD.fwd(candidate_lon, candidate_lat, 350.0, 800.0)
+    far_lon, far_lat, _ = GEOD.fwd(candidate_lon, candidate_lat, 350.0, 1_600.0)
+    target_records.extend(
+        (
+            CatalogRecordV2(
+                key="bridge-near",
+                longitude_deg=near_lon,
+                latitude_deg=near_lat,
+                normalized_type="vessel",
+            ),
+            CatalogRecordV2(
+                key="bridge-far",
+                longitude_deg=far_lon,
+                latitude_deg=far_lat,
+                normalized_type="vessel",
+            ),
+        )
+    )
+    incumbent_target = _record_at_xy("incumbent-target", x + 7_000.0, y + 800.0, "vessel")
+    catalog_data = catalog(*target_records, incumbent_target)
+    unknown_lon, unknown_lat, _ = GEOD.fwd(candidate_lon, candidate_lat, 350.0, 1_150.0)
+    unknown_x, unknown_y = Transformer.from_crs("EPSG:4326", CRS_UTM, always_xy=True).transform(
+        unknown_lon, unknown_lat
+    )
+    unknown_region = box(
+        float(unknown_x) - 60.0,
+        float(unknown_y) - 60.0,
+        float(unknown_x) + 60.0,
+        float(unknown_y) + 60.0,
+    )
+    vector_map = vmap(unknown=unknown_region)
+    measurements = MeasurementSetV2(
+        (MeasurementV2(0.0, TIMESTAMP, 0.02, "vessel"),),
+        trial_id="a22-hidden-unknown-los",
+    )
+    config = SearchConfig(
+        bounds_xy=(x - 10_000.0, x + 10_000.0, y - 5_000.0, y + 5_000.0),
+        min_range_m=0.0,
+        max_range_m=4_500.0,
+        circular_merge_tolerance_deg=0.1,
+        use_types=True,
+        candidate_budget=100,
+    )
+    scorer = CandidateScorer(measurements, catalog_data, vector_map, config)
+    candidates = (
+        CandidatePosition("incumbent", (x + 7_000.0, y)),
+        CandidatePosition("early-k-bridge-unknown", (x, y)),
+    )
+    result = screened_candidate_search(
+        scorer,
+        candidates,
+        visit_budget=2,
+        complete_candidate_count=2,
+    )
+
+    candidate_visit = result.visits[1]
+    assert candidate_visit.action == "exact_unresolved"
+    assert candidate_visit.evaluation_status == "unresolved_coverage"
+    assert candidate_visit.visibility is not None
+    assert not candidate_visit.visibility.certified
+    assert candidate_visit.visibility.reason == "unknown_line_of_sight"
+    assert result.pruned_count == 0
+    assert result.unresolved_count == 1
+    assert result.certificate_scope == "none"
