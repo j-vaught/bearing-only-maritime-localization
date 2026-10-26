@@ -303,3 +303,56 @@ The following clean, pushed source checkouts had no direct process pathname refe
 | .agent-work/worktrees/a41 | 488939520 | accuracy/a41, c2ebc7e0402a3a45bf86241985ae006f79392401, pushed | validation/archive scope; excluded |
 
 The only direct live worktree references in the bounded process scan were an A26 command-line reference and A37 current working directories. Those worktrees remain protected. Because no candidate has passed the inactive-owner check and no original path can be replaced by a mounted archive, no transfer was authorized by this audit. Consequently, no source or destination SHA-256 manifest exists, no bytes were reclaimed, and the source free-space reading is unchanged by this pass. A future transfer must first preserve a per-file SHA-256 manifest, copy to the approved 1176 destination, verify destination hashes and byte counts, and only then remove an explicitly approved inactive checkout while retaining its branch ref and a retrieval manifest.
+
+## Re-audit of inactive artifacts on 2026-10-26
+
+A fresh live-process check was completed before proposing archive candidates. The source filesystem on comech-2080 reported 44,040,118,272 available bytes. No process had a cwd, executable, open descriptor, or mapped pathname under the project worktrees, .agent-work/env, .agent-work/outputs, or .agent-work/cache trees. Current active ownership supplied for this pass was A35 composite, A27 runner, and assignment review. Their paths remain excluded.
+
+The top allocated .agent-work areas were outputs at 54,637,776,896 bytes, worktrees at 17,009,270,784 bytes, cache at 4,389,728,256 bytes, env at 3,339,575,296 bytes, archive at 473,063,424 bytes, build at 309,071,872 bytes, envs at 319,463,424 bytes, and diagnostics at 3,252,224 bytes. The largest output trees were a38-anchor-corrected-dev-hardlinked at 30,244,245,504 bytes, a38-anchor-corrected-validation at 17,010,176,000 bytes, a38-corrected-dev at 2,674,946,048 bytes, and a38 at 2,134,962,176 bytes. These remain protected because they are actively written or referenced by frozen validation and cache manifests.
+
+The stale environment candidate .agent-work/env/a36 occupied 3,234,676,736 bytes. It had no live process or frozen text reference. Its editable direct_url.json pointed to the missing worktree .agent-work/worktrees/a36, so it is a regenerable orphan environment candidate. The following regenerable build products had no live process or frozen text reference: .agent-work/build/a37-installed at 248,205,312 bytes, .agent-work/build/a37-installed-07d8036 at 248,459,264 bytes, and .agent-work/build/a37-installed-37f4c35 at 248,270,848 bytes. The environment .agent-work/env/a41 was excluded because its editable pointer targets frozen worktree a41. The A37 smoke and parallel-assignment environments were excluded because their editable pointers and reports retain current or frozen dependencies. Shared UV cache and map cache were excluded from this pass.
+
+The following clean, pushed, unreferenced worktrees had no live process path or frozen text reference and are potential archive candidates. Their exact allocated bytes are retained for transfer planning.
+
+| Worktree | Allocated bytes |
+| --- | ---: |
+| a26-resumable | 528,916,480 |
+| a32 | 523,141,120 |
+| a37-integration-gate | 500,600,832 |
+| assigned-bearing-refinement | 496,611,328 |
+| a21-prelos-rowmin | 493,092,864 |
+| a06-prelos-review | 493,068,288 |
+| a14-pre-los-preparation | 492,937,216 |
+| a26-wedge-geodesic-diagnostic | 487,620,608 |
+| a14-screen | 478,785,536 |
+| a21-candidate-bound | 478,449,664 |
+| a38-provenance-strict | 476,635,136 |
+| a26-timeout-reap | 472,289,280 |
+| a26-execution-protocol | 471,748,608 |
+| a26-formal | 471,552,000 |
+| a26-wedge-complete-diagnostic | 469,004,288 |
+| a39-field-protocol | 464,633,856 |
+| a26-diagnostic-package | 463,015,936 |
+| a14-prepared | 433,377,280 |
+| a39 | 420,896,768 |
+| a20 | 323,960,832 |
+| a29 | 323,952,640 |
+| parallel-assignment-expansion | 200,613,888 |
+| a21-prelos-vector-plan | 200,503,296 |
+| assignment-expansion | 198,864,896 |
+| a39-cached-refinement-fit | 198,062,080 |
+| a22-pre-los | 195,637,248 |
+| a06-prelos-caller-review | 195,424,256 |
+| a20-cached-refinement | 195,248,128 |
+| a39-cached-refinement | 195,018,752 |
+| a39-cached-progress | 193,953,792 |
+| a21-prelos-review | 193,753,088 |
+| a37-parallel-driver-review | 191,168,512 |
+| a14-exact-next-step | 190,169,088 |
+| a39-repair-checkpoint | 167,104,512 |
+| a39-development-geometry | 166,387,712 |
+| a39-a45-map-diagnostic | 166,031,360 |
+| a39-publication | 165,691,392 |
+| a26 | 136,011,776 |
+
+The listed worktrees total 12,913,934,336 allocated bytes. No transfer or deletion occurred in this re-audit. A future transfer must use comech-1176:/home/jvaught/projects/bearing-only-maritime-localization-archive, create source and destination SHA-256 manifests, verify every destination hash and byte count, retain branch refs, and remove only the explicitly approved inactive checkout after verification.
