@@ -80,12 +80,14 @@ def predict_visible_groups(
     same projected-metre CRS used by ``vector_map``. Catalog coordinates are
     transformed from their V2 longitude/latitude fields only for map LOS; range
     and true bearing always use WGS84 geodesics. The configured range interval
-    is applied before LOS and angular grouping. Unknown observer/LOS coverage marks the result unresolved and
-    does not silently classify the affected feature as visible or blocked.
+    is applied before LOS and angular grouping. Unknown observer or LOS
+    coverage marks the result unresolved and does not silently classify the
+    affected feature as visible or blocked.
 
     Explicit visible-feature east/north offset metadata are applied as
     true-east/north WGS84 offsets from the catalog reference point. Missing
-    offsets use a nominal zero with unknown quality. Supplied unsupported
+    offsets use a nominal zero with unknown quality. Nearby ambiguous identities
+    become unresolved only after range and line-of-sight filtering. Supplied unsupported
     dimensional or antenna-offset metadata sets unresolved_model and excludes
     that record from definite groups. catalog_uncertainty_m carries recognized
     position uncertainty when supplied; otherwise it is None.
@@ -197,7 +199,6 @@ def predict_visible_groups(
                 continue
         elif geometry.distance_m <= minimum_range_m or geometry.distance_m >= visibility_radius_m:
             continue
-
         target_east_m, target_north_m = forward.transform(target_lon, target_lat)
         target_xy = (float(target_east_m), float(target_north_m))
         visibility = vector_map.line_visibility(observer_xy, target_xy)
@@ -205,6 +206,9 @@ def predict_visible_groups(
             unresolved.append(record.key)
             continue
         if visibility == "blocked" or observer_status == "land":
+            continue
+        if _record_metadata(record).get("identity_ambiguous") is True:
+            unresolved_model_keys.append(record.key)
             continue
 
         source_type = record.normalized_type or record.raw_type

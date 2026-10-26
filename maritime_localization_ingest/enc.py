@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from pyproj import Transformer
+from pyproj import CRS, Transformer
 from shapely import make_valid, segmentize, transform
 from shapely.geometry import GeometryCollection, mapping, shape
 from shapely.geometry.base import BaseGeometry
@@ -359,6 +359,239 @@ def enc_aids_catalog_to_catalog_v2(catalog: ENCAidCatalog) -> CatalogV2:
         source=catalog.source or "NOAA ENC Direct to GIS",
         catalog_version=f"eastern-seaboard-enc-aids:{timestamp}",
         catalog_id="noaa-enc-direct-eastern-seaboard-physical-aids",
+    )
+
+
+def combine_ais_and_enc_physical_catalogs(
+    ais_catalog: CatalogV2,
+    aid_catalog: ENCAidCatalog,
+    *,
+    catalog_id: str = "eastern-seaboard-ais-enc-physical-aids-v2",
+) -> CatalogV2:
+    """Compose AIS and all source aids, resolving only defensible identities.
+
+    Resolved named groups are represented once with their source components.
+    Every component in an unresolved group remains a runtime physical record
+    carrying explicit identity ambiguity, so uncertainty cannot shrink search.
+    AIS timestamps and quality are preserved unchanged.
+    """
+    if not isinstance(ais_catalog, CatalogV2):
+        raise TypeError("ais_catalog must be a CatalogV2.")
+    if not isinstance(aid_catalog, ENCAidCatalog):
+        raise TypeError("aid_catalog must be an ENCAidCatalog.")
+    if not catalog_id.strip():
+        raise ValueError("catalog_id must be nonempty.")
+    by_feature = {feature.feature_id: feature for feature in aid_catalog.features}
+    records = list(ais_catalog.records)
+    keys = {record.key for record in records}
+    named_groups: dict[str, list[PhysicalAid]] = {}
+    for physical in aid_catalog.physical_aids:
+        if physical.fullname:
+            named_groups.setdefault(physical.fullname, []).append(physical)
+    cross_chart_collisions: set[str] = set()
+    for same_name_groups in named_groups.values():
+        for index, first in enumerate(same_name_groups):
+            first_feature = by_feature[first.feature_ids[0]]
+            for second in same_name_groups[index + 1 :]:
+                if first.chart_id == second.chart_id:
+                    continue
+                second_feature = by_feature[second.feature_ids[0]]
+                if _distance_m(first_feature, second_feature) <= 20.0:
+                    cross_chart_collisions.update((first.physical_id, second.physical_id))
+
+    resolved_groups = {
+        physical.physical_id: physical
+        for physical in aid_catalog.physical_aids
+        if physical.fullname
+        and not physical.identity_ambiguous
+        and physical.physical_id not in cross_chart_collisions
+    }
+    resolved_features = {
+        feature_id for physical in resolved_groups.values() for feature_id in physical.feature_ids
+    }
+    for physical in aid_catalog.physical_aids:
+        if physical.physical_id not in resolved_groups:
+            continue
+        components = [by_feature[key] for key in physical.feature_ids]
+        if physical.physical_id in keys:
+            raise ValueError(f"Catalog key collision for physical aid {physical.physical_id!r}.")
+        keys.add(physical.physical_id)
+        component_rows = [
+            {
+                "feature_id": aid.feature_id,
+                "chart_id": aid.chart_id,
+                "scale_band": aid.scale_band,
+                "service_layer": aid.service_layer,
+                "longitude_deg": aid.longitude_deg,
+                "latitude_deg": aid.latitude_deg,
+                "source_epoch_sordat": dict(aid.attributes).get("sordat") or None,
+            }
+            for aid in components
+        ]
+        epochs = sorted(
+            {
+                str(value)
+                for aid in components
+                if (value := dict(aid.attributes).get("sordat")) not in (None, "")
+            }
+        )
+        metadata = {
+            "identity_ambiguous": False,
+            "identity_resolution": "same_chart_name_and_proximity",
+            "physical_entity_id": physical.physical_id,
+            "source_component_count": len(components),
+            "source_components": component_rows,
+            "position_uncertainty_m": None,
+            "uncertainty_status": "unspecified_by_source",
+        }
+        provenance = {
+            "source": aid_catalog.source or "NOAA ENC Direct to GIS",
+            "source_retrieved_utc": aid_catalog.retrieved_utc,
+            "source_chart_ids": sorted({aid.chart_id for aid in components}),
+            "source_feature_ids": sorted(aid.feature_id for aid in components),
+            "source_layers": sorted({aid.service_layer for aid in components}),
+            "source_scale_bands": sorted({aid.scale_band for aid in components}),
+            "source_epoch_sordat": epochs,
+        }
+        records.append(
+            CatalogRecordV2(
+                key=physical.physical_id,
+                latitude_deg=physical.latitude_deg,
+                longitude_deg=physical.longitude_deg,
+                raw_type="|".join(physical.component_types),
+                normalized_type="physical_aid",
+                metadata=tuple(sorted(metadata.items())),
+                provenance=tuple(sorted(provenance.items())),
+            )
+        )
+
+    group_by_feature = {
+        feature_id: physical
+        for physical in aid_catalog.physical_aids
+        for feature_id in physical.feature_ids
+    }
+    for aid in aid_catalog.features:
+        if aid.feature_id in resolved_features:
+            continue
+        physical = group_by_feature.get(aid.feature_id)
+        if physical is None:
+            reason = "missing_physical_group"
+        elif aid.identity_ambiguous:
+            reason = "source_identity_ambiguous"
+        elif not physical.fullname:
+            reason = "missing_name"
+        elif physical.physical_id in cross_chart_collisions:
+            reason = "cross_chart_same_name_proximity"
+        else:
+            reason = "grouping_ambiguous"
+        key = f"enc-component:{aid.feature_id}"
+        if key in keys:
+            raise ValueError(f"Catalog key collision for unresolved aid {key!r}.")
+        keys.add(key)
+        attrs = dict(aid.attributes)
+        component_type = _component_type(aid)
+        metadata = {
+            "identity_ambiguous": True,
+            "identity_resolution": "unresolved",
+            "identity_resolution_reason": reason,
+            "source_feature_id": aid.feature_id,
+            "physical_group_id": physical.physical_id if physical is not None else None,
+            "source_component_count": 1,
+            "source_components": [
+                {
+                    "feature_id": aid.feature_id,
+                    "chart_id": aid.chart_id,
+                    "scale_band": aid.scale_band,
+                    "service_layer": aid.service_layer,
+                    "longitude_deg": aid.longitude_deg,
+                    "latitude_deg": aid.latitude_deg,
+                }
+            ],
+            "source_attributes": attrs,
+            "position_uncertainty_m": None,
+            "uncertainty_status": "unspecified_by_source",
+        }
+        provenance = {
+            "source": aid.source or aid_catalog.source or "NOAA ENC Direct to GIS",
+            "source_retrieved_utc": aid.source_retrieved_utc or aid_catalog.retrieved_utc,
+            "source_chart_id": aid.chart_id,
+            "source_feature_id": aid.feature_id,
+            "source_layer": aid.service_layer,
+            "source_scale_band": aid.scale_band,
+            "source_epoch_sordat": attrs.get("sordat") or None,
+        }
+        records.append(
+            CatalogRecordV2(
+                key=key,
+                latitude_deg=aid.latitude_deg,
+                longitude_deg=aid.longitude_deg,
+                raw_type=aid.service_layer,
+                normalized_type=component_type,
+                metadata=tuple(sorted(metadata.items())),
+                provenance=tuple(sorted(provenance.items())),
+            )
+        )
+    return CatalogV2(
+        records=tuple(records),
+        timestamp_utc=ais_catalog.timestamp_utc,
+        source="AIS source snapshot plus all NOAA ENC physical aid rows",
+        catalog_version="2-mixed-epoch",
+        catalog_id=catalog_id,
+    )
+
+
+def compose_partial_map_v2(
+    maps: Iterable[MapV2],
+    *,
+    domain: BaseGeometry,
+    map_version: str,
+) -> MapV2:
+    """Mosaic reported coverage and make every remaining domain point unknown.
+
+    Partial source maps contribute validated coverage geometry. Source unknown
+    areas take precedence in overlaps. No seam becomes inferred water or land.
+    """
+    domain = _valid_polygon(domain, "map mosaic domain")
+    inputs = tuple(maps)
+    if not inputs:
+        raise ValueError("At least one input MapV2 is required.")
+    parsed_crs = CRS.from_user_input(inputs[0].crs)
+    coverages: list[BaseGeometry] = []
+    unknowns: list[BaseGeometry] = []
+    lands: list[BaseGeometry] = []
+    for source_map in inputs:
+        if not isinstance(source_map, MapV2):
+            raise TypeError("maps must contain only MapV2 values.")
+        if not parsed_crs.equals(CRS.from_user_input(source_map.crs)):
+            raise ValueError("All input maps must use the same declared CRS.")
+        if source_map.coverage_geometry_geojson is not None:
+            coverages.append(shape(json.loads(source_map.coverage_geometry_geojson)))
+        if source_map.unknown_geometry_geojson is not None:
+            unknowns.append(shape(json.loads(source_map.unknown_geometry_geojson)))
+        if source_map.land_geometry_geojson is not None:
+            lands.append(shape(json.loads(source_map.land_geometry_geojson)))
+    source_coverage = unary_union(coverages) if coverages else GeometryCollection()
+    source_unknown = unary_union(unknowns) if unknowns else GeometryCollection()
+    coverage = _polygonal_only(source_coverage.intersection(domain).difference(source_unknown))
+    unknown = _polygonal_only(domain.difference(coverage))
+    land = _polygonal_only(
+        (unary_union(lands) if lands else GeometryCollection()).intersection(coverage)
+    )
+    status: Literal["known", "partial", "unknown"]
+    if coverage.is_empty:
+        status = "unknown"
+    elif unknown.is_empty:
+        status = "known"
+    else:
+        status = "partial"
+    return MapV2(
+        crs=inputs[0].crs,
+        source="NOAA ENC Direct validated port map mosaics",
+        map_version=map_version,
+        coverage_status=status,
+        coverage_geometry_geojson=_geojson_geometry(coverage) if not coverage.is_empty else None,
+        unknown_geometry_geojson=_geojson_geometry(unknown) if status == "partial" else None,
+        land_geometry_geojson=_geojson_geometry(land) if not land.is_empty else None,
     )
 
 

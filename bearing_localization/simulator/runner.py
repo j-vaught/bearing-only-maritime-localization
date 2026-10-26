@@ -345,6 +345,7 @@ def run_simulator_v2(
         if not is_visual_entity(record.normalized_type or record.raw_type):
             continue
         metadata = _metadata(record.metadata)
+        catalog_key = None if metadata.get("identity_ambiguous") is True else record.key
         lon, lat = _offset_position(
             record.longitude_deg,
             record.latitude_deg,
@@ -357,7 +358,7 @@ def run_simulator_v2(
             raise ValueError(f"Catalog feature {record.key!r} has invalid angular_half_width_deg.")
         targets.append(
             _PhysicalTarget(
-                record.key, record.key, lon, lat, object_type or "unknown", float(raw_width)
+                record.key, catalog_key, lon, lat, object_type or "unknown", float(raw_width)
             )
         )
     for item in scene.uncataloged_physical_objects:
