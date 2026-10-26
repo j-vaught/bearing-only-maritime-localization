@@ -458,6 +458,24 @@ def _format_argv(template: list[str], values: dict[str, Any]) -> list[str]:
     ]
 
 
+def _format_search_argv(
+    template: list[str], values: dict[str, Any], *, algorithm: str, timeout_s: float
+) -> list[str]:
+    """Format search inputs and bind the internal expansion deadline when enabled."""
+    argv = _format_argv(template, values)
+    options = _search_execution_options(template, algorithm=algorithm)
+    if options["expand_assignments_enabled"]:
+        if "--request-timeout-s" in argv:
+            timeout_index = argv.index("--request-timeout-s")
+            argv[timeout_index + 1] = str(timeout_s)
+        else:
+            argv.extend(("--request-timeout-s", str(timeout_s)))
+    elif "--request-timeout-s" in argv:
+        timeout_index = argv.index("--request-timeout-s")
+        del argv[timeout_index : timeout_index + 2]
+    return argv
+
+
 def _load_command_config(path: Path) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
     required = {
@@ -1160,6 +1178,11 @@ def _search_execution_options(search_argv: list[str], *, algorithm: str) -> dict
         "refine_modes_count": 8,
         "refine_initial_step_m": 100.0,
         "refine_iterations": 50,
+        "expand_assignments_enabled": False,
+        "expansion_local_radius_m": 1000.0,
+        "expansion_max_nfev": 100,
+        "expansion_max_branches": 5000,
+        "expansion_request_timeout_s": 1800.0,
         "device_ids": [],
     }
     value_options = {
@@ -1173,6 +1196,10 @@ def _search_execution_options(search_argv: list[str], *, algorithm: str) -> dict
         "--refine-modes": ("refine_modes_count", int),
         "--refine-initial-step-m": ("refine_initial_step_m", float),
         "--refine-iterations": ("refine_iterations", int),
+        "--expansion-local-radius-m": ("expansion_local_radius_m", float),
+        "--expansion-max-nfev": ("expansion_max_nfev", int),
+        "--expansion-max-branches": ("expansion_max_branches", int),
+        "--request-timeout-s": ("expansion_request_timeout_s", float),
     }
     index = 0
     while index < len(search_argv):
@@ -1186,6 +1213,10 @@ def _search_execution_options(search_argv: list[str], *, algorithm: str) -> dict
                 raise ValueError(f"Search execution option {token} must be concrete before search.")
             values[key] = converter(raw)
             index += 2
+            continue
+        if token == "--expand-assignments":
+            values["expand_assignments_enabled"] = True
+            index += 1
             continue
         if token == "--device-id":
             if index + 1 >= len(search_argv):
@@ -1220,6 +1251,20 @@ def _search_execution_options(search_argv: list[str], *, algorithm: str) -> dict
             index += 2
             continue
         index += 1
+    radius = values["expansion_local_radius_m"]
+    if not math.isfinite(radius) or radius <= 0.0:
+        raise ValueError("Search command --expansion-local-radius-m must be finite and positive.")
+    if not 1 <= values["expansion_max_nfev"] <= 100:
+        raise ValueError("Search command --expansion-max-nfev must be in [1, 100].")
+    if not 1 <= values["expansion_max_branches"] <= 5000:
+        raise ValueError("Search command --expansion-max-branches must be in [1, 5000].")
+    if (
+        not math.isfinite(values["expansion_request_timeout_s"])
+        or values["expansion_request_timeout_s"] <= 0.0
+    ):
+        raise ValueError("Search command --request-timeout-s must be finite and positive.")
+    if not values["expand_assignments_enabled"]:
+        values.pop("expansion_request_timeout_s")
     return values
 
 
@@ -1232,11 +1277,14 @@ def _formal_bindings(
     map_path: Path,
     scope_manifest_path: Path,
     projected_crs: str,
+    timeout_s: float,
 ) -> dict[str, dict[str, Any]]:
     """Freeze all six condition/context pairs using the search telemetry binding."""
     cli_options = _search_execution_options(
         command_config["search_argv"], algorithm=str(base_search_config["algorithm"])
     )
+    if cli_options["expand_assignments_enabled"]:
+        cli_options["expansion_request_timeout_s"] = timeout_s
     bindings: dict[str, dict[str, Any]] = {}
     for range_m in (1000, 5000, 10000):
         for use_types in (True, False):
@@ -1541,6 +1589,7 @@ def run_trials(
             map_path=search_map_path,
             scope_manifest_path=preflight_scope,
             projected_crs=projected_crs,
+            timeout_s=timeout_s,
         )
         formal_run_identity = _formal_run_identity(
             plan_sha256=plan_config_sha256,
@@ -1891,13 +1940,20 @@ def run_trials(
             "search_config_path": search_config_path,
             "search_scope_manifest_path": scope_manifest_path,
             "projected_crs": projected_crs,
+            "expansion_request_timeout_s": timeout_s,
             "estimate_path": estimate_path,
             "telemetry_path": telemetry_path,
             "evaluator_estimate_path": evaluator_estimate_path,
             "evaluation_path": evaluation_path,
             "coordinate_provenance_path": provenance_path,
         }
-        command_sets = (("search", _format_argv(command_config["search_argv"], values)),)
+        search_argv = _format_search_argv(
+            command_config["search_argv"],
+            values,
+            algorithm=str(base_search_config.get("algorithm", "grid")),
+            timeout_s=timeout_s,
+        )
+        command_sets = (("search", search_argv),)
         status = "completed"
         failure = ""
         trial_attempts: list[dict[str, Any]] = []
