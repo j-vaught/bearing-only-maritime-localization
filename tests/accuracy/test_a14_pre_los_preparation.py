@@ -7,6 +7,7 @@ from shapely.geometry import box
 
 from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.pre_los_preparation import (
+    PreLOSTargetRecord,
     PreparedPreLOSTargets,
     prepare_pre_los_targets,
 )
@@ -303,3 +304,27 @@ def test_duplicate_coordinates_empty_catalog_and_exact_range_boundaries():
     exclusive = prepare_pre_los_targets(exclusive_scorer, candidate)
     assert exclusive.supported
     assert exclusive.records == ()
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"bearing_deg": True},
+        {"range_m": True},
+        {"uncertainty_m": True},
+        {"target_map_xy_m": (1.0, True)},
+    ],
+)
+def test_pre_los_record_rejects_boolean_geometry_values(updates):
+    values = {
+        "key": "record",
+        "bearing_deg": 12.0,
+        "range_m": 100.0,
+        "object_type": "vessel",
+        "uncertainty_m": 2.0,
+        "target_map_xy_m": (1.0, 2.0),
+        "offset_quality": "nominal_zero_unknown",
+    }
+    values.update(updates)
+    with pytest.raises(ValueError):
+        PreLOSTargetRecord(**values)

@@ -47,18 +47,38 @@ class PreLOSTargetRecord:
     def __post_init__(self) -> None:
         if not isinstance(self.key, str) or not self.key:
             raise ValueError("key must be a nonempty string.")
-        if not isfinite(self.bearing_deg) or not 0.0 <= self.bearing_deg < 360.0:
+        if (
+            isinstance(self.bearing_deg, bool)
+            or not isinstance(self.bearing_deg, (int, float))
+            or not isfinite(self.bearing_deg)
+            or not 0.0 <= self.bearing_deg < 360.0
+        ):
             raise ValueError("bearing_deg must be finite and in [0, 360).")
-        if not isfinite(self.range_m) or self.range_m < 0.0:
+        if (
+            isinstance(self.range_m, bool)
+            or not isinstance(self.range_m, (int, float))
+            or not isfinite(self.range_m)
+            or self.range_m < 0.0
+        ):
             raise ValueError("range_m must be finite and nonnegative.")
         if self.object_type is not None and not isinstance(self.object_type, str):
             raise TypeError("object_type must be a string or None.")
         if self.uncertainty_m is not None and (
-            not isfinite(self.uncertainty_m) or self.uncertainty_m < 0.0
+            isinstance(self.uncertainty_m, bool)
+            or not isinstance(self.uncertainty_m, (int, float))
+            or not isfinite(self.uncertainty_m)
+            or self.uncertainty_m < 0.0
         ):
             raise ValueError("uncertainty_m must be finite and nonnegative or None.")
-        if len(self.target_map_xy_m) != 2 or not all(
-            isfinite(value) for value in self.target_map_xy_m
+        if (
+            not isinstance(self.target_map_xy_m, tuple)
+            or len(self.target_map_xy_m) != 2
+            or any(
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not isfinite(value)
+                for value in self.target_map_xy_m
+            )
         ):
             raise ValueError("target_map_xy_m must contain two finite coordinates.")
         if self.offset_quality not in ("calibrated", "nominal_zero_unknown"):
