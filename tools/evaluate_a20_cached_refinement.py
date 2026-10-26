@@ -225,6 +225,7 @@ def evaluate_rows(
     truth_ids: dict[int, set[str]],
 ) -> list[dict[str, Any]]:
     result = []
+    source_rank = {item.input_index: rank for rank, item in enumerate(run.candidates, start=1)}
     for row in rows:
         mode = row["refined_mode"]
         stages = {
@@ -235,6 +236,7 @@ def evaluate_rows(
         result.append(
             {
                 "seed_order": row["seed_order"],
+                "source_score_rank": source_rank[row["input_index"]],
                 "input_index": row["input_index"],
                 "candidate_id": row["candidate_id"],
                 "iterations": mode["iterations"],
@@ -253,6 +255,18 @@ def evaluate_rows(
                 **stages,
             }
         )
+    refined_order: list[tuple[float, int]] = []
+    for item in result:
+        refined = item["refined"]
+        index = item["input_index"]
+        if isinstance(refined, dict) and type(index) is int:
+            refined_order.append((float(refined["score"]), index))
+    refined_order.sort()
+    refined_rank = {
+        input_index: rank for rank, (_, input_index) in enumerate(refined_order, start=1)
+    }
+    for item in result:
+        item["refined_score_rank_within_selected"] = refined_rank.get(item["input_index"])
     return result
 
 
