@@ -575,6 +575,8 @@ def evaluate_v2_files(
     truth_path: str | Path,
     support_path: str | Path,
     output_path: str | Path,
+    *,
+    coordinate_crs: str | int | CRS | None = None,
 ) -> dict[str, object]:
     """Join a v2 estimate with evaluator-only truth and its support manifest."""
     paths = [
@@ -590,7 +592,7 @@ def evaluate_v2_files(
     manifest = _construct_dataclass(
         SupportManifest, _load_json(support_path), name="SupportManifest"
     )
-    metrics = evaluate_localization(estimate, truth, manifest)
+    metrics = evaluate_localization(estimate, truth, manifest, coordinate_crs=coordinate_crs)
     document = asdict(metrics)
     document["supported"] = manifest.supported
     _write_json(output, document)
@@ -763,9 +765,15 @@ def evaluate_v2_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--truth", type=Path, required=True)
     parser.add_argument("--support", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--coordinate-crs",
+        help="Shared CRS of estimate and truth coordinates, such as EPSG:32618.",
+    )
     args = parser.parse_args(argv)
     try:
-        result = evaluate_v2_files(args.estimate, args.truth, args.support, args.output)
+        result = evaluate_v2_files(
+            args.estimate, args.truth, args.support, args.output, coordinate_crs=args.coordinate_crs
+        )
     except (OSError, TypeError, ValueError, KeyError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, sort_keys=True))
