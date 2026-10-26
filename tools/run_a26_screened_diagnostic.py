@@ -171,7 +171,7 @@ def _make_generation_config(repo_root: Path, run_root: Path, cache_path: Path) -
         raise ValueError("The source SearchConfig candidate budget changed.")
     config["candidate_budget"] = 1
     config["proposal_cache_path"] = str(cache_path.resolve())
-    config_path = run_root / "cache-build/search-config.json"
+    config_path = run_root / "search-config.json"
     return config_path, _write_json_idempotent(config_path, config)
 
 
