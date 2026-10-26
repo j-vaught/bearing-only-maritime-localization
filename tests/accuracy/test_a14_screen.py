@@ -258,7 +258,7 @@ def test_frozen_ais_motion_and_identity_metadata_is_allowed():
     assert result.minimum_visible_group_count == 1
 
 
-def test_nonempty_nested_height_is_an_unsupported_dimension_model():
+def test_nonempty_nested_vertical_height_is_inert_in_the_2d_model():
     cat = catalog(
         record(
             "height",
@@ -268,8 +268,8 @@ def test_nonempty_nested_height_is_an_unsupported_dimension_model():
         )
     )
     result = screen_candidate_visibility(xy(), context(cat))
-    assert not result.certified
-    assert result.reason == "unsupported_feature_model"
+    assert result.certified
+    assert result.minimum_visible_group_count == 1
 
 
 def test_empty_nested_enc_height_does_not_claim_a_dimension_model():
@@ -284,3 +284,56 @@ def test_empty_nested_enc_height_does_not_claim_a_dimension_model():
     result = screen_candidate_visibility(xy(), context(cat))
     assert result.certified
     assert result.minimum_visible_group_count == 1
+
+
+def test_vertical_height_and_a34_reference_metadata_match_scalar_prediction():
+    metadata = (
+        ("identity_ambiguous", False),
+        ("identity_resolution", "same_chart_name_and_proximity"),
+        ("observation_association_status", "candidate_geometry_only"),
+        ("physical_entity_id", "physical-1"),
+        ("physical_linkage_status", "resolved_by_chart_heuristic"),
+        ("position_uncertainty_m", None),
+        ("source_component_count", 1),
+        (
+            "source_components",
+            [
+                {
+                    "feature_id": "feature-1",
+                    "chart_id": "chart-1",
+                    "scale_band": "general",
+                    "service_layer": "Approach.Light_point",
+                    "longitude_deg": -76.3,
+                    "latitude_deg": 37.0,
+                    "source_epoch_sordat": "20151104",
+                }
+            ],
+        ),
+        ("source_record_identity_status", "qualified_source_components"),
+        ("source_attributes", {"height": "12.0", "objnam": "East Light"}),
+        ("uncertainty_status", "unspecified_by_source"),
+    )
+    cat = catalog(record("resolved", 15, 500, metadata=metadata))
+    ctx = context(cat)
+    screen = screen_candidate_visibility(xy(), ctx, scan_all_members=True)
+    prediction = predict_visible_groups(
+        xy(),
+        cat,
+        observer_crs=CRS_UTM,
+        visibility_radius_m=10_000,
+        vector_map=ctx.vector_map,
+        prepared_context=ctx,
+    )
+    assert screen.certified
+    assert screen.exact_visible_group_count == len(prediction.groups)
+
+
+def test_first_clear_member_certifies_component_without_raying_members_again():
+    cat = catalog(record("near", 0, 100), record("same-bearing", 0.02, 200))
+    result = screen_candidate_visibility(xy(), context(cat))
+    assert result.certified and result.minimum_visible_group_count == 1
+    assert result.ray_check_count == 1
+    assert result.clear_count == 1
+    assert result.complete is False
+    assert result.components[0].confirmed_clear_key == "near"
+    assert result.components[0].unexamined_member_keys == ("same-bearing",)
