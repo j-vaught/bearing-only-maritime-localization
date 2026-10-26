@@ -166,9 +166,9 @@ def test_v2_dispatch_entrypoints_share_candidate_scores_and_never_accept() -> No
     )
     positions = [_xy()]
     runs = (
-        run_grid_search_v2(scorer, iter(positions)),
-        run_hierarchical_search_v2(scorer, iter(positions)),
-        run_randomized_search_v2(scorer, iter(positions)),
+        run_grid_search_v2(scorer, candidate_positions=iter(positions)),
+        run_hierarchical_search_v2(scorer, candidate_positions=iter(positions)),
+        run_randomized_search_v2(scorer, candidate_positions=iter(positions)),
     )
 
     expected = scorer(_xy())
@@ -178,15 +178,17 @@ def test_v2_dispatch_entrypoints_share_candidate_scores_and_never_accept() -> No
     )
     for run in runs:
         assert run.localization.decision_status == "ambiguous"
-        assert run.localization.certificate_scope == "none"
         assert run.localization.search_status == "completed"
+    assert runs[0].localization.certificate_scope == "finite_candidate_set"
+    assert runs[1].localization.certificate_scope == "none"
+    assert runs[2].localization.certificate_scope == "none"
 
 
 def test_pairwise_v2_uses_a19_stream_and_keeps_completion_uncertified() -> None:
     x, y = _xy()
     scorer = CandidateScorer(
-        _measurements((0.0, 0.5), (90.0, 0.5)),
-        _catalog(_record("north", 0.0), _record("east", 90.0)),
+        _measurements((0.0, 0.5), (90.0, 0.5), (45.0, 0.5)),
+        _catalog(_record("north", 0.0), _record("east", 90.0), _record("diagonal", 45.0)),
         _map(),
         SearchConfig(
             max_range_m=5_000.0,
@@ -204,8 +206,79 @@ def test_pairwise_v2_uses_a19_stream_and_keeps_completion_uncertified() -> None:
     first = run.hypotheses[0]
     position = [(first.east_m, first.north_m)]
     parity_runs = (
-        run_grid_search_v2(scorer, position),
-        run_hierarchical_search_v2(scorer, position),
-        run_randomized_search_v2(scorer, position),
+        run_grid_search_v2(scorer, candidate_positions=position),
+        run_hierarchical_search_v2(scorer, candidate_positions=position),
+        run_randomized_search_v2(scorer, candidate_positions=position),
     )
     assert [item.hypotheses[0].score for item in parity_runs] == pytest.approx([first.score] * 3)
+
+
+def test_v2_grid_hierarchical_and_randomized_generate_from_full_bounds() -> None:
+    x, y = _xy()
+    scorer = CandidateScorer(
+        _measurements((0.0, 0.5)),
+        _catalog(_record("north")),
+        _map(),
+        SearchConfig(
+            max_range_m=5_000.0,
+            candidate_budget=50,
+            bounds_xy=(x - 400.0, x + 400.0, y - 400.0, y + 400.0),
+        ),
+    )
+
+    grid = run_grid_search_v2(scorer, grid_spacing_m=400.0)
+    hierarchical = run_hierarchical_search_v2(
+        scorer, coarse_spacing_m=400.0, refinement_levels=1, beam_width=2
+    )
+    randomized = run_randomized_search_v2(scorer, seed=31)
+    randomized_repeat = run_randomized_search_v2(scorer, seed=31)
+
+    assert grid.candidate_count == 9
+    assert grid.localization.certificate_scope == "finite_candidate_set"
+    assert hierarchical.candidate_count > grid.candidate_count
+    assert hierarchical.localization.certificate_scope == "none"
+    assert hierarchical.localization.search_status == "completed"
+    assert randomized.candidate_count == 50
+    assert randomized.localization.certificate_scope == "none"
+    assert [h.score for h in randomized.hypotheses] == pytest.approx(
+        [h.score for h in randomized_repeat.hypotheses]
+    )
+    assert [(h.east_m, h.north_m) for h in randomized.hypotheses] == [
+        (h.east_m, h.north_m) for h in randomized_repeat.hypotheses
+    ]
+
+    constrained = CandidateScorer(
+        scorer.measurements,
+        scorer.catalog,
+        scorer.vector_map,
+        SearchConfig(
+            max_range_m=5_000.0,
+            candidate_budget=2,
+            bounds_xy=(x - 400.0, x + 400.0, y - 400.0, y + 400.0),
+        ),
+    )
+    exhausted = run_grid_search_v2(constrained, grid_spacing_m=400.0)
+    assert exhausted.localization.search_status == "budget_exhausted"
+    assert exhausted.localization.decision_status != "accepted"
+    assert exhausted.localization.certificate_scope == "none"
+
+
+def test_pairwise_v2_proposal_budget_exhaustion_is_not_accepted() -> None:
+    x, y = _xy()
+    scorer = CandidateScorer(
+        _measurements((0.0, 0.5), (90.0, 0.5), (45.0, 0.5)),
+        _catalog(_record("north", 0.0), _record("east", 90.0), _record("diagonal", 45.0)),
+        _map(),
+        SearchConfig(
+            max_range_m=5_000.0,
+            candidate_budget=10,
+            bounds_xy=(x - 2_000.0, x + 2_000.0, y - 2_000.0, y + 2_000.0),
+        ),
+    )
+
+    run = run_pairwise_search_v2(scorer, batch_size=1, max_proposals=1)
+
+    assert run.localization.search_status == "budget_exhausted"
+    assert run.localization.decision_status != "accepted"
+    assert run.localization.certificate_scope == "none"
+    assert run.localization.budget_limit == run.localization.budget_used == 1

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from time import perf_counter
-from typing import Literal
 
 import numpy as np
 
@@ -21,7 +20,12 @@ from maritime_localization_shared.geometry.angular_grouping import (
 from maritime_localization_shared.geospatial.spatial_index import SpatialIndex2D
 
 from ..algorithms import SearchResult, associate
-from .scoring import CandidateScorer, CandidateSearchRun, score_candidate_positions
+from .scoring import (
+    CandidateScorer,
+    CandidateSearchAccumulator,
+    CandidateSearchRun,
+    score_candidate_positions,
+)
 
 WaterPredicate = Callable[[float, float], bool]
 LineOfSightPredicate = Callable[[tuple[float, float], tuple[float, float]], bool]
@@ -255,25 +259,116 @@ def _select_diverse_leaders(
 
 def run_hierarchical_search_v2(
     scorer: CandidateScorer,
-    candidate_positions: Iterable[tuple[float, float]],
     *,
-    search_status: Literal["completed", "budget_exhausted"] = "completed",
-    budget_limit: int | None = None,
-    budget_used: int | None = None,
+    coarse_spacing_m: float = 5_000.0,
+    refinement_levels: int = 4,
+    refinement_factor: float = 2.0,
+    beam_width: int = 8,
+    candidate_positions: Iterable[tuple[float, float]] | None = None,
 ) -> CandidateSearchRun:
-    """Dispatch caller-generated version-two candidates through the common scorer.
+    """Run a coarse-to-fine V2 search over the complete declared bounds.
 
-    This adapter never converts a finite candidate minimum into a global
-    optimality certificate or an accepted fix. Candidate generation remains
-    owned by the associated grid, hierarchical, or randomized driver.
+    Spatially diverse scored leaders seed each refinement level. Completion is
+    heuristic and carries no global certificate. An explicit position iterable
+    provides fixed-candidate parity mode.
     """
-    return score_candidate_positions(
-        scorer,
-        candidate_positions,
-        search_status=search_status,
-        budget_limit=budget_limit,
-        budget_used=budget_used,
-    )
+    if candidate_positions is not None:
+        return score_candidate_positions(
+            scorer,
+            candidate_positions,
+            candidate_limit=scorer.config.candidate_budget,
+        )
+    bounds = scorer.config.bounds_xy
+    if bounds is None:
+        raise ValueError("V2 hierarchical search requires config.bounds_xy.")
+    if not np.isfinite(coarse_spacing_m) or coarse_spacing_m <= 0.0:
+        raise ValueError("coarse_spacing_m must be finite and positive.")
+    if refinement_levels < 0:
+        raise ValueError("refinement_levels must be nonnegative.")
+    if not np.isfinite(refinement_factor) or refinement_factor <= 1.0:
+        raise ValueError("refinement_factor must be finite and greater than one.")
+    if beam_width < 1:
+        raise ValueError("beam_width must be positive.")
+
+    xmin, xmax, ymin, ymax = bounds
+    budget = scorer.config.candidate_budget
+    accumulator = CandidateSearchAccumulator(scorer)
+    exhausted = False
+
+    def axis(low: float, high: float, step: float) -> Iterable[float]:
+        index = 0
+        last = low
+        while True:
+            value = low + index * step
+            if value > high + 1e-9:
+                break
+            last = min(value, high)
+            yield last
+            index += 1
+        if high - last > 1e-9:
+            yield high
+
+    def lattice(step: float) -> Iterable[tuple[float, float]]:
+        for east_m in axis(xmin, xmax, step):
+            for north_m in axis(ymin, ymax, step):
+                yield east_m, north_m
+
+    def evaluate(positions: Iterable[tuple[float, float]]) -> bool:
+        for position in positions:
+            if accumulator.is_new(position) and accumulator.candidate_count >= budget:
+                return False
+            accumulator.add(position)
+        return True
+
+    if not evaluate(lattice(coarse_spacing_m)):
+        exhausted = True
+    step = coarse_spacing_m
+    for _ in range(refinement_levels):
+        if exhausted:
+            break
+        step /= refinement_factor
+        cell_size = max(coarse_spacing_m * 4.0, 50_000.0)
+        leaders: list[tuple[float, float]] = []
+        occupied: set[tuple[int, int]] = set()
+        ranked = sorted(
+            accumulator.scored_by_position.items(),
+            key=lambda item: (item[1].score, item[0]),
+        )
+        for (east_m, north_m), _hypothesis in ranked:
+            cell = (
+                int(np.floor((east_m - xmin) / cell_size)),
+                int(np.floor((north_m - ymin) / cell_size)),
+            )
+            if cell in occupied:
+                continue
+            occupied.add(cell)
+            leaders.append((east_m, north_m))
+            if len(leaders) >= beam_width:
+                break
+        if len(leaders) < beam_width:
+            selected = set(leaders)
+            for (east_m, north_m), _hypothesis in ranked:
+                if (east_m, north_m) not in selected:
+                    leaders.append((east_m, north_m))
+                    selected.add((east_m, north_m))
+                if len(leaders) >= beam_width:
+                    break
+        next_positions = {
+            (x + dx, y + dy)
+            for x, y in leaders
+            for dx in (-step, 0.0, step)
+            for dy in (-step, 0.0, step)
+            if xmin <= x + dx <= xmax and ymin <= y + dy <= ymax
+        }
+        if not evaluate(sorted(next_positions)):
+            exhausted = True
+    if exhausted:
+        return accumulator.finish(
+            search_status="budget_exhausted",
+            budget_limit=budget,
+            budget_used=budget,
+        )
+    return accumulator.finish(budget_limit=budget, budget_used=accumulator.candidate_count)
 
 
 __all__ = [
