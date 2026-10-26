@@ -103,3 +103,23 @@ Every one of those 45 worktrees contains tracked data/ and results/ paths. Sever
 
 No worktree was removed in this triage. No branch, source, dataset, evidence, cache, manifest, configuration, result, or process was modified. No global free-space change was attributed to background activity. Further cleanup requires a changed scope that permits removal of these tracked data and result checkout copies.
 
+
+## Below-reserve read-only triage and proposed duplicate checkouts
+
+At 2026-10-26T13:31:08Z, the project filesystem reported 41,636,909,056 available bytes. At 2026-10-26T13:32:39Z it reported 41,636,192,256 bytes, and at 2026-10-26T13:33:25Z it reported 41,636,147,200 bytes. The filesystem type is ext4. The latest reading is 1,313,525,760 bytes below the 42,949,672,960-byte 40 GiB floor. The observed 761,856-byte decline between the first and latest readings is concurrent filesystem activity of unknown origin.
+
+The current A35 assignment-expansion evaluator remains active. PIDs 2735510 and 2735517 use the root Python environment and write the assignment expansion diagnostic and full audit outputs. Their current directories, executables, descriptors, and memory maps contain zero pathnames under each proposed checkout below. Those active paths and all current output directories remain excluded.
+
+A bounded allocation read found 79,490,920,448 bytes under .agent-work. The largest top-level allocations were outputs at 54,612,570,112 bytes, worktrees at 19,732,525,056 bytes, cache at 4,389,777,408 bytes, archive at 473,063,424 bytes, and env at 122,372,096 bytes in the depth-one summary. The detailed environment allocation is 3,234,676,736 bytes for env/a36 and 286,236,672 bytes for env/a41. The apparent sizes of those environments are mostly hardlinked package files. The verified unique nlink-one allocations are only 17,145,856 bytes for env/a36 and 3,006,464 bytes for env/a41. Their opened-library reports were aliases to the root environment, not actual process path dependencies. Neither environment was removed. The shared UV cache is 3,491,037,184 bytes and the raw map and manifest cache is 898,736,128 bytes. Both were preserved. The archive and map directories contain frozen evidence, manifests, or source material and were preserved.
+
+The following clean, fully pushed checkouts are concrete proposed reclaim candidates for parent confirmation. No checkout was removed in this pass. Each candidate retains its branch and commit in the common Git repository. The unique allocation estimate counts only files with link count one, so it does not count shared package files.
+
+| Checkout path | Branch and commit | Remote tip match | Allocated bytes | Unique nlink-one bytes | Runtime pathname check |
+| --- | --- | --- | ---: | ---: | --- |
+| .agent-work/worktrees/a04-solver-correction | accuracy/a04-solver-correction at 781caf8f993f4b2863e34ad1fee8700ee8062854 | yes | 474,288,128 | 190,607,360 | lsof zero; A35 maps, cwd, executable, and descriptors zero |
+| .agent-work/worktrees/a13-geodesic-reuse | accuracy/a13-geodesic-reuse at a9fe3c659a49592e2657884eff6e2bd73b731311 | yes | 492,961,792 | 209,125,376 | lsof zero; A35 maps, cwd, executable, and descriptors zero |
+| .agent-work/worktrees/a19-witness-seeds | accuracy/a19-witness-seeds at 4db70a67209604e8f0507051180e8ab9922143a2 | yes | 478,617,600 | 194,834,432 | 91 lsof paths, all device/inode/link aliases to root .venv; zero mismatches; root link counts 41 to 42; A35 maps, cwd, executable, and descriptors zero |
+
+The three proposed checkouts have a combined unique reclaim estimate of 594,567,168 bytes, approximately 567 MiB. Including the two inactive environment candidates would raise the estimate to 614,719,488 bytes, approximately 586 MiB, while leaving the filesystem below the 40 GiB floor by approximately 699 MiB. The environments therefore do not solve the reserve deficit on their own. All three checkouts contain tracked data/ and results/ paths. They are presented as reproducible duplicate source checkouts only for explicit parent review; their source, data, and result paths were not deleted.
+
+The earlier candidate paths a04-wedge-projection, a08-coast-base, and a11-coverage-certificate were excluded because reports or map manifests reference them. The shared UV cache, raw map cache, archived evidence, current outputs, active worktrees, root environment, and all frozen inputs remain untouched. No process was stopped. No source, dataset, result, evidence, manifest, branch, or remote ref was modified. No deletion occurred because this turn required concrete candidates to be presented before any removal.
