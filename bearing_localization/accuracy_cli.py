@@ -44,6 +44,11 @@ from bearing_localization.search.parallel_candidates import (
     CandidatePositionInput,
     PersistentCandidatePool,
 )
+from bearing_localization.search.proposals.cache import (
+    ProposalCacheContext,
+    load_proposal_cache,
+    save_proposal_cache,
+)
 from bearing_localization.search.proposals.geodesic_wedge import (
     GeodesicWedgeProposal,
     generate_geographic_reverse_wedge_proposals_geodesic,
@@ -91,6 +96,62 @@ def _effective_proposal_sigma_deg(sigma_deg: float | None, config: SearchConfig)
     """Use the generated sigma for absent uncertainty and honor the configured floor."""
     declared_sigma = sigma_deg if sigma_deg is not None else config.generated_sigma_deg
     return max(declared_sigma, config.sigma_floor_deg)
+
+
+def _proposal_generation_implementation_sha256(
+    project_root: str | Path | None = None,
+) -> str:
+    """Hash only source files that determine the reusable geodesic proposal pool."""
+    root = (
+        Path(project_root).resolve()
+        if project_root is not None
+        else Path(__file__).resolve().parents[1]
+    )
+    relative_paths = (
+        "bearing_localization/search/proposals/geodesic_wedge.py",
+        "bearing_localization/search/proposals/wedge.py",
+        "maritime_localization_shared/geospatial/coordinates.py",
+        "maritime_localization_shared/geospatial/reverse_bearing.py",
+    )
+    digest = hashlib.sha256(b"geodesic-proposal-generation-implementation-v1\0")
+    for relative in relative_paths:
+        path = root / relative
+        if not path.is_file():
+            raise ValueError(f"Proposal generation source is missing: {relative}.")
+        name = relative.encode("utf-8")
+        content = path.read_bytes()
+        digest.update(len(name).to_bytes(8, "big"))
+        digest.update(name)
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    lock_path = root / "uv.lock"
+    manifest_path = root / "pyproject.toml"
+    dependency_path = lock_path if lock_path.is_file() else manifest_path
+    if not dependency_path.is_file():
+        raise ValueError("Proposal generation dependency manifest is missing.")
+    dependency_name = (
+        "dependency-binding/uv.lock"
+        if dependency_path == lock_path
+        else "dependency-binding/pyproject.toml"
+    ).encode("utf-8")
+    dependency_bytes = dependency_path.read_bytes()
+    digest.update(len(dependency_name).to_bytes(8, "big"))
+    digest.update(dependency_name)
+    digest.update(len(dependency_bytes).to_bytes(8, "big"))
+    digest.update(dependency_bytes)
+    return digest.hexdigest()
+
+
+def _proposal_generation_config_sha256(settings: dict[str, Any]) -> str:
+    """Hash canonical proposal-affecting settings, excluding cache/output controls."""
+    payload = json.dumps(
+        {"schema": "geodesic-proposal-generation-config-v1", "settings": settings},
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _candidate_outcome_evidence(
@@ -220,6 +281,7 @@ def _calibration_binding(
     if seed_policy not in ("fixed", "per_trial_variable"):
         raise ValueError("seed_policy must be fixed or per_trial_variable.")
     config_fields = asdict(config)
+    config_fields.pop("proposal_cache_path", None)
     condition = CalibrationOperatingCondition(
         range_m=config_fields["max_range_m"],
         use_types=config_fields["use_types"],
@@ -379,6 +441,7 @@ def _search_dispatch(
     wedge_cell_size_m: float,
     branch_max_regions: int,
     telemetry: SearchTelemetry | None = None,
+    proposal_cache_input_hashes: dict[str, str] | None = None,
 ) -> tuple[LocalizationResult, dict[str, Any], int, bool]:
     config = scorer.config
     if algorithm == "grid":
@@ -748,29 +811,133 @@ def _search_dispatch(
                 "proposal_solver_tolerance_deg exceeds the geodesic solver bound "
                 f"{maximum_solver_tolerance} degrees for this request."
             )
-        generation_stage = (
-            telemetry.stage("proposal_generation") if telemetry is not None else nullcontext()
+        proposal_cache_path = (
+            Path(config.proposal_cache_path).expanduser()
+            if config.proposal_cache_path is not None
+            else None
         )
-        with generation_stage:
-            proposals = generate_geographic_reverse_wedge_proposals_geodesic(
-                observations,
-                geographic_catalog,
-                frame=frame,
-                max_range_m=config.max_range_m,
-                cell_size_m=wedge_cell_size_m,
-                angular_tolerance_deg=wedge_tolerance_deg,
-                max_source_pairs=effective_source_pair_budget,
-                max_candidate_cells=config.proposal_cell_budget,
-                source_chunk_size=config.proposal_chunk_size,
-                observation_sigmas_deg=observation_sigmas,
-                solver_tolerance_deg=config.proposal_solver_tolerance_deg,
+        proposal_cache_diagnostics: dict[str, Any] = {
+            "enabled": proposal_cache_path is not None,
+            "hit": False,
+            "path": str(proposal_cache_path.resolve()) if proposal_cache_path is not None else None,
+            "action": "disabled" if proposal_cache_path is None else "pending",
+        }
+        if proposal_cache_path is None:
+            generation_stage = (
+                telemetry.stage("proposal_generation") if telemetry is not None else nullcontext()
             )
-            to_map = Transformer.from_crs("EPSG:4326", scorer.vector_map.crs, always_xy=True)
-            positions: list[tuple[float, float]] = []
-            for proposal in proposals.proposals:
-                lon, lat = frame.to_geographic(proposal.east_m, proposal.north_m)
-                east_m, north_m = to_map.transform(lon, lat)
-                positions.append((float(east_m), float(north_m)))
+            with generation_stage:
+                proposals = generate_geographic_reverse_wedge_proposals_geodesic(
+                    observations,
+                    geographic_catalog,
+                    frame=frame,
+                    max_range_m=config.max_range_m,
+                    cell_size_m=wedge_cell_size_m,
+                    angular_tolerance_deg=wedge_tolerance_deg,
+                    max_source_pairs=effective_source_pair_budget,
+                    max_candidate_cells=config.proposal_cell_budget,
+                    source_chunk_size=config.proposal_chunk_size,
+                    observation_sigmas_deg=observation_sigmas,
+                    solver_tolerance_deg=config.proposal_solver_tolerance_deg,
+                )
+        else:
+            if proposal_cache_input_hashes is None or set(proposal_cache_input_hashes) != {
+                "measurement_sha256",
+                "catalog_sha256",
+                "map_sha256",
+            }:
+                raise ValueError("Proposal cache requires exact measurement/catalog/map hashes.")
+            generation_settings = {
+                "algorithm": algorithm,
+                "max_range_m": config.max_range_m,
+                "min_range_m": config.min_range_m,
+                "range_inclusive": config.range_inclusive,
+                "use_types": config.use_types,
+                "generated_sigma_deg": config.generated_sigma_deg,
+                "sigma_floor_deg": config.sigma_floor_deg,
+                "effective_observation_sigmas_deg": [
+                    [index, observation_sigmas[index]] for index in sorted(observation_sigmas)
+                ],
+                "bounds_xy": list(config.bounds_xy or ()),
+                "map_projected_crs": scorer.vector_map.crs.to_string(),
+                "frame_origin_lonlat": [frame.origin_lonlat[0], frame.origin_lonlat[1]],
+                "frame_projected_crs": frame.projected_crs.to_string(),
+                "cell_size_m": wedge_cell_size_m,
+                "angular_tolerance_deg": wedge_tolerance_deg,
+                "range_step_m_configured": None,
+                "range_step_m_effective": wedge_cell_size_m / 2.0,
+                "range_sampling_policy": "uniform_steps_with_exact_final_distance_v1",
+                "angular_sampling_policy": "uniform_offsets_cover_interval_and_include_zero_v1",
+                "proposal_source_pair_budget_configured": config.proposal_source_pair_budget,
+                "max_source_pairs": effective_source_pair_budget,
+                "max_candidate_cells": config.proposal_cell_budget,
+                "source_chunk_size": config.proposal_chunk_size,
+                "solver_tolerance_deg": config.proposal_solver_tolerance_deg,
+            }
+            generation_config_sha256 = _proposal_generation_config_sha256(generation_settings)
+            implementation_digest = _proposal_generation_implementation_sha256()
+            proposal_cache_context = ProposalCacheContext(
+                measurement_sha256=proposal_cache_input_hashes["measurement_sha256"],
+                catalog_sha256=proposal_cache_input_hashes["catalog_sha256"],
+                map_sha256=proposal_cache_input_hashes["map_sha256"],
+                search_config_sha256=generation_config_sha256,
+                implementation_sha256=implementation_digest,
+            )
+            proposal_cache_diagnostics.update(
+                {
+                    "generation_config": generation_settings,
+                    "context": proposal_cache_context.to_manifest(),
+                    "context_sha256": proposal_cache_context.context_hash,
+                    "cache_format": "geodesic-proposal-cache-v1",
+                }
+            )
+            if proposal_cache_path.exists() or proposal_cache_path.is_symlink():
+                cache_load_stage = (
+                    telemetry.stage("proposal_cache_load")
+                    if telemetry is not None
+                    else nullcontext()
+                )
+                with cache_load_stage:
+                    proposals = load_proposal_cache(
+                        proposal_cache_path, context=proposal_cache_context
+                    )
+                proposal_cache_diagnostics.update({"hit": True, "action": "loaded"})
+            else:
+                generation_stage = (
+                    telemetry.stage("proposal_generation")
+                    if telemetry is not None
+                    else nullcontext()
+                )
+                with generation_stage:
+                    proposals = generate_geographic_reverse_wedge_proposals_geodesic(
+                        observations,
+                        geographic_catalog,
+                        frame=frame,
+                        max_range_m=config.max_range_m,
+                        cell_size_m=wedge_cell_size_m,
+                        angular_tolerance_deg=wedge_tolerance_deg,
+                        max_source_pairs=effective_source_pair_budget,
+                        max_candidate_cells=config.proposal_cell_budget,
+                        source_chunk_size=config.proposal_chunk_size,
+                        observation_sigmas_deg=observation_sigmas,
+                        solver_tolerance_deg=config.proposal_solver_tolerance_deg,
+                    )
+                cache_save_stage = (
+                    telemetry.stage("proposal_cache_save")
+                    if telemetry is not None
+                    else nullcontext()
+                )
+                with cache_save_stage:
+                    save_proposal_cache(
+                        proposal_cache_path, proposals, context=proposal_cache_context
+                    )
+                proposal_cache_diagnostics.update({"hit": False, "action": "generated_and_saved"})
+        to_map = Transformer.from_crs("EPSG:4326", scorer.vector_map.crs, always_xy=True)
+        positions: list[tuple[float, float]] = []
+        for proposal in proposals.proposals:
+            lon, lat = frame.to_geographic(proposal.east_m, proposal.north_m)
+            east_m, north_m = to_map.transform(lon, lat)
+            positions.append((float(east_m), float(north_m)))
 
         ordering_stage = (
             telemetry.stage("proposal_ordering") if telemetry is not None else nullcontext()
@@ -1117,6 +1284,7 @@ def _search_dispatch(
             for proposal in evaluated_proposals
         ]
         diagnostics = {
+            "proposal_cache": proposal_cache_diagnostics,
             "candidate_count": scoring_candidate_count,
             "outcome_counts": scoring_outcomes,
             "proposal_generation": {
@@ -1453,6 +1621,13 @@ def _search_v2_request(
     selected_algorithm = algorithm or config.algorithm
     if selected_algorithm != config.algorithm:
         raise ValueError("CLI algorithm must match SearchConfig.algorithm.")
+    if config.proposal_cache_path is not None:
+        if selected_algorithm not in ("wedge_geodesic", "wedge_geodesic_seeded"):
+            raise ValueError("proposal_cache_path is only valid for geodesic wedge algorithms.")
+        cache_target = Path(config.proposal_cache_path).expanduser().resolve()
+        protected_paths = set(inputs) | {out, telemetry_target.expanduser().resolve()}
+        if cache_target in protected_paths:
+            raise ValueError("Proposal cache path must be separate from search inputs and outputs.")
     selected_devices = tuple(device_ids or ())
     if config.backend == "gpu":
         if not selected_devices:
@@ -1540,6 +1715,11 @@ def _search_v2_request(
             wedge_cell_size_m=wedge_cell_size_m,
             branch_max_regions=branch_max_regions,
             telemetry=telemetry,
+            proposal_cache_input_hashes={
+                "measurement_sha256": measurement_sha256,
+                "catalog_sha256": _session._snapshot.catalog_sha256,
+                "map_sha256": _session._snapshot.map_sha256,
+            },
         )
     diagnostics["algorithm"] = selected_algorithm
     if selected_algorithm in ("wedge_geodesic", "wedge_geodesic_seeded"):
@@ -1554,11 +1734,24 @@ def _search_v2_request(
         }
     if selected_algorithm in ("wedge_geodesic", "wedge_geodesic_seeded"):
         stage_records = telemetry.as_dict()["stages"]
-        for stage_name in ("proposal_generation", "proposal_ordering", "exact_scoring"):
+        for stage_name in (
+            "proposal_generation",
+            "proposal_cache_load",
+            "proposal_cache_save",
+            "proposal_ordering",
+            "exact_scoring",
+        ):
             elapsed_wall_s = sum(
                 item["wall_s"] for item in stage_records if item["name"] == stage_name
             )
-            diagnostics[stage_name]["elapsed_wall_s"] = elapsed_wall_s
+            if stage_name in diagnostics:
+                diagnostics[stage_name]["elapsed_wall_s"] = elapsed_wall_s
+            elif stage_name == "proposal_cache_load":
+                diagnostics["proposal_cache"]["load_elapsed_wall_s"] = elapsed_wall_s
+            elif stage_name == "proposal_cache_save":
+                diagnostics["proposal_cache"]["save_elapsed_wall_s"] = elapsed_wall_s
+            elif stage_name == "proposal_generation":
+                diagnostics["proposal_cache"]["generation_elapsed_wall_s"] = elapsed_wall_s
     diagnostics["projected_crs"] = str(vector_map.crs)
     diagnostics["map_coverage_status"] = map_input.coverage_status
     diagnostics["declared_bounds_xy_m"] = list(config.bounds_xy)
