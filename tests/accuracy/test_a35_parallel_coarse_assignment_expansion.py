@@ -128,3 +128,52 @@ def test_accepts_dataclass_a20_mode_rows() -> None:
         A20Row(row["input_index"], row["candidate_id"], row["cached_hypothesis"]) for row in a20
     ]
     verify_coarse_selection(rows, typed_a20, assigned)
+
+
+def test_preparation_failure_requires_empty_hashed_ledgers(tmp_path) -> None:
+    import hashlib
+    import json
+
+    from tools.evaluate_parallel_coarse_assignment_expansion import validate_preparation_failure
+
+    rows = tmp_path / "rows.jsonl"
+    events = tmp_path / "events.jsonl"
+    rows.write_bytes(b"")
+    events.write_bytes(b"")
+    empty_hash = hashlib.sha256(b"").hexdigest()
+    unknown = list(range(64))
+    manifest = {
+        "schema": "parallel-assignment-expansion-diagnostic-v1",
+        "seed_stage": "coarse",
+        "status": "failed",
+        "completed_mode_count": 0,
+        "failed_mode_count": 0,
+        "unknown_mode_count": 64,
+        "unknown_mode_indices": unknown,
+        "error": "prep error",
+        "rows_file": rows.name,
+        "events_file": events.name,
+        "checkpoint_file": "checkpoint.json",
+        "rows_sha256": empty_hash,
+        "events_sha256": empty_hash,
+        "event_count": 0,
+        "event_digest": "",
+    }
+    checkpoint = {
+        "status": "failed",
+        "resume_supported": False,
+        "error": "prep error",
+        "rows_sha256": empty_hash,
+        "events_sha256": empty_hash,
+        "event_count": 0,
+        "event_digest": "",
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "checkpoint.json").write_text(json.dumps(checkpoint))
+    result = validate_preparation_failure(tmp_path)
+    assert result["accuracy_status"] == "not_evaluated"
+    assert result["unknown_mode_count"] == 64
+
+    events.write_text("{}\n")
+    with pytest.raises(EvaluationError, match="events hash mismatch"):
+        validate_preparation_failure(tmp_path)
