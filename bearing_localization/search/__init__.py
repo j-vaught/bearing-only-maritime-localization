@@ -7,7 +7,6 @@ and testing. None of these APIs accepts simulation truth.
 """
 
 from dataclasses import dataclass
-from math import sqrt
 
 import numpy as np
 
@@ -104,20 +103,16 @@ def run_hierarchical_search(
         [(record.east_m, record.north_m) for record in ais.records], dtype=float
     ).reshape((-1, 2))
     ais_types: list[str | None] = [record.ais_class for record in ais.records]
-    sigmas = [
-        item.bearing_sigma_deg for item in measurements.observations if item.bearing_sigma_deg > 0
+    report_sigmas = [
+        item.bearing_sigma_deg if item.bearing_sigma_deg > 0.0 else config.bearing_sigma_deg
+        for item in measurements.observations
     ]
-    sigma_deg = (
-        sqrt(sum(value * value for value in sigmas) / len(sigmas))
-        if sigmas
-        else config.bearing_sigma_deg
-    )
     result = hierarchical_search_core(
         observations,
         ais_xy,
         ais_types,
         bounds_xy,
-        sigma_deg=sigma_deg,
+        sigma_deg=report_sigmas,
         coarse_spacing_m=config.coarse_spacing_m,
         refinement_levels=config.refinement_levels,
         refinement_factor=config.refinement_factor,
