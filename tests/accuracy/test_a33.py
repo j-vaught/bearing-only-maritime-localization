@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import json
 import subprocess
 import sys
@@ -104,7 +106,7 @@ def test_search_config_rejects_untagged_or_unknown_documents() -> None:
         loads_search_config('{"contract_type":"SearchConfig","candidate_budget":NaN}')
 
 
-def test_malformed_cli_stages_fail_cleanly_and_gpu_is_explicitly_unsupported(tmp_path) -> None:
+def test_malformed_cli_stages_fail_cleanly_and_gpu_requires_explicit_devices(tmp_path) -> None:
     fixture = tmp_path / "bad-scene.json"
     fixture.write_text("{}")
     measurements = tmp_path / "measurements.json"
@@ -167,10 +169,60 @@ def test_malformed_cli_stages_fail_cleanly_and_gpu_is_explicitly_unsupported(tmp
         text=True,
     )
     assert unsupported.returncode == 2
-    assert "unsupported by this CLI integration" in unsupported.stderr
+    assert "requires one or more explicit --device-id values" in unsupported.stderr
     assert not result_path.exists()
 
 
 def test_missing_required_contract_fields_fail_as_schema_errors() -> None:
     with pytest.raises(ValueError, match="Missing PositionEstimate fields"):
         contract_from_dict(PositionEstimate, {"east_m": 1.0, "north_m": 2.0})
+
+
+def test_v2_pipeline_forwards_each_gpu_device_id_and_keeps_truth_out_of_search(
+    tmp_path, monkeypatch
+) -> None:
+    main_path = __import__("pathlib").Path(__file__).resolve().parents[2] / "main.py"
+    spec = importlib.util.spec_from_file_location("pipeline_main", main_path)
+    assert spec is not None and spec.loader is not None
+    pipeline = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pipeline)
+
+    commands: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        commands.append(command)
+        if any("evaluate_cli" in argument for argument in command):
+            output = __import__("pathlib").Path(command[command.index("--output") + 1])
+            output.write_text('{"status":"ok"}', encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(pipeline.subprocess, "run", fake_run)
+    args = argparse.Namespace(
+        measurements=tmp_path / "measurements.json",
+        catalog=tmp_path / "catalog.json",
+        map_path=tmp_path / "map.json",
+        config=tmp_path / "config.json",
+        truth=tmp_path / "truth.json",
+        support=tmp_path / "support.json",
+        calibration=None,
+        estimate_output=tmp_path / "estimate.json",
+        metrics_output=tmp_path / "metrics.json",
+        projected_crs="EPSG:32618",
+        spacing_m=100.0,
+        seed=0,
+        device_id=[0, 2],
+        algorithm="grid",
+        no_refine=True,
+        scope_manifest=None,
+        max_grid_bearing_error_deg=None,
+    )
+
+    assert pipeline.run_pipeline_v2(args) == {"status": "ok"}
+    search_command = commands[0]
+    assert search_command.count("--device-id") == 2
+    first_device = search_command.index("--device-id")
+    second_device = search_command.index("--device-id", first_device + 1)
+    assert search_command[first_device + 1] == "0"
+    assert search_command[second_device + 1] == "2"
+    assert str(args.truth) not in search_command
+    assert str(args.support) not in search_command

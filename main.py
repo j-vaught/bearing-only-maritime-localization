@@ -145,6 +145,9 @@ def run_pipeline_v2(args: argparse.Namespace) -> dict[str, object]:
     ]
     if args.calibration is not None:
         search_command.extend(("--calibration", str(args.calibration)))
+    if args.device_id is not None:
+        for device_id in args.device_id:
+            search_command.extend(("--device-id", str(device_id)))
     if args.algorithm is not None:
         search_command.extend(("--algorithm", args.algorithm))
     if args.no_refine:
@@ -230,6 +233,13 @@ def _v2_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--spacing-m", type=float, default=250.0)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--device-id",
+        type=int,
+        action="append",
+        default=None,
+        help="GPU device index. Repeat to use multiple GPUs; required for GPU backend.",
+    )
     parser.add_argument("--no-refine", action="store_true")
     parser.add_argument(
         "--estimate-output", type=Path, default=Path("results/localization-v2.json")
@@ -248,6 +258,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = parser.parse_args(arguments[:marker] + arguments[marker + 2 :])
         if args.spacing_m <= 0:
             parser.error("spacing-m must be positive")
+        if args.device_id is not None and (
+            any(device_id < 0 for device_id in args.device_id)
+            or len(set(args.device_id)) != len(args.device_id)
+        ):
+            parser.error("device IDs must be distinct nonnegative integers")
         try:
             metrics = run_pipeline_v2(args)
         except (OSError, TypeError, ValueError, subprocess.CalledProcessError) as exc:
