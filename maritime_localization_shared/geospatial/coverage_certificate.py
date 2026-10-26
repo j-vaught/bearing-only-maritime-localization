@@ -9,9 +9,9 @@ from hashlib import sha256
 from math import isfinite
 from typing import Literal, cast
 
-from pyproj import CRS
-from pyproj.exceptions import CRSError
-from shapely import from_geojson, to_wkb
+from pyproj import CRS, Transformer
+from pyproj.exceptions import CRSError, ProjError
+from shapely import from_geojson, to_wkb, transform
 from shapely.errors import GEOSException
 from shapely.geometry import MultiPoint, Point
 from shapely.geometry.base import BaseGeometry
@@ -30,6 +30,7 @@ class PreparedCoverageMap:
     """Reusable immutable geometry snapshot for per-candidate certificates."""
 
     map_crs: str
+    map_source_crs: str
     map_source: str
     map_version: str
     map_coverage_status: str
@@ -50,6 +51,8 @@ class PreparedCoverageMap:
         *,
         map_v2: MapV2,
         map_identity_sha256: str,
+        source_crs: CRS,
+        target_crs: CRS,
         coverage_wkb: bytes,
         unknown_wkb: bytes | None,
         land_wkb: bytes | None,
@@ -59,7 +62,8 @@ class PreparedCoverageMap:
     ) -> PreparedCoverageMap:
         context = object.__new__(cls)
         values = {
-            "map_crs": map_v2.crs,
+            "map_crs": target_crs.to_string(),
+            "map_source_crs": source_crs.to_string(),
             "map_source": map_v2.source,
             "map_version": map_v2.map_version,
             "map_coverage_status": map_v2.coverage_status,
@@ -92,21 +96,39 @@ class PreparedCoverageMap:
         return self._prepared_unknown is None or not self._prepared_unknown.intersects(hull)
 
 
-def prepare_candidate_coverage_context(map_v2: MapV2) -> PreparedCoverageMap | None:
+def prepare_candidate_coverage_context(
+    map_v2: MapV2, *, target_crs: str | int | CRS | None = None
+) -> PreparedCoverageMap | None:
     """Prepare one reusable exact MapV2 snapshot, or return None if unusable.
 
-    Preparation validates a projected metre CRS and polygonal coverage. The
-    candidate factory can then use this context for many candidates without
-    reparsing GeoJSON, rebuilding the map identity, or preparing geometries.
+    MapV2 GeoJSON is transformed once when target_crs is explicit, using the
+    same always-XY operation as VectorMap.from_map_v2. Without target_crs, the
+    source CRS must already be projected metres. The context identity binds both
+    canonical source and target CRS, so another projection cannot match it.
     """
     try:
         if not isinstance(map_v2, MapV2) or map_v2.coverage_status not in {"known", "partial"}:
             return None
-        crs = CRS.from_user_input(map_v2.crs)
-        _require_projected_metres(crs)
-        coverage = _geojson_polygon(map_v2.coverage_geometry_geojson)
-        unknown = _geojson_polygon(map_v2.unknown_geometry_geojson)
-        land = _geojson_polygon(map_v2.land_geometry_geojson)
+        source_crs = CRS.from_user_input(map_v2.crs)
+        output_crs = source_crs if target_crs is None else CRS.from_user_input(target_crs)
+        _require_projected_metres(output_crs)
+        coverage = _geojson_geometry(map_v2.coverage_geometry_geojson)
+        unknown = _geojson_geometry(map_v2.unknown_geometry_geojson)
+        land = _geojson_geometry(map_v2.land_geometry_geojson)
+        if target_crs is None:
+            _require_projected_metres(source_crs)
+        elif source_crs != output_crs:
+            project = Transformer.from_crs(source_crs, output_crs, always_xy=True).transform
+            coverage = (
+                transform(coverage, project, interleaved=False) if coverage is not None else None
+            )
+            unknown = (
+                transform(unknown, project, interleaved=False) if unknown is not None else None
+            )
+            land = transform(land, project, interleaved=False) if land is not None else None
+        coverage = _normalize_polygon(coverage)
+        unknown = _normalize_polygon(unknown)
+        land = _normalize_polygon(land)
         if coverage is None:
             return None
         coverage_wkb = to_wkb(coverage, output_dimension=2, byte_order=1)
@@ -114,7 +136,8 @@ def prepare_candidate_coverage_context(map_v2: MapV2) -> PreparedCoverageMap | N
         land_wkb = to_wkb(land, output_dimension=2, byte_order=1) if land else None
         map_identity = _map_identity(
             map_v2.schema_version,
-            map_v2.crs,
+            source_crs.to_string(),
+            output_crs.to_string(),
             map_v2.source,
             map_v2.map_version,
             map_v2.coverage_status,
@@ -125,6 +148,8 @@ def prepare_candidate_coverage_context(map_v2: MapV2) -> PreparedCoverageMap | N
         return PreparedCoverageMap._mint(
             map_v2=map_v2,
             map_identity_sha256=map_identity,
+            source_crs=source_crs,
+            target_crs=output_crs,
             coverage_wkb=coverage_wkb,
             unknown_wkb=unknown_wkb,
             land_wkb=land_wkb,
@@ -132,7 +157,7 @@ def prepare_candidate_coverage_context(map_v2: MapV2) -> PreparedCoverageMap | N
             unknown=unknown,
             land=land,
         )
-    except (TypeError, ValueError, CRSError, GEOSException):
+    except (TypeError, ValueError, CRSError, ProjError, GEOSException):
         return None
 
 
@@ -148,6 +173,7 @@ class CandidateCoverageCertificate:
     candidate_xy_m: Point2D
     target_map_xy: tuple[TargetMapPoint, ...]
     map_crs: str
+    map_source_crs: str
     map_source: str
     map_version: str
     map_coverage_status: str
@@ -170,6 +196,7 @@ class CandidateCoverageCertificate:
             "candidate_xy_m": candidate_xy_m,
             "target_map_xy": target_map_xy,
             "map_crs": context.map_crs,
+            "map_source_crs": context.map_source_crs,
             "map_source": context.map_source,
             "map_version": context.map_version,
             "map_coverage_status": context.map_coverage_status,
@@ -188,6 +215,7 @@ class CandidateCoverageCertificate:
             isinstance(map_context, PreparedCoverageMap)
             and self.map_identity_sha256 == map_context.map_identity_sha256
             and self.map_crs == map_context.map_crs
+            and self.map_source_crs == map_context.map_source_crs
             and self.map_source == map_context.map_source
             and self.map_version == map_context.map_version
             and self.map_coverage_status == map_context.map_coverage_status
@@ -220,8 +248,9 @@ def certify_candidate_coverage(
     A caller may pass a MapV2 for convenience or, for repeated candidates, a
     PreparedCoverageMap made once by prepare_candidate_coverage_context. The
     caller is responsible for passing every exact in-range offset-corrected
-    target. The factory binds all supplied keys and map coordinates. The CRS
-    must already be projected metres and shared by candidate, targets, and map.
+    target. The factory binds all supplied keys and map coordinates. Candidate
+    and target coordinates must use the prepared context target CRS. MapV2 source
+    geometry may be geographic only when explicit projected target_crs was used.
     """
     try:
         if isinstance(map_or_context, MapV2):
@@ -287,10 +316,15 @@ def _bounds(geometry: BaseGeometry) -> tuple[float, float, float, float]:
     return float(west), float(south), float(east), float(north)
 
 
-def _geojson_polygon(value: str | None) -> BaseGeometry | None:
+def _geojson_geometry(value: str | None) -> BaseGeometry | None:
     if value is None:
         return None
-    geometry = cast(BaseGeometry, from_geojson(value))
+    return cast(BaseGeometry, from_geojson(value))
+
+
+def _normalize_polygon(geometry: BaseGeometry | None) -> BaseGeometry | None:
+    if geometry is None:
+        return None
     _validate_polygon(geometry)
     return unary_union(geometry)
 
@@ -314,7 +348,8 @@ def _require_projected_metres(crs: CRS) -> None:
 
 def _map_identity(
     schema_version: int,
-    crs: str,
+    source_crs: str,
+    target_crs: str,
     source: str,
     version: str,
     coverage_status: str,
@@ -324,7 +359,8 @@ def _map_identity(
 ) -> str:
     payload = {
         "schema_version": schema_version,
-        "crs": crs,
+        "source_crs": source_crs,
+        "target_crs": target_crs,
         "source": source,
         "map_version": version,
         "coverage_status": coverage_status,
