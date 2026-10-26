@@ -4,8 +4,12 @@ import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
-from bearing_localization.search.prediction import predict_visible_groups
+from bearing_localization.search.prediction import (
+    predict_visible_groups,
+    prepare_prediction_context,
+)
 from maritime_localization_shared.contracts.inputs_v2 import CatalogRecordV2, CatalogV2
+from maritime_localization_shared.geospatial.spatial_index import GeographicSpatialIndex
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 
 CRS_UTM = CRS.from_epsg(32618)
@@ -67,15 +71,44 @@ def _vector_map(*, land=None, unknown=None, coverage=None) -> VectorMap:
     )
 
 
-def _predict(catalog: CatalogV2, origin=(-76.3, 37.0), **kwargs):
-    return predict_visible_groups(
-        _origin_xy(*origin),
+def _predict(
+    catalog: CatalogV2,
+    origin=(-76.3, 37.0),
+    *,
+    angular_resolution_deg: float = 0.1,
+    type_labels_enabled: bool = True,
+):
+    observer_xy = _origin_xy(*origin)
+    vector_map = _vector_map()
+    expected = predict_visible_groups(
+        observer_xy,
         catalog,
         observer_crs=CRS_UTM,
         visibility_radius_m=10_000,
-        vector_map=_vector_map(),
-        **kwargs,
+        vector_map=vector_map,
+        angular_resolution_deg=angular_resolution_deg,
+        type_labels_enabled=type_labels_enabled,
     )
+    context = prepare_prediction_context(
+        catalog,
+        observer_crs=CRS_UTM,
+        visibility_radius_m=10_000,
+        vector_map=vector_map,
+        angular_resolution_deg=angular_resolution_deg,
+        type_labels_enabled=type_labels_enabled,
+    )
+    actual = predict_visible_groups(
+        observer_xy,
+        catalog,
+        observer_crs=CRS_UTM,
+        visibility_radius_m=10_000,
+        vector_map=vector_map,
+        angular_resolution_deg=angular_resolution_deg,
+        type_labels_enabled=type_labels_enabled,
+        prepared_context=context,
+    )
+    assert actual == expected
+    return actual
 
 
 def test_true_north_wraparound_merge_nearest_type_and_metadata() -> None:
@@ -153,6 +186,22 @@ def test_unknown_los_is_reported_unresolved_not_visible_or_blocked() -> None:
     assert result.groups == ()
     assert result.coverage_status == "unresolved"
     assert result.unresolved_member_keys == ("uncertain",)
+
+    context = prepare_prediction_context(
+        catalog,
+        observer_crs=CRS_UTM,
+        visibility_radius_m=2_000,
+        vector_map=vector_map,
+    )
+    cached = predict_visible_groups(
+        origin_xy,
+        catalog,
+        observer_crs=CRS_UTM,
+        visibility_radius_m=2_000,
+        vector_map=vector_map,
+        prepared_context=context,
+    )
+    assert cached == result
 
 
 def test_group_membership_changes_as_candidate_observer_moves() -> None:
@@ -244,6 +293,23 @@ def test_unknown_observer_coverage_is_unresolved_even_with_empty_catalog() -> No
     assert result.unresolved_member_keys == ()
     assert not result.unresolved_model
 
+    vector_map = _vector_map(coverage=outside_coverage)
+    context = prepare_prediction_context(
+        catalog,
+        observer_crs=CRS_UTM,
+        visibility_radius_m=1_000,
+        vector_map=vector_map,
+    )
+    cached = predict_visible_groups(
+        origin_xy,
+        catalog,
+        observer_crs=CRS_UTM,
+        visibility_radius_m=1_000,
+        vector_map=vector_map,
+        prepared_context=context,
+    )
+    assert cached == result
+
 
 def test_supported_visible_feature_offset_corrects_true_bearing_and_range() -> None:
     raw_lon, raw_lat = _at_distance(1_000, 0.0)
@@ -292,3 +358,107 @@ def test_unsupported_antenna_and_dimension_metadata_marks_model_unresolved() -> 
     assert result.groups == ()
     assert result.unresolved_model
     assert result.unresolved_model_keys == ("unsupported",)
+
+
+def test_prepared_context_exactly_matches_uncached_predictions() -> None:
+    origin = (-76.3, 37.0)
+    catalog = _catalog(
+        _record("near", 359.96, 600, "vessel"),
+        _record("far", 0.04, 700, "physical_aid"),
+        _record("moved-bearing", 1.0, 2_000, origin=origin),
+        _record("virtual", 10.0, 500, "virtual_aid"),
+        _record(
+            "uncertain",
+            30.0,
+            900,
+            "shoreline",
+            metadata=(("position_uncertainty_m", 4.5), ("angular_half_width_deg", 0.02)),
+        ),
+    )
+    vector_map = _vector_map()
+    context = prepare_prediction_context(
+        catalog,
+        observer_crs=CRS_UTM,
+        visibility_radius_m=10_000.0,
+        vector_map=vector_map,
+        angular_resolution_deg=0.1,
+    )
+    observers = (
+        _origin_xy(*origin),
+        _origin_xy(*_at_distance(1_500, 0.0, origin=origin)),
+        _origin_xy(*_at_distance(400, 180.0, origin=origin)),
+    )
+
+    for observer_xy in observers:
+        expected = predict_visible_groups(
+            observer_xy,
+            catalog,
+            observer_crs=CRS_UTM,
+            visibility_radius_m=10_000.0,
+            vector_map=vector_map,
+            angular_resolution_deg=0.1,
+        )
+        actual = predict_visible_groups(
+            observer_xy,
+            catalog,
+            observer_crs=CRS_UTM,
+            visibility_radius_m=10_000.0,
+            vector_map=vector_map,
+            angular_resolution_deg=0.1,
+            prepared_context=context,
+            spatial_index=context.spatial_index,
+        )
+        assert actual == expected
+
+
+def test_prepared_context_rejects_catalog_and_prediction_config_mismatch() -> None:
+    catalog = _catalog(_record("first", 0.0, 500), _record("second", 20.0, 800))
+    vector_map = _vector_map()
+    context = prepare_prediction_context(
+        catalog, observer_crs=CRS_UTM, visibility_radius_m=10_000.0, vector_map=vector_map
+    )
+    observer_xy = _origin_xy()
+    shuffled = _catalog(*reversed(catalog.records))
+
+    with pytest.raises(ValueError, match="prepared_context"):
+        predict_visible_groups(
+            observer_xy,
+            shuffled,
+            observer_crs=CRS_UTM,
+            visibility_radius_m=10_000.0,
+            vector_map=vector_map,
+            prepared_context=context,
+        )
+    with pytest.raises(ValueError, match="prepared_context"):
+        predict_visible_groups(
+            observer_xy,
+            catalog,
+            observer_crs=CRS_UTM,
+            visibility_radius_m=9_999.0,
+            vector_map=vector_map,
+            prepared_context=context,
+        )
+
+    bad_index = GeographicSpatialIndex(
+        ((record.longitude_deg, record.latitude_deg) for record in reversed(catalog.records)),
+        keys=(record.key for record in reversed(catalog.records)),
+    )
+    with pytest.raises(ValueError, match="prepared_context"):
+        predict_visible_groups(
+            observer_xy,
+            catalog,
+            observer_crs=CRS_UTM,
+            visibility_radius_m=10_000.0,
+            vector_map=vector_map,
+            prepared_context=context,
+            spatial_index=bad_index,
+        )
+
+    with pytest.raises(ValueError, match="spatial_index"):
+        prepare_prediction_context(
+            catalog,
+            observer_crs=CRS_UTM,
+            visibility_radius_m=10_000.0,
+            vector_map=vector_map,
+            spatial_index=bad_index,
+        )
