@@ -23,19 +23,40 @@
     "error_rank_within_completed_modes": 1
   },
   "same_mode_local_trajectory": [
-    {"stage": "Cached source", "error_m": 296.2855067665096},
-    {"stage": "Pattern refinement", "error_m": 266.3778480349997},
-    {"stage": "Assigned fit", "error_m": 181.27936114907126},
-    {"stage": "Single-addition expansion", "error_m": 11.127008292425764}
+    {
+      "stage": "Cached source",
+      "error_m": 296.2855067665096
+    },
+    {
+      "stage": "Pattern refinement",
+      "error_m": 266.3778480349997
+    },
+    {
+      "stage": "Assigned fit",
+      "error_m": 181.27936114907126
+    },
+    {
+      "stage": "Single-addition expansion",
+      "error_m": 11.127008292425764
+    }
   ],
   "coverage_scope": {
     "selected_modes": 64,
-    "completed_expansion_modes": 60,
-    "pending_modes": 4,
+    "completed_expansion_modes": 64,
+    "pending_modes": 0,
     "unknown_source_hypotheses_at_interruption": 1410282,
     "full_domain_complete": false,
     "accepted_or_calibrated_fix_claim": false,
-    "overall_accuracy_claim": false
+    "overall_accuracy_claim": false,
+    "composite_audited_modes": 64,
+    "composite_selected_mode_audit_complete": true,
+    "serial_run_completed_modes": 60,
+    "serial_run_pending_modes": 4,
+    "parallel_run_completed_modes": 63,
+    "parallel_run_pending_modes": 1,
+    "parallel_run_stop_reason": "disk interruption",
+    "parallel_run_elapsed_s": 568.419,
+    "composite_audit_explanation": "The final audit composes parallel mode rows 0-47 and 49-63 with serial mode row 48; exact branch outcomes from serial modes 0-59 were reused only after overlap checks. Neither producer run completed all rows."
   },
   "source_artifacts": [
     {
@@ -49,7 +70,13 @@
     {
       "path": "reports/experiments/a35-cached-evaluation/assignment-expansion-full-audit.json",
       "sha256": "7111b39f72caf0df53e655681cb4460118b781a08bbbafdd396056774523bbf8"
+    },
+    {
+      "path": "reports/experiments/a35-cached-evaluation/parallel-composite-audit.json",
+      "sha256": "080b61e160a18c60657bfc7e4394b0c57df742a597f841ab484045e96cd62917",
+      "role": "composite final selected-mode audit"
     }
   ],
-  "author": "J.C. Vaught"
+  "author": "J.C. Vaught",
+  "audit_provenance_note": "Composite audit complete across 64 selected modes using serial and parallel evidence. The parallel run itself stopped at 63/64 after disk interruption; no combined latency is reported."
 }

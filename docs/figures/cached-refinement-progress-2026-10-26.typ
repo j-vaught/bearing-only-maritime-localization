@@ -29,7 +29,7 @@
   #text(size: 9pt)[Development diagnostic. 64 modes were score-selected from an incomplete partial-cache run. Snapshot dated 2026-10-26.]
 ]
 #v(2mm)
-#align(center)[#text(size: 8.5pt, weight: "bold")[The stage score winner moved from 853.002 km to 11.127 m. The last result leads the 60 completed modes; four remain pending, so the selected set is incomplete.]]
+#align(center)[#text(size: 8.5pt, weight: "bold")[The stage score winner moved from 853.002 km to 11.127 m. The last result ranks first among 64 composite-audited selected modes. The source search remains incomplete.]]
 #v(3mm)
 
 #text(size: 10pt, weight: "bold")[Actual minimum-score estimate at each stage]
@@ -53,7 +53,7 @@
 #v(2mm)
 
 #text(size: 10pt, weight: "bold")[Single-addition leader. Local error progression for the same selected mode.]
-#text(size: 7.5pt)[This was the lowest-error selected alternative before expansion. The audited branch replay moved from 296.286 m to 266.378 m, then to 181.279 m, and finally to 11.127 m after adding the fifth assignment. It ranks 1 of 60 completed modes by expansion objective, with four modes pending.]
+#text(size: 7.5pt)[This was the lowest-error selected alternative before expansion. The audited branch replay moved from 296.286 m to 266.378 m, then to 181.279 m, and finally to 11.127 m after adding the fifth assignment. It ranks 1 of 64 composite-audited selected modes by expansion objective.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
@@ -88,7 +88,7 @@
 
 #v(2mm)
 #text(size: 10pt, weight: "bold")[Errors across the selected subset]
-#text(size: 7.5pt)[The first three marker series include all 64 score-selected modes. The single-addition series includes 60 completed mode rows. Four modes remain pending; expansion ranks are within the completed subset only.]
+#text(size: 7.5pt)[The first three marker series include all 64 score-selected modes. The single-addition series includes 64 composite-audited selected mode rows; ranks are within this fixed selected set.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
@@ -111,5 +111,5 @@
 
 #v(1mm)
 #text(size: 6.2pt)[
-  The assigned-fit diagnostic used 57.6525 s for 64 modes and 128 starts. The single-addition pass took #str(rounded(data.at("assignment_expansion_summary").at("serial_runtime_s"), 6)) s serially, covering #str(data.at("assignment_expansion_summary").at("completed_modes")) of 64 modes; four are pending and full branch-result replay is independently audited for this completed prefix. These are independent stage diagnostics, not end-to-end or per-frame latency. The source search left #str(data.at("source_exact_hypothesis_count")) hypotheses exact-scored, #str(data.at("source_exact_unresolved_count")) unresolved, and #str(data.at("source_unknown_count")) in an unknown state at interruption. Cached-refinement evaluator SHA-256: #actual.at("source_artifact").at("sha256"). Assigned-fit evaluator SHA-256: #actual.at("assigned_artifact").at("sha256"). Assignment-expansion full-audit evaluator SHA-256: #actual.at("expansion_artifact").at("sha256"). The frozen audit has 20,435 branch results in total. Modes 0–59 account for Modes 0–59 contain 20,381 structurally retained results: 12,150 exact-score replays, 8,225 invalid-water outcomes, and 6 max_nfev outcomes without an exact score. Partial mode 60 adds 54 scored results that were structurally checked only, not replayed. Four selected modes remain pending; the run is interrupted, with no accepted-fix claim, no certificate scope, and no full-domain completion. The preceding provisional artifact SHA-256 is #actual.at("pre_audit_provisional_expansion_artifact").at("sha256"). Authorship J.C. Vaught.
+  The assigned-fit diagnostic used 57.6525 s for 64 modes and 128 starts. The serial expansion run stopped at 60/64 on its deadline; the parallel run stopped at 63/64 after disk interruption at 568.419 s. The composite audit reconciles per-mode evidence for 64/64 selected modes, but is not a completed parallel run or a combined latency result. Of 22,000 selected-population branch results, 12,150 exact-score replays were reused from the serial audit, 510 new results were exact-scored and replayed from the parallel run, 9,334 invalid-water outcomes and 6 max_nfev outcomes were structurally retained. The source search left #str(data.at("source_exact_hypothesis_count")) hypotheses exact-scored, #str(data.at("source_exact_unresolved_count")) unresolved, and #str(data.at("source_unknown_count")) unknown at interruption. Composite audit SHA-256: #actual.at("expansion_artifact").at("sha256"). Previous serial audit SHA-256: #actual.at("serial_audit_artifact").at("sha256"). The selected-mode audit has no accepted-fix claim or certificate; full-domain completion is false. Authorship J.C. Vaught.
 ]
