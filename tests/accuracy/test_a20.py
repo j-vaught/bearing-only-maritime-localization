@@ -76,13 +76,13 @@ def _inputs(*, noisy=False):
     return measurements, catalog, vector_map
 
 
-def test_noisy_mixed_sigma_refinement_recovers_pose_and_matches_exact_scorer():
+def test_noisy_mixed_sigma_refinement_recovers_from_coarse_cell_and_matches_scorer():
     measurements, catalog, vector_map = _inputs(noisy=True)
     x, y = _xy()
     bounds = (x - 1000, x + 1000, y - 1000, y + 1000)
     config = SearchConfig(bounds_xy=bounds, max_range_m=8_000)
     scorer = CandidateScorer(measurements, catalog, vector_map, config)
-    seed = scorer.evaluate((x + 240, y - 170)).hypothesis
+    seed = scorer.evaluate((x + 250, y - 250)).hypothesis
     assert seed is not None
 
     result = refine_modes(
@@ -91,7 +91,7 @@ def test_noisy_mixed_sigma_refinement_recovers_pose_and_matches_exact_scorer():
         vector_map,
         config,
         [seed],
-        initial_step_m=100,
+        initial_step_m=250,
     )
     mode = result.modes[0]
     assert mode.hypothesis is not None
