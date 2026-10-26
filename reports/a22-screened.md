@@ -84,3 +84,19 @@ Python 3.11.15 was used.
 - `git push origin accuracy/a22-screened`: passed.
 
 The controller remains serial and limited to the supplied finite candidate stream; global completeness across multiple chunks needs a caller-maintained candidate ledger.
+
+
+## Same-sample serial timing
+
+The same 255 saved cache-order candidates were evaluated by direct exact scoring and by the A22 serial controller at `204ca2e`. The timing harness was committed before measurement at `d3d09da`. It used the frozen map-projected positions, measurements, catalog, and scoring configuration from the cached-profile artifacts. Setup, including contract loading, map construction, and scorer preparation, took 13.425 s and is reported separately.
+
+| Mode | Wall time (s) | Exact evaluations | Exact-scored | Pruned | Invalid water | Unresolved coverage |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Direct exact | 18.238 | 255 | 131 | 0 | 111 | 13 |
+| A22 screened | 23.025 | 170 | 46 | 85 | 111 | 13 |
+
+Both modes returned best score `24.468390694319403` with tie ID `cell:74:2578`. All 85 pruned candidates had supported bounds no greater than their independently measured exact scores. The screened run took 26.2% longer than direct exact scoring on this sample, despite reducing exact scoring by 85 candidates. This measurement does not show a runtime benefit from screening.
+
+All four numerical-library thread settings were fixed to one thread. Input and scorer setup were outside the timed scoring intervals. Direct exact scoring ran first, followed by screened scoring, under a 600 s watchdog and the canonical nonblocking benchmark lock. The host was active during both runs. The lock-time activity snapshot recorded load averages of `10.09` before timing and `8.46` after timing, active CPU processes, and two GPU processes using approximately 24.6 and 25.0 GiB. Peak resident memory for the harness process was 1,223.8 MiB. Treat the wall times as shared-host diagnostic measurements; they do not establish clean-host performance.
+
+The raw result, including every selected ID and position, per-candidate exact and screened action, score, lower bound, parity checks, configuration and selection hashes, thread settings, and activity snapshots, is [result.json](experiments/a22-screened-same255/result.json). The recorded candidate selection is identified by SHA-256 `d4f2fa4812855a2f691a2ab7e9ad5035623c63abc8192106878dfd879d901a3e`.
