@@ -1,22 +1,26 @@
 #import "@preview/lilaq:0.6.0" as lq
 
-#set page(width: 300mm, height: 340mm, margin: 9mm, fill: white)
+#set page(width: 300mm, height: 380mm, margin: 9mm, fill: white)
 #set text(size: 8pt)
 #let data = json("cached-refinement-progress-2026-10-26.json")
 #let modes = data.at("mode_comparisons")
 #let expansion-modes = data.at("expanded_mode_comparisons")
-#let prior-winner = data.at("top_score_winner")
-#let expansion-winner = data.at("assignment_expansion_winner")
+#let actual = data.at("actual_stage_winners")
+#let actual-stages = actual.at("stages")
 #let low-error = data.at("lowest_error_selected_alternative")
-#let prior-stages = prior-winner.at("stages")
-#let winner-stages = expansion-winner.at("seed")
-#let expanded-final = expansion-winner.at("expanded")
+#let low-stages = low-error.at("stages")
 #let ranks = modes.map(row => row.at("source_score_rank"))
 #let source-errors = modes.map(row => row.at("source_error_m"))
 #let continuous-errors = modes.map(row => row.at("continuous_error_m"))
 #let assigned-errors = modes.map(row => row.at("assigned_error_m"))
 #let expanded-ranks = expansion-modes.map(row => row.at("source_score_rank"))
 #let expanded-errors = expansion-modes.map(row => row.at("expanded_error_m"))
+#let winner-errors = actual-stages.map(row => row.at("result").at("error_m"))
+#let cached-result = actual-stages.at(0).at("result")
+#let pattern-result = actual-stages.at(1).at("result")
+#let assigned-result = actual-stages.at(2).at("result")
+#let expansion-result = actual-stages.at(3).at("result")
+#let carried = actual.at("prior_wrong_mode_after_expansion")
 #let rounded(value, digits) = calc.round(value * calc.pow(10, digits)) / calc.pow(10, digits)
 
 #align(center)[
@@ -25,32 +29,31 @@
   #text(size: 9pt)[Development diagnostic. 64 modes were score-selected from an incomplete partial-cache run. Snapshot dated 2026-10-26.]
 ]
 #v(2mm)
-#align(center)[#text(size: 8.5pt, weight: "bold")[Provisional expansion leader. 11.127 m and 5/5 correct assignments among 60 completed modes. Four modes remain pending. Full branch replay is incomplete. This is not an accepted fix or global certificate.]]
+#align(center)[#text(size: 8.5pt, weight: "bold")[The stage score winner moved from 853.002 km to 11.127 m. The last result is provisional among 60 completed modes; four remain pending and full branch replay is incomplete.]]
 #v(3mm)
 
-#text(size: 10pt, weight: "bold")[Earlier score winner remains wrong]
-#text(size: 7.5pt)[The source-score-rank-3 mode was the continuous and assigned-fit score winner. Single-addition expansion left it unchanged; it remains rank 2 among the 60 completed expansion modes, with 0 of 4 direct truth-key assignments.]
+#text(size: 10pt, weight: "bold")[Actual minimum-score estimate at each stage]
+#text(size: 7.5pt)[Each point is the minimum-objective returned estimate for that stage; the winning mode can change between stages. The vertical axis is logarithmic so the 11.127 m expansion result remains legible beside the earlier 853 km results. Error uses evaluator truth after each estimate was produced.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
-    title: [Geodesic error at the earlier score winner across four stages],
-    xlabel: [Geodesic location error (m)],
-    xlim: (0, 1050000),
-    ylim: (0.4, 4.6),
-    xaxis: (ticks: ((0, [0]), (200000, [200k]), (400000, [400k]), (600000, [600k]), (800000, [800k]), (1000000, [1,000k])), subticks: none),
-    yaxis: (ticks: ((1, [Cached source]), (2, [Continuous refinement]), (3, [Assigned fit]), (4, [Single-addition])), subticks: none),
+    title: [Geodesic error of the actual stage score winner],
+    xlabel: [Stage winner selected independently at each stage],
+    ylabel: [Geodesic location error (m, logarithmic scale)],
+    xlim: (0.5, 4.5),
+    ylim: (1, 1000000),
+    yscale: "log",
+    xaxis: (ticks: ((1, [Cached exact source]), (2, [Pattern refinement]), (3, [Assigned fit]), (4, [Single-addition expansion])), subticks: none),
+    yaxis: (ticks: ((10, [10]), (100, [100]), (1000, [1,000]), (10000, [10,000]), (100000, [100,000]), (1000000, [1,000,000])), subticks: none),
     width: 260mm,
-    height: 46mm,
-    lq.hbar((prior-stages.at("source").at("error_m"),), (1,)),
-    lq.hbar((prior-stages.at("continuous").at("error_m"),), (2,)),
-    lq.hbar((prior-stages.at("assigned").at("error_m"),), (3,)),
-    lq.hbar((data.at("expanded_prior_score_winner").at("expanded").at("geodesic_error_m"),), (4,)),
+    height: 66mm,
+    lq.scatter((1, 2, 3, 4), winner-errors, mark: "s"),
   )
 ]
 #v(2mm)
 
-#text(size: 10pt, weight: "bold")[Provisional single-addition leader among completed modes]
-#text(size: 7.5pt)[This mode was the lowest-error selected alternative before expansion. Adding the fifth matched feature moved it from 181.279 m to 11.127 m and from rank 16 to rank 1 by objective among the 60 completed modes.]
+#text(size: 10pt, weight: "bold")[Single-addition leader. Local error progression for the same selected mode.]
+#text(size: 7.5pt)[This was the lowest-error alternative before expansion. It moved from 296.286 m to 266.378 m, then to 181.279 m, and finally to 11.127 m after adding the fifth assignment. It ranks 1 of 60 completed modes by expansion objective, with four modes pending.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
@@ -59,36 +62,27 @@
     xlim: (0, 350),
     ylim: (0.4, 4.6),
     xaxis: (ticks: ((0, [0]), (100, [100]), (200, [200]), (300, [300])), subticks: none),
-    yaxis: (ticks: ((1, [Cached source]), (2, [Continuous refinement]), (3, [Assigned fit]), (4, [Single-addition])), subticks: none),
+    yaxis: (ticks: ((1, [Cached source]), (2, [Pattern refinement]), (3, [Assigned fit]), (4, [Single-addition])), subticks: none),
     width: 260mm,
-    height: 48mm,
-    lq.hbar((low-error.at("stages").at("source").at("error_m"),), (1,)),
-    lq.hbar((low-error.at("stages").at("continuous").at("error_m"),), (2,)),
-    lq.hbar((low-error.at("stages").at("assigned").at("error_m"),), (3,)),
-    lq.hbar((expanded-final.at("geodesic_error_m"),), (4,)),
+    height: 45mm,
+    lq.hbar((low-stages.at("source").at("error_m"),), (1,)),
+    lq.hbar((low-stages.at("continuous").at("error_m"),), (2,)),
+    lq.hbar((low-stages.at("assigned").at("error_m"),), (3,)),
+    lq.hbar((data.at("assignment_expansion_winner").at("expanded").at("geodesic_error_m"),), (4,)),
   )
 ]
 #v(1mm)
 #align(center)[
   #table(
-    columns: (1.25fr, 0.65fr, 1.8fr, 1.8fr, 1.3fr, 1fr, 1fr),
-    inset: 2.1pt,
+    columns: (1.2fr, 0.55fr, 0.75fr, 1.1fr, 0.7fr, 0.8fr, 0.65fr),
+    inset: 2pt,
     stroke: 0.5pt + black,
-    [Mode], [Source rank], [Errors source → continuous → assigned → expanded (m)], [Scores source → continuous → assigned → expanded], [Correct assignments at each stage], [Expansion score rank], [Expansion error rank],
-    [Earlier score winner],
-    [#str(prior-winner.at("source_score_rank"))],
-    [#str(rounded(prior-stages.at("source").at("error_m"), 1)) → #str(rounded(prior-stages.at("continuous").at("error_m"), 1)) → #str(rounded(prior-stages.at("assigned").at("error_m"), 1)) → #str(rounded(data.at("expanded_prior_score_winner").at("expanded").at("geodesic_error_m"), 1))],
-    [#str(rounded(prior-stages.at("source").at("score"), 3)) → #str(rounded(prior-stages.at("continuous").at("score"), 3)) → #str(rounded(prior-stages.at("assigned").at("score"), 3)) → #str(rounded(data.at("expanded_prior_score_winner").at("expanded").at("score"), 3))],
-    [0/4 → 0/4 → 0/4 → 0/4],
-    [#str(data.at("expanded_prior_score_winner").at("expanded_score_rank_within_completed_modes")) / 60],
-    [#str(data.at("expanded_prior_score_winner").at("expanded_error_rank_within_completed_modes")) / 60],
-    [Provisional expansion leader],
-    [#str(expansion-winner.at("source_score_rank"))],
-    [#str(rounded(low-error.at("stages").at("source").at("error_m"), 1)) → #str(rounded(low-error.at("stages").at("continuous").at("error_m"), 1)) → #str(rounded(low-error.at("stages").at("assigned").at("error_m"), 1)) → #str(rounded(expanded-final.at("geodesic_error_m"), 3))],
-    [#str(rounded(low-error.at("stages").at("source").at("score"), 3)) → #str(rounded(low-error.at("stages").at("continuous").at("score"), 3)) → #str(rounded(low-error.at("stages").at("assigned").at("score"), 3)) → #str(rounded(expanded-final.at("score"), 3))],
-    [4/4 → 4/4 → 4/4 → 5/5],
-    [#str(expansion-winner.at("expanded_score_rank_within_completed_modes")) / 60],
-    [#str(expansion-winner.at("expanded_error_rank_within_completed_modes")) / 60],
+    [Stage result], [Mode index], [Source rank], [Score], [Error (m)], [Correct assignments], [Stage score rank],
+    [Cached exact source], [#str(cached-result.at("mode_index"))], [#str(cached-result.at("source_score_rank"))], [#str(rounded(cached-result.at("score"), 6))], [#str(rounded(cached-result.at("error_m"), 3))], [#str(cached-result.at("correct_assignments")) / #str(cached-result.at("assignment_count"))], [#str(cached-result.at("score_rank")) / #str(cached-result.at("rank_denominator"))],
+    [Pattern refinement], [#str(pattern-result.at("mode_index"))], [#str(pattern-result.at("source_score_rank"))], [#str(rounded(pattern-result.at("score"), 6))], [#str(rounded(pattern-result.at("error_m"), 3))], [#str(pattern-result.at("correct_assignments")) / #str(pattern-result.at("assignment_count"))], [#str(pattern-result.at("score_rank")) / #str(pattern-result.at("rank_denominator"))],
+    [Assigned fit], [#str(assigned-result.at("mode_index"))], [#str(assigned-result.at("source_score_rank"))], [#str(rounded(assigned-result.at("score"), 6))], [#str(rounded(assigned-result.at("error_m"), 3))], [#str(assigned-result.at("correct_assignments")) / #str(assigned-result.at("assignment_count"))], [#str(assigned-result.at("score_rank")) / #str(assigned-result.at("rank_denominator"))],
+    [Single-addition expansion], [#str(expansion-result.at("mode_index"))], [#str(expansion-result.at("source_score_rank"))], [#str(rounded(expansion-result.at("score"), 6))], [#str(rounded(expansion-result.at("error_m"), 3))], [#str(expansion-result.at("correct_assignments")) / #str(expansion-result.at("assignment_count"))], [#str(expansion-result.at("score_rank")) / #str(expansion-result.at("rank_denominator"))],
+    [Prior wrong mode after expansion], [#str(carried.at("mode_index"))], [#str(carried.at("source_score_rank"))], [#str(rounded(carried.at("score"), 6))], [#str(rounded(carried.at("error_m"), 3))], [#str(carried.at("correct_assignments")) / #str(carried.at("assignment_count"))], [#str(carried.at("score_rank")) / #str(carried.at("rank_denominator"))],
   )
 ]
 
@@ -105,7 +99,7 @@
     ylim: (0, data.at("plot_error_max_m")),
     xaxis: (ticks: ((1, [1]), (16, [16]), (32, [32]), (48, [48]), (64, [64]), (80, [80])), subticks: none),
     width: 260mm,
-    height: 48mm,
+    height: 44mm,
     lq.scatter(ranks, source-errors, mark: "s"),
     lq.scatter(ranks, continuous-errors, mark: "^"),
     lq.scatter(ranks, assigned-errors, mark: "d"),
@@ -113,9 +107,9 @@
   )
 ]
 #v(1mm)
-#align(center)[#text(size: 7pt)[Series order. Square is cached source, triangle is continuous refinement, diamond is assigned fit, and cross is single-addition expansion. No legend box is used.]]
+#align(center)[#text(size: 7pt)[Series order. Square is cached source, triangle is pattern refinement, diamond is assigned fit, and cross is single-addition expansion. No legend box is used.]]
 
 #v(1mm)
-#text(size: 6.3pt)[
-  The assigned-fit diagnostic used 57.6525 s for 64 modes and 128 starts. The provisional single-addition pass took #str(rounded(data.at("assignment_expansion_summary").at("serial_runtime_s"), 6)) s serially, covering #str(data.at("assignment_expansion_summary").at("completed_modes")) of 64 modes; four are pending and full branch replay is incomplete. These are independent stage diagnostics, not end-to-end or per-frame latency. The score winner after expansion has 5/5 true assignments and 11.127 m geodesic error within the completed subset, while the prior wrong winner remains 853.440 km away. This single provisional result does not establish an accuracy rate, acceptance, global ranking, or certificate. The source search left #str(data.at("source_exact_hypothesis_count")) hypotheses exact-scored, #str(data.at("source_exact_unresolved_count")) unresolved, and #str(data.at("source_unknown_count")) in an unknown state at interruption. Assignment-expansion evaluator artifact SHA-256: #data.at("assignment_expansion_artifact").at("sha256"). Assigned-fit evaluator artifact SHA-256: #data.at("source_artifact_sha256"). Expansion manifest SHA-256: #data.at("assignment_expansion_artifact").at("expansion_manifest_sha256"). The evaluator used truth only for independent error and assignment checks. Authorship J.C. Vaught.
+#text(size: 6.2pt)[
+  The assigned-fit diagnostic used 57.6525 s for 64 modes and 128 starts. The provisional single-addition pass took #str(rounded(data.at("assignment_expansion_summary").at("serial_runtime_s"), 6)) s serially, covering #str(data.at("assignment_expansion_summary").at("completed_modes")) of 64 modes; four are pending and full branch replay is incomplete. These are independent stage diagnostics, not end-to-end or per-frame latency. The source search left #str(data.at("source_exact_hypothesis_count")) hypotheses exact-scored, #str(data.at("source_exact_unresolved_count")) unresolved, and #str(data.at("source_unknown_count")) in an unknown state at interruption. Cached-refinement evaluator SHA-256: #actual.at("source_artifact").at("sha256"). Assigned-fit evaluator SHA-256: #actual.at("assigned_artifact").at("sha256"). Assignment-expansion provisional evaluator SHA-256: #actual.at("expansion_artifact").at("sha256"). The provisional stage has no accepted-fix claim, no certificate scope, and no completed branch replay. Authorship J.C. Vaught.
 ]

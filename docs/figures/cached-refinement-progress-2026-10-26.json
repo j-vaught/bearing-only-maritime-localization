@@ -1,6 +1,109 @@
 {
   "a20_manifest_sha256": "1cc41596e787c990950b4d1f00043c73b4815ffaf9e2371c762bf356d3bba063",
   "accepted_fix_claim": false,
+  "actual_stage_winners": {
+    "assigned_artifact": {
+      "commit": "a2dcc34799f00b9abd5f145b5661324b749e3ea1",
+      "path": "reports/experiments/a35-cached-evaluation/assigned-refinement-evaluation.json",
+      "sha256": "e0c1b989f82b7a29e3a09dfde541ed0f437edcc82a4a15ab162fd8e01422d3a8"
+    },
+    "expansion_artifact": {
+      "path": ".agent-work/outputs/a35-cached-evaluation/assignment-expansion-provisional.json",
+      "sha256": "b7e3541a77a86943e5553f449769cdc12329696a3c3b96cf69d4199e54f279a5"
+    },
+    "prior_wrong_mode_after_expansion": {
+      "assignment_count": 4,
+      "candidate_id": "cell:cell:-419:1403",
+      "correct_assignments": 0,
+      "error_m": 853439.780080993,
+      "interpretation": "The earlier wrong pattern/assigned-fit score winner was unchanged by expansion and is listed only as a table row.",
+      "mode_index": 2,
+      "rank_denominator": 60,
+      "score": 10.324237291618351,
+      "score_rank": 2,
+      "source_score_rank": 3
+    },
+    "selection_rule": "minimum objective score separately within each completed stage; evaluator truth is used only to report geodesic error and assignment correctness",
+    "source_artifact": {
+      "commit": "624e0469eb2131e301e77d07a7f727a9b80cd063",
+      "path": "reports/experiments/a35-cached-evaluation/refinement-v2-evaluation.json",
+      "sha256": "88290e7ac580c0cd7bd32fb7fd813e0ff7e55ac3a7aefbcca5ee295f0a0a79cd"
+    },
+    "stages": [
+      {
+        "label": "Cached exact source",
+        "result": {
+          "assignment_count": 3,
+          "candidate_id": "cell:cell:-419:1405",
+          "correct_assignments": 0,
+          "error_m": 853001.6816295274,
+          "error_rank": null,
+          "mode_index": 0,
+          "rank_denominator": 64,
+          "rank_scope": "score-selected modes",
+          "score": 14.605335292625604,
+          "score_rank": 1,
+          "source_score_rank": 1
+        },
+        "selection_scope": "64 score-selected cached modes",
+        "stage": "cached_exact_source"
+      },
+      {
+        "label": "Pattern refinement",
+        "result": {
+          "assignment_count": 4,
+          "candidate_id": "cell:cell:-419:1403",
+          "correct_assignments": 0,
+          "error_m": 853439.780080993,
+          "error_rank": 23,
+          "mode_index": 2,
+          "rank_denominator": 64,
+          "rank_scope": "score-selected modes",
+          "score": 10.324237291618351,
+          "score_rank": 1,
+          "source_score_rank": 3
+        },
+        "selection_scope": "64 continuous-refinement modes",
+        "stage": "pattern_refinement"
+      },
+      {
+        "label": "Assigned fit",
+        "result": {
+          "assignment_count": 4,
+          "candidate_id": "cell:cell:-419:1403",
+          "correct_assignments": 0,
+          "error_m": 853439.780080993,
+          "error_rank": 23,
+          "mode_index": 2,
+          "rank_denominator": 64,
+          "rank_scope": "score-selected modes",
+          "score": 10.324237291618351,
+          "score_rank": 1,
+          "source_score_rank": 3
+        },
+        "selection_scope": "64 assigned-fit modes",
+        "stage": "assigned_fit"
+      },
+      {
+        "label": "Single-addition expansion",
+        "result": {
+          "assignment_count": 5,
+          "candidate_id": "cell:cell:1594:4160",
+          "correct_assignments": 5,
+          "error_m": 11.127008292425764,
+          "error_rank": 1,
+          "mode_index": 4,
+          "rank_denominator": 60,
+          "rank_scope": "completed expansion modes only",
+          "score": 5.026904167180264,
+          "score_rank": 1,
+          "source_score_rank": 5
+        },
+        "selection_scope": "60 completed expansion modes; 4 pending",
+        "stage": "single_addition_expansion"
+      }
+    ]
+  },
   "assigned_manifest_sha256": "ecde0ac0eaab7eef8569638f306e2a8c6300a78a1c54716f6ab30d6c5994ba01",
   "assigned_rows_sha256": "d8e921d46b5067c1e12cacbd3eff930f5acb48c27192ed2527cef3159e3c9955",
   "assigned_run": {
