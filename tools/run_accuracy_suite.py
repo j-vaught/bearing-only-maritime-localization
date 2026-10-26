@@ -1261,6 +1261,30 @@ def _formal_bindings(
     return bindings
 
 
+def _execution_protocol(timeout_s: float) -> dict[str, Any]:
+    return {
+        "schema": "accuracy-execution-protocol-v1",
+        "timeout_s": timeout_s,
+        "timeout_scope": "per_command_subprocess",
+        "deadline_clock": "monotonic_wall_clock_from_spawn",
+        "timeout_status": "search_timeout",
+        "termination_policy": {
+            "start_new_session": True,
+            "timeout_signal": "SIGTERM",
+            "grace_s": 1.0,
+            "escalation_signal": "SIGKILL",
+            "reap_process_group": True,
+        },
+    }
+
+
+def _canonical_sha256(value: Any) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _run_identity(
     *,
     split: str,
@@ -1271,6 +1295,7 @@ def _run_identity(
     map_path: Path,
     search_config_path: Path,
     projected_crs: str,
+    execution_protocol: dict[str, Any],
 ) -> str:
     identity = {
         "split": split,
@@ -1281,6 +1306,7 @@ def _run_identity(
         "map_sha256": sha256_file(map_path),
         "search_config_sha256": sha256_file(search_config_path),
         "projected_crs": projected_crs,
+        "execution_protocol": execution_protocol,
     }
     canonical = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(canonical).hexdigest()[:24]
@@ -1295,6 +1321,7 @@ def _formal_run_identity(
     splits_sha256: str,
     trial_table_sha256: str,
     condition_contexts: dict[str, dict[str, Any]],
+    execution_protocol: dict[str, Any],
 ) -> str:
     identity = {
         "plan_sha256": plan_sha256,
@@ -1304,6 +1331,7 @@ def _formal_run_identity(
         "splits_sha256": splits_sha256,
         "trial_table_sha256": trial_table_sha256,
         "condition_contexts": condition_contexts,
+        "execution_protocol": execution_protocol,
     }
     payload = json.dumps(
         {"schema": "accuracy-formal-run-identity-v1", **identity},
@@ -1314,12 +1342,47 @@ def _formal_run_identity(
     return hashlib.sha256(payload).hexdigest()
 
 
+def _reject_execution_protocol_mismatch(
+    run_root: Path,
+    *,
+    split: str,
+    command_config_sha256: str,
+    plan_sha256: str,
+    catalog_sha256: str,
+    map_sha256: str,
+    eligibility_manifest_sha256: str,
+    execution_protocol_sha256: str,
+) -> None:
+    if not run_root.exists():
+        return
+    for manifest_path in run_root.glob("*/run-manifest.json"):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        same_run_inputs = (
+            manifest.get("split") == split
+            and manifest.get("command_config_sha256") == command_config_sha256
+            and manifest.get("plan_sha256") == plan_sha256
+            and manifest.get("search_catalog_sha256") == catalog_sha256
+            and manifest.get("search_map_sha256") == map_sha256
+            and manifest.get("eligibility_manifest_sha256", "") == eligibility_manifest_sha256
+        )
+        old_protocol_hash = manifest.get("execution_protocol_sha256")
+        if same_run_inputs and old_protocol_hash != execution_protocol_sha256:
+            raise ValueError(
+                "Existing run uses a different or unbound execution protocol; use a separate "
+                "run root to change timeout semantics."
+            )
+
+
 def _formal_trial_rows(
     *,
     rows: list[dict[str, Any]],
     split: str,
     snapshot: EligibilitySnapshot,
     condition_contexts: dict[str, dict[str, Any]],
+    execution_protocol_sha256: str,
 ) -> list[dict[str, Any]]:
     eligibility_by_id = {item.trial_id: item for item in snapshot.all_trials}
     result: list[dict[str, Any]] = []
@@ -1363,6 +1426,7 @@ def _formal_trial_rows(
                     canonical(asdict(eligibility))
                 ).hexdigest(),
                 "eligibility_status": eligibility.eligibility_status,
+                "execution_protocol_sha256": execution_protocol_sha256,
                 "supported": eligibility.supported,
                 "support_sha256": eligibility.support_sha256 or "",
                 "status": "missing",
@@ -1388,6 +1452,8 @@ def run_trials(
     """Run independent estimator/evaluator programs with hash-bound artifacts."""
     if timeout_s <= 0.0 or not math.isfinite(timeout_s):
         raise ValueError("timeout_s must be finite and positive.")
+    execution_protocol = _execution_protocol(timeout_s)
+    execution_protocol_sha256 = _canonical_sha256(execution_protocol)
     if split == "heldout":
         if not authorize_a38_release or heldout_manifest is None:
             raise ValueError(
@@ -1482,12 +1548,14 @@ def run_trials(
             splits_sha256=formal_snapshot.splits_sha256,
             trial_table_sha256=formal_snapshot.trial_table_sha256,
             condition_contexts=formal_contexts,
+            execution_protocol=execution_protocol,
         )
         formal_trial_rows = _formal_trial_rows(
             rows=rows,
             split=split,
             snapshot=formal_snapshot,
             condition_contexts=formal_contexts,
+            execution_protocol_sha256=execution_protocol_sha256,
         )
         run_id = hashlib.sha256(
             f"{formal_run_identity}:{command_config_hash}".encode("ascii")
@@ -1502,7 +1570,18 @@ def run_trials(
             map_path=search_map_path,
             search_config_path=base_search_config_path,
             projected_crs=projected_crs,
+            execution_protocol=execution_protocol,
         )
+    _reject_execution_protocol_mismatch(
+        run_root,
+        split=split,
+        command_config_sha256=command_config_hash,
+        plan_sha256=plan_config_sha256,
+        catalog_sha256=sha256_file(catalog_path),
+        map_sha256=sha256_file(search_map_path),
+        eligibility_manifest_sha256=eligibility_manifest_hash,
+        execution_protocol_sha256=execution_protocol_sha256,
+    )
     run_dir = run_root / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     state_path = run_dir / "trials.csv"
@@ -1529,6 +1608,8 @@ def run_trials(
         "search_scope_manifest_sha256": scope_manifest_sha256,
         "projected_crs": projected_crs,
         "geographic_scope": "full_coast",
+        "execution_protocol": execution_protocol,
+        "execution_protocol_sha256": execution_protocol_sha256,
         "trials": [],
     }
     if formal_snapshot is not None:
@@ -1580,6 +1661,7 @@ def run_trials(
         "calibration_condition_sha256",
         "calibration_context_sha256",
         "eligibility_record_sha256",
+        "execution_protocol_sha256",
     )
     missing_input_updates = 0
     for row in rows:
@@ -1659,6 +1741,7 @@ def run_trials(
             "search_config_path": str(search_config_path.relative_to(run_dir)),
             "search_config_sha256": search_config_hash,
             "search_scope_manifest_sha256": scope_manifest_sha256,
+            "execution_protocol_sha256": execution_protocol_sha256,
             "measurements_path": str(measurements_path),
             "truth_path": str(truth_path),
             "support_path": str(support_path),
