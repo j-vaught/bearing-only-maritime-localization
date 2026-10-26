@@ -17,7 +17,7 @@ Each of the six range and type conditions requires at least 90% unique-fix avail
 | A05 | Object taxonomy | Passed taxonomy checks; integrated 53809f9 |
 | A06 | Independent reference fixtures | Passed independent assignment-reference checks; integrated b01dcd6 and 38ceea5 |
 | A07 | AIS and sensor normalization | Passed normalization checks; integrated 405acfb |
-| A08 | ENC and map ingestion | Finishing ingestion, coverage manifests, and chart-only CatalogV2 export |
+| A08 | ENC and map ingestion | Passed acquisition/ingest checks; integrated 305aa0f; coastline coverage remains partial |
 | A09 | Likelihood costs | Passed likelihood checks; integrated b5f3241 |
 | A10 | Exact association | Passed exhaustive assignment parity and legacy label checks; integrated 0dd5145 |
 | A11 | Vector water and visibility | Passed vector geometry checks; integrated 84135c9 |
@@ -35,18 +35,18 @@ Each of the six range and type conditions requires at least 90% unique-fix avail
 | A23 | Reverse-wedge proposals | Passed wedge proposal checks; integrated 169f629 |
 | A24 | Acceptance and ambiguity | Passed calibration contract checks; integrated 9626e36; empirical calibration pending |
 | A25 | Scene difficulty | Passed difficulty checks; integrated ce40379 |
-| A26 | Dataset and benchmark controller | Controller checks passed; repairing aggregate support-extension rule |
+| A26 | Dataset and benchmark controller | Passed aggregate support-extension checks; integrated 12e8292 |
 | A27 | GPU cost generation | Passed CPU and device-1 cost parity; integrated 3600ff6 |
 | A28 | GPU proposals | Passed device-2 planar proposal parity; integrated 8695a64 |
 | A29 | Assignment acceleration experiment | Assignment acceleration deferred by measured bottleneck rule; integrated 0917632 |
-| A30 | Multiple-GPU runtime | Running multi-device implementation and hardware checks |
+| A30 | Multiple-GPU runtime | Passed one/two/four-device correctness; integrated 3a6859c |
 | A31 | Search telemetry | Passed telemetry and real GPU timing checks; integrated 25ab68e |
-| A32 | CLI and main orchestration | Running standalone CLI integration |
-| A33 | Contract and process integration | Awaiting prerequisites |
-| A34 | Data and geometry integration | Awaiting prerequisites |
+| A32 | CLI and main orchestration | Passed standalone CLI checks; integrated 90ec7ce |
+| A33 | Contract and process integration | Passed contract/process integration and GPU CLI parity; integrated 09dfc53 |
+| A34 | Data and geometry integration | Passed data/geometry integration; integrated 88fcf27; source ambiguity retained |
 | A35 | Search integration | Passed search integration checks; integrated 718c11e |
-| A36 | GPU correctness integration | Awaiting prerequisites |
-| A37 | Independent regression and CI | Awaiting prerequisites |
+| A36 | GPU correctness integration | Passed GPU integration and CLI device parity; integrated 71da644 |
+| A37 | Independent regression and CI | Running independent full regression and CI audit |
 | A38 | Performance and held-out evaluation | Awaiting prerequisites |
 | A39 | Figures and reproducibility documentation | Awaiting prerequisites |
 | A40 | Independent release review | Awaiting prerequisites |
@@ -64,3 +64,9 @@ The Python 3.11 CPU suite passed 312 tests with one optional GPU test skipped an
 ## Integration update
 
 Thirty-three specialist agents have been dispatched. Accuracy and held-out evaluation remain pending. Device-level parity is established only for the documented cases; geographic proposal preparation remains on the CPU. The development assignment profile found proposal preparation dominant and assignment below the 20 percent acceleration threshold.
+
+## Data and device integration update
+
+Thirty-seven specialist agents have now been dispatched. The combined runtime catalog preserves 66,668 records, including all 64,400 chart records; 44,580 chart records carry unresolved identity information. The detailed geographic mosaic preserves known port coverage and marks the remaining domain unknown. These inputs do not establish complete-coast visibility.
+
+The one-, two-, and four-device CLI checks returned identical hypotheses, decision statuses, and budget accounting for the nine-candidate reference fixture. These are correctness checks, not performance or accuracy benchmarks.
