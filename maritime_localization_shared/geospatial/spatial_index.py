@@ -203,6 +203,22 @@ class GeographicSpatialIndex:
         self, longitude_deg: float, latitude_deg: float, radius_m: float
     ) -> tuple[int, ...]:
         """Return catalog indices within an inclusive WGS84 geodesic radius."""
+        return tuple(
+            index
+            for index, _, _ in self.query_radius_with_geometry(
+                longitude_deg, latitude_deg, radius_m
+            )
+        )
+
+    def query_radius_with_geometry(
+        self, longitude_deg: float, latitude_deg: float, radius_m: float
+    ) -> tuple[tuple[int, float, float], ...]:
+        """Return accepted indices with exact initial WGS84 bearing and distance.
+
+        Each row is (catalog index, bearing degrees clockwise from north,
+        distance meters). Rows retain catalog order and use the same inclusive
+        exact-distance filter as query_radius.
+        """
         query = self._validate_point((longitude_deg, latitude_deg), "query")
         if not isfinite(radius_m) or radius_m < 0:
             raise ValueError("radius_m must be finite and nonnegative.")
@@ -214,9 +230,9 @@ class GeographicSpatialIndex:
         result = []
         for index in candidates:
             point = self._points[index]
-            _, _, distance_m = _GEOD.inv(query[0], query[1], point[0], point[1])
+            bearing_deg, _, distance_m = _GEOD.inv(query[0], query[1], point[0], point[1])
             if distance_m <= radius_m:
-                result.append(index)
+                result.append((index, float(bearing_deg) % 360.0, float(distance_m)))
         return tuple(sorted(result))
 
     def query_radius_keys(
