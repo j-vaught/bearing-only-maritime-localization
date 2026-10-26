@@ -1,6 +1,6 @@
 # A22 screened finite-candidate search
 
-Status: implemented and pushed. Independent A06 proof review is pending.
+Status: implemented and pushed. A06 review permits supported pruning over a declared finite candidate set; it does not establish continuous optimality.
 
 Branch: `accuracy/a22-screened`.
 
@@ -83,4 +83,4 @@ Python 3.11.15 was used.
 - `git diff --check`: passed.
 - `git push origin accuracy/a22-screened`: passed.
 
-A06 proof review is pending. The controller remains serial and limited to the supplied finite candidate stream; global completeness across multiple chunks needs a caller-maintained candidate ledger.
+The controller remains serial and limited to the supplied finite candidate stream; global completeness across multiple chunks needs a caller-maintained candidate ledger.
