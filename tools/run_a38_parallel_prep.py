@@ -46,7 +46,7 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
     src_split = src / split
     dest_split = dest / split
     copied = 0
-    moved_trial_ids: set[str] = set()
+    moved_output_paths: set[str] = set()
     for directory in sorted(p for p in src_split.glob("port-*/*/r*/*m/*/*") if p.is_dir()):
         rel = directory.relative_to(src)
         target = dest / rel
@@ -55,7 +55,7 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
             raise FileExistsError(f"Refusing to merge over existing trial directory {target}")
         shutil.move(str(directory), str(target))
         copied += 1
-        moved_trial_ids.add("development/" + rel.as_posix().removeprefix("development/"))
+        moved_output_paths.add(rel.as_posix())
     merged_preparation_rows: list[dict[str, str]] = []
     for filename in (
         "preparation.csv",
@@ -81,12 +81,13 @@ def _merge_worker(src: Path, dest: Path, truth_manifest: Path, audit_manifest: P
         _write_table(target, list(indexed.values()))
     if not merged_preparation_rows:
         raise RuntimeError(f"Worker {src} did not produce preparation rows")
-    expected_output_ids = {
-        row["trial_id"] for row in merged_preparation_rows if row.get("status") == "completed"
+    completed_rows = [row for row in merged_preparation_rows if row.get("status") == "completed"]
+    expected_output_paths = {
+        folder(src, split, row).relative_to(src).as_posix() for row in completed_rows
     }
-    if moved_trial_ids != expected_output_ids:
-        missing = sorted(expected_output_ids - moved_trial_ids)
-        unexpected = sorted(moved_trial_ids - expected_output_ids)
+    if moved_output_paths != expected_output_paths:
+        missing = sorted(expected_output_paths - moved_output_paths)
+        unexpected = sorted(moved_output_paths - expected_output_paths)
         raise RuntimeError(
             f"Worker output directory mismatch; missing completed={missing}, "
             f"unexpected={unexpected}"
