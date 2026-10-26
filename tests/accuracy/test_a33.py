@@ -1200,7 +1200,7 @@ def test_seeded_geodesic_cli_scores_cell_centers_then_seed_candidates_and_report
         config_path,
         output_path,
         projected_crs,
-    ) = _write_geodesic_search_fixture(tmp_path, candidate_budget=20_000)
+    ) = _write_geodesic_search_fixture(tmp_path, candidate_budget=16)
     config = loads_search_config(config_path.read_text())
     outcomes = []
     for workers in (1, 2, 4):
@@ -1214,6 +1214,7 @@ def test_seeded_geodesic_cli_scores_cell_centers_then_seed_candidates_and_report
                 seed_cell_budget=20_000,
                 seed_pair_budget=100_000,
                 seed_candidate_budget=20_000,
+                candidate_budget=16,
                 candidate_workers=workers,
                 candidate_pool_memory_budget_bytes=8 * 1024**3,
             ),
@@ -1241,9 +1242,15 @@ def test_seeded_geodesic_cli_scores_cell_centers_then_seed_candidates_and_report
         assert seed["candidate_seeds_generated"] == len(seed["seeds"])
         assert scoring["candidate_count"] == diagnostics["candidate_count"]
         assert len(scoring["evaluated_candidate_ids"]) == scoring["candidate_count"]
-        assert scoring["evaluated_candidate_ids"][0].startswith("cell:")
-        assert any(
+        assert all(
             candidate_id.startswith("seed:") for candidate_id in scoring["evaluated_candidate_ids"]
+        )
+        assert scoring["scored_seed_candidate_count"] == 16
+        assert scoring["scored_cell_center_candidate_count"] == 0
+        assert scoring["scored_seed_cell_count"] == 16
+        assert scoring["remaining_unique_candidates"] > 400
+        assert diagnostics["proposal_ordering"]["candidate_stream_policy"] == (
+            "seed_round_robin_by_selected_ranked_cell_then_all_ranked_cell_centers"
         )
         assert {
             "proposal_generation",
@@ -1351,3 +1358,96 @@ def test_seeded_geodesic_budgets_require_positive_integers(field):
         cast(Any, SearchConfig)(**{field: 0})
     with pytest.raises(ValueError, match=field):
         cast(Any, SearchConfig)(**{field: True})
+
+
+def test_seeded_geodesic_prioritizes_water_seeds_over_land_cell_centers(tmp_path, monkeypatch):
+    import bearing_localization.accuracy_cli as accuracy_cli
+    from maritime_localization_shared.geospatial.vector_map import VectorMap
+
+    (
+        measurements_path,
+        catalog_path,
+        map_path,
+        config_path,
+        output_path,
+        projected_crs,
+    ) = _write_geodesic_search_fixture(tmp_path, candidate_budget=16)
+    config = loads_search_config(config_path.read_text())
+    write_search_config(
+        config_path,
+        replace(
+            config,
+            algorithm="wedge_geodesic_seeded",
+            candidate_budget=16,
+            candidate_workers=1,
+            seed_cell_budget=20_000,
+        ),
+    )
+
+    def key(position):
+        return (round(position[0], 9), round(position[1], 9))
+
+    land_center_keys = set()
+    centers_by_candidate_id = {}
+    original_point_status = VectorMap.point_water_status
+    original_order = accuracy_cli._order_geodesic_proposals_for_scoring
+    original_seed_generator = accuracy_cli.generate_continuous_witness_seeds
+    original_score = accuracy_cli.score_candidate_positions
+    scored = {}
+
+    def classify_selected_center_as_land(self, position):
+        if key(position) in land_center_keys:
+            return "land"
+        return original_point_status(self, position)
+
+    def capture_order(proposals, positions_xy, *, water_status):
+        centers_by_candidate_id.update(
+            (proposal.candidate_id, key(position))
+            for proposal, position in zip(proposals, positions_xy, strict=True)
+        )
+        monkeypatch.setattr(VectorMap, "point_water_status", classify_selected_center_as_land)
+        return original_order(proposals, positions_xy, water_status=water_status)
+
+    def capture_seeds(*args, **kwargs):
+        seeds = original_seed_generator(*args, **kwargs)
+        land_center_keys.update(
+            centers_by_candidate_id[seed.cell_candidate_id] for seed in seeds.seeds
+        )
+        return seeds
+
+    def capture_score(scorer, positions_xy, **kwargs):
+        positions = list(positions_xy)
+        scored["scorer"] = scorer
+        scored["positions"] = positions
+        return original_score(scorer, positions, **kwargs)
+
+    monkeypatch.setattr(accuracy_cli, "_order_geodesic_proposals_for_scoring", capture_order)
+    monkeypatch.setattr(accuracy_cli, "generate_continuous_witness_seeds", capture_seeds)
+    monkeypatch.setattr(accuracy_cli, "score_candidate_positions", capture_score)
+    result = search_v2_files(
+        measurements_path,
+        catalog_path,
+        map_path,
+        config_path,
+        projected_crs,
+        output_path,
+        wedge_error_deg=0.5,
+        wedge_cell_size_m=100.0,
+        refine=False,
+    )
+    diagnostics = json.loads(output_path.with_suffix(".json.telemetry.json").read_text())[
+        "diagnostics"
+    ]
+    candidate_ids = diagnostics["exact_scoring"]["evaluated_candidate_ids"]
+    assert result.search_status == "budget_exhausted"
+    assert len(candidate_ids) == 16
+    assert all(candidate_id.startswith("seed:") for candidate_id in candidate_ids)
+    assert any(
+        classify_selected_center_as_land(scored["scorer"].vector_map, position) == "water"
+        for position in scored["positions"][:16]
+    )
+    assert land_center_keys
+    assert all(
+        classify_selected_center_as_land(scored["scorer"].vector_map, position) == "land"
+        for position in land_center_keys
+    )
