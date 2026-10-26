@@ -324,10 +324,12 @@ def run_finite_domain(
     planned = len(records)
     accounted = totals["completed_candidate_count"] + totals["failed_candidate_count"]
     totals["unvisited_candidate_count"] = max(0, planned - accounted)
-    totals["request_complete"] = (
-        pool_error is None
-        and totals["completed_candidate_count"] == planned
-        and totals["unresolved_count"] == 0
+    totals["all_candidates_accounted"] = (
+        pool_error is None and totals["completed_candidate_count"] == planned
+    )
+    totals["request_complete"] = totals["all_candidates_accounted"]
+    totals["finite_candidate_set_certified"] = (
+        totals["all_candidates_accounted"] and totals["unresolved_count"] == 0
     )
     manifest = {
         "schema_version": 1,
@@ -393,7 +395,7 @@ def main() -> int:
         finally:
             fcntl.flock(lock_stream, fcntl.LOCK_UN)
     print(json.dumps({"totals": manifest["totals"], "run_id": manifest["run_id"]}, sort_keys=True))
-    return 0 if manifest["totals"]["request_complete"] else 1
+    return 0 if manifest["totals"]["all_candidates_accounted"] else 1
 
 
 if __name__ == "__main__":
