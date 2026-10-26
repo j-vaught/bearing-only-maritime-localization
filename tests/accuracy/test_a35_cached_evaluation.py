@@ -245,6 +245,37 @@ def test_trailing_hypothesis_without_durable_chunk_is_reported_but_not_ranked(
     assert loaded.orphan_hypothesis_input_indices == (1,)
 
 
+def test_uncommitted_orphan_hypothesis_must_remain_unknown(tmp_path: Path) -> None:
+    root, expected = _fixture(tmp_path / "run", incomplete=True)
+    _write(
+        root / "hypotheses" / "chunk-00000001.json",
+        [
+            {
+                "input_index": 1,
+                "hypothesis": {
+                    "east_m": 500250.0,
+                    "north_m": 4900000.0,
+                    "score": 1.0,
+                    "assignments": [],
+                },
+            }
+        ],
+    )
+    manifest = json.loads((root / "run-manifest.json").read_text())
+    manifest["hypotheses_sha256"] = sha256_tree(root / "hypotheses")
+    disposition_rows = [
+        {"candidate_id": "cell:1:2", "status": "exact_scored"},
+        {"candidate_id": "cell:1:3", "status": "not_dispatched"},
+    ]
+    _write_jsonl(root / "candidate-dispositions.jsonl", disposition_rows)
+    manifest["candidate_dispositions_sha256"] = sha256_file(root / "candidate-dispositions.jsonl")
+    manifest["candidate_disposition_counts"]["dispatched_uncommitted_or_unknown"] = 0
+    manifest["candidate_disposition_counts"]["not_dispatched"] = 1
+    _write(root / "run-manifest.json", manifest)
+    with pytest.raises(ValueError, match="not marked unknown"):
+        load_run(root, expected_bindings=expected)
+
+
 def test_disposition_must_match_durable_chunk_action(tmp_path: Path) -> None:
     root, expected = _fixture(tmp_path / "run")
     rows = [
