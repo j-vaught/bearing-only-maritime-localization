@@ -234,6 +234,8 @@ class _PhysicalTarget:
     latitude_deg: float
     object_type: str
     angular_half_width_deg: float
+    physical_entity_id: str | None = None
+    physical_linkage_status: str = "unresolved"
 
 
 def _rng(seed: int, stream: str, key: str = "") -> np.random.Generator:
@@ -345,7 +347,15 @@ def run_simulator_v2(
         if not is_visual_entity(record.normalized_type or record.raw_type):
             continue
         metadata = _metadata(record.metadata)
-        catalog_key = None if metadata.get("identity_ambiguous") is True else record.key
+        catalog_key = record.key
+        physical_entity_id = metadata.get("physical_entity_id")
+        if physical_entity_id is None:
+            physical_entity_id = dict(record.provenance).get("physical_entity_id")
+        physical_linkage_status = str(
+            metadata.get(
+                "physical_linkage_status", "resolved" if physical_entity_id else "unresolved"
+            )
+        )
         lon, lat = _offset_position(
             record.longitude_deg,
             record.latitude_deg,
@@ -358,7 +368,14 @@ def run_simulator_v2(
             raise ValueError(f"Catalog feature {record.key!r} has invalid angular_half_width_deg.")
         targets.append(
             _PhysicalTarget(
-                record.key, catalog_key, lon, lat, object_type or "unknown", float(raw_width)
+                record.key,
+                catalog_key,
+                lon,
+                lat,
+                object_type or "unknown",
+                float(raw_width),
+                str(physical_entity_id) if physical_entity_id else None,
+                physical_linkage_status,
             )
         )
     for item in scene.uncataloged_physical_objects:
@@ -478,6 +495,22 @@ def run_simulator_v2(
                 representative_object_id=representative.object_id,
                 catalog_member_keys=catalog_keys,
                 representative_catalog_key=representative.catalog_key,
+                catalog_member_physical_ids=tuple(
+                    sorted(
+                        {
+                            member.physical_entity_id
+                            for member in members
+                            if member.physical_entity_id
+                        }
+                    )
+                ),
+                identity_limited_catalog_member_keys=tuple(
+                    sorted(
+                        member.catalog_key
+                        for member in members
+                        if member.catalog_key is not None and member.physical_entity_id is None
+                    )
+                ),
                 detected=detected,
                 observation_index=observation_index,
             )
