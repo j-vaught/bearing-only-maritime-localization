@@ -656,6 +656,45 @@ def test_truth_free_coarse_assignment_expansion_skips_pattern_refinement(
     assert process.returncode == 0
 
 
+def test_public_search_api_coarse_option_implies_expansion(tmp_path: Path) -> None:
+    measurement_path, catalog_path, map_path, config_path, truth_path = _v2_fixture(tmp_path)
+    config = read_search_config(config_path)
+    write_search_config(config_path, replace(config, algorithm="reference_grid"))
+    result_path = tmp_path / "coarse-public-api-result.json"
+    truth_path.unlink()
+
+    result = accuracy_cli.search_v2_files(
+        measurement_path,
+        catalog_path,
+        map_path,
+        config_path,
+        "EPSG:32618",
+        result_path,
+        algorithm="reference_grid",
+        spacing_m=100.0,
+        refine=False,
+        refine_modes_count=4,
+        expand_assignments_from_coarse=True,
+        expand_assignments_enabled=False,
+        expansion_local_radius_m=800.0,
+        expansion_max_nfev=20,
+        expansion_max_branches=20,
+    )
+    telemetry = json.loads(
+        result_path.with_suffix(".json.telemetry.json").read_text(encoding="utf-8")
+    )
+    expansion = telemetry["diagnostics"]["assignment_expansion"]
+    stage_names = [item["name"] for item in telemetry["telemetry"]["stages"]]
+
+    assert not truth_path.exists()
+    assert result.decision_status == "ambiguous"
+    assert result.certificate_scope == "none"
+    assert expansion["enabled"] is True
+    assert expansion["seed_stage"] == "coarse"
+    assert expansion["selected_mode_count"] >= 1
+    assert "continuous_refinement" not in stage_names
+
+
 def test_production_scorer_expansion_improves_a_coarse_four_match_seed() -> None:
     scorer = _scorer_with_fifth(bearing=320.0)
     east_m, north_m = _xy()
