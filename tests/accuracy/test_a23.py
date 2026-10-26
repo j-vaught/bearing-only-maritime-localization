@@ -4,21 +4,17 @@ from dataclasses import replace
 from math import atan2, degrees
 
 from bearing_localization.search.proposals.wedge import (
+    GeographicWedgeCatalogObject,
     WedgeCatalogObject,
     WedgeObservation,
+    generate_geographic_reverse_wedge_proposals,
     generate_reverse_wedge_proposals,
 )
+from maritime_localization_shared.geospatial.coordinates import LocalFrame
 
 
 def _bearing(observer: tuple[float, float], target: tuple[float, float]) -> float:
     return degrees(atan2(target[0] - observer[0], target[1] - observer[1])) % 360.0
-
-
-def _proposal_at(result, east_m: float, north_m: float):
-    return min(
-        result.proposals,
-        key=lambda proposal: (proposal.east_m - east_m) ** 2 + (proposal.north_m - north_m) ** 2,
-    )
 
 
 def test_duplicate_catalog_claims_count_once_per_observation_and_keep_inputs():
@@ -34,10 +30,18 @@ def test_duplicate_catalog_claims_count_once_per_observation_and_keep_inputs():
     assert {p.candidate_id: p.vote_count for p in one.proposals} == {
         p.candidate_id: p.vote_count for p in duplicates.proposals
     }
-    assert all(p.vote_count == 1 and p.observation_indices == (7,) for p in duplicates.proposals)
-    assert duplicates.observations_array.tolist() == [[7.0, 90.0]]
+    assert all(p.vote_count == 1 for p in duplicates.proposals)
+    assert duplicates.observations_array == ((7, 90.0),)
+    assert duplicates.report_indices_array.tolist() == [7]
+    assert duplicates.bearings_deg_array.tolist() == [90.0]
     assert duplicates.catalog_metadata["keys"] == ("a", "b")
     assert duplicates.catalog_xy_m.shape == (2, 2)
+    assert duplicates.catalog_keys_array.tolist() == ["a", "b"]
+    assert duplicates.proposal_cell_indices_array.shape == (len(duplicates.proposals), 2)
+    assert duplicates.proposal_positions_en_m.shape == (len(duplicates.proposals), 2)
+    assert duplicates.vote_counts_array.tolist() == [
+        proposal.vote_count for proposal in duplicates.proposals
+    ]
 
 
 def test_wraparound_parallel_bearings_and_half_open_grid_boundaries_are_stable():
@@ -53,12 +57,17 @@ def test_wraparound_parallel_bearings_and_half_open_grid_boundaries_are_stable()
     replay = generate_reverse_wedge_proposals(
         list(reversed(observations)), list(reversed(catalog)), max_range_m=1_500.0
     )
-    assert [(p.candidate_id, p.vote_count, p.observation_indices) for p in first.proposals] == [
-        (p.candidate_id, p.vote_count, p.observation_indices) for p in replay.proposals
+    assert [(p.candidate_id, p.vote_count) for p in first.proposals] == [
+        (p.candidate_id, p.vote_count) for p in replay.proposals
     ]
-    assert first.proposals[0].observation_indices == (2, 8, 11)
+    assert first.report_indices_array.tolist() == [2, 8, 11]
     assert all(p.candidate_id == f"cell:{p.cell_i}:{p.cell_j}" for p in first.proposals)
     assert any(abs(p.east_m - 125.0) <= 125.0 for p in first.proposals)
+    assert (
+        max(proposal.north_m for proposal in first.proposals)
+        - min(proposal.north_m for proposal in first.proposals)
+        >= 1_000.0
+    )
 
 
 def test_votes_do_not_overflow_fixed_width_accumulators():
@@ -120,19 +129,67 @@ def test_a18_tiny_scene_vote_recall_is_invariant_to_label_availability():
     catalog = [
         WedgeCatalogObject(f"target-{index}", *target) for index, target in enumerate(targets)
     ]
-    labels_enabled = generate_reverse_wedge_proposals(observations, catalog, max_range_m=1_500.0)
-    # Coarse type labels enter only exact downstream scoring; they cannot alter votes.
+    labels_enabled = generate_reverse_wedge_proposals(
+        observations,
+        [replace(item, normalized_type="vessel") for item in catalog],
+        max_range_m=1_500.0,
+    )
+    # Type labels remain metadata and cannot alter geometric vote coverage.
     labels_disabled = generate_reverse_wedge_proposals(
-        [replace(observation) for observation in observations],
-        [replace(item) for item in catalog],
+        observations,
+        [replace(item, normalized_type=None) for item in catalog],
         max_range_m=1_500.0,
     )
     assert [(p.candidate_id, p.vote_count) for p in labels_enabled.proposals] == [
         (p.candidate_id, p.vote_count) for p in labels_disabled.proposals
     ]
+    assert labels_enabled.catalog_types == ("vessel", "vessel", "vessel")
+    assert labels_disabled.catalog_types == (None, None, None)
     assert any(
         abs(proposal.east_m - truth[0]) <= 250.0
         and abs(proposal.north_m - truth[1]) <= 250.0
         and proposal.vote_count >= 3
         for proposal in labels_enabled.proposals
     )
+
+
+def test_catalog_on_grid_boundaries_includes_both_neighboring_cell_columns():
+    result = generate_reverse_wedge_proposals(
+        [WedgeObservation(0, 0.0)],
+        [WedgeCatalogObject("north", 0.0, 1_000.0)],
+        max_range_m=1_000.0,
+    )
+    ids = {proposal.candidate_id for proposal in result.proposals}
+    assert "cell:-1:-1" in ids
+    assert "cell:0:-1" in ids
+
+
+def test_geographic_adapter_uses_local_tile_and_retains_geodetic_metadata():
+    frame = LocalFrame((-179.999, 0.0))
+    result = generate_geographic_reverse_wedge_proposals(
+        [WedgeObservation(4, 270.0)],
+        [GeographicWedgeCatalogObject("dateline", 179.999, 0.0)],
+        frame=frame,
+        max_range_m=1_000.0,
+        max_grid_bearing_error_deg=0.0,
+    )
+    metadata = result.catalog_metadata
+    assert result.coordinate_model == "local_projected_tile"
+    assert metadata["frame_origin_lonlat"] == (-179.999, 0.0)
+    assert isinstance(metadata["frame_crs"], str)
+    assert result.catalog_lonlat_deg is not None
+    assert result.catalog_lonlat_deg.tolist() == [[179.999, 0.0]]
+    assert result.catalog_xy_m[0, 0] < 0.0
+    assert result.bearings_deg_array.tolist() == [270.0]
+
+
+def test_tiny_cells_report_bounded_raster_budget_exhaustion():
+    result = generate_reverse_wedge_proposals(
+        [WedgeObservation(0, 90.0)],
+        [WedgeCatalogObject("east", 1_000.0, 0.0)],
+        max_range_m=1_000_000.0,
+        cell_size_m=1e-9,
+        max_candidate_cells=8,
+    )
+    assert result.generation_status == "budget_exhausted"
+    assert result.budget_reason == "candidate_cells"
