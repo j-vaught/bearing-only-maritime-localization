@@ -7,6 +7,9 @@ so imports are skipped until candidate pruning is integrated.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import cast
+
 import pytest
 
 pytest.importorskip("bearing_localization.search.candidate_lower_bound")
@@ -17,10 +20,7 @@ from bearing_localization.search.candidate_lower_bound import (  # noqa: E402
 from bearing_localization.search.config import SearchConfig  # noqa: E402
 from bearing_localization.search.likelihood import build_likelihood_costs  # noqa: E402
 
-try:
-    from .reference_assignment import optimal_assignments  # noqa: E402
-except ImportError:  # standalone review against another checkout
-    from reference_assignment import optimal_assignments  # noqa: E402
+from .reference_assignment import optimal_assignments  # noqa: E402
 
 
 @pytest.mark.parametrize(
@@ -94,9 +94,9 @@ def test_candidate_bound_is_below_exhaustive_actual_group_objectives(
         observation_sigmas_deg=report_sigmas,
     )
     assignments = optimal_assignments(
-        costs.matched_costs,
-        costs.report_clutter_costs,
-        costs.group_miss_costs,
+        cast(Sequence[Sequence[float]], costs.matched_costs.tolist()),
+        cast(Sequence[float], costs.report_clutter_costs.tolist()),
+        cast(Sequence[float], costs.group_miss_costs.tolist()),
     )
     assert len(assignments) > 0
     best_complete_objective = costs.baseline_constant + assignments[0].cost
