@@ -413,3 +413,12 @@ def test_batch_los_is_reserved_for_full_scans(monkeypatch):
     calls.clear()
     screen_candidate_visibility(xy(), ctx, stop_after_minimum_groups=1)
     assert calls == []
+
+    small = context(catalog(*(record(f"small-{i}", i * 3, 1000) for i in range(31))))
+    screen_candidate_visibility(xy(), small, scan_all_members=True)
+    assert calls == []
+    threshold = context(catalog(*(record(f"threshold-{i}", i * 3, 1000) for i in range(32))))
+    result = screen_candidate_visibility(xy(), threshold, scan_all_members=True)
+    scalar = _screen_candidate_visibility_scalar(xy(), threshold, scan_all_members=True)
+    assert result == scalar
+    assert result.complete and calls == [32]
