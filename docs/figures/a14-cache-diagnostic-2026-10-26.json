@@ -1,0 +1,27 @@
+{
+  "snapshot_date": "2026-10-26",
+  "classification": "fixed-candidate CPU diagnostic; not a benchmark, accuracy, calibration, held-out, or GPU result",
+  "catalog_records": 66668,
+  "measurement_count": 4,
+  "candidate_count": 3,
+  "baseline": {
+    "source": ".agent-work/outputs/a14-prepared-profile/baseline-run.json",
+    "setup_median_ms": 131.312977,
+    "candidate_median_ms": 455.201731
+  },
+  "prepared": {
+    "source": ".agent-work/outputs/a14-prepared-profile/prepared-run.json",
+    "setup_median_ms": 824.981926,
+    "candidate_median_ms": 4.432294
+  },
+  "candidate_outputs": [
+    {"candidate": 1, "score": 24.544416125800623, "groups": 0, "identity_limited": 0},
+    {"candidate": 2, "score": 31.45217140478276, "groups": 3, "identity_limited": 3},
+    {"candidate": 3, "score": 26.02598193152521, "groups": 4, "identity_limited": 4}
+  ],
+  "input_hashes": {
+    "catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+    "map_sha256": "392b70946655bc54d29260722d743d92baa1f99f89af4ce8848e496eb217df73",
+    "measurements_sha256": "2814da1f89d110ec9c73fff6cc2473ed72bd0e0f7e73e5b0699bdb975b05a370"
+  }
+}
