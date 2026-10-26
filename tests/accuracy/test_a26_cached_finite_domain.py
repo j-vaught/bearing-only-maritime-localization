@@ -591,3 +591,31 @@ def test_durable_chunks_are_checked_against_global_candidate_plan(tmp_path: Path
     (output / "hypotheses/chunk-00000002.json").write_text(hypothesis_path.read_text())
     with pytest.raises(ValueError, match="contiguous prefix"):
         validate_durable_chunk_history(records=records, chunks=[gap_chunk], output_root=output)
+
+    hypothesis_a = output / "hypotheses/chunk-00000001.json"
+    hypothesis_a.write_text(
+        json.dumps(
+            [
+                {
+                    "input_index": 0,
+                    "hypothesis": {"east_m": 1.0, "north_m": 2.0, "score": 1.0},
+                }
+            ]
+        )
+    )
+    chunk_a = {
+        "chunk_index": 1,
+        "candidate_count": 1,
+        "hypotheses_sha256": sha256_file(hypothesis_a),
+        "candidates": [
+            {
+                "candidate_id": "cell:a",
+                "input_index": 0,
+                "position_xy_m": [1.0, 2.0],
+                "action": "exact_scored",
+                "score": 1.0,
+            }
+        ],
+    }
+    with pytest.raises(ValueError, match="ordered prefix"):
+        validate_durable_chunk_history(records=records, chunks=[chunk, chunk_a], output_root=output)

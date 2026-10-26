@@ -656,6 +656,7 @@ def validate_durable_chunk_history(
     plan_index = {row["candidate_id"]: index for index, row in enumerate(records)}
     committed: set[str] = set()
     chunk_indices: set[int] = set()
+    ordered_chunks: list[tuple[int, list[int]]] = []
     for chunk in chunks:
         chunk_index = chunk.get("chunk_index")
         if type(chunk_index) is not int or chunk_index in chunk_indices:
@@ -667,6 +668,7 @@ def validate_durable_chunk_history(
         if not candidates:
             raise ValueError(f"Durable chunk {chunk_index} is empty.")
         chunk_ids: set[str] = set()
+        candidate_plan_indices: list[int] = []
         for row in candidates:
             candidate_id = row.get("candidate_id")
             if candidate_id not in plan_index:
@@ -676,9 +678,13 @@ def validate_durable_chunk_history(
             chunk_ids.add(candidate_id)
             if row.get("input_index") != plan_index[candidate_id]:
                 raise ValueError("Durable chunk input index differs from the frozen plan.")
+            candidate_plan_indices.append(plan_index[candidate_id])
             expected_xy = records[plan_index[candidate_id]]["position_xy_m"]
             if list(row.get("position_xy_m", [])) != list(expected_xy):
                 raise ValueError("Durable chunk position differs from the frozen plan.")
+        if candidate_plan_indices != sorted(candidate_plan_indices):
+            raise ValueError(f"Durable chunk {chunk_index} candidates are out of plan order.")
+        ordered_chunks.append((chunk_index, candidate_plan_indices))
         committed.update(chunk_ids)
         hypothesis_path = output_root / "hypotheses" / f"chunk-{chunk_index:08d}.json"
         if not hypothesis_path.is_file():
@@ -699,9 +705,7 @@ def validate_durable_chunk_history(
             if type(input_index) is not int or not 0 <= input_index < len(records):
                 raise ValueError(f"Durable chunk {chunk_index} has an invalid hypothesis index.")
             if input_index not in exact_scored_by_index:
-                raise ValueError(
-                    f"Durable chunk {chunk_index} hypothesis is not exact-scored."
-                )
+                raise ValueError(f"Durable chunk {chunk_index} hypothesis is not exact-scored.")
             hypothesis = item.get("hypothesis")
             if not isinstance(hypothesis, dict):
                 raise ValueError(f"Durable chunk {chunk_index} has a malformed hypothesis.")
@@ -728,6 +732,14 @@ def validate_durable_chunk_history(
             )
     if chunk_indices and sorted(chunk_indices) != list(range(max(chunk_indices) + 1)):
         raise ValueError("Durable chunk indices are not a contiguous prefix.")
+    if ordered_chunks != sorted(ordered_chunks, key=lambda item: item[0]):
+        raise ValueError("Durable chunks are not ordered by chunk index.")
+    previous_last_index = -1
+    for _, candidate_indices in ordered_chunks:
+        if candidate_indices and candidate_indices[0] <= previous_last_index:
+            raise ValueError("Durable chunks are not an ordered prefix of the candidate plan.")
+        if candidate_indices:
+            previous_last_index = candidate_indices[-1]
     return committed
 
 
