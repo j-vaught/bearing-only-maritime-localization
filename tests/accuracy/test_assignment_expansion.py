@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 from pyproj import Geod
 
+from bearing_localization.search import assignment_expansion as expansion
 from bearing_localization.search.assignment_expansion import (
     ExpansionConfig,
     assignment_expansion,
@@ -26,19 +27,31 @@ from .test_a20 import ORIGIN, _inputs, _xy
 _GEOD = Geod(ellps="WGS84")
 
 
-def _scorer_with_fifth(*, bearing: float = 340.0, use_types: bool = True) -> CandidateScorer:
+def _scorer_with_fifth(
+    *, bearing: float = 340.0, use_types: bool = True, extra_catalog_records: int = 1
+) -> CandidateScorer:
     measurements, catalog, vector_map = _inputs()
     lon, lat, _ = _GEOD.fwd(*ORIGIN, bearing, 2_000.0)
-    catalog = CatalogV2(
-        catalog.records
-        + (
+    records = [
+        CatalogRecordV2(
+            key="target-4",
+            longitude_deg=lon,
+            latitude_deg=lat,
+            normalized_type="vessel",
+        )
+    ]
+    if extra_catalog_records > 1:
+        lon_2, lat_2, _ = _GEOD.fwd(*ORIGIN, bearing + 7.0, 2_000.0)
+        records.append(
             CatalogRecordV2(
-                key="target-4",
-                longitude_deg=lon,
-                latitude_deg=lat,
+                key="target-5",
+                longitude_deg=lon_2,
+                latitude_deg=lat_2,
                 normalized_type="vessel",
-            ),
-        ),
+            )
+        )
+    catalog = CatalogV2(
+        catalog.records + tuple(records),
         timestamp_utc=catalog.timestamp_utc,
         source=catalog.source,
         catalog_version=catalog.catalog_version,
@@ -195,6 +208,25 @@ def test_configuration_caps_solver_and_branch_budgets():
         ExpansionConfig(max_nfev=101)
     with pytest.raises(ValueError, match="max_branches"):
         ExpansionConfig(max_branches=5_001)
+
+
+def test_seed_geometry_preparation_is_once_for_multiple_branches(monkeypatch):
+    scorer = _scorer_with_fifth(extra_catalog_records=2)
+    seed, _ = _single_addition_seed(scorer)
+    real_transformer = expansion.Transformer
+    calls = 0
+
+    class CountingTransformer:
+        @staticmethod
+        def from_crs(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return real_transformer.from_crs(*args, **kwargs)
+
+    monkeypatch.setattr(expansion, "Transformer", CountingTransformer)
+    result = expand_assignments(scorer, seed, config=ExpansionConfig(max_branches=10))
+    assert result.counters["candidate_branches"] == 2
+    assert calls == 1
 
 
 def test_budget_callback_and_event_order():

@@ -108,6 +108,14 @@ class _FrozenBearing:
     sigma_deg: float
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedSeed:
+    frozen: tuple[_FrozenBearing, ...]
+    records: dict[str, CatalogRecordV2]
+    inverse: Transformer
+    seed_lonlat: tuple[float, float]
+
+
 def _result(
     seed: Hypothesis,
     *,
@@ -181,12 +189,11 @@ def _seed_validation(
     return None, evaluation
 
 
-def _frozen_from_seed(
+def _prepare_seed(
     scorer: CandidateScorer,
     seed_evaluation: CandidateEvaluation,
     seed: Hypothesis,
-    candidate: _Candidate,
-) -> tuple[_FrozenBearing, ...]:
+) -> _PreparedSeed:
     predicted = seed_evaluation.predicted
     if predicted is None:
         raise ValueError("A scored seed must include predicted groups.")
@@ -209,10 +216,23 @@ def _frozen_from_seed(
             ),
         )
         frozen.append(_FrozenBearing(assignment.report_index, record, target, sigma))
-    target = _target_lonlat(candidate.record, candidate.offset_quality)
     inverse = Transformer.from_crs(scorer.vector_map.crs, "EPSG:4326", always_xy=True)
     seed_lon, seed_lat = inverse.transform(seed.east_m, seed.north_m)
-    distance = _GEOD.inv(seed_lon, seed_lat, target[0], target[1])[2]
+    return _PreparedSeed(tuple(frozen), records, inverse, (float(seed_lon), float(seed_lat)))
+
+
+def _frozen_for_candidate(
+    scorer: CandidateScorer,
+    seed_context: _PreparedSeed,
+    candidate: _Candidate,
+) -> tuple[_FrozenBearing, ...]:
+    target = _target_lonlat(candidate.record, candidate.offset_quality)
+    distance = _GEOD.inv(
+        seed_context.seed_lonlat[0],
+        seed_context.seed_lonlat[1],
+        target[0],
+        target[1],
+    )[2]
     sigma = max(
         scorer.config.sigma_floor_deg,
         hypot(
@@ -220,14 +240,15 @@ def _frozen_from_seed(
             _group_sigma_deg(candidate.uncertainty_m, max(float(distance), 1.0)),
         ),
     )
-    frozen.append(_FrozenBearing(candidate.report_index, candidate.record, target, sigma))
-    return tuple(frozen)
+    return seed_context.frozen + (
+        _FrozenBearing(candidate.report_index, candidate.record, target, sigma),
+    )
 
 
 def _fit_branch(
     scorer: CandidateScorer,
     seed: Hypothesis,
-    seed_evaluation: CandidateEvaluation,
+    seed_context: _PreparedSeed,
     candidate: _Candidate,
     config: ExpansionConfig,
 ) -> tuple[
@@ -236,13 +257,13 @@ def _fit_branch(
     bounds = scorer.config.bounds_xy
     if bounds is None:
         return "invalid_bounds", None, None, 0, None, None
-    if len(seed.assignments) < 1:
+    if len(seed.assignments) < 2:
         return "insufficient_assignments", None, None, 0, None, None
     try:
-        frozen = _frozen_from_seed(scorer, seed_evaluation, seed, candidate)
+        frozen = _frozen_for_candidate(scorer, seed_context, candidate)
     except ValueError:
         return "invalid_assignment", None, None, 0, None, None
-    inverse = Transformer.from_crs(scorer.vector_map.crs, "EPSG:4326", always_xy=True)
+    inverse = seed_context.inverse
     observed = np.asarray(
         [scorer.measurements.measurements[item.report_index].bearing_deg for item in frozen],
         dtype=float,
@@ -421,6 +442,10 @@ def expand_assignments(
         return _result(seed, status="no_unmatched_reports", completed=True, started=started)
     if not seed.assignments:
         return _result(seed, status="insufficient_assignments", completed=True, started=started)
+    try:
+        seed_context = _prepare_seed(scorer, seed_evaluation, seed)
+    except ValueError:
+        return _result(seed, status="invalid_assignment", completed=False, started=started)
     eligible, counters, pool_digest = _candidate_pool(scorer, seed, config)
     counters["pool_digest"] = pool_digest
     branches = [
@@ -469,7 +494,7 @@ def expand_assignments(
         counters["visited_branches"] += 1
         counters["unvisited_branches"] = len(branches) - counters["visited_branches"]
         status, proposal, solver_status, nfev, exact, evaluation = _fit_branch(
-            scorer, seed, seed_evaluation, candidate, config
+            scorer, seed, seed_context, candidate, config
         )
         event["status"] = status
         event["proposed_pose"] = proposal
