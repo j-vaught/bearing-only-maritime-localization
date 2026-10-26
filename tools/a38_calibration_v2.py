@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +90,78 @@ def _run_row_matches(row: dict[str, Any], planned: dict[str, str]) -> None:
             )
 
 
+def _condition_context_key(condition: CalibrationOperatingCondition) -> str:
+    range_m = int(condition.range_m)
+    if float(range_m) != condition.range_m or range_m not in (1000, 5000, 10000):
+        raise ValueError("Formal accuracy gates require range 1000, 5000, or 10000 m.")
+    return f"{range_m}m_types{'on' if condition.use_types else 'off'}"
+
+
+def _validated_condition_contexts(
+    run_manifest: dict[str, Any],
+    *,
+    condition: CalibrationOperatingCondition,
+    context: CalibrationContext,
+) -> dict[str, dict[str, Any]]:
+    bindings = run_manifest.get("condition_contexts")
+    if not isinstance(bindings, dict):
+        raise ValueError("Run manifest lacks its pre-search condition_contexts map.")
+    expected_keys = {
+        f"{range_m}m_types{label}" for range_m in (1000, 5000, 10000) for label in ("on", "off")
+    }
+    if set(bindings) != expected_keys:
+        raise ValueError("Run manifest condition_contexts must bind all six formal gates.")
+    normalized: dict[str, dict[str, Any]] = {}
+    for key, binding in bindings.items():
+        if not isinstance(binding, dict) or set(binding) != {
+            "calibration_condition",
+            "calibration_context",
+        }:
+            raise ValueError(f"Malformed condition_contexts entry {key}.")
+        bound_condition = CalibrationOperatingCondition.from_dict(
+            binding.get("calibration_condition")
+        )
+        CalibrationContext.from_dict(binding.get("calibration_context"))
+        if key != _condition_context_key(bound_condition):
+            raise ValueError(f"Condition context key does not match condition at {key}.")
+        if (
+            bound_condition.objective_version != condition.objective_version
+            or bound_condition.algorithm != condition.algorithm
+        ):
+            raise ValueError("Condition contexts mix objectives or algorithms.")
+        normalized[key] = binding
+    requested_key = _condition_context_key(condition)
+    requested = normalized[requested_key]
+    requested_condition = CalibrationOperatingCondition.from_dict(
+        requested["calibration_condition"]
+    )
+    requested_context = CalibrationContext.from_dict(requested["calibration_context"])
+    if (
+        requested_condition.as_dict() != condition.as_dict()
+        or requested_context.as_dict() != context.as_dict()
+    ):
+        raise ValueError("Requested condition/context differs from pre-search binding.")
+    return normalized
+
+
+def _validate_run_identity(run_manifest: dict[str, Any]) -> None:
+    identity_fields = (
+        "plan_sha256",
+        "eligibility_plan_sha256",
+        "eligibility_manifest_sha256",
+        "config_sha256",
+        "splits_sha256",
+        "trial_table_sha256",
+        "condition_contexts",
+    )
+    identity = {key: run_manifest.get(key) for key in identity_fields}
+    expected = hashlib.sha256(
+        canonical_json({"schema": "accuracy-formal-run-identity-v1", **identity})
+    ).hexdigest()
+    if run_manifest.get("run_identity_sha256") != expected:
+        raise ValueError("Run identity hash does not match its pre-search bindings.")
+
+
 def build_condition_document(
     *,
     trial_rows: list[dict[str, str]],
@@ -108,21 +181,25 @@ def build_condition_document(
         raise ValueError("Run manifest schema or split does not match request.")
     if eligibility_snapshot.split != split:
         raise ValueError("Eligibility snapshot split does not match request.")
-    if run_manifest.get("calibration_condition") != condition.as_dict():
-        raise ValueError("Run manifest condition does not match requested condition.")
-    if run_manifest.get("calibration_context") != context.as_dict():
-        raise ValueError("Run manifest context does not match requested context.")
+    condition_contexts = _validated_condition_contexts(
+        run_manifest, condition=condition, context=context
+    )
 
     eligibility_sha = hfile(eligibility_manifest_path)
     if run_manifest.get("eligibility_manifest_sha256") != eligibility_sha:
         raise ValueError("Run manifest is not bound to the supplied eligibility manifest.")
+    # Preserve A26's plan_sha256 meaning (the plan config file bytes) and bind
+    # A42's composite config/splits/table identity under a distinct field.
     for manifest_key, snapshot_value in (
-        ("plan_sha256", eligibility_snapshot.plan_sha256),
+        ("plan_sha256", eligibility_snapshot.config_sha256),
         ("config_sha256", eligibility_snapshot.config_sha256),
+        ("splits_sha256", eligibility_snapshot.splits_sha256),
         ("trial_table_sha256", eligibility_snapshot.trial_table_sha256),
+        ("eligibility_plan_sha256", eligibility_snapshot.plan_sha256),
     ):
         if run_manifest.get(manifest_key) != snapshot_value:
             raise ValueError(f"Run manifest {manifest_key} differs from verified plan.")
+    _validate_run_identity(run_manifest)
 
     selected = [
         row
@@ -155,6 +232,41 @@ def build_condition_document(
         if trial_id not in plan_by_id:
             raise ValueError(f"Run manifest includes a row outside this split plan: {trial_id}.")
         _run_row_matches(row, plan_by_id[trial_id])
+        row_key = row.get("condition_context_key")
+        if not isinstance(row_key, str) or row_key != _condition_context_key(
+            CalibrationOperatingCondition(
+                range_m=float(plan_by_id[trial_id]["range_m"]),
+                use_types=plan_by_id[trial_id]["report_types"] == "True",
+                objective_version=condition.objective_version,
+                algorithm=condition.algorithm,
+            )
+        ):
+            raise ValueError(f"Run row condition-context key mismatch for {trial_id}.")
+        row_binding = condition_contexts.get(row_key)
+        if row_binding is None:
+            raise ValueError(f"Run row has no pre-search context binding for {trial_id}.")
+        row_binding_sha = hashlib.sha256(canonical_json(row_binding)).hexdigest()
+        if row.get("condition_context_sha256") != row_binding_sha:
+            raise ValueError(f"Run row condition-context hash mismatch for {trial_id}.")
+        if (
+            row.get("calibration_condition_sha256")
+            != hashlib.sha256(canonical_json(row_binding["calibration_condition"])).hexdigest()
+        ):
+            raise ValueError(f"Run row condition hash mismatch for {trial_id}.")
+        if (
+            row.get("calibration_context_sha256")
+            != hashlib.sha256(canonical_json(row_binding["calibration_context"])).hexdigest()
+        ):
+            raise ValueError(f"Run row calibration-context hash mismatch for {trial_id}.")
+        eligibility_record = eligibility_by_id[trial_id]
+        eligibility_payload = (
+            asdict(eligibility_record)
+            if is_dataclass(eligibility_record)
+            else vars(eligibility_record)
+        )
+        expected_eligibility_sha = hashlib.sha256(canonical_json(eligibility_payload)).hexdigest()
+        if row.get("eligibility_record_sha256") != expected_eligibility_sha:
+            raise ValueError(f"Run row eligibility record hash mismatch for {trial_id}.")
         run_by_id[trial_id] = row
 
     all_trials: list[dict[str, Any]] = []
