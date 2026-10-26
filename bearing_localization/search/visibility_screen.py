@@ -214,12 +214,9 @@ def screen_candidate_visibility(
                 if confirmed is None:
                     confirmed = key
                     k += 1
-                    if (
-                        not scan_all_members
-                        and stop_after_minimum_groups is not None
-                        and k >= stop_after_minimum_groups
-                    ):
-                        stopped = True
+                    if not scan_all_members:
+                        if stop_after_minimum_groups is not None and k >= stop_after_minimum_groups:
+                            stopped = True
                         break
             elif state == "blocked":
                 blocked.append(key)
@@ -335,9 +332,9 @@ def _has_unsupported_metadata_model(metadata: dict[str, object]) -> bool:
             for key, child in value.items():
                 normalized = str(key).casefold()
                 if any(token in normalized for token in _MODEL_KEY_TOKENS):
-                    # ENC source attributes contain a standard height field;
-                    # an empty value carries no dimensional model.
-                    if normalized == "height" and child in ("", None):
+                    # The known ENC source attribute height is vertical and
+                    # inert under the scorer's declared 2D point-geometry model.
+                    if normalized == "height":
                         continue
                     return True
                 if source_attributes_have_model_key(child):
