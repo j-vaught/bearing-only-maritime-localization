@@ -1664,6 +1664,7 @@ def _search_v2_request(
     _batch_preflight_s: float,
 ) -> LocalizationResult:
     """Execute one request against a validated immutable static-input snapshot."""
+    expand_assignments_enabled = expand_assignments_enabled or expand_assignments_from_coarse
     if Path(catalog_path).expanduser().resolve() != _session.catalog_path:
         raise ValueError("Request catalog path does not match SearchV2Session.")
     if Path(map_path).expanduser().resolve() != _session.map_path:
@@ -2427,6 +2428,7 @@ def search_v2_files(
     _request_started_at: float | None = None,
 ) -> LocalizationResult:
     """Run one cold v2 request, preserving the historical file API."""
+    expand_assignments_enabled = expand_assignments_enabled or expand_assignments_from_coarse
     clock = perf_counter
     started = clock() if _request_started_at is None else _request_started_at
     _preflight_search_config(config_path, algorithm=algorithm, device_ids=device_ids)
