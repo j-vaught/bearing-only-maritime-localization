@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/a22-pre-los/tools/profile_pre_los_bound.py", line 658, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/a22-pre-los/tools/profile_pre_los_bound.py", line 396, in main
+    audit["position_xy_m"]
+    ~~~~~^^^^^^^^^^^^^^^^^
+KeyError: 'position_xy_m'
