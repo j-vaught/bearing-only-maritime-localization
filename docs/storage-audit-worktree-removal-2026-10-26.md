@@ -174,3 +174,98 @@ The cumulative measured reclaim in this cleanup sequence is 1,884,401,664 bytes.
 No additional checkout met the same strict rule after this pass. The remaining large inactive candidates a04-wedge-projection, a11-coverage-certificate, a33-calibration-binding, and a36-session-3185116 have shared UV cache editable-finder files containing absolute source paths into those checkouts. Removing their directories would leave persistent shared-cache path mappings, so they were retained. a08-coast-base has immutable map-manifest source paths and was retained. The A37 integration and parallel-review checkouts have shared-cache path mappings and remain protected. The A32, A35, A39, A26, assignment-expansion, reviewer, parallel-expansion, root-environment, shared-cache, frozen scorer configuration, output, dataset, and evidence paths remain protected. The small older checkouts were not removed because each has shared UV cache editable-finder path mappings.
 
 No further safe reclaimable duplicate checkout was identified. No cache, dataset, output, source, evidence, manifest, branch, or remote ref was deleted or modified. The cleanup stopped below the 44.5 GB target because the remaining candidates violate the path-dependency or protection rules.
+
+## Cache-mapping-only cleanup and reserve checkpoint
+
+The fresh reading at 2026-10-26T14:07:15Z was 41,182,044,160 free bytes, below the 40 GiB floor. The root virtual environment editable mapping pointed only to the root checkout. The candidate virtual environments were not active. Current process maps, current directories, executables, and descriptors were checked for every removed path. No candidate had an active process pathname reference. Absolute-path searches found either only shared UV editable-finder metadata or no external path. No output, archive, manifest, dataset, source-pin, or immutable artifact path referenced the removed worktrees.
+
+The following four clean, fully pushed inactive checkouts had only shared UV editable-finder metadata as external references. Their branch tips matched their remote tips, tracked and untracked status was clean, and their regenerable environment files were not active.
+
+| Removed path | Pushed branch and commit | Measured physical reclaim |
+| --- | --- | ---: |
+| .agent-work/worktrees/a04-wedge-projection | accuracy/a04-wedge-projection at 5828ac254eaf7e1d3133821ef92b26f5090f414a | 179,429,376 |
+| .agent-work/worktrees/a11-coverage-certificate | accuracy/a11-coverage-certificate at 54f48c4a93bc11198efcfc59304d7a43ff85bb88 | 207,630,336 |
+| .agent-work/worktrees/a33-calibration-binding | accuracy/a33-calibration-binding at f2bb64f22b46d18f1ebad187c0f0dd781be74407 | 166,825,984 |
+| .agent-work/worktrees/a36-session-3185116 | accuracy/a36-session-3185116 at b50a362f933d1758886f3cf96d013d8b0c9187c7 | 167,915,520 |
+
+The measured total for these four removals was 721,801,216 bytes. The shared cache files remain untouched.
+
+The next clean, fully pushed inactive checkout had no external absolute path reference, no symlink, and no active process pathname reference.
+
+| Removed path | Pushed branch and commit | Measured physical reclaim |
+| --- | --- | ---: |
+| .agent-work/worktrees/a17-legacy-regression | accuracy/a17-legacy-regression at 73d864737ae9c7cce05fc95da6b7828983059028 | 168,153,088 |
+
+The next nine checkouts had only shared UV editable-finder metadata as external references. Their branch tips matched their pushed refs, their status was clean, and ignored content was limited to test caches, bytecode, package metadata, or regenerable environments.
+
+| Removed path | Pushed branch and commit | Measured physical reclaim |
+| --- | --- | ---: |
+| .agent-work/worktrees/a01 | accuracy/a01 at 503e224a68d0f6c69166fe704a0b25de35d74609 | 25,833,472 |
+| .agent-work/worktrees/a02 | accuracy/a02 at 1f5fa669575310625b9ec53e43b464b68a5693b8 | 25,362,432 |
+| .agent-work/worktrees/a03 | accuracy/a03 at cdf9d0e20dae414589ea206be03eddcf47f10462 | 26,292,224 |
+| .agent-work/worktrees/a04 | accuracy/a04 at c5f64f36a2003da0963bdce00de64c2778a2e48a | 25,653,248 |
+| .agent-work/worktrees/a05 | accuracy/a05 at 769e67c58759f9d5afe95fbb6c23b5d8328fe1e4 | 25,608,192 |
+| .agent-work/worktrees/a07 | accuracy/a07 at d586462dee51b9fddee1cdfe330a664bf50ce062 | 25,759,744 |
+| .agent-work/worktrees/a09 | accuracy/a09 at 424af134f0803b97ec2a1b7ed282fe0cae1fb370 | 25,653,248 |
+| .agent-work/worktrees/a10 | accuracy/a10 at 59a3a810f994c8abf07338e19e9e1abe05410cae | 26,456,064 |
+| .agent-work/worktrees/a11 | accuracy/a11 at 68a94ccc5913e071819908c8ec881f6fc3970df6 | 25,423,872 |
+
+The measured total for those nine removals was 232,042,496 bytes.
+
+Five more clean, fully pushed inactive checkouts passed the same cache-only path test.
+
+| Removed path | Pushed branch and commit | Measured physical reclaim |
+| --- | --- | ---: |
+| .agent-work/worktrees/a12 | accuracy/a12 at d2e745286c1c3b210897e7fbe9b0479e5df8b9d1 | 25,477,120 |
+| .agent-work/worktrees/a13 | accuracy/a13 at e409b764aeb31ad6902e91524d2b22998de45ab3 | 26,177,536 |
+| .agent-work/worktrees/a15 | accuracy/a15 at 974d9bf8bd5e4d3b8d5654a13157936f81d8b5db | 25,845,760 |
+| .agent-work/worktrees/a16 | accuracy/a16 at c751c07281e94d2cd7febe2f6c3f7f2b57cb42f2 | 25,726,976 |
+| .agent-work/worktrees/a16-geodesic | accuracy/a16-geodesic at 4b963e357d640b17e841fc2dd847381764b0bb3c | 135,352,320 |
+
+The measured total for those five removals was 238,579,712 bytes.
+
+Ten final cache-mapping-only checkouts passed the same checks.
+
+| Removed path | Pushed branch and commit | Measured physical reclaim |
+| --- | --- | ---: |
+| .agent-work/worktrees/a17 | accuracy/a17 at f6108b384577c3a30546eb4f27909dd32f6530fc | 26,324,992 |
+| .agent-work/worktrees/a18 | accuracy/a18 at 19582279bf7cf618371f1b003f1b9ac58b873b2f | 26,095,616 |
+| .agent-work/worktrees/a23 | accuracy/a23 at aa1eee37e33a9e6c03e1225ec3cd20d669115453 | 26,161,152 |
+| .agent-work/worktrees/a24 | accuracy/a24 at 4cb7dcdc11dc02d709e8ccce6ec7f7b107be06ec | 26,423,296 |
+| .agent-work/worktrees/a25 | accuracy/a25 at 4d7999f127a7cca67acfc5e0791db46342829495 | 26,210,304 |
+| .agent-work/worktrees/a28 | accuracy/a28 at ca9510d5981444a2d76cf285f6d46e1299efc7cb | 26,447,872 |
+| .agent-work/worktrees/a31 | accuracy/a31 at 1fe707c4cfa8ffdb870281f74d12424a7bec883a | 25,862,144 |
+| .agent-work/worktrees/a33 | accuracy/a33 at be0e01adad32f67e61350b4dbdd7f9001f284c87 | 28,786,688 |
+| .agent-work/worktrees/a36 | accuracy/a36 at 4189bba4ce0bce3e221370c8f50835c2f6c96ce1 | 29,720,576 |
+| .agent-work/worktrees/a38 | accuracy/a38 at 44b408b8c50711160a30ef569ff3b472338748dc | 29,376,512 |
+
+The measured total for these ten removals was 271,409,152 bytes.
+
+The final cache-mapping-only base checkout was clean, fully pushed, inactive, and had only one shared UV editable-finder reference.
+
+| Removed path | Pushed branch and commit | Measured physical reclaim |
+| --- | --- | ---: |
+| .agent-work/worktrees/a19 | accuracy/a19 at d71ea5365b450969156d55a98197bdbbda43cb9a | 25,894,912 |
+
+The total measured reclaim in this reserve pass was 1,657,880,576 bytes. The free-space reading after the pass was 44,614,053,888 bytes at 2026-10-26T14:12:00Z. This is above the 44.5 GB working target and 1,664,380,928 bytes above the 40 GiB floor. The free-space change includes only the per-removal deltas reported above; any later filesystem movement remains unattributed.
+
+No further nonprotected cache-mapping-only candidate was identified that would provide the remaining 483,102,720 bytes (approximately 461 MiB) needed for a full 2 GiB margin above the reserve. The concrete blockers are the A06 pre-LOS checkouts, the A14 preparation and review checkouts, and the A21 analysis and pre-LOS checkouts. They are clean and pushed in several cases but remain protected by current ownership and evaluation scope. The coast-base checkout has immutable map-manifest references. The A32, A26, A35, reviewer, A37 CPU, A39, assignment-expansion, parallel-expansion, root-environment, frozen scorer configuration, output, dataset, and evidence paths remain protected.
+
+The largest unique-link UV cache files retained for possible later cache-only review were as follows. Link count was one for each listed file.
+
+| Size bytes | Category | Path |
+| ---: | --- | --- |
+| 25,094,609 | SciPy OpenBLAS shared library | .agent-work/cache/uv/archive-v0/lfZKhQdIed525Ubi/scipy.libs/libscipy_openblas-5f890258.so |
+| 24,325,657 | NumPy OpenBLAS shared library | .agent-work/cache/uv/archive-v0/p9ofA8dpPYbcTgpH/numpy.libs/libscipy_openblas64_-f48b354e.so |
+| 10,633,113 | NumPy extension module | .agent-work/cache/uv/archive-v0/p9ofA8dpPYbcTgpH/numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so |
+| 10,207,232 | PROJ database | .agent-work/cache/uv/archive-v0/xqUN6fOnZN91yLjm/pyproj/proj_dir/share/proj/proj.db |
+| 6,756,048 | SciPy HiGHS extension | .agent-work/cache/uv/archive-v0/lfZKhQdIed525Ubi/scipy/optimize/_highspy/_core.cpython-313-x86_64-linux-gnu.so |
+| 6,264,161 | PROJ curl library | .agent-work/cache/uv/archive-v0/xqUN6fOnZN91yLjm/pyproj.libs/libcurl-27c1359b.so.4.8.0 |
+| 5,254,185 | Shapely GEOS library | .agent-work/cache/uv/archive-v0/KOqwW5bv37QviWSg/shapely.libs/libgeos-d1e818bb.so.3.14.1 |
+| 4,828,657 | PROJ library | .agent-work/cache/uv/archive-v0/xqUN6fOnZN91yLjm/pyproj.libs/libproj-bde9a34c.so.25.9.8.1 |
+| 4,107,536 | Ruff index database | .agent-work/cache/uv/simple-v22/pypi/ruff.rkyv |
+| 4,098,216 | NumPy index database | .agent-work/cache/uv/simple-v22/pypi/numpy.rkyv |
+| 1,335,024 | SciPy index database | .agent-work/cache/uv/simple-v22/pypi/scipy.rkyv |
+| 1,232,904 | Type-checker index database | .agent-work/cache/uv/simple-v22/pypi/ty.rkyv |
+
+No UV cache file was deleted or modified. Branch refs and all unique data and evidence remain preserved in the common repository or retained paths.
