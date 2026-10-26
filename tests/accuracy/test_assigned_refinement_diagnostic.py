@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from bearing_localization.search.assigned_bearing_refinement import AssignedBearingRefinementResult
-from bearing_localization.search.scoring import CandidateEvaluation
+from bearing_localization.search.likelihood import LikelihoodCostMatrix
+from bearing_localization.search.prediction import PredictedGroupSet
+from bearing_localization.search.scoring import CandidateEvaluation, CandidateScorer
 from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
 from tools.run_assigned_refinement_diagnostic import (
     DiagnosticInputError,
@@ -136,7 +139,12 @@ class FakeScorer:
         self.exact = exact
 
     def evaluate(self, _position: tuple[float, float]) -> CandidateEvaluation:
-        return CandidateEvaluation("scored", self.exact, object(), object())
+        return CandidateEvaluation(
+            "scored",
+            self.exact,
+            cast(PredictedGroupSet, object()),
+            cast(LikelihoodCostMatrix, object()),
+        )
 
 
 def test_solver_exception_is_retained_as_explicit_partial_step() -> None:
@@ -145,7 +153,9 @@ def test_solver_exception_is_retained_as_explicit_partial_step() -> None:
     def failed(_scorer, _hypothesis):
         raise RuntimeError("solver failed")
 
-    result = run_start(FakeScorer(source), source, "cached_hypothesis", proposer=failed)
+    result = run_start(
+        cast(CandidateScorer, FakeScorer(source)), source, "cached_hypothesis", proposer=failed
+    )
     assert result.stop_reason == "proposal_exception"
     assert result.steps[0]["status"] == "proposal_exception"
     assert result.final_hypothesis == source
@@ -158,7 +168,12 @@ def test_timeout_propagates_to_outer_interrupted_state() -> None:
         raise TimeoutError("deadline")
 
     with pytest.raises(TimeoutError, match="deadline"):
-        run_start(FakeScorer(source), source, "cached_hypothesis", proposer=interrupted)
+        run_start(
+            cast(CandidateScorer, FakeScorer(source)),
+            source,
+            "cached_hypothesis",
+            proposer=interrupted,
+        )
 
 
 def test_max_nfev_is_a_failure_stop_and_not_an_accepted_step() -> None:
@@ -179,7 +194,9 @@ def test_max_nfev_is_a_failure_stop_and_not_an_accepted_step() -> None:
             message="maximum evaluations",
         )
 
-    result = run_start(FakeScorer(source), source, "refined_mode.hypothesis", proposer=maxed)
+    result = run_start(
+        cast(CandidateScorer, FakeScorer(source)), source, "refined_mode.hypothesis", proposer=maxed
+    )
     assert result.stop_reason == "max_nfev"
     assert result.final_hypothesis == source
 
@@ -188,7 +205,7 @@ def test_stale_initial_score_is_rejected() -> None:
     source = hypothesis(score=99.0)
     canonical = hypothesis(score=3.0)
     with pytest.raises(DiagnosticInputError, match="score"):
-        run_start(FakeScorer(canonical), source, "cached_hypothesis")
+        run_start(cast(CandidateScorer, FakeScorer(canonical)), source, "cached_hypothesis")
 
 
 def test_ranking_schema_names_selected_mode_scope() -> None:
