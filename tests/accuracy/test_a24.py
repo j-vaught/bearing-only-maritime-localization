@@ -25,9 +25,11 @@ from maritime_localization_shared.contracts.localization import (
     UncertaintyEllipse,
 )
 
-calibrate = runpy.run_path(
+calibration_tool = runpy.run_path(
     str(Path(__file__).resolve().parents[2] / "tools" / "calibrate_accuracy_decision.py")
-)["calibrate"]
+)
+calibrate = calibration_tool["calibrate"]
+measure = calibration_tool["_measure"]
 
 
 def _calibration(gap: float = 2.0, radius: float | None = 100.0) -> DecisionCalibration:
@@ -94,12 +96,23 @@ def _coverage(
     search_extent_m: float = 1000.0,
     coverage_complete: bool = True,
     global_bound_excludes_outside: bool = False,
+    distant_region_score_lower_bound: float | None = None,
+    distant_region_bound_scope: str | None = None,
+    distant_region_bound_anchor: tuple[float, float] | None = None,
 ) -> CompetitorCoverageEvidence:
     return CompetitorCoverageEvidence(
         evaluated_candidate_count=evaluated_candidate_count,
         search_extent_m=search_extent_m,
         coverage_complete=coverage_complete,
         global_bound_excludes_outside=global_bound_excludes_outside,
+        distant_region_score_lower_bound=distant_region_score_lower_bound,
+        distant_region_bound_scope=distant_region_bound_scope,
+        distant_region_bound_top_east_m=(
+            None if distant_region_bound_anchor is None else distant_region_bound_anchor[0]
+        ),
+        distant_region_bound_top_north_m=(
+            None if distant_region_bound_anchor is None else distant_region_bound_anchor[1]
+        ),
     )
 
 
@@ -193,14 +206,25 @@ def test_zero_gap_continuous_certificate_can_exclude_outside():
     decision = decide_localization(
         result,
         _calibration(),
-        coverage=_coverage(global_bound_excludes_outside=True),
+        coverage=_coverage(
+            global_bound_excludes_outside=True,
+            distant_region_score_lower_bound=3.0,
+            distant_region_bound_scope="all_objective_positions_at_least_100m_from_top",
+            distant_region_bound_anchor=(0.0, 0.0),
+        ),
         mode_evidence=(_mode(result.hypotheses[0]),),
     )
     assert decision.decision_status == "accepted"
     small_declared_extent = decide_localization(
         result,
         _calibration(),
-        coverage=_coverage(search_extent_m=1.0, global_bound_excludes_outside=True),
+        coverage=_coverage(
+            search_extent_m=1.0,
+            global_bound_excludes_outside=True,
+            distant_region_score_lower_bound=3.0,
+            distant_region_bound_scope="all_objective_positions_at_least_100m_from_top",
+            distant_region_bound_anchor=(0.0, 0.0),
+        ),
         mode_evidence=(_mode(result.hypotheses[0]),),
     )
     assert small_declared_extent.decision_status == "accepted"
@@ -265,3 +289,104 @@ def test_calibration_can_fail_availability_without_weakening_accuracy_gate():
     assert artifact["status"] == "FAIL"
     assert artifact["metrics"]["availability"] < 0.90
     assert artifact["metrics"]["conditional_accuracy"] == 1.0
+
+
+def _global_proof_trial(**updates):
+    row = {
+        "search_status": "completed",
+        "distinct_matched_groups": 3,
+        "ellipse_rank": 2,
+        "radius_95_m": 25.0,
+        "error_m": 10.0,
+        "evaluated_candidate_count": 10,
+        "candidate_outcome_counts_available": True,
+        "unresolved_candidate_count": 0,
+        "unresolved_region_count": 0,
+        "coverage_complete": True,
+        "global_bound_excludes_outside": True,
+        "candidate_certificate_scope": "continuous_objective",
+        "candidate_bound_gap": 0.0,
+        "top_score": 0.0,
+        "top_east_m": 0.0,
+        "top_north_m": 0.0,
+        "score_tolerance": 1e-12,
+        "distant_region_score_lower_bound": 3.0,
+        "distant_region_bound_scope": "all_objective_positions_at_least_100m_from_top",
+        "distant_region_bound_top_east_m": 0.0,
+        "distant_region_bound_top_north_m": 0.0,
+        "global_exclusion_verified": True,
+        "raw_distant_hypothesis_veto_evidence": [],
+    }
+    return row | updates
+
+
+def test_calibration_grid_uses_margin_aware_global_proof_without_mode_score_gap():
+    proof = _global_proof_trial()
+    assert measure([proof], 2.0, None)["accepted_trials"] == 1
+    assert measure([proof], 4.0, None)["accepted_trials"] == 0
+    no_distant_margin = _global_proof_trial(distant_region_score_lower_bound=1.0)
+    assert measure([no_distant_margin], 2.0, None)["accepted_trials"] == 0
+
+
+def test_calibration_raw_tie_veto_and_exact_zero_mode_gap_match_runtime():
+    proof = _global_proof_trial(
+        raw_distant_hypothesis_veto_evidence=[{"score_gap": 0.0, "score_tolerance": 1e-12}]
+    )
+    assert measure([proof], 0.0, None)["accepted_trials"] == 0
+    mode = {
+        "search_status": "completed",
+        "distinct_matched_groups": 3,
+        "ellipse_rank": 2,
+        "meaningful_distant_coverage": True,
+        "score_gap": 0.0,
+        "score_tolerance": 1e-12,
+        "radius_95_m": 25.0,
+        "error_m": 10.0,
+    }
+    assert measure([mode], 0.0, None)["accepted_trials"] == 0
+
+
+def test_calibration_uses_runtime_serialized_converged_mode_predicate():
+    row = {
+        "search_status": "completed",
+        "distinct_matched_groups": 3,
+        "ellipse_rank": 2,
+        "radius_95_m": 25.0,
+        "error_m": 10.0,
+        "evaluated_candidate_count": 10,
+        "candidate_outcome_counts_available": True,
+        "unresolved_candidate_count": 0,
+        "top_east_m": 0.0,
+        "top_north_m": 0.0,
+        "top_score": 0.0,
+        "mode_evidence": [
+            {
+                "east_m": 0.0,
+                "north_m": 0.0,
+                "score": 0.0,
+                "matched_catalog_keys": ["a", "b", "c"],
+                "radius_95_m": 25.0,
+                "stop_reason": "displacement_below_0_01m",
+            },
+            {
+                "east_m": 1000.0,
+                "north_m": 0.0,
+                "score": 3.0,
+                "matched_catalog_keys": ["d", "e", "f"],
+                "radius_95_m": 25.0,
+                "stop_reason": "relative_improvement_below_1e-8",
+            },
+        ],
+    }
+    assert measure([row], 2.0, None)["accepted_trials"] == 1
+    assert measure([row], 3.0, None)["accepted_trials"] == 1
+    assert measure([row], 3.0001, None)["accepted_trials"] == 0
+    raw_far = row | {"mode_evidence": [row["mode_evidence"][0]]}
+    assert measure([raw_far], 0.0, None)["accepted_trials"] == 0
+    unfinished = row | {
+        "mode_evidence": [
+            row["mode_evidence"][0],
+            row["mode_evidence"][1] | {"stop_reason": "iteration_limit"},
+        ]
+    }
+    assert measure([unfinished], 0.0, None)["accepted_trials"] == 0
