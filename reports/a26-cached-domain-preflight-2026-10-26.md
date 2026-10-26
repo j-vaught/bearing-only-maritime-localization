@@ -14,12 +14,12 @@ The frozen input SHA-256 values are measurements `ed1145cee93d4f06ffa983f671319d
 
 ## Generation result
 
-The generator processed all 333,340 source pairs and emitted 1,457,546 candidate cells. It examined 83,001,660 geodesic samples. No source pair or geodesic sample failed, and no generation budget was exhausted. The cache records 66,668 witness keys and 24,328,107 witness edges. The maximum solver residual was (5.010917902836809\times10^{-8}\) degrees against a (10^{-7}\)-degree tolerance.
+The generator processed all 333,340 source pairs and emitted 1,457,546 candidate cells. It examined 83,001,660 geodesic samples. No source pair or geodesic sample failed, and no generation budget was exhausted. The cache records 66,668 witness keys and 24,328,107 witness edges. The maximum solver residual was $5.010917902836809\times10^{-8}$ degrees against a $10^{-7}$-degree tolerance.
 
 Generation took 351.697 seconds, cache publication took 49.876 seconds, and the serialized request took 435.181 seconds. The external one-shot wall time was 437.944 seconds, including 12.608 seconds of session startup. Exact scoring was limited to one candidate and refinement was disabled. The emitted estimate therefore reports `budget_exhausted`; it must not be used as an accuracy outcome.
 
 ## Reproduction artifacts
 
-The adjacent `cache-build` directory contains the original run manifest, telemetry, estimate, configuration, standard output, and standard error. The run manifest records the exact command arguments, source hashes, input hashes, cache path, byte size, and output hashes. The manifest SHA-256 is `13bd1e6c6cc38ba1a35ad5b816b86452b49038dc77cbba770994ecfacf088193`; telemetry SHA-256 is `dae95503bbc2dfa9a133f1a4602e0ce57eaac2252e33f8ca60113862dc95a971`; estimate SHA-256 is `ca503ebcbb2453a7d510992d20a1ce3ecec0463bad215fd15b7008b1209537f4`; and configuration SHA-256 is `a2a306c545b05173105f5c2c7409e603d20497e8193e01c3b773321b54f1675b`.
+The tracked [cache-build directory](../data/accuracy/diagnostics/2026-10-26/a26-cached-domain/cache-build) contains the original run manifest, telemetry, estimate, configuration, standard output, and standard error. The run manifest records the exact command arguments, source hashes, input hashes, cache path, byte size, and output hashes. The manifest SHA-256 is `13bd1e6c6cc38ba1a35ad5b816b86452b49038dc77cbba770994ecfacf088193`; telemetry SHA-256 is `dae95503bbc2dfa9a133f1a4602e0ce57eaac2252e33f8ca60113862dc95a971`; estimate SHA-256 is `ca503ebcbb2453a7d510992d20a1ce3ecec0463bad215fd15b7008b1209537f4`; and configuration SHA-256 is `a2a306c545b05173105f5c2c7409e603d20497e8193e01c3b773321b54f1675b`.
 
 The cache payload itself remains in the server output tree rather than this tracked evidence directory. Its manifest and telemetry are tracked here so the later scoring run can be tied back to the exact cache-generation event without copying the 126 MB cache.
