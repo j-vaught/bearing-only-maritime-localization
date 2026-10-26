@@ -83,8 +83,18 @@ def _scenario(use_types: bool):
 
 
 @pytest.mark.parametrize("use_types", [False, True])
-def test_screened_finite_search_matches_full_exact_winners_and_ties(use_types):
+def test_screened_finite_search_matches_full_exact_winners_and_ties(use_types, monkeypatch):
+    import bearing_localization.search.screened_search as search_module
+
     scorer, points, observer_b = _scenario(use_types)
+    screen_calls = []
+    original_screen = search_module.screen_candidate_visibility
+
+    def counted_screen(*args, **kwargs):
+        screen_calls.append(kwargs)
+        return original_screen(*args, **kwargs)
+
+    monkeypatch.setattr(search_module, "screen_candidate_visibility", counted_screen)
     direct = [scorer.evaluate(point.position_xy_m) for point in points]
     result = screened_candidate_search(
         scorer,
@@ -124,6 +134,8 @@ def test_screened_finite_search_matches_full_exact_winners_and_ties(use_types):
     busy_visit = next(item for item in result.visits if item.candidate_id == "busy-bridge-groups")
     busy_exact = direct[1]
     assert busy_visit.action == "pruned"
+    assert len(screen_calls) == 2
+    assert all(call["scan_all_members"] is True for call in screen_calls)
     assert busy_visit.visibility is not None
     assert busy_visit.visibility.minimum_visible_group_count <= len(busy_exact.predicted.groups)
     assert busy_visit.visibility.ray_check_count < len(scorer._prediction_context.records)
@@ -420,49 +432,3 @@ def test_land_and_unknown_candidates_use_exact_water_status_without_visibility_s
     assert result.unresolved_count == 1
     assert result.pruned_count == 0
     assert result.certificate_scope == "none"
-
-
-def test_useful_group_threshold_is_cached_while_incumbent_and_margin_hold(monkeypatch):
-    import bearing_localization.search.screened_search as search_module
-
-    x, y = xy()
-    scorer = CandidateScorer(
-        MeasurementSetV2((MeasurementV2(0.0, TIMESTAMP, 0.5, "vessel"),)),
-        catalog(),
-        vmap(),
-        SearchConfig(bounds_xy=(x - 1_000, x + 1_000, y - 1_000, y + 1_000)),
-    )
-    points = (
-        CandidatePosition("first", (x - 500, y)),
-        CandidatePosition("second", (x, y)),
-        CandidatePosition("third", (x + 500, y)),
-    )
-    original = search_module._minimum_useful_group_threshold
-    call_count = 0
-
-    def counted_threshold(*args):
-        nonlocal call_count
-        call_count += 1
-        return original(*args)
-
-    monkeypatch.setattr(
-        search_module,
-        "_minimum_useful_group_threshold",
-        counted_threshold,
-    )
-    result = screened_candidate_search(
-        scorer,
-        points,
-        visit_budget=3,
-        complete_candidate_count=3,
-    )
-
-    assert tuple(visit.action for visit in result.visits) == (
-        "exact_scored",
-        "exact_scored",
-        "exact_scored",
-    )
-    assert len(result.hypotheses) == 3
-    assert result.hypotheses[0].score == result.hypotheses[1].score
-    assert result.hypotheses[1].score == result.hypotheses[2].score
-    assert call_count == 1
