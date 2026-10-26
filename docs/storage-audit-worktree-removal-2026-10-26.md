@@ -89,3 +89,17 @@ The sum of individual measured reclaims in this alias-verification pass was 2,07
 
 Across the original seven removals and these twelve alias-verified removals, the measured reclaim is 3,378,491,392 bytes. No further removal was performed after this verification pass while the active computation remained running.
 
+
+
+## Bounded expansion-runner triage
+
+A new active assignment expansion process was present at 2026-10-26T12:53:10Z. Process 2613750 ran from .agent-work/worktrees/assignment-expansion-runner with the root .venv Python executable. Its command consumed assigned-bearing refinement and A20 outputs, wrote assignment-expansion-diagnostic-v1, and held the project benchmark lock. The runner, its shell parent, its working directory, its output paths, its lock, the root environment, and all named protected worktrees were excluded from cleanup. No active process map, current directory, executable, or file descriptor was used as a removal target.
+
+The available-space reading was 44,853,968,896 bytes at 12:53:10Z and 44,852,613,120 bytes at 12:54:13Z. The observed decline of 1,355,776 bytes is not attributed to the active computation.
+
+The remaining nonprotected worktree inventory was screened for exact remote tip equality, clean tracked and untracked state, and top-level tracked content. Forty-five clean, fully pushed worktrees remained in the candidate inventory. They were a01, a02, a03, a04, a04-solver-correction, a04-wedge-projection, a05, a07, a08-coast-base, a09, a10, a11, a11-coverage-certificate, a12, a13, a13-geodesic-reuse, a15, a16, a16-geodesic, a17, a17-legacy-regression, a18, a19, a23, a24, a25, a28, a29, a31, a32, a33, a33-acceptance, a33-calibration-binding, a33-geodesic-seeded, a33-proposal-cache, a33-static-session, a33-support-compat, a33-wedge-complete, a33-wedge-geodesic, a38, storage-audit, storage-audit-a37, storage-audit-a37-resume, and storage-audit-envs.
+
+Every one of those 45 worktrees contains tracked data/ and results/ paths. Several also contain tracked benchmarks/, reports/, or .agent-work/ experiment records. These paths include preserved inputs, experiment outputs, manifests, source pins, and configuration material. Removing any of these worktrees would delete a data, evidence, result, or source-pinned checkout path, so none met the current cleanup rule. The protected A21, A27, A35, A37, A39, assignment expansion, assigned bearing refinement, A20, A26, root environment, and shared cache paths were also left untouched.
+
+No worktree was removed in this triage. No branch, source, dataset, evidence, cache, manifest, configuration, result, or process was modified. No global free-space change was attributed to background activity. Further cleanup requires a changed scope that permits removal of these tracked data and result checkout copies.
+
