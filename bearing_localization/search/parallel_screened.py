@@ -77,21 +77,67 @@ class ParallelScreenedTimings:
     worker_rss_bytes: tuple[tuple[int, int], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class CandidatePoolDisposition:
+    """Disjoint per-ID state for one request at failure or cancellation."""
+
+    consumed_candidate_ids: tuple[str, ...]
+    submitted_candidate_ids: tuple[str, ...]
+    committed_candidate_ids: tuple[str, ...]
+    pending_candidate_ids: tuple[str, ...]
+    failed_candidate_ids: tuple[str, ...]
+    outstanding_candidate_ids: tuple[str, ...]
+    not_dispatched_candidate_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        categories = (
+            self.committed_candidate_ids,
+            self.pending_candidate_ids,
+            self.failed_candidate_ids,
+            self.outstanding_candidate_ids,
+        )
+        flattened = [candidate_id for category in categories for candidate_id in category]
+        if len(flattened) != len(set(flattened)):
+            raise ValueError("submitted candidate dispositions must be pairwise disjoint.")
+        outcome_ids = set(flattened)
+        if outcome_ids != set(self.submitted_candidate_ids):
+            raise ValueError("every submitted candidate must have exactly one disposition.")
+        all_categories = flattened + list(self.not_dispatched_candidate_ids)
+        if len(all_categories) != len(set(all_categories)):
+            raise ValueError("consumed candidate dispositions must be pairwise disjoint.")
+        if set(all_categories) != set(self.consumed_candidate_ids):
+            raise ValueError("every consumed candidate must have exactly one disposition.")
+
+    @property
+    def completed_count(self) -> int:
+        """Number of chunk results yielded to the caller."""
+        return len(self.committed_candidate_ids)
+
+    @property
+    def pending_count(self) -> int:
+        return len(self.pending_candidate_ids)
+
+    @property
+    def failed_count(self) -> int:
+        return len(self.failed_candidate_ids)
+
+    @property
+    def outstanding_count(self) -> int:
+        return len(self.outstanding_candidate_ids)
+
+
 class ParallelScreenedError(RuntimeError):
-    def __init__(
-        self,
-        message: str,
-        *,
-        completed_count: int,
-        failed_count: int,
-        outstanding_count: int,
-        failed_candidate_ids: tuple[str, ...] = (),
-    ) -> None:
+    def __init__(self, message: str, disposition: CandidatePoolDisposition) -> None:
         super().__init__(message)
-        self.completed_count = completed_count
-        self.failed_count = failed_count
-        self.outstanding_count = outstanding_count
-        self.failed_candidate_ids = failed_candidate_ids
+        self.disposition = disposition
+        self.completed_count = disposition.completed_count
+        self.pending_count = disposition.pending_count
+        self.failed_count = disposition.failed_count
+        self.outstanding_count = disposition.outstanding_count
+        self.failed_candidate_ids = disposition.failed_candidate_ids
+        self.pending_candidate_ids = disposition.pending_candidate_ids
+        self.outstanding_candidate_ids = disposition.outstanding_candidate_ids
+        self.not_dispatched_candidate_ids = disposition.not_dispatched_candidate_ids
 
 
 @dataclass(frozen=True, slots=True)
@@ -375,6 +421,7 @@ class ParallelScreenedCandidatePool:
         self._startup = 0.0
         self._closed = self._failed = self._active = False
         self._timings = ParallelScreenedTimings(0, 0, 0, 0, 0, 0, 0, 0, 0, ())
+        self._last_disposition = CandidatePoolDisposition((), (), (), (), (), (), ())
         start = perf_counter()
         try:
             for wid in range(workers):
@@ -409,6 +456,11 @@ class ParallelScreenedCandidatePool:
     @property
     def last_timings(self) -> ParallelScreenedTimings:
         return self._timings
+
+    @property
+    def last_disposition(self) -> CandidatePoolDisposition:
+        """Return the last request's committed, pending, failed, and outstanding IDs."""
+        return self._last_disposition
 
     def iter_chunks(
         self,
@@ -452,6 +504,10 @@ class ParallelScreenedCandidatePool:
         request = uuid.uuid4().hex
         source = iter(candidates)
         seen = set()
+        consumed_ids: list[str] = []
+        submitted_ids: list[str] = []
+        committed_ids: list[str] = []
+        failed_ids: set[str] = set()
         input_n = dispatch = yielded = completed = failed = unresolved = 0
         sizes = {}
         ids = {}
@@ -476,6 +532,7 @@ class ParallelScreenedCandidatePool:
                         if item.candidate_id in seen:
                             raise ValueError(f"duplicate candidate ID {item.candidate_id!r}")
                         seen.add(item.candidate_id)
+                        consumed_ids.append(item.candidate_id)
                         points.append(
                             _Point(
                                 item.candidate_id,
@@ -501,6 +558,7 @@ class ParallelScreenedCandidatePool:
                             if deadline and perf_counter() >= deadline:
                                 raise TimeoutError("request timed out")
                             _dead(self._procs, "while dispatching")
+                    submitted_ids.extend(ids[dispatch])
                     dispatch += 1
                 if eof and complete is not None and input_n != complete:
                     raise ValueError(f"candidate count {input_n} != declared {complete}")
@@ -529,9 +587,11 @@ class ParallelScreenedCandidatePool:
                     raise RuntimeError(f"duplicate chunk {ci}")
                 if msg.error is None:
                     if msg.chunk is None or len(msg.chunk.audits) != sizes[ci]:
+                        failed_ids.update(ids[ci])
                         raise RuntimeError(f"incomplete chunk {ci}")
                 else:
                     failed += sizes[ci]
+                    failed_ids.update(ids[ci])
                 self._rssmap[msg.pid] = msg.rss
                 setup += msg.setup_s
                 worker_s += msg.eval_s
@@ -542,6 +602,7 @@ class ParallelScreenedCandidatePool:
                         raise RuntimeError(ready.error)
                     chunk = ready.chunk
                     if chunk is None or tuple(a.candidate_id for a in chunk.audits) != ids[yielded]:
+                        failed_ids.update(ids[yielded])
                         raise RuntimeError("chunk candidate IDs mismatch")
                     completed += len(chunk.audits)
                     unresolved += chunk.unresolved
@@ -565,6 +626,11 @@ class ParallelScreenedCandidatePool:
                         estimate,
                         tuple(sorted(self._rssmap.items())),
                     )
+                    committed_ids.extend(audit.candidate_id for audit in chunk.audits)
+                    yielded += 1
+                    self._last_disposition = _make_disposition(
+                        submitted_ids, committed_ids, pending, ids, failed_ids, consumed_ids
+                    )
                     yield ScreenedChunkResult(
                         chunk.index,
                         chunk.audits,
@@ -586,12 +652,17 @@ class ParallelScreenedCandidatePool:
                         final,
                         finite,
                     )
-                    yielded += 1
                     self._memory(estimate)
             success = eof and completed == input_n and failed == 0 and not pending
+            self._last_disposition = _make_disposition(
+                submitted_ids, committed_ids, pending, ids, failed_ids, consumed_ids
+            )
             self._active = False
         except BaseException as exc:
-            outstanding = max(0, input_n - completed - failed)
+            disposition = _make_disposition(
+                submitted_ids, committed_ids, pending, ids, failed_ids, consumed_ids
+            )
+            self._last_disposition = disposition
             self._timings = ParallelScreenedTimings(
                 self._startup,
                 setup,
@@ -599,18 +670,15 @@ class ParallelScreenedCandidatePool:
                 worker_s,
                 perf_counter() - start,
                 input_n,
-                completed,
-                failed,
+                disposition.completed_count,
+                disposition.failed_count,
                 estimate,
                 tuple(sorted(self._rssmap.items())),
             )
             if isinstance(exc, (GeneratorExit, KeyboardInterrupt, SystemExit)):
                 raise
             raise ParallelScreenedError(
-                "parallel request failed; partial output is incomplete",
-                completed_count=completed,
-                failed_count=failed,
-                outstanding_count=outstanding,
+                "parallel request failed; partial output is incomplete", disposition
             ) from exc
         finally:
             if not success:
@@ -672,6 +740,44 @@ class ParallelScreenedCandidatePool:
         self.close()
 
 
+def _make_disposition(
+    submitted_ids: list[str],
+    committed_ids: list[str],
+    pending: dict[int, _Msg],
+    chunk_ids: dict[int, tuple[str, ...]],
+    failed_ids: set[str],
+    consumed_ids: list[str],
+) -> CandidatePoolDisposition:
+    """Partition every consumed ID without promoting buffered output to committed."""
+    submitted = set(submitted_ids)
+    committed = set(committed_ids)
+    pending_ids = {
+        candidate_id
+        for chunk_index, message in pending.items()
+        if message.error is None and message.chunk is not None
+        for candidate_id in chunk_ids[chunk_index]
+    }
+    failed = failed_ids & submitted
+    pending_ids &= submitted
+    pending_ids -= committed | failed
+    outstanding = submitted - committed - failed - pending_ids
+    not_dispatched = set(consumed_ids) - submitted
+    order = {candidate_id: index for index, candidate_id in enumerate(consumed_ids)}
+
+    def sort_ids(values: set[str]) -> tuple[str, ...]:
+        return tuple(sorted(values, key=order.__getitem__))
+
+    return CandidatePoolDisposition(
+        consumed_candidate_ids=tuple(consumed_ids),
+        submitted_candidate_ids=sort_ids(submitted),
+        committed_candidate_ids=sort_ids(committed),
+        pending_candidate_ids=sort_ids(pending_ids),
+        failed_candidate_ids=sort_ids(failed),
+        outstanding_candidate_ids=sort_ids(outstanding),
+        not_dispatched_candidate_ids=sort_ids(not_dispatched),
+    )
+
+
 def _dead(procs: list[Any], phase: str) -> None:
     dead = [p for p in procs if p.exitcode is not None]
     if dead:
@@ -701,6 +807,7 @@ def _rss(pid: int | None = None) -> int:
 
 __all__ = [
     "CandidateAudit",
+    "CandidatePoolDisposition",
     "ParallelScreenedCandidatePool",
     "ParallelScreenedError",
     "ParallelScreenedTimings",
