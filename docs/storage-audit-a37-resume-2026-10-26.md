@@ -8,7 +8,7 @@ Both resume attempts were complete bounded smoke runs. Their manifests reported 
 
 **Full-run exclusion**
 
-The active exact full run was excluded from all mutations. Its output root was `.agent-work/outputs/a26-cached-exact-full-1002d733`, with generation worktree `a26-cachegen-33fded7`, scoring worktree `a26-scoring-0d34a17`, and resumable worktree `a26-resumable`. The active process group had PIDs `2087843`, `2087851`, `2087854`, and `2087862`. It read the canonical prefix-smoke plan path, which was left intact. Adding hardlinks to that canonical file did not change its contents or path.
+The active exact full run was excluded from all mutations. Its output root was `.agent-work/outputs/a26-cached-exact-full-1002d73`, with generation worktree `a26-cachegen-33fded7`, scoring worktree `a26-scoring-0d34a17`, and resumable worktree `a26-resumable`. The active process group had PIDs `2087843`, `2087851`, `2087854`, and `2087862`. It read the canonical prefix-smoke plan path, which was left intact. Adding hardlinks to that canonical file did not change its contents or path.
 
 **Full-hash identity**
 
@@ -22,7 +22,7 @@ Post-operation inode checks gave link count `4` for the canonical and two resume
 
 The first reading was `44,949,225,472` available bytes. Immediately before replacement, the reading was `44,949,200,896` bytes. After hardlink replacement and `sync`, it was `45,807,448,064` bytes. The measured cleanup increase was `858,247,168` bytes. The destination path allocation sum was `1,327,095,808` bytes, but the plan and inventory destinations already shared one inode between attempts before this pass. The physical reclaim therefore consisted of one old plan allocation, one old inventory allocation, and two old disposition allocations, totaling the measured `858,247,168` bytes.
 
-The `24,576` byte decrease between the first and pre-operation readings is background movement. A later reading during the still-active full run was `45,418,934,272` bytes, a decrease of `388,513,792` bytes from the post-cleanup reading. That later decrease is attributed to the active full-run computation and is not subtracted from the measured cleanup reclaim. The reserve floor of `40 GiB` remained satisfied at every reading.
+The `24,576` byte decrease between the first and pre-operation readings is background movement. A later reading during the still-active full run was `45,418,934,272` bytes, a decrease of `388,513,792` bytes from the post-cleanup reading. That later decrease was observed while the full run was active, but its source was not measured. It is not attributed to that run and is not subtracted from the measured cleanup reclaim. The reserve floor of `40 GiB` remained satisfied at every reading.
 
 **Verification**
 
