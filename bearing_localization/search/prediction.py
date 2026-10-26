@@ -22,7 +22,10 @@ from maritime_localization_shared.geometry.angular_grouping import (
     DetectedObject,
     group_angular_detections,
 )
-from maritime_localization_shared.geospatial.coordinates import geodesic_bearing_distance
+from maritime_localization_shared.geospatial.coordinates import (
+    BearingDistance,
+    geodesic_bearing_distance,
+)
 from maritime_localization_shared.geospatial.spatial_index import GeographicSpatialIndex
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 
@@ -304,6 +307,7 @@ def predict_visible_groups(
     unresolved_model_keys: list[str] = []
     identity_limited_keys: list[str] = []
     observer_status = vector_map.point_water_status(observer_xy)
+    los_candidates: list[tuple[_PreparedRecord, BearingDistance, tuple[float, float]]] = []
 
     for record_index in nearby_indices:
         prepared_record = prepared_context.records[record_index]
@@ -338,7 +342,16 @@ def predict_visible_groups(
             continue
         target_east_m, target_north_m = prepared_context.forward.transform(target_lon, target_lat)
         target_xy = (float(target_east_m), float(target_north_m))
-        visibility = vector_map.line_visibility(observer_xy, target_xy)
+        los_candidates.append((prepared_record, geometry, target_xy))
+
+    visibilities = vector_map.line_visibility_many(
+        observer_xy,
+        [target_xy for _, _, target_xy in los_candidates],
+    )
+    for (prepared_record, geometry, _), visibility in zip(
+        los_candidates, visibilities, strict=True
+    ):
+        record = prepared_record.record
         if visibility == "unknown" or observer_status == "unknown":
             unresolved.append(record.key)
             continue
@@ -360,7 +373,7 @@ def predict_visible_groups(
             )
         )
         metadata_by_key[record.key] = prepared_record
-        offset_applied_by_key[record.key] = offset_quality
+        offset_applied_by_key[record.key] = prepared_record.offset_quality
 
     grouped = group_angular_detections(detections, angular_resolution_deg)
     key_to_detection = {item.object_id: item for item in detections}
