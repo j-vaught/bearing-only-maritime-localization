@@ -103,9 +103,12 @@ def _write_events(
 
 def _bundle(root: Path, *, parallel: bool) -> Path:
     root.mkdir(parents=True)
-    completed = 64 if parallel else 60
+    completed = 63 if parallel else 60
     rows = []
-    for mode in range(completed):
+    row_modes = [
+        mode for mode in (range(64) if parallel else range(60)) if not (parallel and mode == 48)
+    ]
+    for mode in row_modes:
         branches = 2 if mode == 60 and parallel else 1
         seed = _hypothesis(3.0)
         rows.append(
@@ -148,8 +151,11 @@ def _bundle(root: Path, *, parallel: bool) -> Path:
             "schema": "assignment-expansion-diagnostic-v1",
             "mode_count": 64,
             "completed_mode_count": completed,
-            "pending_mode_count": 0 if parallel else 4,
-            "status": "completed" if parallel else "interrupted",
+            "pending_mode_count": 4 if not parallel else 1,
+            "pending_mode_ids": [48] if parallel else None,
+            "completed_mode_indices": row_modes if parallel else None,
+            "unknown_mode_indices": [48] if parallel else None,
+            "status": "failed" if parallel else "interrupted",
             "truth_used": False,
             "evaluator_used": False,
             "certificate_scope": "none",
@@ -197,7 +203,7 @@ def _bundle(root: Path, *, parallel: bool) -> Path:
         else [mode for pair in zip(range(32), range(32, 64)) for mode in pair]
     )
     for mode in mode_order:
-        if mode >= completed and not (not parallel and mode == 60):
+        if not parallel and mode >= completed and mode != 60:
             continue
         branches = 2 if mode == 60 else 1
         for branch_id in range(branches):
@@ -234,7 +240,7 @@ def test_valid_partial_serial_prefix_and_complete_parallel_bundle(
     result = evaluator.evaluate(serial, parallel)
     assert result["evaluation_status"] == "provisional"
     assert result["serial_completed_mode_count"] == 60
-    assert result["parallel_completed_mode_count"] == 64
+    assert result["parallel_completed_mode_count"] == 63
     assert result["truth_used"] is False
 
 
@@ -316,6 +322,8 @@ def test_corruptions_are_rejected(
     else:
         manifest = evaluator.read_json(parallel_copy / "manifest.json")
         manifest.pop("assignment_expansion_sha256")
+        for worker in manifest["worker_provenance"]:
+            worker.pop("assignment_expansion_sha256")
         _write_json(parallel_copy / "manifest.json", manifest)
     with pytest.raises(evaluator.EvaluationError):
         evaluator.evaluate(serial_copy, parallel_copy)
@@ -347,7 +355,15 @@ def test_complete_audit_requires_all_64_exact_artifact_hashes(
         "mode_count": 64,
         "completed_mode_count": 64,
         "pending_mode_count": 0,
-        "expansion_status": "completed",
+        "parallel_status": "failed",
+        "parallel_completed_mode_indices": [*range(48), *range(49, 64)],
+        "parallel_pending_mode_indices": [48],
+        "composite_selected_mode_status": "complete",
+        "composite_mode_sources": {
+            str(mode): ("parallel" if mode != 48 else "serial") for mode in range(64)
+        },
+        "serial_completed_mode_count": 60,
+        "serial_pending_mode_count": 4,
         "expansion_event_count": parallel_manifest["event_count"],
         "expansion_event_digest": parallel_manifest["event_digest"],
         "expansion_events_sha256": parallel_manifest["events_sha256"],
@@ -473,3 +489,21 @@ def test_parallel_producer_helpers_emit_validator_accepted_ledger(tmp_path: Path
     assert validated_manifest["event_count"] == 2
     assert len(rows) == 1
     assert len(events) == 2
+
+
+def test_actual_disk_guard_union_is_sparse_and_provisional() -> None:
+    outputs = Path("/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/outputs")
+    result = evaluator.evaluate(
+        outputs / "assignment-expansion-diagnostic-v1",
+        outputs / "parallel-assignment-expansion-diagnostic-v1",
+    )
+    assert result["evaluation_status"] == "provisional"
+    assert result["parallel_status"] == "failed"
+    assert result["parallel_completed_mode_indices"] == [
+        *range(48),
+        *range(49, 64),
+    ]
+    assert result["parallel_pending_mode_indices"] == [48]
+    assert result["composite_selected_mode_status"] == "complete"
+    assert result["composite_mode_sources"]["48"] == "serial"
+    assert result["composite_mode_sources"]["0"] == "parallel"
