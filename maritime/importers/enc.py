@@ -17,6 +17,7 @@ from shapely import make_valid, segmentize, transform
 from shapely.geometry import GeometryCollection, mapping, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
+from shapely.strtree import STRtree
 
 from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
@@ -710,6 +711,7 @@ def compose_scale_fallback_map_v2(
     source: str,
     densify_geographic_edges: bool = True,
     geographic_segment_length_deg: float | None = None,
+    resolve_same_scale_conflicts: bool = True,
 ) -> tuple[MapV2, dict[str, float]]:
     """Compose per-area detailed scales over a complete coarse fallback.
 
@@ -768,24 +770,30 @@ def compose_scale_fallback_map_v2(
         band_coverage = unary_union([coverage for coverage, _ in parts])
         band_land = unary_union([land for _, land in parts])
         conflict_parts: list[BaseGeometry] = []
-        water_parts = [_polygonal_only(coverage.difference(land)) for coverage, land in parts]
-        for index, (first_coverage, first_land) in enumerate(parts):
-            first_water = water_parts[index]
-            for second_index, (second_coverage, second_land) in enumerate(
-                parts[index + 1 :], start=index + 1
-            ):
-                overlap = first_coverage.intersection(second_coverage)
-                if overlap.is_empty:
-                    continue
-                second_water = water_parts[second_index]
-                disagreement = unary_union(
-                    [
-                        first_land.intersection(second_water),
-                        first_water.intersection(second_land),
-                    ]
-                ).intersection(overlap)
-                if not disagreement.is_empty:
-                    conflict_parts.append(disagreement)
+        if resolve_same_scale_conflicts:
+            water_parts = [_polygonal_only(coverage.difference(land)) for coverage, land in parts]
+            coverage_tree = STRtree([coverage for coverage, _ in parts])
+            for index, (first_coverage, first_land) in enumerate(parts):
+                first_water = water_parts[index]
+                for candidate_index in coverage_tree.query(first_coverage):
+                    second_index = int(candidate_index)
+                    if second_index <= index:
+                        continue
+                    second_coverage, second_land = parts[second_index]
+                    overlap = first_coverage.intersection(second_coverage)
+                    if overlap.is_empty:
+                        continue
+                    second_water = water_parts[second_index]
+                    disagreement = _polygonal_only(
+                        unary_union(
+                            [
+                                _polygonal_only(first_land.intersection(second_water)),
+                                _polygonal_only(first_water.intersection(second_land)),
+                            ]
+                        ).intersection(overlap)
+                    )
+                    if not disagreement.is_empty:
+                        conflict_parts.append(disagreement)
         conflict = (
             _polygonal_only(unary_union(conflict_parts)) if conflict_parts else GeometryCollection()
         )
@@ -1129,6 +1137,7 @@ def mosaic_map_v2(
     *,
     map_version: str,
     incomplete_scale_bands: Iterable[str] = (),
+    densify_geographic_edges: bool = True,
 ) -> MapV2:
     """Convert the geographic ENC mosaic into the shared version-2 map contract."""
     layers = mosaic_by_scale(collection, domain, incomplete_scale_bands=incomplete_scale_bands)
@@ -1139,8 +1148,16 @@ def mosaic_map_v2(
         unary_union([layer.land for layer in layers]) if layers else GeometryCollection()
     )
     unknown = _polygonal_only(domain.difference(known))
-    coverage_geojson = _geojson_geometry(known) if not known.is_empty else None
-    unknown_geojson = _geojson_geometry(unknown) if not unknown.is_empty else None
+    coverage_geojson = (
+        _geojson_geometry(known, densify_geographic_edges=densify_geographic_edges)
+        if not known.is_empty
+        else None
+    )
+    unknown_geojson = (
+        _geojson_geometry(unknown, densify_geographic_edges=densify_geographic_edges)
+        if not unknown.is_empty
+        else None
+    )
     if not known.is_empty and unknown_geojson is not None:
         encoded_unknown = shape(json.loads(unknown_geojson))
         if encoded_unknown.is_empty and not unknown.is_empty:
@@ -1149,8 +1166,12 @@ def mosaic_map_v2(
             unknown = _polygonal_only(unknown.buffer(1e-5))
             known = _polygonal_only(known.difference(unknown))
             land = _polygonal_only(land.intersection(known))
-            coverage_geojson = _geojson_geometry(known)
-            unknown_geojson = _geojson_geometry(unknown)
+            coverage_geojson = _geojson_geometry(
+                known, densify_geographic_edges=densify_geographic_edges
+            )
+            unknown_geojson = _geojson_geometry(
+                unknown, densify_geographic_edges=densify_geographic_edges
+            )
     status: Literal["known", "partial", "unknown"]
     if known.is_empty:
         status = "unknown"
@@ -1166,5 +1187,9 @@ def mosaic_map_v2(
         coverage_status=status,
         coverage_geometry_geojson=(coverage_geojson if status != "unknown" else None),
         unknown_geometry_geojson=(unknown_geojson if status == "partial" else None),
-        land_geometry_geojson=(_geojson_geometry(land) if not land.is_empty else None),
+        land_geometry_geojson=(
+            _geojson_geometry(land, densify_geographic_edges=densify_geographic_edges)
+            if not land.is_empty
+            else None
+        ),
     )
