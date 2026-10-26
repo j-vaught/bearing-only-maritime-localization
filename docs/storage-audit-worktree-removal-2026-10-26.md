@@ -123,3 +123,36 @@ The following clean, fully pushed checkouts are concrete proposed reclaim candid
 The three proposed checkouts have a combined unique reclaim estimate of 594,567,168 bytes, approximately 567 MiB. Including the two inactive environment candidates would raise the estimate to 614,719,488 bytes, approximately 586 MiB, while leaving the filesystem below the 40 GiB floor by approximately 699 MiB. The environments therefore do not solve the reserve deficit on their own. All three checkouts contain tracked data/ and results/ paths. They are presented as reproducible duplicate source checkouts only for explicit parent review; their source, data, and result paths were not deleted.
 
 The earlier candidate paths a04-wedge-projection, a08-coast-base, and a11-coverage-certificate were excluded because reports or map manifests reference them. The shared UV cache, raw map cache, archived evidence, current outputs, active worktrees, root environment, and all frozen inputs remain untouched. No process was stopped. No source, dataset, result, evidence, manifest, branch, or remote ref was modified. No deletion occurred because this turn required concrete candidates to be presented before any removal.
+
+## Approved three-checkout removal and next candidate audit
+
+The parent approved removal of exactly three previously audited clean and fully pushed duplicate checkouts. A final pre-removal check at 2026-10-26T13:35:55Z reported 41,635,295,232 free bytes. Each branch tip matched its remote tip, each checkout had zero tracked or untracked status lines, and the active A35 evaluator had zero map, current-directory, executable, or descriptor pathnames under the three targets. The three normal non-force commands were:
+
+```
+git -C /home/jvaught2/projects/bearing-only-maritime-localization worktree remove /home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/a04-solver-correction
+git -C /home/jvaught2/projects/bearing-only-maritime-localization worktree remove /home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/a13-geodesic-reuse
+git -C /home/jvaught2/projects/bearing-only-maritime-localization worktree remove /home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/a19-witness-seeds
+```
+
+The measured physical free-space changes were as follows.
+
+| Removed checkout | Branch and commit retained | Free bytes before | Free bytes after | Measured physical reclaim |
+| --- | --- | ---: | ---: | ---: |
+| a04-solver-correction | accuracy/a04-solver-correction at 781caf8f993f4b2863e34ad1fee8700ee8062854 | 41,635,237,888 | 41,827,536,896 | 192,299,008 |
+| a13-geodesic-reuse | accuracy/a13-geodesic-reuse at a9fe3c659a49592e2657884eff6e2bd73b731311 | 41,827,536,896 | 42,038,689,792 | 211,152,896 |
+| a19-witness-seeds | accuracy/a19-witness-seeds at 4db70a67209604e8f0507051180e8ab9922143a2 | 42,038,689,792 | 42,235,486,208 | 196,796,416 |
+
+The measured total reclaim was 600,248,320 bytes. The later reading at 2026-10-26T13:39:19Z was 42,006,716,416 bytes, a concurrent decline of 228,769,792 bytes from the post-removal reading. That background change is not attributed to the removals. All three branch refs remain present, and no source file in the common repository was modified.
+
+The next four concrete candidates pass the same initial checks. Each is clean, its local commit matches the remote tip, its active-process pathname count is zero, its only checkout symlinks are virtual-environment interpreter links, and no report, output, archive, cache, or diagnostic path contains the checkout name. Their lsof scans returned zero paths, so no hardlink alias verification was needed.
+
+| Candidate checkout | Branch and commit | Allocated bytes | Unique nlink-one bytes | Active process refs | External path references |
+| --- | --- | ---: | ---: | ---: | ---: |
+| a33-geodesic-seeded | accuracy/a33-geodesic-seeded at 1d09df551f377f39dd3a3cef82330ee8b149fd78 | 479,485,952 | 195,698,688 | 0 | 0 |
+| a33-proposal-cache | accuracy/a33-proposal-cache at ab29f4a8ee0f980ad49347183cde3c1cf82733ae | 489,345,024 | 205,529,088 | 0 | 0 |
+| a33-wedge-complete | accuracy/a33-wedge-complete at 639fcfdb9b25783a5c8a6ce6070d8bb056a723a8 | 465,678,336 | 181,927,936 | 0 | 0 |
+| a33-wedge-geodesic | accuracy/a33-wedge-geodesic at dc6a4f491cb4d90ebbb097a19e39cf334ca5e7dd | 465,985,536 | 182,235,136 | 0 | 0 |
+
+The four candidates have a combined unique allocation estimate of 765,390,848 bytes. Their apparent allocated total is 1,900,494,848 bytes, but shared package files were excluded from the unique estimate. Removing all four would still leave approximately 999 MiB of additional reserve shortfall at the latest reading, so further candidates would be needed to reach 44 GB. No further removal was performed pending parent review.
+
+The following paths were not proposed. a04-wedge-projection, a11-coverage-certificate, a33-calibration-binding, a33-static-session, a33-support-compat, and a36-session-3185116 have external report or shared-cache editable-path references. a08-coast-base has immutable map-manifest source paths. The A32, A35, A37, A39, A26, assignment-expansion, parallel-expansion, root, shared-cache, root-environment, and frozen-output paths remain protected.
