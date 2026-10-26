@@ -507,13 +507,51 @@ def test_parallel_producer_helpers_emit_validator_accepted_ledger(tmp_path: Path
     assert len(events) == 2
 
 
+def _artifact_sources_are_resolvable(root: Path) -> bool:
+    manifest = evaluator.read_json(root / "manifest.json")
+    source_values = [
+        manifest.get("assignment_expansion_source"),
+        manifest.get("package_source"),
+    ]
+    source_values.extend(
+        item.get("assignment_expansion_source")
+        for item in manifest.get("worker_provenance", [])
+        if isinstance(item, dict)
+    )
+    source_values.extend(
+        item.get("scorer_source")
+        for item in manifest.get("worker_provenance", [])
+        if isinstance(item, dict)
+    )
+    return all(not isinstance(value, str) or Path(value).is_file() for value in source_values)
+
+
 def test_actual_disk_guard_union_is_sparse_and_provisional(tmp_path: Path) -> None:
     repository_root = Path(__file__).resolve().parents[2]
     serial_root = repository_root / "reports/experiments/assignment-expansion-diagnostic-v1"
     parallel_root = (
         repository_root / "reports/experiments/parallel-assignment-expansion-diagnostic-v1"
     )
-    if not serial_root.is_dir() or not parallel_root.is_dir():
+    raw_artifacts_present = serial_root.is_dir() and parallel_root.is_dir()
+    if raw_artifacts_present:
+        serial_manifest, serial_rows, _serial_events = evaluator.validate_manifest(serial_root)
+        parallel_manifest, parallel_rows, _parallel_events = evaluator.validate_manifest(
+            parallel_root
+        )
+        assert serial_manifest["status"] == "interrupted"
+        assert len(serial_rows) == 60
+        assert parallel_manifest["status"] == "failed"
+        assert len(parallel_rows) == 63
+        assert parallel_manifest["completed_mode_indices"] == [
+            *range(48),
+            *range(49, 64),
+        ]
+        assert parallel_manifest["unknown_mode_indices"] == [48]
+    if (
+        not raw_artifacts_present
+        or not _artifact_sources_are_resolvable(serial_root)
+        or not _artifact_sources_are_resolvable(parallel_root)
+    ):
         serial_root, parallel_root = (
             _bundle(tmp_path / "serial", parallel=False),
             _bundle(tmp_path / "parallel", parallel=True),
@@ -529,3 +567,15 @@ def test_actual_disk_guard_union_is_sparse_and_provisional(tmp_path: Path) -> No
     assert result["composite_selected_mode_status"] == "complete"
     assert result["composite_mode_sources"]["48"] == "serial"
     assert result["composite_mode_sources"]["0"] == "parallel"
+
+
+def test_missing_source_fixture_is_rejected(tmp_path: Path) -> None:
+    serial = _bundle(tmp_path / "serial", parallel=False)
+    parallel = _bundle(tmp_path / "parallel", parallel=True)
+    manifest = evaluator.read_json(parallel / "manifest.json")
+    manifest["assignment_expansion_source"] = str(tmp_path / "missing-assignment-expansion.py")
+    manifest["runner_sha256"] = "0" * 64
+    _write_json(parallel / "manifest.json", manifest)
+    with pytest.raises(evaluator.EvaluationError, match="assignment source is missing"):
+        evaluator.evaluate(serial, parallel)
+
