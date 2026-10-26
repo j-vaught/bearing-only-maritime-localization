@@ -78,7 +78,7 @@ def validate_serial_audit(
     manifest: dict[str, Any],
     rows: list[dict[str, Any]],
     events: list[dict[str, Any]],
-) -> None:
+) -> set[int]:
     require(
         audit.get("schema") == "a35-assignment-expansion-evaluation-v1",
         "unexpected serial audit schema",
@@ -157,6 +157,8 @@ def validate_serial_audit(
     require(
         event_counts == expected_counts, "serial event inventory differs from exact audit binding"
     )
+    # This explicit set is the only coverage later reused for parallel overlap payloads.
+    return {int(item["mode_index"]) for item in audit["mode_evaluations"]}
 
 
 def validate_serial_audit_sources(
@@ -517,26 +519,34 @@ def _replay_composite_events(
     events_by_mode: dict[int, list[dict[str, Any]]],
     scorer: Any,
     cache: dict[tuple[float, float], Any],
+    *,
+    validated_serial_audit_modes: set[int],
 ) -> dict[str, int]:
     counts = {
         "serial_audited_branch_results_reused": 0,
         "parallel_new_branch_results_rescored": 0,
         "nonexact_branch_results_preserved": 0,
+        "invalid_water_results_structurally_retained": 0,
+        "max_nfev_results_structurally_retained": 0,
     }
     for mode, row in enumerate(rows):
         events = events_by_mode[mode]
-        best_score = decode_hypothesis(row["seed"]).score
+        seed = decode_hypothesis(row["seed"])
+        best_score = seed.score
+        winning_branch: dict[str, Any] | None = None
         for record in events:
             if record.get("phase") != "branch_result":
                 continue
             branch = record["event"]
             exact_score = branch.get("exact_score")
             if exact_score is None:
+                status = branch.get("status")
                 require(
-                    branch.get("status") not in {"improved", "no_improvement"},
-                    f"mode {mode} scoreless result has scored status",
+                    status in {"invalid_water", "max_nfev"},
+                    f"mode {mode} scoreless result has unsupported status",
                 )
                 counts["nonexact_branch_results_preserved"] += 1
+                counts[f"{status}_results_structurally_retained"] += 1
                 continue
             require(
                 type(exact_score) in (int, float) and math.isfinite(float(exact_score)),
@@ -553,7 +563,7 @@ def _replay_composite_events(
                 and all(type(v) in (int, float) and math.isfinite(float(v)) for v in pose),
                 f"mode {mode} branch pose invalid",
             )
-            if row["_source_run"] == "serial":
+            if mode in validated_serial_audit_modes:
                 counts["serial_audited_branch_results_reused"] += 1
             else:
                 result = evaluate_exact_position(scorer, cache, (float(pose[0]), float(pose[1])))
@@ -579,12 +589,34 @@ def _replay_composite_events(
             if branch["status"] == "improved":
                 require(score < best_score, f"mode {mode} improvement is not strict")
                 best_score = score
+                winning_branch = branch
             else:
                 require(score >= best_score, f"mode {mode} no-improvement beats current best")
+        final_best = decode_hypothesis(row["best_hypothesis"])
         require(
-            _same_score(best_score, decode_hypothesis(row["best_hypothesis"]).score),
+            _same_score(best_score, final_best.score),
             f"mode {mode} final score differs from branch sequence",
         )
+        if winning_branch is None:
+            require(
+                _same_hypothesis(seed, final_best),
+                f"mode {mode} final best changed without a strict improvement",
+            )
+        else:
+            winning_pose = winning_branch["proposed_pose"]
+            require(
+                float(winning_pose[0]) == final_best.east_m
+                and float(winning_pose[1]) == final_best.north_m,
+                f"mode {mode} final best pose differs from strict winning branch",
+            )
+            require(
+                any(
+                    item.report_index == winning_branch.get("report_index")
+                    and item.catalog_key == winning_branch.get("catalog_key")
+                    for item in final_best.assignments
+                ),
+                f"mode {mode} final best omits winning branch assignment",
+            )
         require(
             row.get("counters", {}).get("visited_branches", 0)
             == sum(1 for e in events if e.get("phase") == "branch_result"),
@@ -613,6 +645,20 @@ def _replay_composite_events(
                 f"mode {mode} has unvisited branches",
             )
     return counts
+
+
+def _rank_evaluations(
+    metrics: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    score_rank = sorted(metrics, key=lambda item: (item["expanded"]["score"], item["mode_index"]))
+    error_rank = sorted(
+        metrics, key=lambda item: (item["expanded"]["geodesic_error_m"], item["mode_index"])
+    )
+    for rank, item in enumerate(score_rank, 1):
+        item["expanded_score_rank_within_composite_selected_modes"] = rank
+    for rank, item in enumerate(error_rank, 1):
+        item["expanded_error_rank_within_composite_selected_modes"] = rank
+    return score_rank, error_rank
 
 
 def _truth_metrics(
@@ -670,7 +716,9 @@ def audit_composite(
     serial_manifest, serial_rows, serial_events = validate_manifest(serial_root)
     reviewer.verify_immutable_sources(serial_manifest, "serial")
     audit = read_json(serial_audit_path)
-    validate_serial_audit(audit, serial_root, serial_manifest, serial_rows, serial_events)
+    serial_audited_modes = validate_serial_audit(
+        audit, serial_root, serial_manifest, serial_rows, serial_events
+    )
     parallel_manifest, parallel_rows, parallel_events, normalized_parallel = (
         _validate_parallel_partial(parallel_root)
     )
@@ -732,7 +780,16 @@ def audit_composite(
     )
     cache: dict[tuple[float, float], Any] = {}
     _exact_rows(composite, assigned_rows, a20_rows, scorer, cache)
-    branch_counts = _replay_composite_events(composite, events_by_mode, scorer, cache)
+    # The serial evaluator's hash-bound exact replay covers only its completed modes 0..59.
+    # Overlap rows/events were just validated byte-for-byte, so those same payloads can be reused
+    # for the parallel-selected rows in that range. Serial mode-60 tail events are not covered.
+    branch_counts = _replay_composite_events(
+        composite,
+        events_by_mode,
+        scorer,
+        cache,
+        validated_serial_audit_modes=serial_audited_modes,
+    )
     # Strip internal source tags before scoring truth metrics.
     metric_rows = []
     for item in composite:
@@ -740,14 +797,7 @@ def audit_composite(
         row.pop("_source_run", None)
         metric_rows.append(row)
     metrics, truth_hashes = _truth_metrics(metric_rows, truth_dir)
-    score_rank = sorted(metrics, key=lambda item: (item["expanded"]["score"], item["mode_index"]))
-    error_rank = sorted(
-        metrics, key=lambda item: (item["expanded"]["geodesic_error_m"], item["mode_index"])
-    )
-    for rank, item in enumerate(score_rank, 1):
-        item["expanded_score_rank_within_composite_selected_modes"] = rank
-    for rank, item in enumerate(error_rank, 1):
-        item["expanded_error_rank_within_composite_selected_modes"] = rank
+    score_rank, error_rank = _rank_evaluations(metrics)
     raw_parallel_counts = {
         str(mode): {
             "started": sum(
@@ -775,11 +825,17 @@ def audit_composite(
         "branch_rescore_complete": True,
         "evaluation_only": True,
         "truth_used_for_search_or_proposal_selection": False,
-        "truth_used": False,
+        "truth_used": True,
         "accepted_fix_claim": False,
         "certificate_scope": "none",
         "full_domain_complete": False,
         "expansion_status": parallel_manifest.get("status"),
+        "parallel_status": parallel_manifest.get("status"),
+        "parallel_completed_mode_indices": parallel_manifest.get("completed_mode_indices"),
+        "parallel_pending_mode_indices": sorted(
+            set(parallel_manifest.get("unknown_mode_indices", []))
+            | set(parallel_manifest.get("failed_mode_indices", []))
+        ),
         "expansion_raw_completed_mode_count": parallel_manifest.get("completed_mode_count"),
         "expansion_raw_pending_mode_count": parallel_manifest.get("unknown_mode_count"),
         "expansion_raw_completed_mode_indices": parallel_manifest.get("completed_mode_indices"),
@@ -812,9 +868,10 @@ def audit_composite(
         "mode_evaluations": metrics,
         "truth_inputs_sha256": truth_hashes,
         "expanded_best_score": score_rank[0]["expanded"]["score"],
-        "expanded_best_error_m": error_rank[0]["expanded"]["geodesic_error_m"],
+        "expanded_best_error_m": score_rank[0]["expanded"]["geodesic_error_m"],
         "expanded_best_score_rank_row": score_rank[0]["mode_index"],
         "nearest_expanded_mode_index": error_rank[0]["mode_index"],
+        "nearest_expanded_error_m": error_rank[0]["expanded"]["geodesic_error_m"],
         "expanded_modes_within_100m": sum(
             item["expanded"]["geodesic_error_m"] <= 100.0 for item in metrics
         ),
@@ -862,6 +919,12 @@ def main() -> int:
                     "expanded_best_score",
                     "expanded_best_error_m",
                     "nearest_expanded_mode_index",
+                    "nearest_expanded_error_m",
+                    "parallel_status",
+                    "parallel_completed_mode_indices",
+                    "parallel_pending_mode_indices",
+                    "composite_selected_mode_status",
+                    "composite_mode_sources",
                 )
             },
             sort_keys=True,

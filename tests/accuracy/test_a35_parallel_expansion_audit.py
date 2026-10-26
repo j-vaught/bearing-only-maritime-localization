@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -10,6 +11,7 @@ from tools.audit_parallel_assignment_expansion import (
     _compare_overlap,
     _compose_selected_modes,
     _exact_rows,
+    _rank_evaluations,
     _replay_composite_events,
     validate_serial_audit,
     validate_serial_audit_sources,
@@ -164,9 +166,35 @@ def test_parallel_only_mode_pose_is_rescored_even_if_serial_audit_is_complete() 
             ]
         row["_source_run"] = "parallel" if i == 63 else "serial"
         rows.append(row)
-    result = _replay_composite_events(rows, events_by_mode, FakeScorer(), {})
+    # A parallel-selected row may reuse its exact serial overlap audit for modes 0..59.
+    rows[10]["counters"] = {"visited_branches": 1, "unvisited_branches": 0}
+    rows[10]["status"] = "completed"
+    rows[10]["completed"] = True
+    rows[10]["budget_exhausted"] = False
+    events_by_mode[10] = [
+        _event(10, "branch_started", 0),
+        {
+            **_event(10, "branch_result", 0),
+            "event": {
+                "branch_id": 0,
+                "status": "no_improvement",
+                "exact_score": 1.0,
+                "proposed_pose": [0.0, 0.0],
+                "report_index": 0,
+                "catalog_key": "k0",
+                "added_assignment_retained": True,
+            },
+        },
+    ]
+    result = _replay_composite_events(
+        rows,
+        events_by_mode,
+        FakeScorer(),
+        {},
+        validated_serial_audit_modes=set(range(60)),
+    )
     assert result["parallel_new_branch_results_rescored"] == 1
-    assert result["serial_audited_branch_results_reused"] == 0
+    assert result["serial_audited_branch_results_reused"] == 1
 
 
 def test_parallel_only_branch_without_exact_pose_is_rejected() -> None:
@@ -200,7 +228,13 @@ def test_parallel_only_branch_without_exact_pose_is_rejected() -> None:
         },
     ]
     with pytest.raises(ValueError, match="pose invalid"):
-        _replay_composite_events(rows, events_by_mode, FakeScorer(), {})
+        _replay_composite_events(
+            rows,
+            events_by_mode,
+            FakeScorer(),
+            {},
+            validated_serial_audit_modes=set(range(60)),
+        )
 
 
 def test_overlap_rejects_mutated_branch_payload() -> None:
@@ -294,4 +328,186 @@ def test_serial_audit_upstream_source_hashes_are_required() -> None:
             assigned_rows_sha256=bindings["assigned_rows_sha256"],
             a20_manifest_sha256=bindings["a20_manifest_sha256"],
             a20_rows_sha256=bindings["a20_rows_sha256"],
+        )
+
+
+@dataclass
+class ImprovingFakeScorer:
+    def evaluate(self, position: tuple[float, float]) -> object:
+        east, _ = position
+        score = 2.0 if east == 0.0 else 1.0
+        return SimpleNamespace(status="scored", hypothesis=_hypothesis(east, score))
+
+
+def test_final_best_must_match_strict_improving_winning_branch() -> None:
+    rows = []
+    events_by_mode = {i: [] for i in range(64)}
+    for i in range(64):
+        seed = _hypothesis(0.0, 2.0)
+        best = _hypothesis(1.0, 1.0) if i == 0 else seed
+        row: dict = {
+            "seed": _hyp_json(seed),
+            "best_hypothesis": _hyp_json(best),
+            "counters": {},
+            "status": "no_unmatched_reports",
+        }
+        row["_source_run"] = "serial"
+        rows.append(row)
+    rows[0].update(
+        {
+            "counters": {"visited_branches": 1, "unvisited_branches": 0},
+            "status": "completed",
+            "completed": True,
+            "budget_exhausted": False,
+        }
+    )
+    events_by_mode[0] = [
+        _event(0, "branch_started", 0),
+        {
+            "mode_index": 0,
+            "phase": "branch_result",
+            "event": {
+                "branch_id": 0,
+                "status": "improved",
+                "exact_score": 1.0,
+                "proposed_pose": [1.0, 0.0],
+                "report_index": 3,
+                "catalog_key": "k3",
+                "added_assignment_retained": True,
+            },
+        },
+    ]
+    _replay_composite_events(
+        rows,
+        events_by_mode,
+        ImprovingFakeScorer(),
+        {},
+        validated_serial_audit_modes=set(range(60)),
+    )
+    rows[0]["best_hypothesis"] = _hyp_json(_hypothesis(2.0, 1.0))
+    with pytest.raises(ValueError, match="final best pose differs"):
+        _replay_composite_events(
+            rows,
+            events_by_mode,
+            ImprovingFakeScorer(),
+            {},
+            validated_serial_audit_modes=set(range(60)),
+        )
+
+
+def test_score_rank_best_error_is_not_nearest_error() -> None:
+    metrics = [
+        {"mode_index": 0, "expanded": {"score": 1.0, "geodesic_error_m": 500.0}},
+        {"mode_index": 1, "expanded": {"score": 2.0, "geodesic_error_m": 5.0}},
+    ]
+    score_rank, error_rank = _rank_evaluations(metrics)
+    assert score_rank[0]["mode_index"] == 0
+    assert error_rank[0]["mode_index"] == 1
+    assert score_rank[0]["expanded"]["geodesic_error_m"] == 500.0
+    assert error_rank[0]["expanded"]["geodesic_error_m"] == 5.0
+
+
+def test_mode_60_is_rescored_even_if_source_label_says_serial() -> None:
+    hypothesis = _hypothesis(0.0, 1.0)
+    rows: list[dict[str, Any]] = []
+    events_by_mode = {i: [] for i in range(64)}
+    for i in range(64):
+        rows.append(
+            {
+                "seed": _hyp_json(hypothesis),
+                "best_hypothesis": _hyp_json(hypothesis),
+                "counters": {},
+                "status": "no_unmatched_reports",
+                "_source_run": "serial",
+            }
+        )
+    rows[60].update(
+        {
+            "counters": {"visited_branches": 1, "unvisited_branches": 0},
+            "status": "completed",
+            "completed": True,
+            "budget_exhausted": False,
+        }
+    )
+    events_by_mode[60] = [
+        _event(60, "branch_started", 0),
+        {
+            "mode_index": 60,
+            "phase": "branch_result",
+            "event": {
+                "branch_id": 0,
+                "status": "no_improvement",
+                "exact_score": 1.0,
+                "proposed_pose": [0.0, 0.0],
+                "report_index": 0,
+                "catalog_key": "k0",
+                "added_assignment_retained": True,
+            },
+        },
+    ]
+    result = _replay_composite_events(
+        rows,
+        events_by_mode,
+        FakeScorer(),
+        {},
+        validated_serial_audit_modes=set(range(60)),
+    )
+    assert result["parallel_new_branch_results_rescored"] == 1
+    assert result["serial_audited_branch_results_reused"] == 0
+
+
+def test_final_best_assignment_must_include_winning_branch_edge() -> None:
+    seed = _hypothesis(0.0, 2.0)
+    best = Hypothesis(
+        east_m=1.0,
+        north_m=0.0,
+        score=1.0,
+        assignments=tuple(
+            Assignment(report_index=i, catalog_key=f"bad{i}", residual_deg=0.0, cost=0.0)
+            for i in range(5)
+        ),
+    )
+    rows: list[dict[str, Any]] = []
+    events_by_mode = {i: [] for i in range(64)}
+    for i in range(64):
+        rows.append(
+            {
+                "seed": _hyp_json(seed),
+                "best_hypothesis": _hyp_json(best if i == 0 else seed),
+                "counters": {},
+                "status": "no_unmatched_reports",
+                "_source_run": "serial",
+            }
+        )
+    rows[0].update(
+        {
+            "counters": {"visited_branches": 1, "unvisited_branches": 0},
+            "status": "completed",
+            "completed": True,
+            "budget_exhausted": False,
+        }
+    )
+    events_by_mode[0] = [
+        _event(0, "branch_started", 0),
+        {
+            "mode_index": 0,
+            "phase": "branch_result",
+            "event": {
+                "branch_id": 0,
+                "status": "improved",
+                "exact_score": 1.0,
+                "proposed_pose": [1.0, 0.0],
+                "report_index": 3,
+                "catalog_key": "k3",
+                "added_assignment_retained": True,
+            },
+        },
+    ]
+    with pytest.raises(ValueError, match="omits winning branch assignment"):
+        _replay_composite_events(
+            rows,
+            events_by_mode,
+            ImprovingFakeScorer(),
+            {},
+            validated_serial_audit_modes=set(range(60)),
         )
