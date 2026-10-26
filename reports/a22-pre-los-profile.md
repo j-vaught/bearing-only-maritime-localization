@@ -6,4 +6,4 @@ Every proposed prune is independently scored after the timed traversal. The vali
 
 The caller now acquires the canonical benchmark lock nonblocking and fails without running if another benchmark owns it. The timing experiment has not run yet. Per the benchmark schedule, the real screening run is waiting for the A20 owner to finish and for the independent caller review to complete. No latency claim is made.
 
-Focused coverage includes incumbent revalidation, duplicate-ID rejection, supported pruning with tie preservation, unsupported-bound exact fallback, and rejection of an injected overlarge bound during independent post-pass validation. Ruff, ty, and the four focused tests pass using the existing environment without dependency installation.
+Focused coverage includes incumbent revalidation, duplicate-ID rejection, supported pruning with tie preservation, unsupported-bound exact fallback, rejection of an injected overlarge bound during independent post-pass validation, and the negative-score relative-tolerance boundary. Ruff, ty, and the five focused tests pass using the existing environment without dependency installation.
