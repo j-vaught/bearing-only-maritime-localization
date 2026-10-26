@@ -13,6 +13,7 @@ from typing import Literal
 DecisionStatus = Literal["accepted", "ambiguous", "no_fix"]
 SearchStatus = Literal["completed", "budget_exhausted", "failed"]
 CertificateScope = Literal["none", "finite_candidate_set", "continuous_objective"]
+BudgetExhaustionReason = Literal["candidate_limit", "request_deadline", "assignment_branch_limit"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +132,7 @@ class LocalizationResult:
     report_count: int | None = None
     objective_version: str = "bearing_set_map_v1"
     bound_gap: float | None = None
+    budget_exhaustion_reason: BudgetExhaustionReason | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.hypotheses, tuple) or any(
@@ -184,9 +186,29 @@ class LocalizationResult:
                 raise ValueError("budget_limit must be a positive integer.")
             if type(self.budget_used) is not int or not 0 <= self.budget_used <= self.budget_limit:
                 raise ValueError("budget_used must be an integer within budget_limit.")
+        if self.budget_exhaustion_reason not in (
+            None,
+            "candidate_limit",
+            "request_deadline",
+            "assignment_branch_limit",
+        ):
+            raise ValueError("Unsupported budget_exhaustion_reason.")
+        if self.budget_exhaustion_reason is not None:
+            if self.search_status != "budget_exhausted":
+                raise ValueError("budget_exhaustion_reason requires budget_exhausted status.")
+            if (
+                self.budget_exhaustion_reason != "candidate_limit"
+                and self.certificate_scope != "none"
+            ):
+                raise ValueError(
+                    "An interrupted request or assignment expansion has no certificate."
+                )
         if self.search_status == "budget_exhausted":
-            if self.budget_limit is None or self.budget_used != self.budget_limit:
-                raise ValueError("budget_exhausted requires a fully consumed declared budget.")
+            # These integer counters retain their original candidate-budget meaning.
+            # A time or assignment-branch limit must not fabricate consumed candidates.
+            if self.budget_exhaustion_reason in (None, "candidate_limit"):
+                if self.budget_limit is None or self.budget_used != self.budget_limit:
+                    raise ValueError("budget_exhausted requires a fully consumed declared budget.")
         if self.search_status == "failed" and self.decision_status == "accepted":
             raise ValueError("A failed search cannot produce an accepted result.")
 
