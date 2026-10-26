@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from collections.abc import Callable, Sequence
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass, fields, replace
 from math import hypot, isfinite
 from pathlib import Path
@@ -38,6 +39,10 @@ from bearing_localization.search.grid import run_grid_search_v2
 from bearing_localization.search.hierarchical import run_hierarchical_search_v2
 from bearing_localization.search.modes import SearchModeEvidence, converged_mode_evidence
 from bearing_localization.search.pairwise import run_pairwise_search_v2
+from bearing_localization.search.proposals.geodesic_wedge import (
+    GeodesicWedgeProposal,
+    generate_geographic_reverse_wedge_proposals_geodesic,
+)
 from bearing_localization.search.proposals.wedge import (
     GeographicWedgeCatalogObject,
     WedgeObservation,
@@ -313,6 +318,38 @@ def _order_wedge_proposals_for_scoring(
     return tuple(ordered)
 
 
+def _order_geodesic_proposals_for_scoring(
+    proposals: Sequence[GeodesicWedgeProposal],
+    positions_xy: Sequence[tuple[float, float]],
+    *,
+    water_status: Callable[[tuple[float, float]], str],
+) -> tuple[int, ...]:
+    """Keep A47 witness priority; prefer water only within matching/vote tiers."""
+    if len(proposals) != len(positions_xy):
+        raise ValueError("Every geodesic proposal must have exactly one projected position.")
+    if len(set(positions_xy)) != len(positions_xy):
+        raise ValueError("Geodesic proposal cells must map to distinct projected positions.")
+    water_rank = {"water": 0, "unknown": 1, "land": 2}
+
+    def key(index: int) -> tuple[int, int, int, float, float, int, int]:
+        proposal = proposals[index]
+        status = water_status(positions_xy[index])
+        return (
+            -proposal.matching_count,
+            -proposal.vote_count,
+            water_rank.get(status, 1),
+            proposal.normalized_angular_residual,
+            -proposal.evidence_score,
+            proposal.cell_i,
+            proposal.cell_j,
+        )
+
+    ordered = tuple(sorted(range(len(proposals)), key=key))
+    if len(ordered) != len(proposals) or set(ordered) != set(range(len(proposals))):
+        raise RuntimeError("Geodesic proposal ordering lost candidates.")
+    return ordered
+
+
 def _search_dispatch(
     scorer: CandidateScorer,
     *,
@@ -323,6 +360,7 @@ def _search_dispatch(
     wedge_tolerance_deg: float,
     wedge_cell_size_m: float,
     branch_max_regions: int,
+    telemetry: SearchTelemetry | None = None,
 ) -> tuple[LocalizationResult, dict[str, Any], int, bool]:
     config = scorer.config
     if algorithm == "grid":
@@ -512,6 +550,7 @@ def _search_dispatch(
             [
                 WedgeObservation(index, item.bearing_deg)
                 for index, item in enumerate(scorer.measurements.measurements)
+                if item.sigma_deg is not None
             ],
             [
                 GeographicWedgeCatalogObject(
@@ -570,6 +609,7 @@ def _search_dispatch(
         observations = [
             WedgeObservation(index, item.bearing_deg)
             for index, item in enumerate(scorer.measurements.measurements)
+            if item.sigma_deg is not None
         ]
         geographic_catalog = [
             GeographicWedgeCatalogObject(
@@ -651,6 +691,227 @@ def _search_dispatch(
                 "cell_size_m": wedge_cell_size_m,
                 "angular_tolerance_deg": wedge_tolerance_deg,
                 "max_grid_bearing_error_deg": wedge_error_deg,
+            },
+        }
+        return result, diagnostics, scoring_run.candidate_count, False
+    if algorithm == "wedge_geodesic":
+        bounds = config.bounds_xy
+        if bounds is None:
+            raise ValueError("Geodesic wedge search requires finite config.bounds_xy.")
+        xmin, xmax, ymin, ymax = bounds
+        to_geo = Transformer.from_crs(scorer.vector_map.crs, "EPSG:4326", always_xy=True)
+        origin_lon, origin_lat = to_geo.transform((xmin + xmax) / 2.0, (ymin + ymax) / 2.0)
+        frame = LocalFrame((float(origin_lon), float(origin_lat)))
+        observations = [
+            WedgeObservation(index, item.bearing_deg)
+            for index, item in enumerate(scorer.measurements.measurements)
+            if item.sigma_deg is not None
+        ]
+        observation_sigmas = {
+            index: item.sigma_deg
+            for index, item in enumerate(scorer.measurements.measurements)
+            if item.sigma_deg is not None
+        }
+        geographic_catalog = [
+            GeographicWedgeCatalogObject(
+                record.key, record.longitude_deg, record.latitude_deg, record.normalized_type
+            )
+            for record in scorer.catalog.records
+        ]
+        effective_source_pair_budget = config.proposal_source_pair_budget
+        if effective_source_pair_budget is None:
+            effective_source_pair_budget = max(1, len(observations) * len(geographic_catalog))
+        effective_sigmas = [
+            max(
+                item.sigma_deg if item.sigma_deg is not None else config.generated_sigma_deg,
+                config.sigma_floor_deg,
+            )
+            for item in scorer.measurements.measurements
+        ]
+        maximum_solver_tolerance = min(
+            0.001,
+            0.01 * min(effective_sigmas) if effective_sigmas else 0.001,
+        )
+        if config.proposal_solver_tolerance_deg > maximum_solver_tolerance:
+            raise ValueError(
+                "proposal_solver_tolerance_deg exceeds the geodesic solver bound "
+                f"{maximum_solver_tolerance} degrees for this request."
+            )
+        generation_stage = (
+            telemetry.stage("proposal_generation") if telemetry is not None else nullcontext()
+        )
+        with generation_stage:
+            proposals = generate_geographic_reverse_wedge_proposals_geodesic(
+                observations,
+                geographic_catalog,
+                frame=frame,
+                max_range_m=config.max_range_m,
+                cell_size_m=wedge_cell_size_m,
+                angular_tolerance_deg=wedge_tolerance_deg,
+                max_source_pairs=effective_source_pair_budget,
+                max_candidate_cells=config.proposal_cell_budget,
+                source_chunk_size=config.proposal_chunk_size,
+                observation_sigmas_deg=observation_sigmas,
+                solver_tolerance_deg=config.proposal_solver_tolerance_deg,
+            )
+            to_map = Transformer.from_crs("EPSG:4326", scorer.vector_map.crs, always_xy=True)
+            positions: list[tuple[float, float]] = []
+            for proposal in proposals.proposals:
+                lon, lat = frame.to_geographic(proposal.east_m, proposal.north_m)
+                east_m, north_m = to_map.transform(lon, lat)
+                positions.append((float(east_m), float(north_m)))
+
+        ordering_stage = (
+            telemetry.stage("proposal_ordering") if telemetry is not None else nullcontext()
+        )
+        with ordering_stage:
+            proposal_order = _order_geodesic_proposals_for_scoring(
+                proposals.proposals,
+                positions,
+                water_status=scorer.vector_map.point_water_status,
+            )
+            ordered_positions = [positions[index] for index in proposal_order]
+
+        scoring_stage = telemetry.stage("exact_scoring") if telemetry is not None else nullcontext()
+        with scoring_stage:
+            scoring_run = score_candidate_positions(
+                scorer, ordered_positions, candidate_limit=config.candidate_budget
+            )
+
+        failed_samples = proposals.geodesic_samples_failed
+        failed_source_pairs = proposals.source_pairs_failed
+        model_incomplete = failed_samples > 0 or failed_source_pairs > 0
+        generation_incomplete = proposals.generation_status != "completed"
+        scoring_incomplete = scoring_run.localization.search_status == "budget_exhausted"
+        result = scoring_run.localization
+        if model_incomplete:
+            result = replace(
+                result,
+                decision_status="ambiguous" if result.hypotheses else "no_fix",
+                search_status="failed",
+                accepted_index=None,
+            )
+        elif generation_incomplete and not scoring_incomplete:
+            if proposals.budget_reason == "source_pairs":
+                exhausted_limit = effective_source_pair_budget
+                exhausted_used = proposals.source_pairs_processed
+            elif proposals.budget_reason == "candidate_cells":
+                exhausted_limit = config.proposal_cell_budget
+                exhausted_used = proposals.candidate_cells_total
+            else:
+                raise RuntimeError("Incomplete geodesic generation must identify its budget.")
+            result = replace(
+                result,
+                search_status="budget_exhausted",
+                budget_limit=exhausted_limit,
+                budget_used=exhausted_used,
+            )
+
+        evaluated_indexes = proposal_order[: scoring_run.candidate_count]
+        evaluated_proposals = [proposals.proposals[index] for index in evaluated_indexes]
+        witness_edge_count = sum(
+            len(keys)
+            for proposal in proposals.proposals
+            for _report_index, keys in proposal.witness_report_keys
+        )
+        matching_histogram: dict[int, int] = {}
+        matching_vote_histogram: dict[tuple[int, int], int] = {}
+        for proposal in proposals.proposals:
+            matching_histogram[proposal.matching_count] = (
+                matching_histogram.get(proposal.matching_count, 0) + 1
+            )
+            priority_tier = (proposal.matching_count, proposal.vote_count)
+            matching_vote_histogram[priority_tier] = (
+                matching_vote_histogram.get(priority_tier, 0) + 1
+            )
+        evaluated_witness_records = [
+            {
+                "candidate_id": proposal.candidate_id,
+                "matching_count": proposal.matching_count,
+                "vote_count": proposal.vote_count,
+                "witness_keys": list(proposal.witness_keys),
+                "witness_report_keys": [
+                    {"report_index": report_index, "catalog_keys": list(keys)}
+                    for report_index, keys in proposal.witness_report_keys
+                ],
+                "normalized_angular_residual": proposal.normalized_angular_residual,
+                "evidence_score": proposal.evidence_score,
+            }
+            for proposal in evaluated_proposals
+        ]
+        diagnostics = {
+            "candidate_count": scoring_run.candidate_count,
+            "outcome_counts": dict(scoring_run.outcome_counts),
+            "proposal_generation": {
+                "generation_status": proposals.generation_status,
+                "generation_budget_reason": proposals.budget_reason,
+                "generation_complete": not generation_incomplete and not model_incomplete,
+                "source_pairs_total": proposals.source_pairs_total,
+                "source_pairs_processed": proposals.source_pairs_processed,
+                "source_pairs_failed": failed_source_pairs,
+                "candidate_cells_total": proposals.candidate_cells_total,
+                "geodesic_samples_total": proposals.geodesic_samples_total,
+                "geodesic_samples_failed": failed_samples,
+                "geodesic_samples_degenerate": proposals.geodesic_samples_degenerate,
+                "solver_tolerance_deg": proposals.solver_tolerance_deg,
+                "max_solver_residual_deg": proposals.max_solver_residual_deg,
+                "unresolved_model_count": failed_samples + failed_source_pairs,
+                "vote_histogram": [list(item) for item in proposals.vote_histogram],
+                "matching_count_histogram": [
+                    [matching_count, matching_histogram[matching_count]]
+                    for matching_count in sorted(matching_histogram, reverse=True)
+                ],
+                "matching_vote_histogram": [
+                    [
+                        matching_count,
+                        vote_count,
+                        matching_vote_histogram[(matching_count, vote_count)],
+                    ]
+                    for matching_count, vote_count in sorted(matching_vote_histogram, reverse=True)
+                ],
+                "witness_edge_count": witness_edge_count,
+                "unique_witness_edge_count": witness_edge_count,
+                "witness_edge_uniqueness": "unique_by_candidate_report_catalog_key",
+                "unique_witness_key_count": len(
+                    {key for proposal in proposals.proposals for key in proposal.witness_keys}
+                ),
+            },
+            "proposal_ordering": {
+                "policy": (
+                    "matching_count_descending_then_vote_count_descending_then_known_water_"
+                    "within_tier_then_residual_evidence_cell_order"
+                ),
+                "proposal_count": len(proposals.proposals),
+                "evaluated_proposal_count": scoring_run.candidate_count,
+            },
+            "exact_scoring": {
+                "status": scoring_run.localization.search_status,
+                "complete": not scoring_incomplete,
+                "candidate_budget": config.candidate_budget,
+                "candidate_count": scoring_run.candidate_count,
+                "outcome_counts": dict(scoring_run.outcome_counts),
+                "evaluated_proposal_witnesses": evaluated_witness_records,
+            },
+            "result_elapsed_s_scope": (
+                "exact_scoring_plus_continuous_refinement; excludes "
+                "proposal_generation_and_ordering"
+            ),
+            "request_timing_authority": (
+                "telemetry.request_timing.request_elapsed_s through serialized estimate output"
+            ),
+            "proposal_config": {
+                "proposal_source_pair_budget_configured": config.proposal_source_pair_budget,
+                "proposal_source_pair_budget_effective": effective_source_pair_budget,
+                "proposal_cell_budget": config.proposal_cell_budget,
+                "proposal_chunk_size": config.proposal_chunk_size,
+                "proposal_solver_tolerance_deg": config.proposal_solver_tolerance_deg,
+                "candidate_scoring_budget": config.candidate_budget,
+                "cell_size_m": wedge_cell_size_m,
+                "angular_tolerance_deg": wedge_tolerance_deg,
+                "max_range_m": config.max_range_m,
+                "range_step_m": proposals.range_step_m,
+                "angular_sample_gap_deg": proposals.angular_sample_gap_deg,
+                "angular_sample_count": proposals.angular_sample_count,
             },
         }
         return result, diagnostics, scoring_run.candidate_count, False
@@ -945,8 +1206,26 @@ def _search_v2_request(
             wedge_tolerance_deg=wedge_tolerance_deg,
             wedge_cell_size_m=wedge_cell_size_m,
             branch_max_regions=branch_max_regions,
+            telemetry=telemetry,
         )
     diagnostics["algorithm"] = selected_algorithm
+    if selected_algorithm == "wedge_geodesic":
+        diagnostics["elapsed_time_semantics"] = {
+            "localization_result_elapsed_s": (
+                "exact_scoring_plus_continuous_refinement; excludes "
+                "proposal generation and ordering"
+            ),
+            "complete_request_wall_s": (
+                "request_timing.request_elapsed_s; request entry through estimate serialization"
+            ),
+        }
+    if selected_algorithm == "wedge_geodesic":
+        stage_records = telemetry.as_dict()["stages"]
+        for stage_name in ("proposal_generation", "proposal_ordering", "exact_scoring"):
+            elapsed_wall_s = sum(
+                item["wall_s"] for item in stage_records if item["name"] == stage_name
+            )
+            diagnostics[stage_name]["elapsed_wall_s"] = elapsed_wall_s
     diagnostics["projected_crs"] = str(vector_map.crs)
     diagnostics["map_coverage_status"] = map_input.coverage_status
     diagnostics["declared_bounds_xy_m"] = list(config.bounds_xy)
@@ -1025,7 +1304,9 @@ def _search_v2_request(
     if type(unresolved_region_count) is not int or unresolved_region_count < 0:
         unresolved_region_count = 1
     # Unknown evaluator outcomes fail closed by suppressing positive mode evidence.
-    decision_modes = mode_evidence if outcome_counts is not None else ()
+    decision_modes = (
+        mode_evidence if outcome_counts is not None and result.search_status != "failed" else ()
+    )
     top_mode_index = _top_mode_evidence_index(result, decision_modes)
     public_modes = [
         {**mode.as_dict(), "converged": True, "ellipse_rank": 2} for mode in decision_modes
@@ -1458,6 +1739,7 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             "branch_bound",
             "wedge",
             "wedge_complete",
+            "wedge_geodesic",
         ),
     )
     parser.add_argument("--spacing-m", type=float, default=250.0)
