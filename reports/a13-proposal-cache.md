@@ -16,7 +16,7 @@ Loading bounds metadata, array expansion, and counts before array construction. 
 
 A proposal result can represent `completed` and `budget_exhausted` generation. The source result type has no `failed` generation state, so a generation exception has no result to cache. The loader rejects unknown generation statuses. Failed source-pair and sample counters are preserved exactly.
 
-The component is not wired into command-line execution. A later caller can report one-time static proposal generation and cache preparation separately, while excluding that preparation from repeated warm-search timing. No full generation or large cache was run.
+This component checkpoint preceded command-line integration. The cache is measurement-specific and supports repeated experiments on an identical proposal pool. It is not static map preprocessing for a new detection frame. Cached selection timings must be reported separately from complete new-frame latency, which includes proposal generation and any cache-miss work. No full generation or large cache was run for this component checkpoint.
 
 ## Validation
 
