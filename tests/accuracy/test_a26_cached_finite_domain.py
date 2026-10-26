@@ -70,6 +70,33 @@ def test_candidate_dispositions_keep_dispatched_work_unknown(tmp_path: Path) -> 
     ]
 
 
+def test_pool_failure_keeps_known_failure_and_unknown_remainder(tmp_path: Path) -> None:
+    output = tmp_path / "out"
+    output.mkdir()
+    (output / "candidate-plan.jsonl").write_text(
+        "".join(json.dumps({"candidate_id": f"cell:{letter}"}) + "\n" for letter in "abc")
+    )
+
+    counts = write_candidate_dispositions(
+        output,
+        externally_interrupted=True,
+        failed_candidate_ids=["cell:b"],
+        failed_count_unattributed=1,
+    )
+    rows = [
+        json.loads(line)
+        for line in (output / "candidate-dispositions.jsonl").read_text().splitlines()
+    ]
+
+    assert counts["failed"] == 1
+    assert counts["dispatched_uncommitted_or_unknown"] == 2
+    assert [row["status"] for row in rows] == [
+        "worker_state_unknown_at_interruption",
+        "worker_reported_failure",
+        "worker_state_unknown_at_interruption",
+    ]
+
+
 def test_finite_domain_driver_refuses_nonempty_output(tmp_path: Path) -> None:
     from tools.run_a26_cached_finite_domain import run_finite_domain
 
