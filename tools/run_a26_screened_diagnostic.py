@@ -25,7 +25,7 @@ MEASUREMENTS_SHA256 = "ed1145cee93d4f06ffa983f671319dee49e9a95cb4692a2dd14a44c4a
 SCOPE_SHA256 = "d32e42622c7d959a26009bb23b5c5ea8336d4b13329f59e3fffb8e3f25e175e1"
 CATALOG_ARCHIVE_SHA256 = "cef2b3dec757983c8a026caeff98e1ba42c164660f32a34915594e1443ac5472"
 MAP_ARCHIVE_SHA256 = "fda522364582a20d74a643e7e854844b2ce2490a45e469cb210fd9a8babd13de"
-RUN_ID = "a26-screened-cachegen-port001-placement001-r0-10km-typesoff-v2"
+RUN_ID = "a26-screened-cachegen-port001-placement001-r0-10km-typesoff-v3"
 TIMEOUT_S = 1800.0
 EXECUTION_PROTOCOL = {
     "schema": "accuracy-execution-protocol-v1",
@@ -176,10 +176,17 @@ def _make_generation_config(repo_root: Path, run_root: Path, cache_path: Path) -
 
 
 def build_cache_generation_plan(
-    repo_root: Path, search_worktree: Path, output_root: Path
+    repo_root: Path,
+    search_worktree: Path,
+    output_root: Path,
+    *,
+    expected_source_sha: str | None = None,
 ) -> dict[str, Any]:
     repo_root = repo_root.resolve()
     search_worktree = search_worktree.resolve()
+    source_sha = _git_sha(search_worktree)
+    if expected_source_sha is not None and source_sha != expected_source_sha:
+        raise ValueError("Search worktree does not match the explicitly pinned source SHA.")
     output_root = output_root.resolve()
     static_root = output_root / "static-inputs"
     cache_path = output_root / "cache/proposals-v1"
@@ -234,7 +241,8 @@ def build_cache_generation_plan(
         "schema_version": 1,
         "run_id": RUN_ID,
         "purpose": "development cache-generation diagnostic",
-        "search_source_sha": _git_sha(search_worktree),
+        "search_source_sha": source_sha,
+        "expected_search_source_sha": expected_source_sha or source_sha,
         "runner_source_sha": _git_sha(repo_root),
         "timeout_s": TIMEOUT_S,
         "search_truth_input": None,
@@ -266,7 +274,9 @@ def execute_cache_generation(
 
     if not re.fullmatch(r"[0-9a-f]{40,64}", gate_sha):
         raise ValueError("A gate commit digest is required before execution.")
-    if _git_sha(search_worktree.resolve()) != plan["search_source_sha"]:
+    if plan.get("expected_search_source_sha") != plan["search_source_sha"]:
+        raise ValueError("Plan does not bind the expected search source SHA.")
+    if _git_sha(search_worktree.resolve()) != plan["expected_search_source_sha"]:
         raise ValueError("Search source changed after the plan was frozen.")
     output_root = output_root.resolve()
     lock_path = search_worktree.resolve() / ".agent-work/benchmark.lock"
@@ -333,9 +343,15 @@ def main() -> int:
     parser.add_argument("--search-worktree", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--gate-sha", help="Required only with --execute-cache-build.")
+    parser.add_argument("--expected-search-source-sha", required=True)
     parser.add_argument("--execute-cache-build", action="store_true")
     args = parser.parse_args()
-    plan = build_cache_generation_plan(args.repo_root, args.search_worktree, args.output_root)
+    plan = build_cache_generation_plan(
+        args.repo_root,
+        args.search_worktree,
+        args.output_root,
+        expected_source_sha=args.expected_search_source_sha,
+    )
     run_root = args.output_root.resolve() / "cache-build"
     if args.execute_cache_build:
         if args.gate_sha is None:
