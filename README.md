@@ -1,68 +1,60 @@
 # Bearing-only maritime localization
 
-Locate a boat from true-north object bearings, optional object types, a catalog of known objects, and a land/water map. The estimator receives no boat position, target distances, or observation-to-catalog identities.
+Locate a boat from true-north object bearings, optional types, a catalog of known objects, and a land/water map. Search receives no boat position, target distances, or observation-to-catalog identities.
 
-## Install
+## Install and run
 
-Use Python 3.11 and [uv](https://docs.astral.sh/uv/). Run commands from the repository root.
+Use Python 3.11 and [uv](https://docs.astral.sh/uv/). Run from the repository root.
 
 ```text
 uv sync --locked --all-groups
+uv run python examples/simulate.py
+uv run python examples/wedge.py
 ```
 
-## Run the small example
+Every example loads the same complete East Coast catalog and vector map from `data/`. The compressed files unpack automatically into that same folder after checksum verification. No additional dataset download is required.
 
-The editable example has three vessels in synthetic open water. It uses a 200 m square search region so you can step through the complete program quickly.
+Edit the settings at the top of an example to choose an observer, visibility range, candidate budget, or method. Observer IDs refer to `data/observer_locations.csv`. The table records each location's current map status. B1 is in known water. Simulation rejects positions on land or outside known coverage.
 
-Generate separate measurement and truth files.
+## Examples
 
-```text
-uv run bearing-simulator --schema-version 2 --fixture examples/tiny/scene.json --projected-crs EPSG:32618 --measurements-out runs/tiny/measurements.json --truth-out runs/tiny/truth.json --diagnostics-out runs/tiny/simulation.json --seed 11 --trial-id tiny
-```
-
-Search using measurements, catalog, map and configuration.
-
-```text
-uv run bearing-localization-search --schema-version 2 --measurements runs/tiny/measurements.json --catalog examples/tiny/catalog.json --map examples/tiny/map.json --config examples/tiny/search-config.json --projected-crs EPSG:32618 --algorithm grid --spacing-m 100 --no-refine --output runs/tiny/result.json
-```
-
-Evaluate the saved result separately.
-
-```text
-uv run bearing-localization-evaluate --schema-version 2 --estimate runs/tiny/result.json --truth runs/tiny/truth.json --support examples/tiny/support.json --coordinate-crs EPSG:32618 --output runs/tiny/evaluation.json
-```
-
-Read ranked positions and assignments in `runs/tiny/result.json`. Stage timings and diagnostics are written alongside it as `result.json.telemetry.json`. Without a calibrated acceptance rule, a returned location can have `decision_status="ambiguous"`. This is distinct from a failed search.
-
-## Debug and change inputs
-
-Edit `examples/tiny/scene.json` to change the simulator's observer, objects, noise or visibility. Its catalog and map are embedded so simulation is self-contained. If you change those objects or geometry, make the same changes in the separate `catalog.json` and `map.json` supplied to search.
-
-Edit `examples/tiny/search-config.json` to change the search bounds, range, type policy or candidate budget. All projected search coordinates use EPSG:32618. Bearings are degrees clockwise from true north.
-
-
-## Code
-
-| Path | Responsibility |
+| Python file | Purpose |
 |---|---|
-| `bearing_localization/simulator/` | Simulated detections and separate truth output. |
-| `bearing_localization/search/` | Candidate generation, visibility, association, scoring and refinement. |
-| `bearing_localization/accuracy_cli.py` | Version-2 file loading and program orchestration. |
-| `bearing_localization/evaluation/` | Truth-based measurements after search. |
-| `maritime_localization_shared/` | Contracts, serialization, coordinates and geometry. |
-| `maritime_localization_ingest/` | AIS, measurement and chart normalization. |
-| `main.py` | Optional search/evaluation subprocess orchestration. |
-| `data/` | Current real inputs and source manifests. |
-| `examples/` | Small editable case and saved East Coast measurements. |
-| `tests/` | Core software regression tests. |
+| [simulate.py](examples/simulate.py) | Generate visible bearings and separate truth, without running search. |
+| [grid.py](examples/grid.py) | Uniform grid search. |
+| [hierarchical.py](examples/hierarchical.py) | Coarse-to-fine search. |
+| [randomized.py](examples/randomized.py) | Seeded randomized search. |
+| [pairwise.py](examples/pairwise.py) | Pairwise bearing-intersection proposals. |
+| [wedge.py](examples/wedge.py) | Geodesic reverse-bearing proposals and seed refinement. |
+| [branch_bound.py](examples/branch_bound.py) | Region subdivision with explicit unresolved-bound status. |
+| [gpu.py](examples/gpu.py) | Grid candidate scoring using optional GPUs. |
+| [compare_algorithms.py](examples/compare_algorithms.py) | Run methods on the same observations. |
+| [compare_types.py](examples/compare_types.py) | Compare type labels enabled and disabled on identical bearings. |
+| [compare_ranges.py](examples/compare_ranges.py) | Compare 1, 5 and 10 km visibility. |
+| [compare_backends.py](examples/compare_backends.py) | Compare CPU and GPU requests sequentially. |
+| [replay.py](examples/replay.py) | Search using saved bearings without running the simulator. |
 
-## Checks
+The scripts share `examples/_data.py` for verified data loading and `examples/_common.py` for simulation, process handoff, and result reporting. They do not contain separate copies of the dataset. Small synthetic fixtures live under `tests/`.
+
+## Outputs
+
+Each search invocation writes a new timestamped folder under `runs/`. It contains measurements, separate truth, search settings, ranked results, a process log, and a summary. Comparison examples also write `comparison.csv` and `comparison.json`.
+
+The summary reports the best hypothesis's geodesic position error separately from accepted-fix error. Ambiguity, failure, and budget exhaustion remain explicit. `search_process_ms` includes interpreter startup, full input loading, search, and output writing; data unpacking and simulation happen before that interval.
+
+These are editable manual experiments. Default budgets do not complete a coast-wide search, and the 25 km grid is a coarse demonstration. The full catalog and declared search domain remain unchanged across examples. Range and land visibility limit detections, not the search domain. Dynamic-map branch-and-bound does not currently have a certified exclusion bound. An uncalibrated result may remain ambiguous.
+
+## Data and software
+
+All data files are directly under [data/](data/README.md). `objects.json.gz` and `map.json.gz` are the shared runtime inputs. Source CSVs and manifests retain provenance. `observer_locations.csv` is simulator/evaluator truth; search receives only bearings, catalog, map, and configuration.
+
+Production code is in `bearing_localization/`, `maritime_localization_shared/`, and `maritime_localization_ingest/`. Tests are named by the behavior they check.
+
+For GPU examples, use Linux with compatible NVIDIA hardware and install the optional extra.
 
 ```text
-uv run pytest -q
-uv run ruff format --check .
-uv run ruff check .
-uv run ty check .
+uv sync --locked --all-groups --extra gpu
+uv run python examples/gpu.py
 ```
 
-The code retains both contract versions. Use `--schema-version 2` for the current search path. Search accuracy and complete coast-wide latency remain experimental. Removed reports, plots and experiment runners remain available in Git history at `a8ed127`.
+No benchmark or recurring job starts automatically.

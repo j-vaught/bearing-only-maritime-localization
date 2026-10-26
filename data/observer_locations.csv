@@ -1,25 +1,25 @@
-site_id,port,usace_2024_rank,latitude_deg,longitude_deg,reference_anchor_latitude_deg,reference_anchor_longitude_deg,anchor_distance_km,placement_note
-B1,Searsport ME,147,44.449174,-68.906964,44.46,-68.92,1.66,Water cell nearest Searsport harbor anchor
-B2,Portland ME,75,43.648779,-70.247938,43.65,-70.25,0.23,Water cell nearest Portland Harbor anchor
-B3,Portsmouth NH,140,43.082207,-70.744383,43.08,-70.75,0.55,Water cell nearest Portsmouth Harbor anchor
-B4,Boston,57,42.353758,-71.023990,42.35,-71.03,0.67,Water cell nearest Boston Harbor anchor
-B5,Providence,73,41.809669,-71.389192,41.81,-71.40,0.95,Water cell nearest Providence Harbor anchor
-B6,New Haven,51,41.270076,-72.912766,41.27,-72.91,0.24,Water cell nearest New Haven Harbor anchor
-B7,Bridgeport CT,98,41.171151,-73.180960,41.17,-73.19,0.80,Water cell nearest Bridgeport Harbor anchor
-B8,Port Jefferson NY,105,40.955314,-73.083954,40.95,-73.07,1.36,Water cell nearest Port Jefferson Harbor anchor
-B9,New York and New Jersey,4,40.681022,-74.059726,40.68,-74.06,0.12,Water cell nearest New York Harbor anchor
-B10,South Jersey,32,39.939082,-75.121092,39.94,-75.12,0.14,Water cell nearest South Jersey waterfront anchor
-B11,Philadelphia,18,39.889620,-75.138211,39.89,-75.14,0.16,Water cell nearest Philadelphia waterfront anchor
-B12,Wilmington DE,70,39.714252,-75.503412,39.72,-75.53,2.42,Water cell nearest Wilmington Delaware port anchor
-B13,Baltimore,15,39.228619,-76.559072,39.23,-76.56,0.17,Water cell nearest Baltimore Harbor anchor
-B14,Virginia Hampton Roads,8,36.948842,-76.330821,36.95,-76.33,0.15,Water cell nearest Hampton Roads anchor
-B15,Morehead City,136,34.718528,-76.701729,34.72,-76.70,0.22,Water cell nearest Morehead City port anchor
-B16,Wilmington NC,62,34.187929,-77.957108,34.23,-77.95,4.72,Cape Fear entrance water cell nearest Wilmington port-area anchor
-B17,Charleston,24,32.780492,-79.931477,32.78,-79.93,0.14,Water cell nearest Charleston Harbor anchor
-B18,Savannah,12,31.948621,-80.850187,31.95,-80.85,0.15,Water cell nearest Savannah and Tybee Roads approach anchor
-B19,Brunswick GA,81,31.130239,-81.489289,31.15,-81.50,2.39,Water cell nearest Brunswick port-area anchor
-B20,Jacksonville,36,30.406286,-81.403695,30.39,-81.42,2.31,Water cell nearest St Johns River entrance anchor
-B21,Port Canaveral,71,28.414292,-80.610523,28.41,-80.60,1.04,Water cell nearest Port Canaveral entrance anchor
-B22,Palm Beach,109,26.768536,-80.051309,26.77,-80.05,0.20,Water cell nearest Port of Palm Beach anchor
-B23,Port Everglades,28,26.089549,-80.119784,26.09,-80.12,0.05,Water cell nearest Port Everglades anchor
-B24,PortMiami,54,25.770290,-80.182553,25.77,-80.18,0.23,Water cell nearest PortMiami anchor
+site_id,port,usace_2024_rank,latitude_deg,longitude_deg,reference_anchor_latitude_deg,reference_anchor_longitude_deg,anchor_distance_km,placement_note,current_map_water_status,current_map_sha256
+B1,Searsport ME,147,44.449174,-68.906964,44.46,-68.92,1.66,Water cell nearest Searsport harbor anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B2,Portland ME,75,43.648779,-70.247938,43.65,-70.25,0.23,Water cell nearest Portland Harbor anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B3,Portsmouth NH,140,43.082207,-70.744383,43.08,-70.75,0.55,Water cell nearest Portsmouth Harbor anchor,land,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B4,Boston,57,42.353758,-71.023990,42.35,-71.03,0.67,Water cell nearest Boston Harbor anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B5,Providence,73,41.809669,-71.389192,41.81,-71.40,0.95,Water cell nearest Providence Harbor anchor,land,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B6,New Haven,51,41.270076,-72.912766,41.27,-72.91,0.24,Water cell nearest New Haven Harbor anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B7,Bridgeport CT,98,41.171151,-73.180960,41.17,-73.19,0.80,Water cell nearest Bridgeport Harbor anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B8,Port Jefferson NY,105,40.955314,-73.083954,40.95,-73.07,1.36,Water cell nearest Port Jefferson Harbor anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B9,New York and New Jersey,4,40.681022,-74.059726,40.68,-74.06,0.12,Water cell nearest New York Harbor anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B10,South Jersey,32,39.939082,-75.121092,39.94,-75.12,0.14,Water cell nearest South Jersey waterfront anchor,land,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B11,Philadelphia,18,39.889620,-75.138211,39.89,-75.14,0.16,Water cell nearest Philadelphia waterfront anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B12,Wilmington DE,70,39.714252,-75.503412,39.72,-75.53,2.42,Water cell nearest Wilmington Delaware port anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B13,Baltimore,15,39.228619,-76.559072,39.23,-76.56,0.17,Water cell nearest Baltimore Harbor anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B14,Virginia Hampton Roads,8,36.948842,-76.330821,36.95,-76.33,0.15,Water cell nearest Hampton Roads anchor,land,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B15,Morehead City,136,34.718528,-76.701729,34.72,-76.70,0.22,Water cell nearest Morehead City port anchor,land,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B16,Wilmington NC,62,34.187929,-77.957108,34.23,-77.95,4.72,Cape Fear entrance water cell nearest Wilmington port-area anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B17,Charleston,24,32.780492,-79.931477,32.78,-79.93,0.14,Water cell nearest Charleston Harbor anchor,land,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B18,Savannah,12,31.948621,-80.850187,31.95,-80.85,0.15,Water cell nearest Savannah and Tybee Roads approach anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B19,Brunswick GA,81,31.130239,-81.489289,31.15,-81.50,2.39,Water cell nearest Brunswick port-area anchor,land,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B20,Jacksonville,36,30.406286,-81.403695,30.39,-81.42,2.31,Water cell nearest St Johns River entrance anchor,land,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B21,Port Canaveral,71,28.414292,-80.610523,28.41,-80.60,1.04,Water cell nearest Port Canaveral entrance anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B22,Palm Beach,109,26.768536,-80.051309,26.77,-80.05,0.20,Water cell nearest Port of Palm Beach anchor,land,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B23,Port Everglades,28,26.089549,-80.119784,26.09,-80.12,0.05,Water cell nearest Port Everglades anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93
+B24,PortMiami,54,25.770290,-80.182553,25.77,-80.18,0.23,Water cell nearest PortMiami anchor,water,cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93

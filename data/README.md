@@ -8,14 +8,17 @@ Every data file is directly in this folder. All search examples use the same ful
 | `map.json.gz` | Current land geometry and explicit known/unknown coverage. |
 | `objects.manifest.json`, `map.manifest.json` | Compressed and uncompressed checksums, coordinate conventions, counts and source information. |
 | `map-source-validation.json` | Source geometry validation record. |
+| `search-domain.json` | Full-coast search bounds, projection, and input hashes. |
+| `example-bearings.json` | Saved simulated bearings for replay; no evaluator truth is bundled for that older frame. |
 | `observer_locations.csv` | 24 East Coast port-area observer locations for simulation and evaluation. |
-| `east-coast-observers-b1-b10.csv` | Earlier ten-port observer locations. |
 | `*2023-07-15T1200Z.csv` | Selected AIS snapshot source tables. |
 | `*-enc-aids.csv` | Chart feature source tables before catalog normalization. |
 
+The example loader verifies and expands the archives into `objects.json` and `map.json` here. These generated JSON files are ignored by Git.
+
 Adjacent source-table manifests retain original extraction details. AIS row identifiers are snapshot keys; the original extraction omitted vessel names and MMSIs. Chart components can have unresolved physical identities. Source manifests can mention historical server paths or filenames; those are provenance, not files needed at runtime.
 
-Observer coordinates are simulator/evaluator truth, never search inputs. Identifiers belong to their individual observer tables. These points were originally selected using a coarse mask; the examples must check them against the current vector map before simulation.
+Observer coordinates are simulator/evaluator truth, never search inputs. The points were originally selected using a coarse mask. The table now records the current vector-map status and the map hash without changing coordinates. Fifteen points are water and nine are land on this map. The simulator rechecks geometry at runtime and rejects invalid positions.
 
 The catalog and map use EPSG:4326. The declared search domain uses EPSG:32618. Approximately 23.7 percent of the map region has unknown coverage, which is not inferred as water.
 

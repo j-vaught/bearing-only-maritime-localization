@@ -10,3 +10,11 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# Recreated from the committed compressed data.
+/data/objects.json
+/data/map.json
+# Generated example records; figures remain trackable.
+/runs/**/*.json
+/runs/**/*.csv
+/runs/**/*.log

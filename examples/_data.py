@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import gzip
 import hashlib
 import json
@@ -44,27 +43,23 @@ def unpack(archive: Path, output: Path, archive_hash: str, raw_hash: str) -> Non
     print(f"Verified {output}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path, default=ROOT / "runs/east-coast")
-    args = parser.parse_args()
+def prepare_data() -> tuple[Path, Path]:
+    """Unpack one shared copy beside the committed compressed inputs."""
     catalog_folder = ROOT / "data"
     catalog = json.loads((catalog_folder / "objects.manifest.json").read_text())
+    objects_path = catalog_folder / "objects.json"
+    map_path = catalog_folder / "map.json"
     unpack(
         ROOT / catalog["archive_path"],
-        args.output_dir / "catalog.json",
+        objects_path,
         catalog["archive_sha256"],
         catalog["raw_sha256"],
     )
-    map_folder = ROOT / "data"
-    map_payload = json.loads((map_folder / "map.manifest.json").read_text())["map_payload"]
+    map_payload = json.loads((catalog_folder / "map.manifest.json").read_text())["map_payload"]
     unpack(
-        map_folder / map_payload["archive_filename"],
-        args.output_dir / "map.json",
+        catalog_folder / map_payload["archive_filename"],
+        map_path,
         map_payload["archive_sha256"],
         map_payload["original_sha256"],
     )
-
-
-if __name__ == "__main__":
-    main()
+    return objects_path, map_path
