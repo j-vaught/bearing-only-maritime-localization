@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,17 +22,44 @@ EVALUATION_ROOTS = ("bearing_localization.evaluation", "bearing_localization.eva
 SHARED_ROOTS = ("maritime_localization_shared",)
 
 
-def _python_sources() -> dict[str, tuple[Path, ast.Module]]:
+def _python_sources(root: Path = ROOT) -> dict[str, tuple[Path, ast.Module]]:
     sources: dict[str, tuple[Path, ast.Module]] = {}
-    for path in ROOT.rglob("*.py"):
-        if any(part in {".venv", "build", "dist"} for part in path.parts):
-            continue
-        relative = path.relative_to(ROOT).with_suffix("")
-        module = ".".join(relative.parts)
-        if module.endswith(".__init__"):
-            module = module[: -len(".__init__")]
-        sources[module] = (path, ast.parse(path.read_text(encoding="utf-8")))
+    excluded_dirs = {
+        ".agent-work",
+        ".git",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "__pycache__",
+        "build",
+        "dist",
+    }
+    for directory, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(name for name in dirnames if name not in excluded_dirs)
+        directory_path = Path(directory)
+        for filename in sorted(filenames):
+            if not filename.endswith(".py"):
+                continue
+            path = directory_path / filename
+            relative = path.relative_to(root).with_suffix("")
+            module = ".".join(relative.parts)
+            if module.endswith(".__init__"):
+                module = module[: -len(".__init__")]
+            sources[module] = (path, ast.parse(path.read_text(encoding="utf-8")))
     return sources
+
+
+def test_python_source_discovery_prunes_agent_workarea(tmp_path: Path) -> None:
+    source = tmp_path / "maritime_localization_shared" / "example.py"
+    source.parent.mkdir()
+    source.write_text("value = 1\n", encoding="utf-8")
+    generated = tmp_path / ".agent-work" / "cache" / "generated.py"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("type Alias[T] = list[T]\n", encoding="utf-8")
+
+    sources = _python_sources(tmp_path)
+
+    assert set(sources) == {"maritime_localization_shared.example"}
 
 
 def _program_for(module: str) -> str | None:

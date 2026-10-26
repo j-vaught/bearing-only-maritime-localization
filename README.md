@@ -1,5 +1,22 @@
 # Bearing-only maritime localization
 
+## Current development results — 26 October 2026
+
+The latest assignment-expansion diagnostic recovers the difficult development scene. Its lowest-objective returned estimate is 11.127 m from the simulated boat, with all five object associations correct. Earlier refinement selected a location 853.440 km away, with no correct associations. The input catalog, map, observations, and complete scoring objective are unchanged; the new proposal step explores additional report-to-object matches.
+
+| Selected result | Position error | Correct associations |
+|---|---:|---:|
+| Previous pattern refinement | 853,439.780 m | 0 of 4 |
+| Assignment expansion | 11.127 m | 5 of 5 |
+
+![Selected development result before and after assignment expansion.](docs/figures/localization-recovery-summary-2026-10-26.png)
+
+The [one-page results PDF](docs/figures/localization-recovery-summary-2026-10-26.pdf) provides the compact comparison. The [detailed progress PDF](docs/figures/cached-refinement-progress-2026-10-26.pdf) shows the selected result at each stage and the nearby alternative's progression. The [independent evaluation](reports/experiments/a35-cached-evaluation/assignment-expansion-full-audit.json) records the numerical evidence, and the [progress ledger](docs/accuracy-progress-2026-10-26.md) retains failed approaches and remaining work.
+
+This result uses generated bearings over real catalog and chart data. It is one development scene, not a measured-bearing field result or a benchmark accuracy rate. The serial run completed 60 of 64 selected locations before its deadline. A four-worker run completed 63 of 64 before its storage guard; a composite audit is checking their combined coverage. The original coast-wide search still has 1,410,282 unvisited or unresolved candidate IDs, so acceptance, global optimality, and the 100 ms target remain unproven.
+
+The standard search command and benchmark runner now support assignment expansion. A direct coarse-estimate route also skips intermediate pattern refinement; its software tests pass, while its real-data runtime and accuracy comparison remain pending. Publication gates, calibration, held-out evaluation, and final review remain open.
+
 This repository is a reproducible simulation study for locating a vessel from globally referenced object bearings and a catalog of AIS coordinates. Bearings are measured clockwise from north. The estimator receives object types when enabled, but it does not receive object identities, ranges, non-AIS coordinates, or the vessel's position.
 
 The simulator reports objects inside a configurable visibility radius, including detections that have no AIS match. Reports contain global bearing and an optional type label, but no object identity, range, or observer pose. The initial sensor model uses Gaussian bearing error and can merge objects whose bearings fall within the configured angular resolution. When a map is supplied, water masks constrain observer placement and search candidates, while line-of-sight checks remove objects hidden by land. These map features are implemented, but the checked-in synthetic baseline does not use a coastline or navigable-water dataset.

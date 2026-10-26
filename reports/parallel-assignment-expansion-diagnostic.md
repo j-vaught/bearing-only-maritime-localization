@@ -1,0 +1,34 @@
+# Parallel assignment expansion diagnostic
+
+**Scope and status**
+
+The runner uses the completed A20 and assigned-mode artifacts through the same source-pin checks, mode-reference validation, and deterministic best-of-two start selection as the serial diagnostic. It does not read truth or evaluator outputs. Before dispatch, the coordinator canonically revalidates both saved starts for all 64 modes, exactly preserving the serial input selection, and releases its scorer before creating worker processes. Four persistent spawned CPU workers each build one scorer and process bounded whole-mode jobs.
+
+Each mode retains the fixed 1,000 m local radius, 100 function-evaluation cap, and 5,000-branch cap. The runner precomputes each mode’s candidate count from the existing candidate-pool helper, then dispatches modes in descending count order with mode index as the tie-break. This changes job priority only. All 64 modes remain in the run. Results and final row files return to mode-index order, while the ranked list uses objective score with mode index as the tie-break.
+
+**Durability and provenance**
+
+Branch start and result events are appended by the coordinator to one fsynced, globally chained event stream. Each record also has a mode-local sequence number, stable mode index, and the original branch event identifier. Completion rows are atomically rewritten in mode-index order whenever a mode finishes. Checkpoints distinguish completed, failed, and unknown mode indices, and retain pending and not-dispatched pool dispositions. Resume is disabled. A worker failure, timeout, callback error, output cap, or incomplete inventory cannot produce a completed run.
+
+The manifest records source pins, the loaded package commit and assignment-expansion file hash from the coordinator and each worker, each worker’s scorer source path and hash, process IDs, ready and peak resident memory, validation/setup elapsed time, and the count-based dispatch order. The output directory is fixed at `.agent-work/outputs/parallel-assignment-expansion-diagnostic-v1`; the runner enforces the shared canonical benchmark lock, the 40 GiB free-space reserve, a 50 MiB output cap, a 1,800 s maximum deadline, and one numerical thread per worker.
+
+The result always leaves `decision_status` as `ambiguous`, `search_status` as `budget_exhausted`, `certificate_scope` as `none`, and `full_domain_complete` as false. It does not claim that bounded local expansion proves a global optimum. The manifest separately reports preflight, visited, and unvisited branch counts and requires complete inventory agreement before marking all 64 modes complete.
+
+**Validation**
+
+The focused tests cover standalone import and numeric-thread setup, parity of selected starts and stable mode IDs, descending-count dispatch priority, source-hash rejection, out-of-order event interleaving and chained indices, durable partial rows and unknown-mode counts, canonical-lock resolution, current loaded-package commit and source hashes, and branch-inventory arithmetic. The combined pool and runner suites pass 25 tests. Ruff, `ty`, and `git diff --check` pass on the owned files. Runtime evidence from the bounded diagnostic appears below.
+
+J.C. Vaught
+
+
+**Observed run**
+
+The frozen run started from commit `a41570c525f4da6b801622366c5a601bfba09c22` and stopped after 568.4192093019374 s when the callback resource check found that free space had fallen below the 40 GiB reserve plus the 50 MiB output cap. The final manifest records `failed` with `RuntimeError: progress callback failed: OSError: 40 GiB disk reserve leaves less than the output cap`. The parent process and workers exited; the raw output was preserved without retry.
+
+The preflight covered all 64 modes and 22,000 candidate branches. The durable result contains 63 completed modes, zero failed modes, and pending mode 48 with 3,183 candidate branches. Completed rows account for 18,817 candidate and visited branches, with zero unvisited branches within those returned modes. Their row statuses are 55 `completed` and 8 `no_unmatched_reports`. The worker pool reported four provenance records, each loaded from the frozen commit and each with a measured peak resident set of 1,299,152,896 bytes. The caller received the pool callback failure above and retained the pending mode as unknown. The run does not establish full-domain completion or a final decision.
+
+The best objective among the returned rows is 5.026904167180264 for mode 4, candidate `cell:cell:1594:4160`. This describes only the completed subset. The manifest retains `decision_status=ambiguous`, `search_status=budget_exhausted`, `certificate_scope=none`, and `truth_used=false`.
+
+The raw output remains at `/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/outputs/parallel-assignment-expansion-diagnostic-v1`, and the log remains at `/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/parallel-assignment-expansion-diagnostic-v1.log`. The manifest SHA-256 is `1f032a2270517d0f2ba5f303f335de3329e9f5532806969f65bee006e6617060`, the checkpoint SHA-256 is `27713feb2605c4b5a3d53d2e54a12b05237c72d6f61eb5972cc05c70c13a6cb6`, the rows SHA-256 is `34874d530ed45a1ee8da40da7ee78650dc84f2033a454e7ba967f48faabe6068`, the event stream SHA-256 is `59e52547471065853a1c1b35bc46f8b4393d254559317c237bb5675196f23f24`, and the log SHA-256 is `d87afcbe3c40535d88116972389a9e7b6ae3c84b626b97651fd2d9d9d61906f0`. The output occupied 24,931,532 bytes. The fsynced event chain ended at `ea74ba8b2306d35a71b878a200cde8f80a4e8c2b9758cce1549a83aad69cad33` after 41,278 events.
+
+This shared-host CPU diagnostic reports only the observed partial elapsed time. It does not support a complete-run latency or general parallel speedup claim.

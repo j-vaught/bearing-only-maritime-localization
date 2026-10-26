@@ -4,6 +4,7 @@ The output uses the same local equirectangular metre frame as the East Coast
 search diagnostics. A 500 m scanline raster supports coarse candidate pruning
 and land-blocked line-of-sight experiments; it is not a navigation chart.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,9 +24,7 @@ ORIGIN_LON_DEG = -76.2
 
 def project(lon_deg: float, lat_deg: float) -> tuple[float, float]:
     east = (
-        R_EARTH_M
-        * math.radians(lon_deg - ORIGIN_LON_DEG)
-        * math.cos(math.radians(ORIGIN_LAT_DEG))
+        R_EARTH_M * math.radians(lon_deg - ORIGIN_LON_DEG) * math.cos(math.radians(ORIGIN_LAT_DEG))
     )
     north = R_EARTH_M * math.radians(lat_deg - ORIGIN_LAT_DEG)
     return east, north

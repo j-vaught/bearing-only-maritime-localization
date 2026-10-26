@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from hashlib import blake2b
 from math import atan2, degrees, hypot, isfinite
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+from pyproj import Geod, Transformer
 
 from bearing_localization.scene import Landmark, Scene, ShipPose
 from bearing_localization.simulator.angular_grouping import (
@@ -15,6 +18,15 @@ from bearing_localization.simulator.angular_grouping import (
     group_angular_detections,
 )
 from bearing_localization.simulator.measurement_model import add_bearing_noise
+from bearing_localization.simulator.mismatch import (
+    GroupTruthDiagnostic,
+    KnownWaterObserver,
+    PhysicalSceneV2,
+    SensorConfigurationV2,
+    SimulationDiagnosticsV2,
+    SimulationRunV2,
+    SimulatorMismatchConfig,
+)
 from maritime_localization_shared.contracts import (
     AISRecord,
     AISSnapshot,
@@ -22,12 +34,18 @@ from maritime_localization_shared.contracts import (
     MeasurementSet,
     TrueObject,
 )
+from maritime_localization_shared.contracts.inputs_v2 import MeasurementSetV2, MeasurementV2
 from maritime_localization_shared.contracts.map_input import MapInput
+from maritime_localization_shared.contracts.object_types import (
+    is_visual_entity,
+    normalize_object_type,
+)
 from maritime_localization_shared.geospatial import (
     LandPolygon,
     line_of_sight_clear,
     raster_line_of_sight,
 )
+from maritime_localization_shared.geospatial.vector_map import VectorMap
 from maritime_localization_shared.geospatial.water_mask import WaterMask
 from maritime_localization_shared.serialization import write_contract
 
@@ -202,3 +220,346 @@ def _is_water(map_input: MapInput | WaterMask, point: tuple[float, float]) -> bo
 
 
 __all__ = ["SimulationRun", "run_simulator"]
+
+_GEOD = Geod(ellps="WGS84")
+_DEFAULT_TIMESTAMP = "2026-10-25T12:00:00Z"
+_TYPE_CHOICES = ("vessel", "physical_aid", "shoreline", "unknown")
+
+
+@dataclass(frozen=True, slots=True)
+class _PhysicalTarget:
+    object_id: str
+    catalog_key: str | None
+    longitude_deg: float
+    latitude_deg: float
+    object_type: str
+    angular_half_width_deg: float
+    physical_entity_id: str | None = None
+    physical_linkage_status: str = "unresolved"
+
+
+def _rng(seed: int, stream: str, key: str = "") -> np.random.Generator:
+    digest = blake2b(f"{stream}\0{key}".encode(), digest_size=4).digest()
+    stream_key = int.from_bytes(digest, "little")
+    return np.random.default_rng(np.random.SeedSequence(seed, spawn_key=(stream_key,)))
+
+
+def _metadata(pairs: tuple[tuple[str, Any], ...]) -> dict[str, Any]:
+    return dict(pairs)
+
+
+def _offset_position(
+    longitude_deg: float,
+    latitude_deg: float,
+    metadata: dict[str, Any],
+    displacement_east_m: float = 0.0,
+    displacement_north_m: float = 0.0,
+) -> tuple[float, float]:
+    east = float(metadata.get("visible_feature_offset_east_m", 0.0)) + displacement_east_m
+    north = float(metadata.get("visible_feature_offset_north_m", 0.0)) + displacement_north_m
+    if not isfinite(east) or not isfinite(north):
+        raise ValueError("Visible-feature offsets and catalog displacement must be finite.")
+    distance = hypot(east, north)
+    if distance == 0.0:
+        return longitude_deg, latitude_deg
+    bearing = degrees(atan2(east, north))
+    lon, lat, _ = _GEOD.fwd(longitude_deg, latitude_deg, bearing, distance)
+    return float(lon), float(lat)
+
+
+def _type_with_error(
+    object_type: str, *, seed: int, key: str, probability: float, enabled: bool
+) -> str | None:
+    if not enabled:
+        return None
+    if _rng(seed, "type-error", key).random() >= probability:
+        return object_type
+    alternatives = tuple(value for value in _TYPE_CHOICES if value != object_type)
+    if not alternatives:
+        return object_type
+    return alternatives[int(_rng(seed, "type-choice", key).integers(len(alternatives)))]
+
+
+def _bearing_error(
+    bearing_deg: float,
+    *,
+    seed: int,
+    key: str,
+    sigma_deg: float,
+    outlier_probability: float,
+    heading_bias_deg: float,
+) -> float:
+    if _rng(seed, "outlier", key).random() < outlier_probability:
+        return float(_rng(seed, "outlier-bearing", key).uniform(0.0, 360.0))
+    error = float(_rng(seed, "bearing-noise", key).normal(0.0, sigma_deg))
+    return (bearing_deg + heading_bias_deg + error) % 360.0
+
+
+def run_simulator_v2(
+    scene: PhysicalSceneV2,
+    observer: KnownWaterObserver,
+    vector_map: VectorMap,
+    sensor: SensorConfigurationV2,
+    *,
+    seed: int = 0,
+    mismatch: SimulatorMismatchConfig | None = None,
+    trial_id: str | None = None,
+    timestamp_utc: str = _DEFAULT_TIMESTAMP,
+) -> SimulationRunV2:
+    """Generate a v2 measurement set plus separate evaluator-only truth and diagnostics.
+
+    The supplied vector_map represents the search map. An optional mismatch
+    observation_map changes only the physical observation LOS model. Displacement
+    moves cataloged physical targets relative to the supplied catalog; uncataloged
+    targets remain fixed. Global bearings are never rotated by observer heading.
+    """
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise TypeError("seed must be an integer.")
+    if not isinstance(scene, PhysicalSceneV2):
+        raise TypeError("scene must be a PhysicalSceneV2.")
+    if not isinstance(observer, KnownWaterObserver):
+        raise TypeError("observer must be a KnownWaterObserver.")
+    if not isinstance(vector_map, VectorMap):
+        raise TypeError("vector_map must be a VectorMap.")
+    if not isinstance(sensor, SensorConfigurationV2):
+        raise TypeError("sensor must be a SensorConfigurationV2.")
+    mismatch = mismatch or SimulatorMismatchConfig()
+    if not isinstance(mismatch, SimulatorMismatchConfig):
+        raise TypeError("mismatch must be a SimulatorMismatchConfig.")
+    if trial_id is not None and (not isinstance(trial_id, str) or not trial_id.strip()):
+        raise ValueError("trial_id must be a nonempty string or None.")
+    if not isinstance(timestamp_utc, str) or not timestamp_utc.strip():
+        raise ValueError("timestamp_utc must be a nonempty ISO 8601 timestamp.")
+
+    observation_map = mismatch.observation_map or vector_map
+    observer_xy = Transformer.from_crs("EPSG:4326", observation_map.crs, always_xy=True).transform(
+        observer.longitude_deg, observer.latitude_deg
+    )
+    observer_xy = (float(observer_xy[0]), float(observer_xy[1]))
+    observer_status = observation_map.point_water_status(observer_xy)
+    if observer_status != "water":
+        raise ValueError("Observer must lie in known water on the observation map.")
+
+    to_map = Transformer.from_crs("EPSG:4326", observation_map.crs, always_xy=True)
+    targets: list[_PhysicalTarget] = []
+    for record in scene.catalog.records:
+        object_type = normalize_object_type(record.normalized_type or record.raw_type)
+        if not is_visual_entity(record.normalized_type or record.raw_type):
+            continue
+        metadata = _metadata(record.metadata)
+        catalog_key = record.key
+        physical_entity_id = metadata.get("physical_entity_id")
+        if physical_entity_id is None:
+            physical_entity_id = dict(record.provenance).get("physical_entity_id")
+        physical_linkage_status = str(
+            metadata.get(
+                "physical_linkage_status", "resolved" if physical_entity_id else "unresolved"
+            )
+        )
+        lon, lat = _offset_position(
+            record.longitude_deg,
+            record.latitude_deg,
+            metadata,
+            mismatch.catalog_displacement_east_m,
+            mismatch.catalog_displacement_north_m,
+        )
+        raw_width = metadata.get("angular_half_width_deg", 0.0)
+        if not isinstance(raw_width, (int, float)) or not isfinite(raw_width) or raw_width < 0.0:
+            raise ValueError(f"Catalog feature {record.key!r} has invalid angular_half_width_deg.")
+        targets.append(
+            _PhysicalTarget(
+                record.key,
+                catalog_key,
+                lon,
+                lat,
+                object_type or "unknown",
+                float(raw_width),
+                str(physical_entity_id) if physical_entity_id else None,
+                physical_linkage_status,
+            )
+        )
+    for item in scene.uncataloged_physical_objects:
+        label = item.normalized_type or item.raw_type
+        if not is_visual_entity(label):
+            continue
+        metadata = _metadata(item.metadata)
+        lon, lat = _offset_position(item.longitude_deg, item.latitude_deg, metadata)
+        raw_width = metadata.get("angular_half_width_deg", 0.0)
+        if not isinstance(raw_width, (int, float)) or not isfinite(raw_width) or raw_width < 0.0:
+            raise ValueError(
+                f"Physical feature {item.object_id!r} has invalid angular_half_width_deg."
+            )
+        targets.append(
+            _PhysicalTarget(
+                item.object_id,
+                None,
+                lon,
+                lat,
+                normalize_object_type(label) or "unknown",
+                float(raw_width),
+            )
+        )
+
+    in_range: list[tuple[_PhysicalTarget, float, float]] = []
+    visible: list[tuple[_PhysicalTarget, float, float]] = []
+    for target in targets:
+        bearing, _, distance = _GEOD.inv(
+            observer.longitude_deg,
+            observer.latitude_deg,
+            target.longitude_deg,
+            target.latitude_deg,
+        )
+        distance = float(distance)
+        if distance == 0.0 or distance > sensor.visibility_radius_m:
+            continue
+        in_range.append((target, float(bearing % 360.0), distance))
+        target_xy = to_map.transform(target.longitude_deg, target.latitude_deg)
+        visibility = observation_map.line_visibility(
+            observer_xy, (float(target_xy[0]), float(target_xy[1]))
+        )
+        if visibility == "clear":
+            visible.append((target, float(bearing % 360.0), distance))
+
+    detections = tuple(
+        DetectedObject(
+            object_id=target.object_id,
+            object_type=target.object_type,
+            bearing_deg=bearing,
+            range_m=distance,
+            bearing_sigma_deg=sensor.bearing_sigma_deg,
+            angular_half_width_deg=target.angular_half_width_deg,
+        )
+        for target, bearing, distance in visible
+    )
+    grouped = group_angular_detections(
+        detections,
+        sensor.angular_resolution_deg,
+        report_type_labels=True,
+    )
+
+    measurements: list[MeasurementV2] = []
+    group_diagnostics: list[GroupTruthDiagnostic] = []
+    truth_observation_for_id: dict[str, int | None] = {target.object_id: None for target in targets}
+    target_by_id = {target.object_id: target for target in targets}
+    detected_group_count = 0
+    for group_index, member_ids in enumerate(grouped.truth_groups):
+        members = [target_by_id[object_id] for object_id in member_ids]
+        representative = min(
+            (
+                (target, distance)
+                for (target, _, distance) in visible
+                if target.object_id in member_ids
+            ),
+            key=lambda pair: (pair[1], pair[0].object_id),
+        )[0]
+        group_key = "|".join(sorted(member_ids))
+        if _rng(seed, "detection", group_key).random() >= sensor.detection_probability:
+            detected = False
+            observation_index = None
+        else:
+            detected = True
+            detected_group_count += 1
+            observation_index = len(measurements)
+            for object_id in member_ids:
+                truth_observation_for_id[object_id] = observation_index
+            measured_type = _type_with_error(
+                representative.object_type,
+                seed=seed,
+                key=group_key,
+                probability=sensor.type_error_probability,
+                enabled=sensor.report_type_labels,
+            )
+            bearing = _bearing_error(
+                grouped.observations[group_index].bearing_deg % 360.0,
+                seed=seed,
+                key=group_key,
+                sigma_deg=sensor.bearing_sigma_deg,
+                outlier_probability=sensor.outlier_probability,
+                heading_bias_deg=mismatch.heading_bias_deg,
+            )
+            measurements.append(
+                MeasurementV2(
+                    bearing_deg=bearing,
+                    timestamp_utc=timestamp_utc,
+                    sigma_deg=sensor.bearing_sigma_deg,
+                    object_type=measured_type,
+                    angular_half_width_deg=representative.angular_half_width_deg,
+                )
+            )
+        catalog_keys = tuple(
+            target.catalog_key for target in members if target.catalog_key is not None
+        )
+        group_diagnostics.append(
+            GroupTruthDiagnostic(
+                member_object_ids=tuple(member_ids),
+                representative_object_id=representative.object_id,
+                catalog_member_keys=catalog_keys,
+                representative_catalog_key=representative.catalog_key,
+                catalog_member_physical_ids=tuple(
+                    sorted(
+                        {
+                            member.physical_entity_id
+                            for member in members
+                            if member.physical_entity_id
+                        }
+                    )
+                ),
+                identity_limited_catalog_member_keys=tuple(
+                    sorted(
+                        member.catalog_key
+                        for member in members
+                        if member.catalog_key is not None and member.physical_entity_id is None
+                    )
+                ),
+                detected=detected,
+                observation_index=observation_index,
+            )
+        )
+
+    clutter_count = int(_rng(seed, "clutter-count").poisson(sensor.expected_clutter_reports))
+    clutter_rng = _rng(seed, "clutter-bearing")
+    for _ in range(clutter_count):
+        measurements.append(
+            MeasurementV2(
+                bearing_deg=float(clutter_rng.uniform(0.0, 360.0)),
+                timestamp_utc=timestamp_utc,
+                sigma_deg=sensor.bearing_sigma_deg,
+                object_type=None,
+                angular_half_width_deg=0.0,
+            )
+        )
+
+    truth_objects = tuple(
+        TrueObject(
+            object_id=f"truth:{target.object_id}",
+            object_type=target.object_type,
+            east_m=float(to_map.transform(target.longitude_deg, target.latitude_deg)[0]),
+            north_m=float(to_map.transform(target.longitude_deg, target.latitude_deg)[1]),
+            ais_record_id=(
+                f"catalog:{target.catalog_key}" if target.catalog_key is not None else None
+            ),
+            observation_index=truth_observation_for_id[target.object_id],
+        )
+        for target in targets
+    )
+    truth = EvaluationTruth(
+        observer_east_m=observer_xy[0],
+        observer_north_m=observer_xy[1],
+        observer_heading_deg=observer.heading_deg,
+        objects=truth_objects,
+        trial_id=trial_id,
+    )
+    measurement_set = MeasurementSetV2(tuple(measurements), trial_id=trial_id)
+    diagnostics = SimulationDiagnosticsV2(
+        in_range_physical_count=len(in_range),
+        line_of_sight_visible_physical_count=len(visible),
+        merged_physical_group_count=len(grouped.truth_groups),
+        detected_physical_group_count=detected_group_count,
+        clutter_report_count=clutter_count,
+        groups=tuple(group_diagnostics),
+        observation_map_coverage="known",
+        heading_bias_deg=mismatch.heading_bias_deg,
+        catalog_displacement_east_m=mismatch.catalog_displacement_east_m,
+        catalog_displacement_north_m=mismatch.catalog_displacement_north_m,
+    )
+    return SimulationRunV2(measurement_set, truth, diagnostics)

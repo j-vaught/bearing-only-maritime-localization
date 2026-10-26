@@ -1,0 +1,11 @@
+{
+  "completed_mode_count": 60,
+  "event_count": 40762,
+  "event_digest": "de5ecfe77ac3f8b15449218328c0321f0e5e00dc49f76d277a7175f6e2fb3115",
+  "events_sha256": "e36a84a9415d1ffdbcb267faea8f37dda07c8952c2faccd7501f16141dea319b",
+  "pending_mode_count": 4,
+  "resume_supported": false,
+  "rows_sha256": "2bb8a9f2f3e0e46f4456c7ead57efda5afab6776465552156ea863a8574a7c7c",
+  "schema": "assignment-expansion-checkpoint-v1",
+  "status": "in_progress"
+}

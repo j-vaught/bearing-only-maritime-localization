@@ -15,6 +15,7 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from maritime_localization_shared.contracts import AISRecord, Observation
+from maritime_localization_shared.contracts.object_types import normalize_object_type
 
 # These are deliberately coarse object-kind aliases, not AIS transponder
 # equipment classes. Unknown labels are compared after case/spacing cleanup.
@@ -55,14 +56,33 @@ def compatible_types(
         return True
     sensor = _normalize(sensor_type)
     ais = _normalize(ais_class)
+    explicit_wildcards = {"unknown", "unk", "unclassified", "unspecified"}
+    if sensor in explicit_wildcards or ais in explicit_wildcards:
+        return True
     mapping = sensor_to_ais
     if mapping is not None:
         normalized_mapping = {
             _normalize(key): frozenset(_normalize(value) for value in values)
             for key, values in mapping.items()
         }
-        return ais in normalized_mapping.get(sensor, frozenset({sensor}))
-    return ais in _SENSOR_KIND_ALIASES.get(sensor, frozenset({sensor}))
+        allowed = normalized_mapping.get(sensor)
+        if allowed is not None:
+            # A custom mapping deliberately assigns meaning to otherwise
+            # unknown source labels such as "class_a".
+            return ais in allowed
+        return ais == sensor
+    sensor_kind = normalize_object_type(sensor_type)
+    ais_kind = normalize_object_type(ais_class)
+    if sensor_kind != "unknown" and ais_kind != "unknown" and sensor_kind == ais_kind:
+        return True
+    # Preserve historical crosswalks for legacy AIS strings not in the
+    # neutral taxonomy while treating other unrecognized labels literally.
+    aliases = _SENSOR_KIND_ALIASES.get(sensor)
+    if aliases is not None and ais in aliases:
+        return True
+    if sensor_kind == "unknown" or ais_kind == "unknown":
+        return sensor == ais
+    return False
 
 
 def associate_observations_to_ais(

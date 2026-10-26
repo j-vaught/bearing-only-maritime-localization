@@ -1,0 +1,98 @@
+[
+  {
+    "name": "manual_unique",
+    "description": "Manually calculated unique optimum; both reports match and unused-group costs are included.",
+    "real_costs": [[1, 9], [8, 2]],
+    "report_miss_costs": [5, 5],
+    "group_miss_costs": [7, 7],
+    "expected_cost": 3,
+    "expected_matches": [[0, 0], [1, 1]],
+    "expected_ties": 1
+  },
+  {
+    "name": "negative_edge_costs",
+    "description": "Negative log-density edge costs remain valid; complete matching is optimal.",
+    "real_costs": [[-3, "inf"], ["inf", 2]],
+    "report_miss_costs": [1, 1],
+    "group_miss_costs": [4, 4],
+    "expected_cost": -1,
+    "expected_matches": [[0, 0], [1, 1]],
+    "expected_ties": 1
+  },
+  {
+    "name": "forbidden_edges_and_unused_group",
+    "description": "An infinite edge is forbidden and the unused predicted-group penalty changes the optimum.",
+    "real_costs": [[0, "inf"]],
+    "report_miss_costs": [3],
+    "group_miss_costs": [4, 4],
+    "expected_cost": 4,
+    "expected_matches": [[0, 0]],
+    "expected_ties": 1
+  },
+  {
+    "name": "duplicate_points_tie",
+    "description": "Duplicate predicted coordinates remain distinct groups and produce two tied injections.",
+    "scenario": {"duplicate_group_coordinates": [[-76.0, 37.0], [-76.0, 37.0]]},
+    "real_costs": [[0, 0], [0, 0]],
+    "report_miss_costs": [10, 10],
+    "group_miss_costs": [1, 1],
+    "expected_cost": 0,
+    "expected_matches": [[0, 0], [1, 1]],
+    "expected_ties": 2
+  },
+  {
+    "name": "heteroscedastic_labels",
+    "description": "Per-report uncertainty and label likelihood create different real edge costs.",
+    "scenario": {"report_sigma_deg": [0.2, 2.0], "report_label": ["buoy", "ship"], "group_label": ["buoy", "ship"]},
+    "real_costs": [[-1.2, 3.4], [2.7, -0.4]],
+    "report_miss_costs": [1.0, 1.0],
+    "group_miss_costs": [0.7, 0.7],
+    "expected_cost": -1.6,
+    "expected_matches": [[0, 0], [1, 1]],
+    "expected_ties": 1
+  },
+  {
+    "name": "wrapped_symmetric_ambiguity",
+    "description": "Symmetric wrapped-bearing hypotheses have equal objective and both optima must be retained.",
+    "scenario": {"bearings_deg": [179.0, -179.0], "predicted_bearings_deg": [180.0, 178.0], "period_deg": 360.0},
+    "real_costs": [[0.25, 0.25], [0.25, 0.25]],
+    "report_miss_costs": [2.0, 2.0],
+    "group_miss_costs": [0.5, 0.5],
+    "expected_cost": 0.5,
+    "expected_matches": [[0, 0], [1, 1]],
+    "expected_ties": 2
+  },
+  {
+    "name": "b4_pruning_rank_regression",
+    "description": "B4 is the global reference winner despite its later position; pruning that removes it regresses the rank.",
+    "scenario": {"candidate_ids": ["B1", "B2", "B3", "B4"]},
+    "real_costs": [[-2, "inf"], ["inf", -2]],
+    "report_miss_costs": [1, 1],
+    "group_miss_costs": [1, 1],
+    "expected_cost": -4,
+    "expected_matches": [[0, 0], [1, 1]],
+    "expected_ties": 1,
+    "candidate_objectives": {"B1": 4, "B2": 2, "B3": 3, "B4": -4},
+    "expected_candidate_winner": "B4"
+  },
+  {
+    "name": "empty_reports_with_predicted_groups",
+    "description": "Empty report set pays all predicted-group miss costs.",
+    "real_costs": [],
+    "report_miss_costs": [],
+    "group_miss_costs": [2, 3],
+    "expected_cost": 5,
+    "expected_matches": [],
+    "expected_ties": 1
+  },
+  {
+    "name": "reports_without_groups",
+    "description": "Reports with no predicted groups all pay report miss costs.",
+    "real_costs": [[], []],
+    "report_miss_costs": [2, 3],
+    "group_miss_costs": [],
+    "expected_cost": 5,
+    "expected_matches": [],
+    "expected_ties": 1
+  }
+]

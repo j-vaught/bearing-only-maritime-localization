@@ -8,8 +8,9 @@ depend on a particular raster or vector implementation.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from math import isfinite, sqrt
+from math import isfinite
 from time import perf_counter
 from typing import Protocol
 
@@ -17,6 +18,9 @@ import numpy as np
 
 from bearing_localization.algorithms import associate, grid_search
 from maritime_localization_shared.contracts import AISSnapshot, MeasurementSet, PositionEstimate
+
+from .candidate_order import order_candidate_positions
+from .scoring import CandidateScorer, CandidateSearchRun, score_candidate_positions
 
 
 class MapVisibility(Protocol):
@@ -68,7 +72,7 @@ def _inputs(
     measurements: MeasurementSet,
     ais: AISSnapshot,
     config: GridSearchConfig,
-) -> tuple[list[tuple[str | None, float]], np.ndarray, list[str | None], float]:
+) -> tuple[list[tuple[str | None, float]], np.ndarray, list[str | None], np.ndarray]:
     observations = [
         (observation.object_type, observation.bearing_deg)
         for observation in measurements.observations
@@ -78,18 +82,17 @@ def _inputs(
         ais_xy = np.empty((0, 2), dtype=float)
     ais_types: list[str | None] = [record.ais_class for record in ais.records]
 
-    # The baseline algorithm accepts a single noise scale. Use the RMS of the
-    # reported per-detection uncertainties, and fall back to the configured
-    # nominal scale when the set contains no positive uncertainty values.
-    uncertainty = [
-        observation.bearing_sigma_deg
-        for observation in measurements.observations
-        if observation.bearing_sigma_deg > 0
-    ]
-    if uncertainty:
-        sigma_deg = sqrt(sum(value * value for value in uncertainty) / len(uncertainty))
-    else:
-        sigma_deg = config.bearing_sigma_deg
+    # Retain each report's own sigma. The configured value is used only when
+    # a legacy measurement does not provide a positive report uncertainty.
+    sigma_deg = np.asarray(
+        [
+            observation.bearing_sigma_deg
+            if observation.bearing_sigma_deg > 0.0
+            else config.bearing_sigma_deg
+            for observation in measurements.observations
+        ],
+        dtype=float,
+    )
     return observations, ais_xy, ais_types, sigma_deg
 
 
@@ -203,4 +206,66 @@ def run_grid_search(
     )
 
 
-__all__ = ["GridSearchConfig", "MapVisibility", "run_grid_search"]
+def _grid_positions_v2(
+    bounds: tuple[float, float, float, float], spacing_m: float
+) -> Iterable[tuple[float, float]]:
+    xmin, xmax, ymin, ymax = bounds
+
+    def axis(low: float, high: float) -> Iterable[float]:
+        index = 0
+        last = low
+        while True:
+            value = low + index * spacing_m
+            if value > high + 1e-9:
+                break
+            last = min(value, high)
+            yield last
+            index += 1
+        if high - last > 1e-9:
+            yield high
+
+    for east_m in axis(xmin, xmax):
+        for north_m in axis(ymin, ymax):
+            yield east_m, north_m
+
+
+def run_grid_search_v2(
+    scorer: CandidateScorer,
+    *,
+    grid_spacing_m: float = 250.0,
+    candidate_positions: Iterable[tuple[float, float]] | None = None,
+) -> CandidateSearchRun:
+    """Score a uniform grid over all declared bounds with the V2 objective.
+
+    An explicit position iterable provides fixed-candidate mode for parity
+    tests and externally generated exact grids. No port prior or map subset is
+    inferred when the full bounds are available.
+    """
+    if not isfinite(grid_spacing_m) or grid_spacing_m <= 0.0:
+        raise ValueError("grid_spacing_m must be finite and positive.")
+    if candidate_positions is None:
+        bounds = scorer.config.bounds_xy
+        if bounds is None:
+            raise ValueError("V2 grid search requires config.bounds_xy.")
+        positions = _grid_positions_v2(bounds, grid_spacing_m)
+    else:
+        return score_candidate_positions(
+            scorer,
+            candidate_positions,
+            candidate_limit=scorer.config.candidate_budget,
+            certificate_scope="finite_candidate_set",
+        )
+    positions = order_candidate_positions(
+        positions,
+        water_status=scorer.vector_map.point_water_status,
+        bounds=bounds,
+    )
+    return score_candidate_positions(
+        scorer,
+        positions,
+        candidate_limit=scorer.config.candidate_budget,
+        certificate_scope="finite_candidate_set",
+    )
+
+
+__all__ = ["GridSearchConfig", "MapVisibility", "run_grid_search", "run_grid_search_v2"]

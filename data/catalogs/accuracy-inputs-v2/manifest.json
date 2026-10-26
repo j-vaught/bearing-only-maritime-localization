@@ -1,0 +1,21 @@
+{
+  "archive_bytes": 4545028,
+  "archive_path": "data/catalogs/accuracy-inputs-v2/east-coast-fullcoast-catalog-v2.json.gz",
+  "archive_sha256": "cef2b3dec757983c8a026caeff98e1ba42c164660f32a34915594e1443ac5472",
+  "artifact": "east-coast-fullcoast-catalog-v2",
+  "compression": "gzip with deterministic header (no filename or timestamp)",
+  "contract_type": "CatalogV2",
+  "map_raw_sha256": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
+  "map_reference": "data/maps/accuracy-inputs-v3/noaa-enc-east-coast-fullcoast-map-v3-candidate.json.gz",
+  "raw_bytes": 148891502,
+  "raw_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+  "record_count": 66668,
+  "record_summary": {
+    "ais_records": 2268,
+    "enc_source_components": 64400,
+    "identity_ambiguous_components": 44580,
+    "resolved_physical_aids": 19820
+  },
+  "schema_version": 1,
+  "source_artifact": ".agent-work/cache/maps/noaa-enc-east-coast-fullcoast-catalog-v2.json"
+}

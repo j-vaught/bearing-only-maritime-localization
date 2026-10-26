@@ -1,0 +1,160 @@
+{
+  "implementation_sha256": "1e15e477a0843c18c377dd403ea8a23753b24f7a4158145e13171e8d1eabbb69",
+  "measurement_path": "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/outputs/a26-pilot-c76be7c/static-inputs/measurements/67448756902a8c1c2ae3-ed1145cee93d4f06ffa983f671319dee49e9a95cb4692a2dd14a44c4a8eeceb1.json",
+  "catalog_path": "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/outputs/a26-pilot-c76be7c/static-inputs/catalog-2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704.json",
+  "cases": [
+    {
+      "source_count": 100,
+      "observation_count": 5,
+      "pair_budget": 500,
+      "catalog_prefix_sha256": "6210a1baa222053b8bb992e1ad7208caf024be882a93735dca13e65569eefa2d",
+      "measurement_sha256": "ed1145cee93d4f06ffa983f671319dee49e9a95cb4692a2dd14a44c4a8eeceb1",
+      "catalog_file_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+      "settings": {
+        "frame_origin_lonlat": [
+          -76.43,
+          39.32
+        ],
+        "max_range_m": 10000.0,
+        "cell_size_m": 250.0,
+        "angular_tolerance_deg": 0.5,
+        "source_chunk_size": 16,
+        "max_candidate_cells": 100000,
+        "solver_tolerance_deg": 1e-07
+      },
+      "ordered_proposal_signature_sha256": "133c6e3aaabc36a80c3c4812bde551da0ecb9ab0173ded8e9632ec3f84fdfb53",
+      "worker_results": {
+        "1": {
+          "seconds": [
+            0.5712163327261806,
+            0.7944217119365931,
+            0.9213271532207727
+          ],
+          "median_seconds": 0.7944217119365931,
+          "source_pairs_processed": 500,
+          "source_pairs_computed": 500,
+          "source_pairs_discarded": 0,
+          "candidate_cells": 11847,
+          "source_pairs_failed": 0,
+          "geodesic_samples_total": 124500,
+          "geodesic_samples_failed": 0,
+          "geodesic_samples_degenerate": 1500,
+          "generation_status": "completed",
+          "budget_reason": "none"
+        },
+        "2": {
+          "seconds": [
+            5.300762281753123,
+            5.355885347817093,
+            5.394508427940309
+          ],
+          "median_seconds": 5.355885347817093,
+          "source_pairs_processed": 500,
+          "source_pairs_computed": 500,
+          "source_pairs_discarded": 0,
+          "candidate_cells": 11847,
+          "source_pairs_failed": 0,
+          "geodesic_samples_total": 124500,
+          "geodesic_samples_failed": 0,
+          "geodesic_samples_degenerate": 1500,
+          "generation_status": "completed",
+          "budget_reason": "none"
+        },
+        "4": {
+          "seconds": [
+            5.299572661053389,
+            5.314691633917391,
+            5.314882728271186
+          ],
+          "median_seconds": 5.314691633917391,
+          "source_pairs_processed": 500,
+          "source_pairs_computed": 500,
+          "source_pairs_discarded": 0,
+          "candidate_cells": 11847,
+          "source_pairs_failed": 0,
+          "geodesic_samples_total": 124500,
+          "geodesic_samples_failed": 0,
+          "geodesic_samples_degenerate": 1500,
+          "generation_status": "completed",
+          "budget_reason": "none"
+        }
+      },
+      "exact_signature_parity": true
+    },
+    {
+      "source_count": 500,
+      "observation_count": 5,
+      "pair_budget": 2500,
+      "catalog_prefix_sha256": "50d2311d2e20cfc1128f8b62846f6960d9d86fad00b753992ebbe2f0c2f534ff",
+      "measurement_sha256": "ed1145cee93d4f06ffa983f671319dee49e9a95cb4692a2dd14a44c4a8eeceb1",
+      "catalog_file_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+      "settings": {
+        "frame_origin_lonlat": [
+          -76.43,
+          39.32
+        ],
+        "max_range_m": 10000.0,
+        "cell_size_m": 250.0,
+        "angular_tolerance_deg": 0.5,
+        "source_chunk_size": 16,
+        "max_candidate_cells": 100000,
+        "solver_tolerance_deg": 1e-07
+      },
+      "ordered_proposal_signature_sha256": "43852638a0e3852ce222921c26d795b4bfdc3462b21d753ce31e0ebbb07cc9b7",
+      "worker_results": {
+        "1": {
+          "seconds": [
+            2.5907549699768424,
+            3.0562758557498455
+          ],
+          "median_seconds": 2.823515412863344,
+          "source_pairs_processed": 2500,
+          "source_pairs_computed": 2500,
+          "source_pairs_discarded": 0,
+          "candidate_cells": 34324,
+          "source_pairs_failed": 0,
+          "geodesic_samples_total": 622500,
+          "geodesic_samples_failed": 0,
+          "geodesic_samples_degenerate": 7500,
+          "generation_status": "completed",
+          "budget_reason": "none"
+        },
+        "2": {
+          "seconds": [
+            6.795035501010716,
+            7.199707762803882
+          ],
+          "median_seconds": 6.997371631907299,
+          "source_pairs_processed": 2500,
+          "source_pairs_computed": 2500,
+          "source_pairs_discarded": 0,
+          "candidate_cells": 34324,
+          "source_pairs_failed": 0,
+          "geodesic_samples_total": 622500,
+          "geodesic_samples_failed": 0,
+          "geodesic_samples_degenerate": 7500,
+          "generation_status": "completed",
+          "budget_reason": "none"
+        },
+        "4": {
+          "seconds": [
+            6.587005970068276,
+            6.835604011081159
+          ],
+          "median_seconds": 6.7113049905747175,
+          "source_pairs_processed": 2500,
+          "source_pairs_computed": 2500,
+          "source_pairs_discarded": 0,
+          "candidate_cells": 34324,
+          "source_pairs_failed": 0,
+          "geodesic_samples_total": 622500,
+          "geodesic_samples_failed": 0,
+          "geodesic_samples_degenerate": 7500,
+          "generation_status": "completed",
+          "budget_reason": "none"
+        }
+      },
+      "exact_signature_parity": true
+    }
+  ]
+}

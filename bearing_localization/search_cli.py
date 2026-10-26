@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
@@ -170,6 +171,15 @@ def _parse_bounds(value: str) -> tuple[float, float, float, float]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if "--schema-version" in arguments:
+        marker = arguments.index("--schema-version")
+        if marker + 1 >= len(arguments) or arguments[marker + 1] != "2":
+            raise SystemExit("--schema-version must be 2 when specified.")
+        v2_arguments = arguments[:marker] + arguments[marker + 2 :]
+        from bearing_localization.accuracy_cli import search_v2_main
+
+        return search_v2_main(v2_arguments)
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.grid_spacing_m <= 0 or args.refine_starts < 1 or args.iterations < 1:

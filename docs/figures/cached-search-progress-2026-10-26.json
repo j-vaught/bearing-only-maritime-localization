@@ -1,0 +1,140 @@
+{
+  "title": "Cached candidate scoring progress",
+  "author": "J.C. Vaught",
+  "captured_utc": "2026-10-26T10:40:47.550774+00:00",
+  "source_report": "reports/cached-candidate-scoring-profile.md",
+  "source_report_sha256": "a3a5d3529e45ca331efdf1336f66ecd490e7c460d73f2abff3eebabd0cd42a5a",
+  "scaling_source": "reports/experiments/cached-candidate-scaling/scaling-2048-results.json",
+  "scaling_source_sha256": "dfafd0829e5479489b600ce0f857b8683a9a6a4f5d6403460d72a34ecbc5a58e",
+  "initial_profile_source": "reports/experiments/cached-candidate-scoring/profile-results.json",
+  "initial_profile_source_sha256": "099a8f2304a72550c5d310e0f364c15dd31c0adbd5e97ccf15488cce0af01eea",
+  "cache_candidates": 1457546,
+  "scaling_sample_size": 2048,
+  "scaling_mode": "exact",
+  "exact_scaling": [
+    {
+      "workers": 1,
+      "startup_s": 6.613446888979524,
+      "request_s": 51.226990304887295,
+      "wall_s": 60.22217347892001,
+      "candidate_count": 2048,
+      "exact_evaluations": 2048,
+      "exact_scored": 992,
+      "best_score": 24.1270900878417,
+      "tie_ids": [
+        "cell:-35:2251"
+      ],
+      "status": "completed",
+      "startup_display_s": "6.613",
+      "request_display_s": "51.227"
+    },
+    {
+      "workers": 4,
+      "startup_s": 16.944949875120074,
+      "request_s": 14.5304514169693,
+      "wall_s": 34.017912732902914,
+      "candidate_count": 2048,
+      "exact_evaluations": 2048,
+      "exact_scored": 992,
+      "best_score": 24.1270900878417,
+      "tie_ids": [
+        "cell:-35:2251"
+      ],
+      "status": "completed",
+      "startup_display_s": "16.945",
+      "request_display_s": "14.530"
+    },
+    {
+      "workers": 8,
+      "startup_s": 28.156838378403336,
+      "request_s": 8.13573764404282,
+      "wall_s": 38.888220462948084,
+      "candidate_count": 2048,
+      "exact_evaluations": 2048,
+      "exact_scored": 992,
+      "best_score": 24.1270900878417,
+      "tie_ids": [
+        "cell:-35:2251"
+      ],
+      "status": "completed",
+      "startup_display_s": "28.157",
+      "request_display_s": "8.136"
+    }
+  ],
+  "startup_failure": {
+    "workers": 16,
+    "elapsed_s": 53.073378193657845,
+    "status": "timeout_or_failure",
+    "error": "TimeoutError: worker startup timed out",
+    "candidates_dispatched": 0,
+    "disposition": {
+      "committed_count": 0,
+      "consumed_count": 0,
+      "failed_count": 0,
+      "not_dispatched_count": 0,
+      "outstanding_count": 0,
+      "pending_count": 0,
+      "submitted_count": 0
+    }
+  },
+  "initial_255_sample": [
+    {
+      "workers": 1,
+      "mode": "exact",
+      "wall_s": 28.933686814270914,
+      "candidate_count": 255,
+      "exact_evaluations": 255,
+      "exact_scored": 131,
+      "pruned": 0,
+      "best_score": 24.468390694319403,
+      "tie_ids": [
+        "cell:74:2578"
+      ]
+    },
+    {
+      "workers": 1,
+      "mode": "screened",
+      "wall_s": 123.10579638602212,
+      "candidate_count": 255,
+      "exact_evaluations": 173,
+      "exact_scored": 49,
+      "pruned": 82,
+      "best_score": 24.468390694319403,
+      "tie_ids": [
+        "cell:74:2578"
+      ]
+    },
+    {
+      "workers": 4,
+      "mode": "exact",
+      "wall_s": 25.495543010067195,
+      "candidate_count": 255,
+      "exact_evaluations": 255,
+      "exact_scored": 131,
+      "pruned": 0,
+      "best_score": 24.468390694319403,
+      "tie_ids": [
+        "cell:74:2578"
+      ]
+    },
+    {
+      "workers": 4,
+      "mode": "screened",
+      "wall_s": 52.12602310394868,
+      "candidate_count": 255,
+      "exact_evaluations": 180,
+      "exact_scored": 56,
+      "pruned": 75,
+      "best_score": 24.468390694319403,
+      "tie_ids": [
+        "cell:74:2578"
+      ]
+    }
+  ],
+  "initial_best_score": 24.468390694319403,
+  "initial_tie_ids": [
+    "cell:74:2578"
+  ],
+  "scope": "Shared-host diagnostic profile. No full-domain localization success or full-coast accuracy result.",
+  "source_report_revision": "03ee598"
+}

@@ -8,7 +8,7 @@ and matching semantics stay comparable with :mod:`bearing_localization.algorithm
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from time import perf_counter
 
 import numpy as np
@@ -20,6 +20,13 @@ from maritime_localization_shared.geometry.angular_grouping import (
 from maritime_localization_shared.geospatial.spatial_index import SpatialIndex2D
 
 from ..algorithms import SearchResult, associate
+from .candidate_order import order_candidate_positions
+from .scoring import (
+    CandidateScorer,
+    CandidateSearchAccumulator,
+    CandidateSearchRun,
+    score_candidate_positions,
+)
 
 WaterPredicate = Callable[[float, float], bool]
 LineOfSightPredicate = Callable[[tuple[float, float], tuple[float, float]], bool]
@@ -30,7 +37,7 @@ def hierarchical_search(
     ais_xy: np.ndarray,
     ais_types: Sequence[str | None],
     bounds_xy: tuple[float, float, float, float],
-    sigma_deg: float = 0.5,
+    sigma_deg: float | Sequence[float] | np.ndarray = 0.5,
     coarse_spacing_m: float = 5_000.0,
     refinement_levels: int = 4,
     refinement_factor: float = 2.0,
@@ -61,7 +68,7 @@ def hierarchical_search(
     between levels, trading compute for resilience to local score minima.
     """
     started = perf_counter()
-    if sigma_deg <= 0 or unmatched_penalty_deg <= 0 or visibility_radius_m <= 0:
+    if np.any(np.asarray(sigma_deg) <= 0) or unmatched_penalty_deg <= 0 or visibility_radius_m <= 0:
         raise ValueError("sigma, unmatched penalty, and visibility radius must be positive.")
     if coarse_spacing_m <= 0 or not np.isfinite(coarse_spacing_m):
         raise ValueError("coarse_spacing_m must be finite and positive.")
@@ -251,4 +258,167 @@ def _select_diverse_leaders(
     return leaders
 
 
-__all__ = ["LineOfSightPredicate", "WaterPredicate", "hierarchical_search"]
+def run_hierarchical_search_v2(
+    scorer: CandidateScorer,
+    *,
+    coarse_spacing_m: float = 5_000.0,
+    refinement_levels: int = 4,
+    refinement_factor: float = 2.0,
+    beam_width: int = 8,
+    candidate_positions: Iterable[tuple[float, float]] | None = None,
+) -> CandidateSearchRun:
+    """Run a coarse-to-fine V2 search over the complete declared bounds.
+
+    Spatially diverse scored leaders seed each refinement level.  The remaining
+    candidate budget is allocated with ceil(remaining/stages_left) at each
+    stage, which reserves work for refinement instead of allowing the initial
+    coarse prefix to consume the full budget.  Candidate ordering is
+    deterministic and status-aware; it does not remove candidates or weaken
+    acceptance criteria.  Completion is heuristic and carries no global
+    certificate.  An explicit position iterable provides fixed-candidate
+    parity mode.
+    """
+    if candidate_positions is not None:
+        return score_candidate_positions(
+            scorer,
+            candidate_positions,
+            candidate_limit=scorer.config.candidate_budget,
+        )
+    bounds = scorer.config.bounds_xy
+    if bounds is None:
+        raise ValueError("V2 hierarchical search requires config.bounds_xy.")
+    if not np.isfinite(coarse_spacing_m) or coarse_spacing_m <= 0.0:
+        raise ValueError("coarse_spacing_m must be finite and positive.")
+    if refinement_levels < 0:
+        raise ValueError("refinement_levels must be nonnegative.")
+    if not np.isfinite(refinement_factor) or refinement_factor <= 1.0:
+        raise ValueError("refinement_factor must be finite and greater than one.")
+    if beam_width < 1:
+        raise ValueError("beam_width must be positive.")
+
+    xmin, xmax, ymin, ymax = bounds
+    budget = scorer.config.candidate_budget
+    accumulator = CandidateSearchAccumulator(scorer)
+    budget_exhausted = False
+    any_stage_truncated = False
+    pending_truncated: list[tuple[float, float]] = []
+    pending_keys: set[tuple[float, float]] = set()
+    total_stages = refinement_levels + 1
+
+    def axis(low: float, high: float, step: float) -> Iterable[float]:
+        index = 0
+        last = low
+        while True:
+            value = low + index * step
+            if value > high + 1e-9:
+                break
+            last = min(value, high)
+            yield last
+            index += 1
+        if high - last > 1e-9:
+            yield high
+
+    def lattice(step: float) -> Iterable[tuple[float, float]]:
+        for east_m in axis(xmin, xmax, step):
+            for north_m in axis(ymin, ymax, step):
+                yield east_m, north_m
+
+    def evaluate_stage(positions: Iterable[tuple[float, float]], quota: int) -> None:
+        nonlocal any_stage_truncated, budget_exhausted
+        ordered = order_candidate_positions(
+            positions,
+            water_status=scorer.vector_map.point_water_status,
+            bounds=bounds,
+        )
+        used = 0
+        for position_index, position in enumerate(ordered):
+            if not accumulator.is_new(position):
+                continue
+            if accumulator.candidate_count >= budget:
+                budget_exhausted = True
+                return
+            if used >= quota:
+                any_stage_truncated = True
+                for pending in ordered[position_index:]:
+                    if accumulator.is_new(pending):
+                        key = accumulator.position_key(pending)
+                        if key not in pending_keys:
+                            pending_keys.add(key)
+                            pending_truncated.append(pending)
+                return
+            accumulator.add(position)
+            used += 1
+
+    for stage_index in range(total_stages):
+        if budget_exhausted:
+            break
+        remaining_budget = budget - accumulator.candidate_count
+        if remaining_budget <= 0:
+            remaining_budget = 1
+        stages_left = total_stages - stage_index
+        quota = max(1, (remaining_budget + stages_left - 1) // stages_left)
+        if stage_index == 0:
+            evaluate_stage(lattice(coarse_spacing_m), quota)
+            continue
+
+        step = coarse_spacing_m / (refinement_factor**stage_index)
+        cell_size = max(coarse_spacing_m * 4.0, 50_000.0)
+        ranked = sorted(
+            accumulator.scored_by_position.items(),
+            key=lambda item: (item[1].score, item[0]),
+        )
+        leaders: list[tuple[float, float]] = []
+        occupied: set[tuple[int, int]] = set()
+        for (east_m, north_m), _hypothesis in ranked:
+            cell = (
+                int(np.floor((east_m - xmin) / cell_size)),
+                int(np.floor((north_m - ymin) / cell_size)),
+            )
+            if cell in occupied:
+                continue
+            occupied.add(cell)
+            leaders.append((east_m, north_m))
+            if len(leaders) >= beam_width:
+                break
+        if len(leaders) < beam_width:
+            selected = set(leaders)
+            for (east_m, north_m), _hypothesis in ranked:
+                if (east_m, north_m) not in selected:
+                    leaders.append((east_m, north_m))
+                    selected.add((east_m, north_m))
+                if len(leaders) >= beam_width:
+                    break
+        next_positions = {
+            (x + dx, y + dy)
+            for x, y in leaders
+            for dx in (-step, 0.0, step)
+            for dy in (-step, 0.0, step)
+            if xmin <= x + dx <= xmax and ymin <= y + dy <= ymax
+        }
+        evaluate_stage(next_positions, quota)
+
+    # A stage quota is an internal reservation.  Continue all planned
+    # refinement stages first, then consume the omitted unique positions in
+    # their deterministic order so the declared candidate budget and outcome
+    # counts remain aligned with the budget-exhausted contract.
+    if any_stage_truncated and not budget_exhausted:
+        evaluate_stage(pending_truncated, budget - accumulator.candidate_count)
+
+    if budget_exhausted:
+        return accumulator.finish(
+            search_status="budget_exhausted",
+            budget_limit=budget,
+            budget_used=budget,
+        )
+    return accumulator.finish(
+        budget_limit=budget,
+        budget_used=accumulator.candidate_count,
+    )
+
+
+__all__ = [
+    "LineOfSightPredicate",
+    "WaterPredicate",
+    "hierarchical_search",
+    "run_hierarchical_search_v2",
+]

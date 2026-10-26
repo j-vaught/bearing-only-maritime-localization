@@ -7,7 +7,6 @@ and testing. None of these APIs accepts simulation truth.
 """
 
 from dataclasses import dataclass
-from math import sqrt
 
 import numpy as np
 
@@ -16,7 +15,22 @@ from bearing_localization.search.association import (
     associate_observations_to_ais,
     compatible_types,
 )
+from bearing_localization.search.branch_bound import (
+    BranchBoundContext,
+    BranchBoundResult,
+    RegionDiagnostic,
+    branch_and_bound_search,
+)
 from bearing_localization.search.candidates import WaterMaskProtocol, generate_candidates
+from bearing_localization.search.config import Backend, ObjectiveVersion, SearchConfig
+from bearing_localization.search.config_serialization import (
+    dumps_search_config,
+    loads_search_config,
+    read_search_config,
+    search_config_from_dict,
+    search_config_to_dict,
+    write_search_config,
+)
 from bearing_localization.search.grid import GridSearchConfig, MapVisibility, run_grid_search
 from bearing_localization.search.hierarchical import (
     WaterPredicate,
@@ -89,20 +103,16 @@ def run_hierarchical_search(
         [(record.east_m, record.north_m) for record in ais.records], dtype=float
     ).reshape((-1, 2))
     ais_types: list[str | None] = [record.ais_class for record in ais.records]
-    sigmas = [
-        item.bearing_sigma_deg for item in measurements.observations if item.bearing_sigma_deg > 0
+    report_sigmas = [
+        item.bearing_sigma_deg if item.bearing_sigma_deg > 0.0 else config.bearing_sigma_deg
+        for item in measurements.observations
     ]
-    sigma_deg = (
-        sqrt(sum(value * value for value in sigmas) / len(sigmas))
-        if sigmas
-        else config.bearing_sigma_deg
-    )
     result = hierarchical_search_core(
         observations,
         ais_xy,
         ais_types,
         bounds_xy,
-        sigma_deg=sigma_deg,
+        sigma_deg=report_sigmas,
         coarse_spacing_m=config.coarse_spacing_m,
         refinement_levels=config.refinement_levels,
         refinement_factor=config.refinement_factor,
@@ -130,22 +140,35 @@ def run_hierarchical_search(
 
 __all__ = [
     "AssociationResult",
+    "BranchBoundContext",
+    "BranchBoundResult",
+    "Backend",
     "GridSearchConfig",
     "HierarchicalSearchConfig",
     "LineOfSightQuery",
     "MapVisibility",
+    "ObjectiveVersion",
     "PairwiseSearchConfig",
     "RandomizedSearchConfig",
+    "RegionDiagnostic",
+    "SearchConfig",
     "WaterMaskProtocol",
     "WaterPredicate",
     "WaterQuery",
     "associate_observations_to_ais",
+    "branch_and_bound_search",
     "compatible_types",
+    "dumps_search_config",
     "filter_visible_candidates",
     "generate_candidates",
     "hierarchical_search_core",
+    "loads_search_config",
     "randomized_search",
+    "read_search_config",
+    "search_config_from_dict",
+    "search_config_to_dict",
     "run_grid_search",
     "run_hierarchical_search",
     "run_pairwise_search",
+    "write_search_config",
 ]

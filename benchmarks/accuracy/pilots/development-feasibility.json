@@ -1,0 +1,35 @@
+{
+  "schema": "accuracy-feasibility-pilot-v1",
+  "split": "development",
+  "search_domain_scope": "full_coast",
+  "map_scope": "full_coast",
+  "map_unknown_policy": "retain_explicit_unknown",
+  "objective_version": "bearing_set_map_v1",
+  "projected_crs": "EPSG:32618",
+  "domain_margin_m": 10000.0,
+  "supported_cases_per_gate": 1,
+  "include_one_unsupported_nominal": true,
+  "include_one_preparation_failure": true,
+  "algorithms": [
+    "pairwise",
+    "wedge",
+    "hierarchical",
+    "grid",
+    "reference_grid"
+  ],
+  "candidate_budgets": [
+    64,
+    256
+  ],
+  "grid_spacing_m": 10000.0,
+  "max_grid_bearing_error_deg": 0.5,
+  "wedge_cell_size_m": 10000.0,
+  "generated_sigma_deg": 0.5,
+  "detection_probability": 0.9,
+  "bearing_outlier_probability": 0.05,
+  "expected_unmatched_reports": 1.0,
+  "timeout_s": 300.0,
+  "rationale": "Development-only runtime feasibility. Selection uses pre-search support and preparation status. Candidate budgets are diagnostics and do not alter the frozen release thresholds.",
+  "expected_catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+  "expected_map_sha256": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93"
+}

@@ -1,0 +1,4900 @@
+{
+  "activity_after": {
+    "cpu_processes": [
+      {
+        "comm": "plymouthd",
+        "pcpu": 3.8,
+        "pid": 1234,
+        "pmem": 0.0
+      },
+      {
+        "comm": "rclone",
+        "pcpu": 11.9,
+        "pid": 958598,
+        "pmem": 0.5
+      },
+      {
+        "comm": "python",
+        "pcpu": 162.0,
+        "pid": 960044,
+        "pmem": 0.4
+      },
+      {
+        "comm": "claude",
+        "pcpu": 1.8,
+        "pid": 986423,
+        "pmem": 0.0
+      },
+      {
+        "comm": "claude",
+        "pcpu": 1.8,
+        "pid": 1438871,
+        "pmem": 0.0
+      },
+      {
+        "comm": "claude",
+        "pcpu": 1.3,
+        "pid": 1444951,
+        "pmem": 0.0
+      },
+      {
+        "comm": "pt_data_worker",
+        "pcpu": 25.9,
+        "pid": 1832064,
+        "pmem": 0.3
+      },
+      {
+        "comm": "pt_data_worker",
+        "pcpu": 26.0,
+        "pid": 1832065,
+        "pmem": 0.3
+      },
+      {
+        "comm": "pt_data_worker",
+        "pcpu": 26.2,
+        "pid": 1832072,
+        "pmem": 0.3
+      },
+      {
+        "comm": "pt_data_worker",
+        "pcpu": 25.8,
+        "pid": 1832073,
+        "pmem": 0.3
+      },
+      {
+        "comm": "grep",
+        "pcpu": 99.9,
+        "pid": 1856764,
+        "pmem": 0.0
+      },
+      {
+        "comm": "python3",
+        "pcpu": 99.7,
+        "pid": 1862751,
+        "pmem": 0.2
+      },
+      {
+        "comm": "docker",
+        "pcpu": 8.1,
+        "pid": 1865483,
+        "pmem": 0.0
+      },
+      {
+        "comm": "find",
+        "pcpu": 94.8,
+        "pid": 2078513,
+        "pmem": 0.0
+      },
+      {
+        "comm": "claude",
+        "pcpu": 1.9,
+        "pid": 2386842,
+        "pmem": 0.0
+      },
+      {
+        "comm": "python",
+        "pcpu": 36.6,
+        "pid": 2882462,
+        "pmem": 0.4
+      },
+      {
+        "comm": "ruby",
+        "pcpu": 135.0,
+        "pid": 3823947,
+        "pmem": 0.7
+      },
+      {
+        "comm": "ruby",
+        "pcpu": 11.2,
+        "pid": 3983516,
+        "pmem": 0.4
+      }
+    ],
+    "gpu_processes": [
+      "2882462, /home/gpan/tc.venv/bin/python, 24598 MiB",
+      "960044, /home/whisenaj/anaconda3/envs/YOLO_Workspace/bin/python, 25042 MiB"
+    ],
+    "loadavg": "8.46 9.46 11.34 7/5991 1865525"
+  },
+  "activity_before": {
+    "cpu_processes": [
+      {
+        "comm": "plymouthd",
+        "pcpu": 3.8,
+        "pid": 1234,
+        "pmem": 0.0
+      },
+      {
+        "comm": "rclone",
+        "pcpu": 11.9,
+        "pid": 958598,
+        "pmem": 0.5
+      },
+      {
+        "comm": "python",
+        "pcpu": 162.0,
+        "pid": 960044,
+        "pmem": 0.4
+      },
+      {
+        "comm": "claude",
+        "pcpu": 1.8,
+        "pid": 986423,
+        "pmem": 0.0
+      },
+      {
+        "comm": "claude",
+        "pcpu": 1.8,
+        "pid": 1438871,
+        "pmem": 0.0
+      },
+      {
+        "comm": "claude",
+        "pcpu": 1.3,
+        "pid": 1444951,
+        "pmem": 0.0
+      },
+      {
+        "comm": "pt_data_worker",
+        "pcpu": 26.0,
+        "pid": 1832064,
+        "pmem": 0.3
+      },
+      {
+        "comm": "pt_data_worker",
+        "pcpu": 26.0,
+        "pid": 1832065,
+        "pmem": 0.3
+      },
+      {
+        "comm": "pt_data_worker",
+        "pcpu": 26.2,
+        "pid": 1832072,
+        "pmem": 0.3
+      },
+      {
+        "comm": "pt_data_worker",
+        "pcpu": 25.9,
+        "pid": 1832073,
+        "pmem": 0.3
+      },
+      {
+        "comm": "grep",
+        "pcpu": 99.9,
+        "pid": 1856764,
+        "pmem": 0.0
+      },
+      {
+        "comm": "python3",
+        "pcpu": 99.9,
+        "pid": 1862751,
+        "pmem": 0.2
+      },
+      {
+        "comm": "find",
+        "pcpu": 94.8,
+        "pid": 2078513,
+        "pmem": 0.0
+      },
+      {
+        "comm": "claude",
+        "pcpu": 1.9,
+        "pid": 2386842,
+        "pmem": 0.0
+      },
+      {
+        "comm": "python",
+        "pcpu": 36.6,
+        "pid": 2882462,
+        "pmem": 0.4
+      },
+      {
+        "comm": "ruby",
+        "pcpu": 135.0,
+        "pid": 3823947,
+        "pmem": 0.7
+      },
+      {
+        "comm": "ruby",
+        "pcpu": 11.2,
+        "pid": 3983516,
+        "pmem": 0.4
+      }
+    ],
+    "gpu_processes": [
+      "2882462, /home/gpan/tc.venv/bin/python, 24598 MiB",
+      "960044, /home/whisenaj/anaconda3/envs/YOLO_Workspace/bin/python, 25042 MiB"
+    ],
+    "loadavg": "10.09 9.85 11.55 8/5953 1863611"
+  },
+  "best_score": 24.468390694319403,
+  "config_sha256": "a2a306c545b05173105f5c2c7409e603d20497e8193e01c3b773321b54f1675b",
+  "effective_config": {
+    "absolute_score_tolerance": 1e-08,
+    "algorithm": "wedge_geodesic",
+    "backend": "cpu",
+    "bearing_outlier_probability": 0.05,
+    "bounds_xy": [
+      -220366.49772326474,
+      1424309.6784374337,
+      2699585.3102704627,
+      5088044.413143414
+    ],
+    "candidate_budget": 1,
+    "circular_merge_tolerance_deg": 0.1,
+    "common_bearing_bias_prior_deg": null,
+    "correct_type_probability": 0.95,
+    "detection_probability": 0.9,
+    "expected_unmatched_reports": 1.0,
+    "generated_sigma_deg": 0.5,
+    "max_range_m": 10000.0,
+    "min_range_m": 0.0,
+    "objective_version": "bearing_set_map_v1",
+    "proposal_cell_budget": 5000000,
+    "proposal_chunk_size": 4096,
+    "proposal_solver_tolerance_deg": 1e-07,
+    "proposal_source_pair_budget": 333340,
+    "range_inclusive": true,
+    "relative_score_tolerance": 1e-10,
+    "sigma_floor_deg": 0.05,
+    "uniform_eligible_water_prior": true,
+    "use_types": false
+  },
+  "exact_audits": [
+    {
+      "candidate_id": "cell:-3226:-3730",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-32:2305",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3225:-3737",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2648:-2950",
+      "score": 62.66671145916743,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3184:-3649",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3203:-3680",
+      "score": 353.28907094557565,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3194:-3663",
+      "score": 318.38786613799266,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1012:-168",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2461:-3655",
+      "score": 149.97443672994785,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:117:2441",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2659:-2925",
+      "score": 336.839043104597,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:114:2424",
+      "score": 106.28450732095403,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-33:2303",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2655:-2914",
+      "score": 121.34213699964349,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3201:-3665",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:152:2451",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3209:-3681",
+      "score": 251.47868908467888,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:83:2440",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2660:-2924",
+      "score": 316.17428200125113,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2660:-2922",
+      "score": 291.3738533947828,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2643:-2932",
+      "score": 208.43087581412863,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3220:-3708",
+      "score": 282.4637219619575,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3217:-3696",
+      "score": 254.04402979257782,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2546:-4100",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3207:-3679",
+      "score": 338.5963936915886,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2524:-4082",
+      "score": 93.34316796151674,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2563:-4118",
+      "score": 95.93680302521936,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2646:-2942",
+      "score": 278.0496742516071,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2644:-2943",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2866:-2232",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:1179:3796",
+      "score": 168.58562573689358,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3203:-3676",
+      "score": 355.26596768801886,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2661:-2921",
+      "score": 289.00702211637366,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-31:2316",
+      "score": 62.66671145916743,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2654:-2909",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2742:-4442",
+      "score": 125.41039011152951,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2641:-2879",
+      "score": 81.64290132781579,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-861:799",
+      "score": 193.91406175982797,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3206:-3687",
+      "score": 343.7797104542963,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2640:-2923",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:116:2434",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3210:-3686",
+      "score": 309.295128833454,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:2:2421",
+      "score": 53.46655278850693,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3204:-3670",
+      "score": 366.21905162777824,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2513:-4035",
+      "score": 40.03427158017996,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2641:-2929",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:155:2440",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2538:-4097",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2644:-2934",
+      "score": 228.86561046791263,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3203:-3670",
+      "score": 341.4591883427547,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-924:1838",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-55:2451",
+      "score": 102.07034429144204,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2519:-4078",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2659:-2917",
+      "score": 172.1477950731947,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2556:-4115",
+      "score": 185.4462562033875,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2642:-2935",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2653:-2908",
+      "score": 135.18007788127625,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:117:2436",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:106:2440",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3213:-3687",
+      "score": 209.5730569420447,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:133:2433",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3204:-3683",
+      "score": 351.0891337457755,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3208:-3682",
+      "score": 337.5103722199744,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3193:-3655",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-926:1843",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3205:-3686",
+      "score": 355.4208721397917,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:860:2821",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-52:2461",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:72:2423",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2645:-2937",
+      "score": 283.34937917868075,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-50:2468",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2638:-2888",
+      "score": 121.20130778295061,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2638:-2924",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2556:-4113",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2650:-2936",
+      "score": 310.7903518171537,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2467:-3549",
+      "score": 37.33827543623292,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3219:-3698",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2858:-2218",
+      "score": 32.733105250244826,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2652:-2947",
+      "score": 145.81495999359583,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2632:-2916",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:71:2420",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3206:-3683",
+      "score": 364.7073362984889,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:105:2438",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:987:3193",
+      "score": 80.43044358248376,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-876:771",
+      "score": 195.27356543742374,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2640:-2925",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:1176:3788",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3218:-3697",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-30:2313",
+      "score": 53.45637108719124,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2464:-3558",
+      "score": 37.33827543623292,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1025:-180",
+      "score": 96.43915552901655,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-849:824",
+      "score": 153.87322261332483,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-54:2453",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-1026:-174",
+      "score": 87.9951474821019,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2646:-2892",
+      "score": 112.13793126644643,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3207:-3678",
+      "score": 321.539508212846,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2507:-4013",
+      "score": 46.54861580820911,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3208:-3681",
+      "score": 329.413109043565,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3219:-3692",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:112:2428",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-918:1812",
+      "score": 212.2785428383096,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3212:-3697",
+      "score": 355.46964343459297,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-861:795",
+      "score": 154.77011517892933,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2506:-3951",
+      "score": 61.55256416740586,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3184:-3767",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3185:-3741",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-55:2456",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2659:-2919",
+      "score": 157.0727002719234,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3214:-3690",
+      "score": 249.46429813524676,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2658:-2915",
+      "score": 147.2269378243086,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:111:2443",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2646:-2933",
+      "score": 260.8002335654417,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3204:-4590",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:74:2578",
+      "score": 24.468390694319403,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-920:1822",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:106:2419",
+      "score": 87.16023120888258,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-38:2307",
+      "score": 85.69256238910786,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3216:-3693",
+      "score": 240.77429325575963,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2750:-4461",
+      "score": 176.61925211672636,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-3206:-3671",
+      "score": 308.7935038389998,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2554:-4108",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3204:-3668",
+      "score": 290.1991349504381,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2662:-2924",
+      "score": 296.79537479160524,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:129:2430",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3213:-3684",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-918:1820",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2647:-2939",
+      "score": 300.52215048555473,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-51:2360",
+      "score": 366.7563526152742,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1510:-510",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3186:-4575",
+      "score": 46.54861580820911,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:148:2431",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:77:2436",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:1273:2753",
+      "score": 42.78654471377979,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-859:735",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-810:1716",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-903:1692",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-6:2410",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-3180:-3742",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:464:2583",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:1621:3990",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2543:-4268",
+      "score": 126.10008245490965,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2481:-3936",
+      "score": 41.57964116705618,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2814:-2431",
+      "score": 30.43052015725078,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:919:2938",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2477:-3854",
+      "score": 52.665342844106135,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-433:1543",
+      "score": 85.69256238910786,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-890:926",
+      "score": 154.77011517892933,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1015:352",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-915:1415",
+      "score": 61.471407845748686,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1007:3609",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-1505:-497",
+      "score": 190.30266631761916,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:10:3133",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-77:2138",
+      "score": 77.6637835441704,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2867:-2219",
+      "score": 32.733105250244826,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:508:2755",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2:3428",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2520:-1073",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-921:1628",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-942:390",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-925:1302",
+      "score": 92.60031766808999,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:1052:2923",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:1703:4048",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-840:999",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-799:1657",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2991:-2041",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-1430:-377",
+      "score": 46.54861580820911,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-425:2130",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-1048:955",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-2195:-976",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-87:2088",
+      "score": 44.246030715215056,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2307:-972",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2082:-886",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:106:3575",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:1145:3728",
+      "score": 61.7681596509327,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-972:3532",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-1660:3578",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-811:1702",
+      "score": 99.50807294707214,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:1841:4143",
+      "score": 46.926873530615666,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-840:1853",
+      "score": 62.3253754877058,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-767:637",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2844:-4473",
+      "score": 65.52671124462756,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-971:170",
+      "score": 106.41582822605429,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:398:2501",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-1021:14",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-195:3426",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-138:1922",
+      "score": 51.809597226958154,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2024:2376",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:1044:2838",
+      "score": 112.45346106247277,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-898:847",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:422:2943",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:532:2725",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-555:788",
+      "score": 27.51660292473386,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:1299:2871",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2517:-3876",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-862:1625",
+      "score": 64.77233538073463,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2932:-2574",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-999:1062",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-1688:3552",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-2705:-1274",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:1963:4174",
+      "score": 27.96202077990806,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2648:-1330",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-987:-190",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:1480:3906",
+      "score": 33.03250141352423,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1229:977",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:923:2673",
+      "score": 29.046492031873484,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-921:-47",
+      "score": 91.58754110522923,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1641:3580",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:910:2816",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-758:-22",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2117:-973",
+      "score": 28.241645499334894,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-209:793",
+      "score": 25.58414004434823,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:1539:3244",
+      "score": 26.15072527368221,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1093:157",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:2226:4070",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-34:2215",
+      "score": 51.688405179211344,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1616:3569",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-855:1589",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2548:-3222",
+      "score": 31.28111704095612,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-201:791",
+      "score": 25.04536334316966,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:533:-973",
+      "score": 25.070392098366767,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2632:-2808",
+      "score": 32.733105250244826,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2809:-2011",
+      "score": 36.64818219924346,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-908:33",
+      "score": 45.82167449840251,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:747:2763",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2687:-3469",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:223:4121",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-728:920",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-1398:-1145",
+      "score": 30.43052015725078,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:693:2746",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-1063:1382",
+      "score": 133.9529275407323,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-150:3489",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-832:1581",
+      "score": 35.03569034323887,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-359:3483",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-2812:-1472",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-639:379",
+      "score": 30.43052015725078,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:1289:3060",
+      "score": 32.733105250244826,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-996:1056",
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "candidate_id": "cell:-1399:-1164",
+      "score": 27.58572775697496,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2109:-1030",
+      "score": 31.370528173969596,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-766:1590",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:1253:2721",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-727:815",
+      "score": 80.45821353651358,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-1276:-484",
+      "score": 28.401958055480897,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:506:2805",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-200:800",
+      "score": 28.179064653179456,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-747:1896",
+      "score": 99.12229746283664,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2067:-877",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-407:1614",
+      "score": 78.78480711012573,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:1471:3845",
+      "score": 34.40436485883718,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:1341:4089",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:-358:1656",
+      "score": 53.45637108719124,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2994:-4019",
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "candidate_id": "cell:67:2317",
+      "score": 35.03569034323887,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:1083:3218",
+      "score": 45.23906564192991,
+      "status": "scored"
+    },
+    {
+      "candidate_id": "cell:-2657:-1392",
+      "score": 58.06154127317934,
+      "status": "scored"
+    }
+  ],
+  "exact_status_counts": {
+    "invalid_water": 111,
+    "scored": 131,
+    "unresolved_coverage": 13
+  },
+  "exact_wall_s": 18.237792897969484,
+  "invalid_prune_count": 0,
+  "no_truth_or_held_out_data": true,
+  "parity": {
+    "best_score": true,
+    "best_ties": true
+  },
+  "peak_process_rss_mib": 1223.80859375,
+  "pruned_bounds_valid_against_independent_exact_scores": true,
+  "schema": "a22-same255-profile-v1",
+  "screened_audits": [
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3226:-3730",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-32:2305",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3225:-3737",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": null,
+      "candidate_id": "cell:-2648:-2950",
+      "lower_bound": null,
+      "score": 62.66671145916743,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3184:-3649",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3203:-3680",
+      "lower_bound": 350.60165873491746,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3194:-3663",
+      "lower_bound": 318.3654674362245,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-1012:-168",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2461:-3655",
+      "lower_bound": 147.9741705717042,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:117:2441",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2659:-2925",
+      "lower_bound": 334.483563085571,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:114:2424",
+      "lower_bound": 88.10695815984575,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-33:2303",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2655:-2914",
+      "lower_bound": 111.13280908748362,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3201:-3665",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:152:2451",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3209:-3681",
+      "lower_bound": 212.44655316909024,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:83:2440",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2660:-2924",
+      "lower_bound": 313.76029725069685,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2660:-2922",
+      "lower_bound": 288.4318612302952,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2643:-2932",
+      "lower_bound": 182.512946963161,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3220:-3708",
+      "lower_bound": 274.6163506737125,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3217:-3696",
+      "lower_bound": 219.35430844738158,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2546:-4100",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3207:-3679",
+      "lower_bound": 313.76029725069685,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2524:-4082",
+      "lower_bound": 69.68627741773545,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2563:-4118",
+      "lower_bound": 88.10695815984575,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2646:-2942",
+      "lower_bound": 237.7749891894919,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2644:-2943",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2866:-2232",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:1179:3796",
+      "lower_bound": 129.5534898295939,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3203:-3676",
+      "lower_bound": 348.2990736421537,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2661:-2921",
+      "lower_bound": 283.82669104476764,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-31:2316",
+      "lower_bound": 23.63457556245971,
+      "score": 62.66671145916743,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2654:-2909",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2742:-4442",
+      "lower_bound": 122.64573455130257,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2641:-2879",
+      "lower_bound": 65.08110723220787,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-861:799",
+      "lower_bound": 154.88192584999555,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3206:-3687",
+      "lower_bound": 343.6939034566261,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2640:-2923",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:116:2434",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3210:-3686",
+      "lower_bound": 309.1551270651693,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:2:2421",
+      "lower_bound": 30.54233084075107,
+      "score": 53.46655278850693,
+      "status": "scored"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3204:-3670",
+      "lower_bound": 348.2990736421537,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2513:-4035",
+      "lower_bound": 23.63457556245971,
+      "score": 40.03427158017996,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2641:-2929",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:155:2440",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2538:-4097",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2644:-2934",
+      "lower_bound": 196.32845751974372,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3203:-3670",
+      "lower_bound": 341.3913183638623,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-924:1838",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-55:2451",
+      "lower_bound": 85.80437306708197,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2519:-4078",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2659:-2917",
+      "lower_bound": 138.76383020064904,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2556:-4115",
+      "lower_bound": 182.512946963161,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2642:-2935",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2653:-2908",
+      "lower_bound": 111.13280908748362,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:117:2436",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:106:2440",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3213:-3687",
+      "lower_bound": 194.02587242697996,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:133:2433",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3204:-3683",
+      "lower_bound": 350.60165873491746,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3208:-3682",
+      "lower_bound": 329.87839290004337,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3193:-3655",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-926:1843",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3205:-3686",
+      "lower_bound": 355.20682892044505,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:860:2821",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-52:2461",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:72:2423",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2645:-2937",
+      "lower_bound": 256.1956699316022,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-50:2468",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2638:-2888",
+      "lower_bound": 101.92246871642848,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2638:-2924",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2556:-4113",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2650:-2936",
+      "lower_bound": 286.1292761375314,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2467:-3549",
+      "lower_bound": 2.9113097280461417,
+      "score": 37.33827543623292,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3219:-3698",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2858:-2218",
+      "lower_bound": 2.9113097285066587,
+      "score": 32.733105250244826,
+      "status": "scored"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2652:-2947",
+      "lower_bound": 127.25090473683014,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2632:-2916",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:71:2420",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3206:-3683",
+      "lower_bound": 357.5094140132088,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:105:2438",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:987:3193",
+      "lower_bound": 55.87076686115273,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-876:771",
+      "lower_bound": 171.00002149934207,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2640:-2925",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:1176:3788",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3218:-3697",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-30:2313",
+      "lower_bound": 14.424235191404561,
+      "score": 53.45637108719124,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2464:-3558",
+      "lower_bound": 2.9113097280461417,
+      "score": 37.33827543623292,
+      "status": "scored"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-1025:-180",
+      "lower_bound": 81.19920288155438,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-849:824",
+      "lower_bound": 122.64573455130257,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-54:2453",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-1026:-174",
+      "lower_bound": 48.96301158286137,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2646:-2892",
+      "lower_bound": 104.22505380919226,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3207:-3678",
+      "lower_bound": 302.2473717868779,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2507:-4013",
+      "lower_bound": 7.516479913113199,
+      "score": 46.54861580820911,
+      "status": "scored"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3208:-3681",
+      "lower_bound": 313.76029725069685,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3219:-3692",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:112:2428",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-918:1812",
+      "lower_bound": 200.9336277052713,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3212:-3697",
+      "lower_bound": 350.60165873491746,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-861:795",
+      "lower_bound": 115.7379792730112,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2506:-3951",
+      "lower_bound": 53.56818176838894,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3184:-3767",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3185:-3741",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-55:2456",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2659:-2919",
+      "lower_bound": 118.04056436577498,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3214:-3690",
+      "lower_bound": 240.07757428225568,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2658:-2915",
+      "lower_bound": 115.7379792730112,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:111:2443",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2646:-2933",
+      "lower_bound": 244.68274446778327,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3204:-4590",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:74:2578",
+      "lower_bound": 14.424235191404561,
+      "score": 24.468390694319403,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-920:1822",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:106:2419",
+      "lower_bound": 53.56818176838894,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-38:2307",
+      "lower_bound": 46.66042649009758,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3216:-3693",
+      "lower_bound": 221.6568935401454,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2750:-4461",
+      "lower_bound": 175.60519168486965,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3206:-3671",
+      "lower_bound": 293.0370314158228,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2554:-4108",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-3204:-3668",
+      "lower_bound": 286.1292761375314,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2662:-2924",
+      "lower_bound": 288.4318612302952,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:129:2430",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3213:-3684",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-918:1820",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2647:-2939",
+      "lower_bound": 276.91893576647624,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-51:2360",
+      "lower_bound": 366.719754384264,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-1510:-510",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-3186:-4575",
+      "lower_bound": 7.516479913113199,
+      "score": 46.54861580820911,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:148:2431",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:77:2436",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:1273:2753",
+      "lower_bound": 25.937160655223497,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-859:735",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-810:1716",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-903:1692",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-6:2410",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-3180:-3742",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:464:2583",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:1621:3990",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2543:-4268",
+      "lower_bound": 120.34314945853878,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2481:-3936",
+      "lower_bound": 23.63457556245971,
+      "score": 41.57964116705618,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2814:-2431",
+      "lower_bound": 2.911309728736917,
+      "score": 30.43052015725078,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:919:2938",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2477:-3854",
+      "lower_bound": 21.33199046969592,
+      "score": 52.665342844106135,
+      "status": "scored"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-433:1543",
+      "lower_bound": 46.66042649009758,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-890:926",
+      "lower_bound": 115.7379792730112,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-1015:352",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-915:1415",
+      "lower_bound": 25.937160655223497,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-1007:3609",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-1505:-497",
+      "lower_bound": 164.0922662210507,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:10:3133",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-77:2138",
+      "lower_bound": 53.56818176838894,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2867:-2219",
+      "lower_bound": 2.9113097285066587,
+      "score": 32.733105250244826,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:508:2755",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2:3428",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2520:-1073",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-921:1628",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-942:390",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-925:1302",
+      "lower_bound": 53.56818176838894,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:1052:2923",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:1703:4048",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-840:999",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-799:1657",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2991:-2041",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-1430:-377",
+      "lower_bound": 7.516479913113199,
+      "score": 46.54861580820911,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-425:2130",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-1048:955",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2195:-976",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-87:2088",
+      "lower_bound": 5.213894820349411,
+      "score": 44.246030715215056,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2307:-972",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2082:-886",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:106:3575",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:1145:3728",
+      "lower_bound": 30.54233084075107,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-972:3532",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-1660:3578",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-811:1702",
+      "lower_bound": 60.4759370466803,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:1841:4143",
+      "lower_bound": 14.424235191404561,
+      "score": 46.926873530615666,
+      "status": "scored"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-840:1853",
+      "lower_bound": 30.54233084075107,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-767:637",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-2844:-4473",
+      "lower_bound": 35.14750102627864,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-971:170",
+      "lower_bound": 67.38369232497166,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:398:2501",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-1021:14",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-195:3426",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-138:1922",
+      "lower_bound": 21.33199046969592,
+      "score": 51.809597226958154,
+      "status": "scored"
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-2024:2376",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:1044:2838",
+      "lower_bound": 85.80437306708197,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-898:847",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:422:2943",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:532:2725",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-555:788",
+      "lower_bound": 2.911309727585625,
+      "score": 27.51660292473386,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:1299:2871",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2517:-3876",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-862:1625",
+      "lower_bound": 35.14750102627864,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2932:-2574",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-999:1062",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-1688:3552",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2705:-1274",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:1963:4174",
+      "lower_bound": 2.9113097280461417,
+      "score": 27.96202077990806,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2648:-1330",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-987:-190",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:1480:3906",
+      "lower_bound": 2.9113097278158833,
+      "score": 33.03250141352423,
+      "status": "scored"
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-1229:977",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:923:2673",
+      "lower_bound": 2.9113097278158833,
+      "score": 29.046492031873484,
+      "status": "scored"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-921:-47",
+      "lower_bound": 55.87076686115273,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-1641:3580",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:910:2816",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-758:-22",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2117:-973",
+      "lower_bound": 2.9113097285066587,
+      "score": 28.241645499334894,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-209:793",
+      "lower_bound": 2.9113097285066587,
+      "score": 25.58414004434823,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:1539:3244",
+      "lower_bound": 2.9113097285066587,
+      "score": 26.15072527368221,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-1093:157",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:2226:4070",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-34:2215",
+      "lower_bound": 14.424235191404561,
+      "score": 51.688405179211344,
+      "status": "scored"
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-1616:3569",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-855:1589",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2548:-3222",
+      "lower_bound": 2.9113097285066587,
+      "score": 31.28111704095612,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-201:791",
+      "lower_bound": 2.9113097285066587,
+      "score": 25.04536334316966,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:533:-973",
+      "lower_bound": 2.9113097285066587,
+      "score": 25.070392098366767,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2632:-2808",
+      "lower_bound": 2.9113097285066587,
+      "score": 32.733105250244826,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2809:-2011",
+      "lower_bound": 5.213894820349411,
+      "score": 36.64818219924346,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-908:33",
+      "lower_bound": 14.424235191404561,
+      "score": 45.82167449840251,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:747:2763",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2687:-3469",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:223:4121",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-728:920",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-1398:-1145",
+      "lower_bound": 2.911309728736917,
+      "score": 30.43052015725078,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:693:2746",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-1063:1382",
+      "lower_bound": 101.92246871642848,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-150:3489",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-832:1581",
+      "lower_bound": 2.9113097282764,
+      "score": 35.03569034323887,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-359:3483",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2812:-1472",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-639:379",
+      "lower_bound": 2.911309728736917,
+      "score": 30.43052015725078,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:1289:3060",
+      "lower_bound": 2.9113097285066587,
+      "score": 32.733105250244826,
+      "status": "scored"
+    },
+    {
+      "action": "exact_unresolved",
+      "bound_supported": null,
+      "candidate_id": "cell:-996:1056",
+      "lower_bound": null,
+      "score": null,
+      "status": "unresolved_coverage"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-1399:-1164",
+      "lower_bound": 2.9113097285066587,
+      "score": 27.58572775697496,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2109:-1030",
+      "lower_bound": 2.9113097280461417,
+      "score": 31.370528173969596,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-766:1590",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:1253:2721",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-727:815",
+      "lower_bound": 46.66042649009758,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-1276:-484",
+      "lower_bound": 2.9113097285066587,
+      "score": 28.401958055480897,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:506:2805",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-200:800",
+      "lower_bound": 2.9113097285066587,
+      "score": 28.179064653179456,
+      "status": "scored"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-747:1896",
+      "lower_bound": 62.77852213944409,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2067:-877",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "pruned",
+      "bound_supported": true,
+      "candidate_id": "cell:-407:1614",
+      "lower_bound": 39.752671211806216,
+      "score": null,
+      "status": null
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:1471:3845",
+      "lower_bound": 2.9113097282764,
+      "score": 34.40436485883718,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:1341:4089",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-358:1656",
+      "lower_bound": 14.424235191404561,
+      "score": 53.45637108719124,
+      "status": "scored"
+    },
+    {
+      "action": "exact_invalid_water",
+      "bound_supported": null,
+      "candidate_id": "cell:-2994:-4019",
+      "lower_bound": null,
+      "score": null,
+      "status": "invalid_water"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:67:2317",
+      "lower_bound": 2.9113097282764,
+      "score": 35.03569034323887,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:1083:3218",
+      "lower_bound": 7.516479913113199,
+      "score": 45.23906564192991,
+      "status": "scored"
+    },
+    {
+      "action": "exact_scored",
+      "bound_supported": true,
+      "candidate_id": "cell:-2657:-1392",
+      "lower_bound": 19.029405376932132,
+      "score": 58.06154127317934,
+      "status": "scored"
+    }
+  ],
+  "screened_counts": {
+    "candidate_count": 255,
+    "exact_evaluation_count": 170,
+    "exact_scored_count": 46,
+    "invalid_water_count": 111,
+    "pruned_count": 85,
+    "unresolved_count": 13
+  },
+  "screened_wall_s": 23.025151859037578,
+  "selected_count": 255,
+  "selected_ids": [
+    "cell:-3226:-3730",
+    "cell:-32:2305",
+    "cell:-3225:-3737",
+    "cell:-2648:-2950",
+    "cell:-3184:-3649",
+    "cell:-3203:-3680",
+    "cell:-3194:-3663",
+    "cell:-1012:-168",
+    "cell:-2461:-3655",
+    "cell:117:2441",
+    "cell:-2659:-2925",
+    "cell:114:2424",
+    "cell:-33:2303",
+    "cell:-2655:-2914",
+    "cell:-3201:-3665",
+    "cell:152:2451",
+    "cell:-3209:-3681",
+    "cell:83:2440",
+    "cell:-2660:-2924",
+    "cell:-2660:-2922",
+    "cell:-2643:-2932",
+    "cell:-3220:-3708",
+    "cell:-3217:-3696",
+    "cell:-2546:-4100",
+    "cell:-3207:-3679",
+    "cell:-2524:-4082",
+    "cell:-2563:-4118",
+    "cell:-2646:-2942",
+    "cell:-2644:-2943",
+    "cell:-2866:-2232",
+    "cell:1179:3796",
+    "cell:-3203:-3676",
+    "cell:-2661:-2921",
+    "cell:-31:2316",
+    "cell:-2654:-2909",
+    "cell:-2742:-4442",
+    "cell:-2641:-2879",
+    "cell:-861:799",
+    "cell:-3206:-3687",
+    "cell:-2640:-2923",
+    "cell:116:2434",
+    "cell:-3210:-3686",
+    "cell:2:2421",
+    "cell:-3204:-3670",
+    "cell:-2513:-4035",
+    "cell:-2641:-2929",
+    "cell:155:2440",
+    "cell:-2538:-4097",
+    "cell:-2644:-2934",
+    "cell:-3203:-3670",
+    "cell:-924:1838",
+    "cell:-55:2451",
+    "cell:-2519:-4078",
+    "cell:-2659:-2917",
+    "cell:-2556:-4115",
+    "cell:-2642:-2935",
+    "cell:-2653:-2908",
+    "cell:117:2436",
+    "cell:106:2440",
+    "cell:-3213:-3687",
+    "cell:133:2433",
+    "cell:-3204:-3683",
+    "cell:-3208:-3682",
+    "cell:-3193:-3655",
+    "cell:-926:1843",
+    "cell:-3205:-3686",
+    "cell:860:2821",
+    "cell:-52:2461",
+    "cell:72:2423",
+    "cell:-2645:-2937",
+    "cell:-50:2468",
+    "cell:-2638:-2888",
+    "cell:-2638:-2924",
+    "cell:-2556:-4113",
+    "cell:-2650:-2936",
+    "cell:-2467:-3549",
+    "cell:-3219:-3698",
+    "cell:-2858:-2218",
+    "cell:-2652:-2947",
+    "cell:-2632:-2916",
+    "cell:71:2420",
+    "cell:-3206:-3683",
+    "cell:105:2438",
+    "cell:987:3193",
+    "cell:-876:771",
+    "cell:-2640:-2925",
+    "cell:1176:3788",
+    "cell:-3218:-3697",
+    "cell:-30:2313",
+    "cell:-2464:-3558",
+    "cell:-1025:-180",
+    "cell:-849:824",
+    "cell:-54:2453",
+    "cell:-1026:-174",
+    "cell:-2646:-2892",
+    "cell:-3207:-3678",
+    "cell:-2507:-4013",
+    "cell:-3208:-3681",
+    "cell:-3219:-3692",
+    "cell:112:2428",
+    "cell:-918:1812",
+    "cell:-3212:-3697",
+    "cell:-861:795",
+    "cell:-2506:-3951",
+    "cell:-3184:-3767",
+    "cell:-3185:-3741",
+    "cell:-55:2456",
+    "cell:-2659:-2919",
+    "cell:-3214:-3690",
+    "cell:-2658:-2915",
+    "cell:111:2443",
+    "cell:-2646:-2933",
+    "cell:-3204:-4590",
+    "cell:74:2578",
+    "cell:-920:1822",
+    "cell:106:2419",
+    "cell:-38:2307",
+    "cell:-3216:-3693",
+    "cell:-2750:-4461",
+    "cell:-3206:-3671",
+    "cell:-2554:-4108",
+    "cell:-3204:-3668",
+    "cell:-2662:-2924",
+    "cell:129:2430",
+    "cell:-3213:-3684",
+    "cell:-918:1820",
+    "cell:-2647:-2939",
+    "cell:-51:2360",
+    "cell:-1510:-510",
+    "cell:-3186:-4575",
+    "cell:148:2431",
+    "cell:77:2436",
+    "cell:1273:2753",
+    "cell:-859:735",
+    "cell:-810:1716",
+    "cell:-903:1692",
+    "cell:-6:2410",
+    "cell:-3180:-3742",
+    "cell:464:2583",
+    "cell:1621:3990",
+    "cell:-2543:-4268",
+    "cell:-2481:-3936",
+    "cell:-2814:-2431",
+    "cell:919:2938",
+    "cell:-2477:-3854",
+    "cell:-433:1543",
+    "cell:-890:926",
+    "cell:-1015:352",
+    "cell:-915:1415",
+    "cell:-1007:3609",
+    "cell:-1505:-497",
+    "cell:10:3133",
+    "cell:-77:2138",
+    "cell:-2867:-2219",
+    "cell:508:2755",
+    "cell:-2:3428",
+    "cell:-2520:-1073",
+    "cell:-921:1628",
+    "cell:-942:390",
+    "cell:-925:1302",
+    "cell:1052:2923",
+    "cell:1703:4048",
+    "cell:-840:999",
+    "cell:-799:1657",
+    "cell:-2991:-2041",
+    "cell:-1430:-377",
+    "cell:-425:2130",
+    "cell:-1048:955",
+    "cell:-2195:-976",
+    "cell:-87:2088",
+    "cell:-2307:-972",
+    "cell:-2082:-886",
+    "cell:106:3575",
+    "cell:1145:3728",
+    "cell:-972:3532",
+    "cell:-1660:3578",
+    "cell:-811:1702",
+    "cell:1841:4143",
+    "cell:-840:1853",
+    "cell:-767:637",
+    "cell:-2844:-4473",
+    "cell:-971:170",
+    "cell:398:2501",
+    "cell:-1021:14",
+    "cell:-195:3426",
+    "cell:-138:1922",
+    "cell:-2024:2376",
+    "cell:1044:2838",
+    "cell:-898:847",
+    "cell:422:2943",
+    "cell:532:2725",
+    "cell:-555:788",
+    "cell:1299:2871",
+    "cell:-2517:-3876",
+    "cell:-862:1625",
+    "cell:-2932:-2574",
+    "cell:-999:1062",
+    "cell:-1688:3552",
+    "cell:-2705:-1274",
+    "cell:1963:4174",
+    "cell:-2648:-1330",
+    "cell:-987:-190",
+    "cell:1480:3906",
+    "cell:-1229:977",
+    "cell:923:2673",
+    "cell:-921:-47",
+    "cell:-1641:3580",
+    "cell:910:2816",
+    "cell:-758:-22",
+    "cell:-2117:-973",
+    "cell:-209:793",
+    "cell:1539:3244",
+    "cell:-1093:157",
+    "cell:2226:4070",
+    "cell:-34:2215",
+    "cell:-1616:3569",
+    "cell:-855:1589",
+    "cell:-2548:-3222",
+    "cell:-201:791",
+    "cell:533:-973",
+    "cell:-2632:-2808",
+    "cell:-2809:-2011",
+    "cell:-908:33",
+    "cell:747:2763",
+    "cell:-2687:-3469",
+    "cell:223:4121",
+    "cell:-728:920",
+    "cell:-1398:-1145",
+    "cell:693:2746",
+    "cell:-1063:1382",
+    "cell:-150:3489",
+    "cell:-832:1581",
+    "cell:-359:3483",
+    "cell:-2812:-1472",
+    "cell:-639:379",
+    "cell:1289:3060",
+    "cell:-996:1056",
+    "cell:-1399:-1164",
+    "cell:-2109:-1030",
+    "cell:-766:1590",
+    "cell:1253:2721",
+    "cell:-727:815",
+    "cell:-1276:-484",
+    "cell:506:2805",
+    "cell:-200:800",
+    "cell:-747:1896",
+    "cell:-2067:-877",
+    "cell:-407:1614",
+    "cell:1471:3845",
+    "cell:1341:4089",
+    "cell:-358:1656",
+    "cell:-2994:-4019",
+    "cell:67:2317",
+    "cell:1083:3218",
+    "cell:-2657:-1392"
+  ],
+  "selected_manifest_sha256": "d4f2fa4812855a2f691a2ab7e9ad5035623c63abc8192106878dfd879d901a3e",
+  "selected_positions_map_epsg32618": [
+    [
+      -193112.4758447545,
+      2949651.320578988
+    ],
+    [
+      587212.3368526496,
+      4469887.746986394
+    ],
+    [
+      -192835.60170155822,
+      2947901.843977116
+    ],
+    [
+      -51192.95870909782,
+      3147842.425567764
+    ],
+    [
+      -182898.67898063513,
+      2970177.4889418883
+    ],
+    [
+      -187540.78161547298,
+      2962307.0936804893
+    ],
+    [
+      -185350.61916740646,
+      2966615.8037213185
+    ],
+    [
+      349666.46647161094,
+      3849111.500979718
+    ],
+    [
+      -2064.0947251550388,
+      2972202.3628631206
+    ],
+    [
+      623962.161021963,
+      4504352.3891791785
+    ],
+    [
+      -54029.55461246136,
+      3154053.7217826215
+    ],
+    [
+      623268.2611880853,
+      4500093.903319706
+    ],
+    [
+      586969.0836838522,
+      4469384.798951247
+    ],
+    [
+      -53065.38469591818,
+      3156825.18440896
+    ],
+    [
+      -187096.17634028802,
+      2966077.6973389336
+    ],
+    [
+      632663.9815407324,
+      4506965.970234413
+    ],
+    [
+      -189039.64508421812,
+      2962024.7899330654
+    ],
+    [
+      615480.9747357897,
+      4503992.209157143
+    ],
+    [
+      -54283.16899140435,
+      3154299.7400980704
+    ],
+    [
+      -54289.87652767741,
+      3154800.482925541
+    ],
+    [
+      -50002.06734706159,
+      3152370.7258068263
+    ],
+    [
+      -191692.87218927324,
+      2955198.2622586573
+    ],
+    [
+      -190986.75489963614,
+      2958222.340005325
+    ],
+    [
+      -21759.616014130588,
+      2860428.7577382126
+    ],
+    [
+      -188546.27948435606,
+      2962536.68766007
+    ],
+    [
+      -16330.88838794548,
+      2865039.812102195
+    ],
+    [
+      -25940.139954275684,
+      2855841.07096469
+    ],
+    [
+      -50719.296113516786,
+      3149854.0496760095
+    ],
+    [
+      -50215.46247574524,
+      3149612.3873080043
+    ],
+    [
+      -108184.9715309568,
+      3326723.211500545
+    ],
+    [
+      884056.4651301939,
+      4847244.085877822
+    ],
+    [
+      -187555.7934978524,
+      2963309.7835134496
+    ],
+    [
+      -54543.49281373003,
+      3155046.5025342503
+    ],
+    [
+      587427.1792642972,
+      4472639.827952636
+    ],
+    [
+      -52831.87130114273,
+      3158081.370583855
+    ],
+    [
+      -69458.43105495628,
+      2773827.663788737
+    ],
+    [
+      -49678.775226634345,
+      3165648.5988499727
+    ],
+    [
+      384671.1361349287,
+      4091169.307553326
+    ],
+    [
+      -188265.79636568238,
+      2960536.5643727365
+    ],
+    [
+      -49281.45950711798,
+      3154637.004635712
+    ],
+    [
+      623735.1636214098,
+      4502599.6574813
+    ],
+    [
+      -189271.29586534947,
+      2960766.130253251
+    ],
+    [
+      595329.3726638096,
+      4498984.227916196
+    ],
+    [
+      -187828.74321270979,
+      2964808.556462066
+    ],
+    [
+      -13748.212575286278,
+      2876855.8727452643
+    ],
+    [
+      -49511.624132601195,
+      3153130.496825148
+    ],
+    [
+      633448.2060192489,
+      4504226.550200868
+    ],
+    [
+      -19773.18492013961,
+      2861218.190712672
+    ],
+    [
+      -50245.613212654134,
+      3151865.6553142527
+    ],
+    [
+      -187578.30412769574,
+      2964813.81880395
+    ],
+    [
+      365954.68105812365,
+      4350624.163332248
+    ],
+    [
+      581011.2602616327,
+      4506301.0670271395
+    ],
+    [
+      -15096.756341775064,
+      2866064.901975711
+    ],
+    [
+      -54056.37883436319,
+      3156056.6892316537
+    ],
+    [
+      -24203.3310821536,
+      2856625.90285167
+    ],
+    [
+      -49741.77871827257,
+      3151623.982650426
+    ],
+    [
+      -52584.95818971121,
+      3158336.0789181096
+    ],
+    [
+      623978.268140269,
+      4503102.7609416675
+    ],
+    [
+      621220.4049371554,
+      4504066.713395306
+    ],
+    [
+      -190018.85402612947,
+      2960499.6098393514
+    ],
+    [
+      627980.7004340354,
+      4502405.100718376
+    ],
+    [
+      -187779.95274739503,
+      2961549.805793108
+    ],
+    [
+      -188785.44998069282,
+      2961779.3886823305
+    ],
+    [
+      -185130.13433821558,
+      2968626.382777738
+    ],
+    [
+      365440.8416532943,
+      4351868.267770835
+    ],
+    [
+      -188019.11974640342,
+      2960792.51321952
+    ],
+    [
+      808116.3735342845,
+      4601990.6414991245
+    ],
+    [
+      581728.1026823336,
+      4508809.512985749
+    ],
+    [
+      612790.5651179221,
+      4499708.0844771685
+    ],
+    [
+      -50485.80750716233,
+      3151110.218431545
+    ],
+    [
+      582204.922333967,
+      4510565.1177002285
+    ],
+    [
+      -48897.945022051455,
+      3163408.2946956786
+    ],
+    [
+      -48777.62643225666,
+      3154395.316520175
+    ],
+    [
+      -24210.329016615695,
+      2857126.513379635
+    ],
+    [
+      -51740.387217646,
+      3151338.8356934553
+    ],
+    [
+      -3920.7254916148377,
+      2998703.810917873
+    ],
+    [
+      -191480.1060234207,
+      2957710.3882132266
+    ],
+    [
+      -106225.60164225195,
+      3330262.998789383
+    ],
+    [
+      -52203.99337980838,
+      3148576.0933880503
+    ],
+    [
+      -47302.9225594108,
+      3156424.1758424966
+    ],
+    [
+      612550.6358555536,
+      4498955.108017178
+    ],
+    [
+      -188280.8209968143,
+      2961539.2614198197
+    ],
+    [
+      620977.2979701695,
+      4503563.619941966
+    ],
+    [
+      838466.3949583829,
+      4695548.30574988
+    ],
+    [
+      381002.6027367255,
+      4084131.3028689376
+    ],
+    [
+      -49274.76744923531,
+      3154136.28207214
+    ],
+    [
+      883339.9739700968,
+      4845228.668877213
+    ],
+    [
+      -191233.4305634267,
+      2957966.3652437124
+    ],
+    [
+      587686.2110889961,
+      4471893.261092433
+    ],
+    [
+      -3140.9092577435076,
+      2996464.845480985
+    ],
+    [
+      346450.8012532131,
+      3846075.9945431133
+    ],
+    [
+      387598.4318474205,
+      4097449.382023966
+    ],
+    [
+      581254.4371989032,
+      4506804.014189717
+    ],
+    [
+      346183.983112991,
+      3847572.497462213
+    ],
+    [
+      -50886.65643280523,
+      3162372.2694868073
+    ],
+    [
+      -188550.03458328615,
+      2962787.362683142
+    ],
+    [
+      -12326.575818577723,
+      2882390.6298714415
+    ],
+    [
+      -188789.20630304422,
+      2962030.0642952565
+    ],
+    [
+      -191502.6967197149,
+      2959214.483029397
+    ],
+    [
+      622756.2922982645,
+      4501087.10625773
+    ],
+    [
+      367527.8878713177,
+      4344143.153692293
+    ],
+    [
+      -189730.8054611605,
+      2957998.1120161614
+    ],
+    [
+      384682.5380404742,
+      4090169.7986615063
+    ],
+    [
+      -12290.974418171449,
+      2897912.9509369708
+    ],
+    [
+      -182456.11415672745,
+      2940599.6381476787
+    ],
+    [
+      -182804.29548957292,
+      2947111.4814140624
+    ],
+    [
+      580995.414757715,
+      4507550.5665607685
+    ],
+    [
+      -54049.67381335108,
+      3155555.947291959
+    ],
+    [
+      -190258.01193518622,
+      2959742.2885889513
+    ],
+    [
+      -53812.81970380177,
+      3156561.7784398757
+    ],
+    [
+      622458.4594336848,
+      4504832.727852652
+    ],
+    [
+      -50749.45246785693,
+      3152107.3268793635
+    ],
+    [
+      -184276.39029221504,
+      2734196.915802676
+    ],
+    [
+      612790.9529122543,
+      4538451.860086575
+    ],
+    [
+      366999.6423897913,
+      4346636.663394958
+    ],
+    [
+      621287.951518909,
+      4498818.313193918
+    ],
+    [
+      585708.6534754719,
+      4470368.712428635
+    ],
+    [
+      -190747.60575452808,
+      2958979.6735945707
+    ],
+    [
+      -71385.44737840083,
+      2769028.3932622387
+    ],
+    [
+      -188325.8718349235,
+      2964547.3542955727
+    ],
+    [
+      -23728.586723446846,
+      2858387.7110543153
+    ],
+    [
+      -187836.24583919963,
+      2965309.9029894783
+    ],
+    [
+      -54783.693014377495,
+      3154291.0326172356
+    ],
+    [
+      626992.1757767962,
+      4501642.273196326
+    ],
+    [
+      -190030.13342483586,
+      2961251.646133465
+    ],
+    [
+      367504.8552095799,
+      4346142.221749158
+    ],
+    [
+      -50979.593652480165,
+      3150600.7919538138
+    ],
+    [
+      582297.2182242566,
+      4483572.706357049
+    ],
+    [
+      226121.73811844218,
+      3762204.9046771363
+    ],
+    [
+      -179837.294332062,
+      2738061.703434205
+    ],
+    [
+      631730.4263393224,
+      4501954.2439576145
+    ],
+    [
+      613996.5816446805,
+      4502973.151997395
+    ],
+    [
+      911518.1742892351,
+      4586628.853610942
+    ],
+    [
+      385353.2648092496,
+      4075182.7021352537
+    ],
+    [
+      394776.06100837013,
+      4320445.521497247
+    ],
+    [
+      371619.44977338624,
+      4314197.316271013
+    ],
+    [
+      593368.0916933225,
+      4496209.847669329
+    ],
+    [
+      -181548.63197539386,
+      2946887.259248384
+    ],
+    [
+      710092.2934859636,
+      4541019.388453291
+    ],
+    [
+      993528.8951934057,
+      4897926.451532973
+    ],
+    [
+      -20422.361125504132,
+      2818393.1078993864
+    ],
+    [
+      -6101.126163310662,
+      2901784.473071753
+    ],
+    [
+      -94493.73980786186,
+      3277095.054596072
+    ],
+    [
+      822426.0862333239,
+      4631486.178762029
+    ],
+    [
+      -5383.303882900334,
+      2922325.4262820994
+    ],
+    [
+      489430.47545357834,
+      4278274.251036882
+    ],
+    [
+      377062.43111351196,
+      4122823.968916886
+    ],
+    [
+      347451.4862837996,
+      3979045.337330451
+    ],
+    [
+      369417.74538297456,
+      4244947.659690358
+    ],
+    [
+      340136.3607159901,
+      4792968.7359571755
+    ],
+    [
+      227335.3599201279,
+      3765469.164405268
+    ],
+    [
+      595020.9783713007,
+      4676943.809111941
+    ],
+    [
+      576504.9155248802,
+      4428014.018527682
+    ],
+    [
+      -108478.50403443875,
+      3329975.487123683
+    ],
+    [
+      720490.4110218775,
+      4584176.251218404
+    ],
+    [
+      591054.8814179397,
+      4750626.115237234
+    ],
+    [
+      -25091.429740202962,
+      3618231.8102861275
+    ],
+    [
+      367307.77199048805,
+      4298156.584831541
+    ],
+    [
+      365589.640251311,
+      3988743.9861022453
+    ],
+    [
+      367243.1678890858,
+      4216683.876000253
+    ],
+    [
+      855686.8560545492,
+      4628265.283815385
+    ],
+    [
+      1013746.8492154424,
+      4912873.879693591
+    ],
+    [
+      389347.23246765556,
+      4141202.560752058
+    ],
+    [
+      397694.20776788896,
+      4305732.862860784
+    ],
+    [
+      -140161.37107866688,
+      3374061.1747302758
+    ],
+    [
+      245752.01669047325,
+      3795682.934439472
+    ],
+    [
+      489670.30220350233,
+      4424971.440406006
+    ],
+    [
+      337497.105810061,
+      4129639.814832431
+    ],
+    [
+      56044.50416211947,
+      3643574.831319727
+    ],
+    [
+      574164.5078481849,
+      4415488.250179836
+    ],
+    [
+      27980.590955992986,
+      3644213.1378468876
+    ],
+    [
+      84075.21854573966,
+      3666449.650072885
+    ],
+    [
+      617466.5146789344,
+      4787727.293798359
+    ],
+    [
+      875845.1499603733,
+      4830076.011547637
+    ],
+    [
+      349079.350119801,
+      4773812.020299312
+    ],
+    [
+      177461.3464367026,
+      4783836.869575434
+    ],
+    [
+      394566.91415737127,
+      4316944.547535899
+    ],
+    [
+      1047781.0096315766,
+      4937403.658381488
+    ],
+    [
+      386887.3610131452,
+      4354597.321786959
+    ],
+    [
+      408622.14549078495,
+      4050950.6222712877
+    ],
+    [
+      -94804.64898444596,
+      2765526.127341331
+    ],
+    [
+      358962.8334615164,
+      3933688.6060375385
+    ],
+    [
+      693893.6131857192,
+      4520290.5881248135
+    ],
+    [
+      346904.90307497943,
+      3894565.861904208
+    ],
+    [
+      542977.1699960661,
+      4749503.024499655
+    ],
+    [
+      561946.1984669527,
+      4373849.739684296
+    ],
+    [
+      89648.07016427832,
+      4482555.844989976
+    ],
+    [
+      853998.8347550419,
+      4606966.8962488305
+    ],
+    [
+      375288.58130613575,
+      4103061.4745873697
+    ],
+    [
+      698392.17211741,
+      4630868.082735045
+    ],
+    [
+      726581.9403042381,
+      4576762.018303203
+    ],
+    [
+      461160.96891642414,
+      4089275.507257891
+    ],
+    [
+      917576.8669957153,
+      4616272.184126219
+    ],
+    [
+      -15295.895658048044,
+      2916632.7855679574
+    ],
+    [
+      382052.4970703956,
+      4297565.730665135
+    ],
+    [
+      -123585.62639093446,
+      3240769.493285172
+    ],
+    [
+      349438.202394097,
+      4156510.9181158934
+    ],
+    [
+      170545.22283826087,
+      4777285.131600429
+    ],
+    [
+      -70863.06267369271,
+      3567271.7801023526
+    ],
+    [
+      1078106.5178236412,
+      4945839.296640479
+    ],
+    [
+      -56398.52532506699,
+      3553450.2359864577
+    ],
+    [
+      355976.9988307002,
+      3843684.823211647
+    ],
+    [
+      958695.5120040942,
+      4876191.190847504
+    ],
+    [
+      292197.31614084827,
+      4134652.059525996
+    ],
+    [
+      824372.4564682329,
+      4565214.185654117
+    ],
+    [
+      372071.0884397691,
+      3879604.59508714
+    ],
+    [
+      182194.52334370633,
+      4784371.75441689
+    ],
+    [
+      820617.4269592545,
+      4600933.957140733
+    ],
+    [
+      412737.74758910126,
+      3886310.664678823
+    ],
+    [
+      75566.88101291924,
+      3644575.823216387
+    ],
+    [
+      547593.0193767244,
+      4091514.2039704616
+    ],
+    [
+      976112.496022784,
+      4710710.221302853
+    ],
+    [
+      328504.5973530605,
+      3930098.63040159
+    ],
+    [
+      1144303.3129639653,
+      4921250.808172221
+    ],
+    [
+      586996.5629681566,
+      4447390.166569529
+    ],
+    [
+      188457.66447529907,
+      4781667.8770568045
+    ],
+    [
+      383904.67237879365,
+      4288589.055168525
+    ],
+    [
+      -25265.823266198044,
+      3080188.7331656828
+    ],
+    [
+      549597.6545091692,
+      4091037.592366868
+    ],
+    [
+      737967.0434764442,
+      3652153.7869197
+    ],
+    [
+      -47662.82000816928,
+      3183462.845177818
+    ],
+    [
+      -94617.21790298121,
+      3382309.1803479013
+    ],
+    [
+      375095.0595693856,
+      3899631.5862651053
+    ],
+    [
+      780112.0368646343,
+      4587054.285679944
+    ],
+    [
+      -59180.78376251471,
+      3017723.93910551
+    ],
+    [
+      644704.0787733676,
+      4924601.183165116
+    ],
+    [
+      417557.3930845041,
+      4121772.8151012463
+    ],
+    [
+      255929.6097982067,
+      3603818.696322198
+    ],
+    [
+      766692.1167811891,
+      4582601.243900436
+    ],
+    [
+      332537.2195129823,
+      4236305.368168007
+    ],
+    [
+      553982.6768795231,
+      4765388.262573378
+    ],
+    [
+      389672.32807931805,
+      4286652.458991161
+    ],
+    [
+      501938.91336592793,
+      4763241.742955144
+    ],
+    [
+      -97085.33437452733,
+      3517299.526695284
+    ],
+    [
+      441342.05319064844,
+      3986842.832715229
+    ],
+    [
+      914366.9084192077,
+      4663535.76263488
+    ],
+    [
+      350204.9120847989,
+      4155019.704827288
+    ],
+    [
+      255733.58846735966,
+      3599066.7460381608
+    ],
+    [
+      77737.16025930445,
+      3630343.03081549
+    ],
+    [
+      406130.16312755644,
+      4289081.634804054
+    ],
+    [
+      906638.0328888206,
+      4578537.290851269
+    ],
+    [
+      418108.3961514982,
+      4095539.2051818874
+    ],
+    [
+      284560.51901477657,
+      3769386.1254229485
+    ],
+    [
+      719820.4865656426,
+      4596669.532420334
+    ],
+    [
+      549821.2465177666,
+      4093289.4812104614
+    ],
+    [
+      409983.54490565514,
+      4365594.692871443
+    ],
+    [
+      87804.34283688443,
+      3668748.196187536
+    ],
+    [
+      495712.3106696945,
+      4296090.116639335
+    ],
+    [
+      956702.1074243053,
+      4860874.866054514
+    ],
+    [
+      923267.1753288292,
+      4921328.702904364
+    ],
+    [
+      507822.82114530733,
+      4306727.01821089
+    ],
+    [
+      -133973.19707793288,
+      2878453.2159611844
+    ],
+    [
+      611881.5279959444,
+      4473200.704995175
+    ],
+    [
+      862333.2884444569,
+      4702200.766581056
+    ],
+    [
+      -58464.15362271317,
+      3537894.3158366317
+    ]
+  ],
+  "setup_elapsed_s": 13.424880017060786,
+  "source_commit": "d3d09da14c29522ede57fe3441302b89d79ccb53",
+  "started_utc": "2026-10-26T10:46:36.139831+00:00",
+  "thread_settings": {
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "tie_candidate_ids": [
+    "cell:74:2578"
+  ],
+  "unsupported_prune_count": 0
+}
