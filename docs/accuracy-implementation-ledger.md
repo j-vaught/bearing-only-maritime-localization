@@ -242,3 +242,12 @@ At integration 94c0c7b, the independently validated pass-one result places the b
 A35's immutable source and checkpoint-prefix validation fixes are integrated as 4ad2709. The CPU pool and runner are integrated as 2862818 and a9e9dea. Independent review commits 82d18c2 and 94c0c7b clear the earlier startup failures. The combined root integration check passes 43 tests, Ruff and ty. Actual four-worker execution waits for the 40 GiB disk reserve. A39 is adding a clearly provisional fourth stage to the zoomable progress figure.
 
 The existing success criteria, supported denominators, calibrated acceptance requirements, split manifests and held-out isolation remain unchanged. Calibration, the six release decisions, clean GPU scaling measurements and measured-bearing field validation remain unfinished.
+
+
+## Audited development recovery and postprocessing integration
+
+A35's full audit is integrated as ecaf55b. It independently verifies the 11.127008 m, five-match lowest-score result among 60 completed modes, while retaining four pending modes and incomplete global coverage. A39's audited figure update is integrated as 44b38c2. The four-worker run at a41570c is executing the same 64-mode, 22,000-branch workload after verified cleanup restored the disk reserve.
+
+The shared result-contract fix at 4e8bc42 preserves candidate counters while declaring request or assignment-branch exhaustion. It passes 42 CPU-environment contract/serialization tests. A32 owns normal-CLI expansion integration; A26 owns suite argument binding and execution fingerprints. Neither changes acceptance thresholds or opens validation/held-out results.
+
+Coordinator review rejected the initial parallel evaluator's complete-audit logic and producer-schema assumptions. Its owner is repairing those paths with production-derived contract fixtures and independent A35 review. Complete parallel validation is pending. CI import ordering was repaired at cbc2bee after an otherwise passing build/test/figure run. Final broad integration checks remain required after the CLI and evaluator changes land.

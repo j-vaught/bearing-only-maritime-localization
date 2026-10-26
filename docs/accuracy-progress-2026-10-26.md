@@ -222,3 +222,20 @@ This result covers 60 completed modes out of the same 64 selected alternatives. 
 The four-worker CPU pool and runner are integrated from b76deb56626e8b5d2a908b748ac80689ca66f77c and a41570c525f4da6b801622366c5a601bfba09c22. Independent review cleared the four reported startup defects. The coordinator's combined pool, runner, and evaluator gate passes 43 tests in 15.24 seconds, with scoped Ruff and ty passing. Whole-mode jobs retain the same 22,000 planned branches and canonical objective; dispatch order prioritizes larger branch inventories and does not use truth. Actual parallel execution has not started.
 
 Server free space has fallen to 41,636,933,632 bytes, below the 42,949,672,960-byte reserve. New downloads and large artifact generation are paused. A storage audit is checking reproducible duplicate worktrees and disposable caches while preserving frozen data, active environments, and experiment evidence. The small evaluator audit and code reviews continue.
+
+
+## Audited recovery and full selected-set parallel run
+
+The independent second pass completed with no scoring mismatches. It reconciled all 20,435 durable branch results, independently re-scored 12,204 scored poses, and accounted for 8,225 invalid-water outcomes and six solver-limit outcomes without exact scores. The best returned estimate remains 11.127008 m from truth with five correct assignments and objective 5.026904167180264. The full audit JSON is retained under reports/experiments/a35-cached-evaluation/assignment-expansion-full-audit.json with SHA-256 7111b39f72caf0df53e655681cb4460118b781a08bbbafdd396056774523bbf8. The provisional artifact remains preserved separately.
+
+The audit covers the durable 60-mode prefix. The search itself remains interrupted, four modes remain pending, and the original coast-wide candidate population remains incomplete. The figure now uses each stage's actual score winner in its first panel and the same nearby alternative's progression in a separate local-scale panel. It records the complete audit without implying complete search.
+
+Verified duplicate-checkout cleanup reclaimed 1,884,401,664 measured bytes across the latest approved passes, restoring free space to 43,265,101,824 bytes. Source refs, frozen inputs, environments and experiment evidence remain intact. Margin is limited, so the 40 GiB guard continues on every diagnostic callback.
+
+The four-worker CPU run began from frozen runner a41570c525f4da6b801622366c5a601bfba09c22 with all 64 modes and 22,000 branches. It uses the unchanged expansion module and inputs, the canonical benchmark lock, a 1,800-second deadline and 50 MiB output limit. Preflight checked actual loaded-source and input hashes. This run is a selected-mode CPU diagnostic; it is not complete-frame latency or a GPU scaling measurement.
+
+Hosted CI at 125ce06 passed the full tests, installed commands, package builds, formatting, and every Typst build, but failed one newly added test's import-order check. Commit cbc2bee repairs the import ordering and unused suppression. Complete local Ruff lint/format and ty checks, plus the three independent pool tests, then pass.
+
+Normal-command integration exposed a result-contract reporting defect. Candidate counts cannot describe a request deadline or assignment-branch limit. Commit 4e8bc42 adds an optional explicit exhaustion reason so interrupted requests remain budget_exhausted without fabricating candidate counts. Old payloads and the legacy candidate-budget rule remain unchanged. Forty-two contract/serialization tests pass in the existing CPU-only environment.
+
+The first parallel evaluator implementation remains under repair after coordinator review found mismatched producer schemas and unsafe reuse of the 60-mode audit for all 64 modes. It is not approved for a complete-audit claim. Repairs must validate actual producer artifacts, reuse only exact overlapping branch evidence, and independently score every added pose before reporting complete verification.
