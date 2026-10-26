@@ -189,16 +189,19 @@ def select_modes(seeds: list[Seed], cap: int = 64, separation_m: float = 100.0) 
 def verify_selected_plan(root: Path, selected: list[Seed]) -> None:
     pending = {seed.input_index: seed for seed in selected}
     with (root / "candidate-plan.jsonl").open() as stream:
-        for line in stream:
+        for ordinal, line in enumerate(stream):
             row = json.loads(line)
-            seed = pending.get(row["input_index"])
+            index = row.get("input_index", ordinal)
+            if index != ordinal:
+                raise ValueError("Candidate plan index differs from line ordinal")
+            seed = pending.get(index)
             if seed is not None:
                 if row["candidate_id"] != seed.candidate_id or tuple(row["position_xy_m"]) != (
                     seed.hypothesis.east_m,
                     seed.hypothesis.north_m,
                 ):
                     raise ValueError("Selected seed differs from immutable candidate plan")
-                del pending[row["input_index"]]
+                del pending[index]
             if not pending:
                 break
     if pending:
