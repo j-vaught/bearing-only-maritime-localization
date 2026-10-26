@@ -403,10 +403,14 @@ def test_result_callback_follows_branch_completion_and_preserves_event_copy() ->
     phases: list[tuple[str, int]] = []
 
     def on_start(event: dict[str, object]) -> None:
-        phases.append(("started", int(event["branch_id"])))
+        branch_id = event["branch_id"]
+        assert type(branch_id) is int
+        phases.append(("started", branch_id))
 
     def on_result(event: dict[str, object]) -> None:
-        phases.append(("result", int(event["branch_id"])))
+        branch_id = event["branch_id"]
+        assert type(branch_id) is int
+        phases.append(("result", branch_id))
         event["status"] = "review-mutation"
 
     result = expand_assignments(
