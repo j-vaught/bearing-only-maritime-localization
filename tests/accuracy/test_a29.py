@@ -23,6 +23,22 @@ from tools.profile_accuracy_assignment import run_bounded_process  # noqa: E402
 from .reference_assignment import optimal_assignments
 
 
+def _proc_state(pid: int) -> str | None:
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text()
+    except (FileNotFoundError, ProcessLookupError):
+        return None
+    return stat.rsplit(") ", maxsplit=1)[-1].split()[0]
+
+
+def test_proc_state_treats_disappearing_process_as_terminated(monkeypatch) -> None:
+    def disappear(_path: Path) -> str:
+        raise ProcessLookupError("process exited between the probe and stat read")
+
+    monkeypatch.setattr(Path, "read_text", disappear)
+    assert _proc_state(12345) is None
+
+
 def test_prototype_gate_defers_below_twenty_percent_and_opens_at_threshold() -> None:
     assert assignment_acceleration_decision(0.199999) == "defer_cpu"
     assert assignment_acceleration_decision(0.20) == "prototype_eligible"
@@ -115,11 +131,9 @@ def test_bounded_process_timeout_terminates_grandchild(tmp_path) -> None:
             os.kill(child_pid, 0)
         except ProcessLookupError:
             break
-        stat_path = Path(f"/proc/{child_pid}/stat")
-        if stat_path.is_file():
-            state = stat_path.read_text().rsplit(") ", maxsplit=1)[-1].split()[0]
-            if state == "Z":
-                break
+        state = _proc_state(child_pid)
+        if state is None or state == "Z":
+            break
         time.sleep(0.02)
     else:
         pytest.fail("Timed-out process group left its grandchild running.")
