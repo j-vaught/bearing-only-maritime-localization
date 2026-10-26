@@ -139,6 +139,26 @@ def test_fisher_information_matches_finite_difference_global_bearing_jacobian():
     np.testing.assert_allclose(got, expected, rtol=1e-8, atol=1e-10)
 
 
+def test_angular_geometry_uses_truth_bearings_not_measurement_noise():
+    truth, measurements = scene(((1000, 0), (0, 1000), (-1000, 0)))
+    shifted = MeasurementSetV2(
+        tuple(
+            MeasurementV2(
+                (measurement.bearing_deg + offset) % 360.0,
+                measurement.timestamp_utc,
+                sigma_deg=measurement.sigma_deg,
+                object_type=measurement.object_type,
+            )
+            for measurement, offset in zip(measurements.measurements, (10.0, -5.0, 25.0))
+        )
+    )
+    baseline = evaluate_scene_difficulty(truth, measurements, valid_reference_water=True)
+    perturbed = evaluate_scene_difficulty(truth, shifted, valid_reference_water=True)
+
+    assert perturbed.angular_spread_deg == baseline.angular_spread_deg
+    assert perturbed.largest_angular_gap_deg == baseline.largest_angular_gap_deg
+
+
 def test_more_range_or_noise_increases_uncertainty():
     close = scene(((500, 0), (0, 500), (-500, 0)), sigma=0.5)
     far = scene(((5000, 0), (0, 5000), (-5000, 0)), sigma=0.5)

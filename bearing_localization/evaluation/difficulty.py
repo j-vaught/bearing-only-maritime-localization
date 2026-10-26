@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from math import isfinite, log, pi, radians, sqrt
+from math import atan2, degrees, isfinite, log, pi, radians, sqrt
 from typing import Literal, Protocol
 
 import numpy as np
@@ -158,7 +158,7 @@ def evaluate_scene_difficulty(
             radians(max(sigma if sigma is not None else default_sigma_deg, sigma_floor_deg))
         )
         matched_indices.append(index)
-        bearings.append(measurements.measurements[index].bearing_deg % 360.0)
+        bearings.append(degrees(atan2(dx, dy)) % 360.0)
         ranges.append(range_m)
         types.append(obj.object_type)
 
