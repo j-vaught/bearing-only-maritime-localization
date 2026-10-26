@@ -7,7 +7,8 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from pyproj import Geod
+from pyproj import Geod, Transformer
+from shapely import transform as shapely_transform
 from shapely.geometry import box, shape
 
 from maritime_localization_ingest.ais import read_ais_csv
@@ -24,7 +25,11 @@ from maritime_localization_shared.serialization import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARED_ROOT = next(parent for parent in (ROOT, *ROOT.parents) if (parent / ".agent-work").is_dir())
+SHARED_ROOT = (
+    ROOT.parents[2]
+    if ROOT.parent.name == "worktrees" and ROOT.parent.parent.name == ".agent-work"
+    else next(parent for parent in (ROOT, *ROOT.parents) if (parent / ".agent-work").is_dir())
+)
 CACHE = SHARED_ROOT / ".agent-work" / "cache" / "maps"
 SOURCE_MAP_MANIFEST = ROOT / "data" / "maps" / "accuracy-east-coast-enc.manifest.json"
 OUTPUT_MANIFEST = ROOT / "data" / "maps" / "eastern-seaboard-accuracy-v2.manifest.json"
@@ -46,7 +51,525 @@ def geodesic_area_km2(geometry) -> float:
     return abs(float(area_m2)) / 1_000_000.0
 
 
+def equal_area_km2(geometry) -> float:
+    """Measure polygon area in WGS 84 / NSIDC EASE-Grid 2.0 Global."""
+    transformer = Transformer.from_crs("EPSG:4326", "EPSG:6933", always_xy=True)
+    projected = shapely_transform(geometry, transformer.transform, interleaved=False)
+    return float(projected.area) / 1_000_000.0
+
+
+def build_coast_base_candidate() -> int:
+    """Build an isolated full-coast MapV2 candidate from validated source layers."""
+    import gzip
+    import sys
+
+    from shapely.geometry import GeometryCollection, box, shape
+    from shapely.ops import unary_union
+    from shapely.strtree import STRtree
+
+    from maritime_localization_ingest.enc import (
+        SCALE_PRIORITY,
+        ENCCollection,
+        _geojson_geometry,
+        _polygonal_only,
+        compose_scale_fallback_map_v2,
+        load_enc_geojson,
+        mosaic_by_scale,
+    )
+
+    base_root = (
+        SHARED_ROOT
+        / ".agent-work"
+        / "worktrees"
+        / "a08-coast-base"
+        / "data"
+        / "maps"
+        / "coast-base"
+    )
+    source_manifest_path = base_root / "manifest.json"
+    source_manifest = json.loads(source_manifest_path.read_text(encoding="utf-8"))
+    if not source_manifest.get("overall_complete"):
+        raise ValueError("NOAA coast-base source retrieval is not complete.")
+
+    source_copy_root = CACHE / "a34-coast-base-v2-source"
+    source_copy_root.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_manifest_path, source_copy_root / "manifest.json")
+    source_manifest_sha256 = sha256(source_manifest_path)
+    source_layer_audit: dict[str, dict[str, object]] = {}
+    complete_bands: set[str] = set()
+    for band in ("coastal", "general"):
+        role_archives: dict[str, dict] = {}
+        band_complete = True
+        for role in ("coverage_area", "land_area"):
+            key = f"{band}_{role}"
+            entry = source_manifest["source_layers"][key]
+            archive_path = base_root / Path(entry["archive_path"]).name
+            copied_path = source_copy_root / archive_path.name
+            if not entry.get("complete") or not archive_path.is_file():
+                band_complete = False
+                source_layer_audit[key] = {
+                    "complete": False,
+                    "reason": "missing_or_incomplete_source_archive",
+                }
+                continue
+            actual_sha = sha256(archive_path)
+            if actual_sha != entry["archive_sha256"]:
+                raise ValueError(f"Source archive SHA-256 mismatch for {key}.")
+            shutil.copy2(archive_path, copied_path)
+            archive = json.loads(gzip.decompress(archive_path.read_bytes()))
+            requested_ids = sorted(archive.get("requested_ids", []))
+            returned_ids = sorted(archive.get("returned_ids", []))
+            feature_ids = []
+            for feature in archive.get("features", []):
+                object_id = (feature.get("attributes") or {}).get(archive["object_id_field"])
+                if object_id is None:
+                    raise ValueError(f"Missing source object ID in archive for {key}.")
+                feature_ids.append(int(object_id))
+            feature_ids.sort()
+            if (
+                requested_ids != returned_ids
+                or returned_ids != feature_ids
+                or archive.get("missing_ids")
+                or archive.get("invalid_geometry_ids")
+            ):
+                raise ValueError(f"Source archive ID/geometry validation failed for {key}.")
+            role_archives[role] = archive
+            source_layer_audit[key] = {
+                "complete": True,
+                "feature_count": len(archive["features"]),
+                "requested_id_count": len(requested_ids),
+                "returned_id_count": len(returned_ids),
+                "requested_id_set_sha256": hashlib.sha256(
+                    json.dumps(requested_ids, separators=(",", ":")).encode()
+                ).hexdigest(),
+                "returned_id_set_sha256": hashlib.sha256(
+                    json.dumps(returned_ids, separators=(",", ":")).encode()
+                ).hexdigest(),
+                "invalid_geometry_ids": 0,
+                "source_archive_path": str(archive_path),
+                "candidate_input_copy_path": str(copied_path),
+                "sha256": actual_sha,
+            }
+        if not band_complete or set(role_archives) != {"coverage_area", "land_area"}:
+            continue
+        if (
+            role_archives["coverage_area"].get("band") != band
+            or role_archives["land_area"].get("band") != band
+        ):
+            raise ValueError(f"Unexpected band metadata in {band} source archives.")
+        categories = {
+            str(feature.get("attributes", {}).get("CATCOV", "")).strip().casefold()
+            for feature in role_archives["coverage_area"]["features"]
+        }
+        if categories - {"1", "2", "coverage available", "no coverage available"}:
+            raise ValueError(f"Unrecognized {band} CATCOV values: {sorted(categories)}")
+        complete_bands.add(band)
+
+    if not complete_bands:
+        raise ValueError("No complete coverage-plus-land scale is available.")
+    base_entry = source_manifest.get("base_map_v2", {})
+    if (
+        not base_entry.get("complete")
+        or set(base_entry.get("complete_scale_bands", [])) != complete_bands
+    ):
+        raise ValueError(
+            "The A08 coast-base MapV2 candidate is incomplete or has different scales."
+        )
+    expected_source_hashes = {
+        key: audit["sha256"] for key, audit in source_layer_audit.items() if audit.get("complete")
+    }
+    if expected_source_hashes != base_entry.get("source_layer_archive_hashes"):
+        raise ValueError(
+            "The coarse MapV2 candidate does not bind to the verified raw layer hashes."
+        )
+    base_map_source_path = base_root / Path(base_entry["path"]).name
+    if sha256(base_map_source_path) != base_entry["sha256"]:
+        raise ValueError("The A08 coast-base MapV2 candidate SHA-256 does not match its manifest.")
+    base_map_candidate_copy = source_copy_root / base_map_source_path.name
+    shutil.copy2(base_map_source_path, base_map_candidate_copy)
+    base_map = MapV2(**json.loads(gzip.decompress(base_map_source_path.read_bytes())))
+    domain = box(*DOMAIN_BOUNDS)
+    source_epoch = source_manifest.get("retrieval_completed_utc", "unknown")
+    if base_map.coverage_status == "unknown":
+        raise ValueError("Validated source layers produced no known base coverage.")
+
+    source_map_manifest = json.loads(SOURCE_MAP_MANIFEST.read_text(encoding="utf-8"))
+    if source_map_manifest.get("status") != "partial":
+        raise ValueError("The 24-port source maps must retain their original partial status.")
+    enc_path = Path(source_map_manifest["collection_path"])
+    if not enc_path.is_file() or sha256(enc_path) != source_map_manifest["collection_sha256"]:
+        raise ValueError("The 24-port ENC collection is missing or has a SHA-256 mismatch.")
+    enc_collection = load_enc_geojson(enc_path)
+    enc_geometries = [feature.geometry for feature in enc_collection.features]
+    enc_tree = STRtree(enc_geometries)
+    detailed_maps_by_scale: dict[str, list[MapV2]] = {band: [] for band in SCALE_PRIORITY[:3]}
+    site_audit: list[dict[str, object]] = []
+    total_intersections = 0
+    for item in source_map_manifest["port_maps"]:
+        map_path = Path(item["map_path"])
+        if not map_path.is_file() or sha256(map_path) != item["map_sha256"]:
+            raise ValueError(f"Port map missing or hash mismatch: {map_path}")
+        site_map = read_contract(map_path, MapV2)
+        if site_map.coverage_geometry_geojson is None:
+            site_audit.append({"site_id": item["site_id"], "status": "no_coverage_geometry"})
+            continue
+        site_coverage = shape(json.loads(site_map.coverage_geometry_geojson))
+        site_unknown = (
+            shape(json.loads(site_map.unknown_geometry_geojson))
+            if site_map.unknown_geometry_geojson is not None
+            else GeometryCollection()
+        )
+        site_domain = _polygonal_only(unary_union([site_coverage, site_unknown]))
+        if site_domain.is_empty:
+            raise ValueError(f"Empty source domain for port {item['site_id']}.")
+        local_feature_indexes = sorted(
+            int(index) for index in enc_tree.query(site_domain, predicate="intersects")
+        )
+        local_features = tuple(enc_collection.features[index] for index in local_feature_indexes)
+        total_intersections += len(local_features)
+        local_detail_features = tuple(
+            feature for feature in local_features if feature.scale_band in SCALE_PRIORITY[:3]
+        )
+        local_collection = ENCCollection(
+            crs=enc_collection.crs,
+            features=local_detail_features,
+            collection_id=f"{enc_collection.collection_id}:{item['site_id']}:detail",
+            source=enc_collection.source,
+        )
+        incomplete = {
+            band
+            for band, band_status in item["scale_source_status"].items()
+            if not band_status.get("complete")
+        }
+        layers = mosaic_by_scale(
+            local_collection,
+            site_domain,
+            incomplete_scale_bands=incomplete,
+        )
+        layer_audit: list[dict[str, object]] = []
+        for layer in layers:
+            if layer.scale_band not in detailed_maps_by_scale:
+                continue
+            map_value = MapV2(
+                crs=enc_collection.crs,
+                source=f"NOAA ENC Direct port scale layer {layer.scale_band}",
+                map_version=str(source_map_manifest.get("retrieved_at_utc", "unknown")),
+                coverage_status="known",
+                coverage_geometry_geojson=_geojson_geometry(layer.coverage),
+                unknown_geometry_geojson=None,
+                land_geometry_geojson=(
+                    _geojson_geometry(layer.land, densify_geographic_edges=False)
+                    if not layer.land.is_empty
+                    else None
+                ),
+            )
+            detailed_maps_by_scale[layer.scale_band].append(map_value)
+            layer_audit.append(
+                {
+                    "scale_band": layer.scale_band,
+                    "effective_coverage_km2": equal_area_km2(layer.coverage),
+                    "land_km2": equal_area_km2(layer.land),
+                    "source_feature_count": len(layer.feature_ids),
+                }
+            )
+        site_audit.append(
+            {
+                "site_id": item["site_id"],
+                "port": item["port"],
+                "source_coverage_status": item["coverage_status"],
+                "port_map_sha256": item["map_sha256"],
+                "effective_source_scales": item["effective_scale_bands"],
+                "incomplete_scales": sorted(incomplete),
+                "local_enc_feature_count": len(local_features),
+                "scale_layers": layer_audit,
+            }
+        )
+        print(
+            f"Composed {item['site_id']} from {len(local_detail_features)} detailed features.",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    candidate, conflicts_deg2 = compose_scale_fallback_map_v2(
+        base_map,
+        detailed_maps_by_scale,
+        domain=domain,
+        map_version=f"noaa-enc-east-coast-fullcoast-map-v3-candidate:{source_epoch}",
+        source="NOAA ENC Direct General/Coastal fallback with 24 verified port-scale overlays",
+        densify_geographic_edges=False,
+        geographic_segment_length_deg=0.001,
+    )
+    if candidate.coverage_geometry_geojson is None or candidate.unknown_geometry_geojson is None:
+        raise ValueError("Candidate map must carry explicit domain coverage and unknown geometry.")
+    known = _polygonal_only(shape(json.loads(candidate.coverage_geometry_geojson)))
+    unknown = _polygonal_only(shape(json.loads(candidate.unknown_geometry_geojson)))
+    land = (
+        _polygonal_only(shape(json.loads(candidate.land_geometry_geojson)))
+        if candidate.land_geometry_geojson is not None
+        else GeometryCollection()
+    )
+    if not known.is_valid or not unknown.is_valid or not land.is_valid:
+        raise ValueError("Candidate output contains invalid polygon topology.")
+    if known.intersection(unknown).area > 1e-10 or land.difference(known).area > 1e-10:
+        raise ValueError("Candidate coverage, unknown, and land topologies overlap inconsistently.")
+
+    def projection_chord_check(geometry):
+        import numpy as np
+        from shapely import segmentize
+
+        sampled_geometry = segmentize(geometry, max_segment_length=0.001)
+        maximum_error_m = 0.0
+        maximum_segment_m = 0.0
+        stack = [sampled_geometry]
+        while stack:
+            part = stack.pop()
+            if part.geom_type == "Polygon":
+                for ring in [part.exterior, *part.interiors]:
+                    coordinates = np.asarray(ring.coords, dtype=np.float64)
+                    first = coordinates[:-1]
+                    last = coordinates[1:]
+                    if not len(first):
+                        continue
+                    x0, y0 = projection_check.transform(first[:, 0], first[:, 1])
+                    x1, y1 = projection_check.transform(last[:, 0], last[:, 1])
+                    x0, y0, x1, y1 = map(np.asarray, (x0, y0, x1, y1))
+                    lengths = np.hypot(x1 - x0, y1 - y0)
+                    maximum_segment_m = max(maximum_segment_m, float(lengths.max(initial=0)))
+                    for fraction in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
+                        sample_x = first[:, 0] + fraction * (last[:, 0] - first[:, 0])
+                        sample_y = first[:, 1] + fraction * (last[:, 1] - first[:, 1])
+                        projected_x, projected_y = projection_check.transform(sample_x, sample_y)
+                        deviation = np.hypot(
+                            np.asarray(projected_x) - (x0 + fraction * (x1 - x0)),
+                            np.asarray(projected_y) - (y0 + fraction * (y1 - y0)),
+                        )
+                        maximum_error_m = max(maximum_error_m, float(deviation.max(initial=0)))
+            elif hasattr(part, "geoms"):
+                stack.extend(part.geoms)
+        return {
+            "max_sampled_chord_deviation_m": maximum_error_m,
+            "max_projected_segment_length_m": maximum_segment_m,
+        }
+
+    projection_check = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True)
+    projection_accuracy = {
+        "method": (
+            "Sample nine interior points per segment and measure projected distance to its "
+            "endpoint chord after segmentizing source lon/lat edges. This is a sampled "
+            "approximation check, not a formal bound."
+        ),
+        "crs": "EPSG:32618",
+        "segment_length_degrees": 0.001,
+        "by_geometry": {
+            "coverage": projection_chord_check(known),
+            "unknown": projection_chord_check(unknown),
+            "land": projection_chord_check(land),
+        },
+    }
+
+    candidate_path = CACHE / "noaa-enc-east-coast-fullcoast-map-v3-candidate.json"
+    write_contract(candidate_path, candidate)
+    base_coverage = (
+        _polygonal_only(shape(json.loads(base_map.coverage_geometry_geojson)))
+        if base_map.coverage_geometry_geojson is not None
+        else GeometryCollection()
+    )
+    base_unknown = (
+        _polygonal_only(shape(json.loads(base_map.unknown_geometry_geojson)))
+        if base_map.unknown_geometry_geojson is not None
+        else _polygonal_only(domain.difference(base_coverage))
+    )
+    base_land = (
+        _polygonal_only(shape(json.loads(base_map.land_geometry_geojson)))
+        if base_map.land_geometry_geojson is not None
+        else GeometryCollection()
+    )
+    added_land = _polygonal_only(land.difference(base_land))
+    base_land_removed = _polygonal_only(base_land.difference(land))
+    base_metrics = {
+        "path": str(base_map_source_path),
+        "sha256": base_entry["sha256"],
+        "coverage_status": base_map.coverage_status,
+        "known_area_km2": equal_area_km2(base_coverage),
+        "unknown_area_km2": equal_area_km2(base_unknown),
+        "land_area_km2": equal_area_km2(base_land),
+    }
+    baseline_path = CACHE / "noaa-enc-east-coast-fullcoast-map-v2.json"
+    baseline_metrics: dict[str, float | str] = {}
+    if baseline_path.is_file():
+        baseline = read_contract(baseline_path, MapV2)
+        baseline_coverage = (
+            _polygonal_only(shape(json.loads(baseline.coverage_geometry_geojson)))
+            if baseline.coverage_geometry_geojson is not None
+            else GeometryCollection()
+        )
+        baseline_unknown = (
+            _polygonal_only(shape(json.loads(baseline.unknown_geometry_geojson)))
+            if baseline.unknown_geometry_geojson is not None
+            else _polygonal_only(domain.difference(baseline_coverage))
+        )
+        baseline_metrics = {
+            "path": str(baseline_path),
+            "coverage_status": baseline.coverage_status,
+            "known_km2": equal_area_km2(baseline_coverage),
+            "unknown_km2": equal_area_km2(baseline_unknown),
+        }
+
+    detailed_coverage_by_scale: dict[str, object] = {}
+    detailed_coverages: list = []
+    for band in SCALE_PRIORITY[:3]:
+        band_parts = []
+        for source_map in detailed_maps_by_scale[band]:
+            if source_map.coverage_geometry_geojson is None:
+                continue
+            source_coverage = shape(json.loads(source_map.coverage_geometry_geojson))
+            if source_map.unknown_geometry_geojson is not None:
+                source_coverage = source_coverage.difference(
+                    shape(json.loads(source_map.unknown_geometry_geojson))
+                )
+            band_parts.append(_polygonal_only(source_coverage.intersection(domain)))
+        band_union = _polygonal_only(
+            unary_union(band_parts) if band_parts else GeometryCollection()
+        )
+        detailed_coverage_by_scale[band] = {
+            "union_area_km2_before_cross_scale_precedence": equal_area_km2(band_union),
+            "source_map_count": len(detailed_maps_by_scale[band]),
+        }
+        if not band_union.is_empty:
+            detailed_coverages.append(band_union)
+    detailed_union = _polygonal_only(
+        unary_union(detailed_coverages) if detailed_coverages else GeometryCollection()
+    )
+    coarse_coverage = (
+        _polygonal_only(shape(json.loads(base_map.coverage_geometry_geojson)))
+        if base_map.coverage_geometry_geojson is not None
+        else GeometryCollection()
+    )
+    detailed_inside_coarse = _polygonal_only(detailed_union.intersection(coarse_coverage))
+    detailed_outside_coarse = _polygonal_only(detailed_union.difference(coarse_coverage))
+
+    manifest = {
+        "schema_version": 1,
+        "candidate_only": True,
+        "activation_status": "awaiting_root_review",
+        "candidate_map_path": str(candidate_path),
+        "candidate_map_sha256": sha256(candidate_path),
+        "candidate_map_version": candidate.map_version,
+        "domain_bbox_wgs84": list(DOMAIN_BOUNDS),
+        "crs": candidate.crs,
+        "source": "NOAA ENC Direct",
+        "source_retrieval_completed_utc": source_epoch,
+        "source_retrieval_started_utc": source_manifest.get("retrieval_started_utc"),
+        "coast_base_manifest_path": str(source_manifest_path),
+        "coast_base_manifest_sha256": source_manifest_sha256,
+        "coast_base_manifest_overall_complete": source_manifest["overall_complete"],
+        "coast_base_map_v2_generator_status": source_manifest.get("base_map_v2"),
+        "coast_base_map_v2_candidate_path": str(base_map_source_path),
+        "coast_base_map_v2_candidate_sha256": base_entry["sha256"],
+        "coast_base_map_v2_candidate_copy_path": str(base_map_candidate_copy),
+        "coast_base_source_layers": source_layer_audit,
+        "complete_base_bands_used": [
+            band for band in ("coastal", "general") if band in complete_bands
+        ],
+        "coast_base_feature_count": sum(
+            int(feature_count)
+            for layer in source_layer_audit.values()
+            if layer.get("complete")
+            and isinstance(feature_count := layer.get("feature_count"), int)
+        ),
+        "repair_policy": (
+            "The coarse base uses the validated A08 MapV2 candidate tied to all raw layer "
+            "hashes. Port scale mosaics retain polygon components after clipping and overlay. "
+            "Raw source features remain lossless in the archived inputs."
+        ),
+        "port_source_manifest_path": str(SOURCE_MAP_MANIFEST),
+        "port_source_manifest_sha256": sha256(SOURCE_MAP_MANIFEST),
+        "port_collection_path": str(enc_path),
+        "port_collection_sha256": source_map_manifest["collection_sha256"],
+        "port_maps_verified": len(site_audit),
+        "port_map_source_bytes_unchanged": True,
+        "port_local_feature_intersections": total_intersections,
+        "port_scale_precedence": list(SCALE_PRIORITY),
+        "port_scale_union_area_by_band_km2_before_cross_scale_precedence": (
+            detailed_coverage_by_scale
+        ),
+        "port_scale_union_area_km2": equal_area_km2(detailed_union),
+        "port_scale_union_inside_coarse_base_km2": equal_area_km2(detailed_inside_coarse),
+        "port_scale_union_outside_coarse_base_km2": equal_area_km2(detailed_outside_coarse),
+        "same_scale_land_water_conflicts_deg2": conflicts_deg2,
+        "site_scale_audit": site_audit,
+        "map_coverage_status": candidate.coverage_status,
+        "area_method": "EPSG:6933 equal-area projection of EPSG:4326 geometry",
+        "geometry_segmentization": projection_accuracy,
+        "domain_area_km2": equal_area_km2(domain),
+        "known_area_km2": equal_area_km2(known),
+        "unknown_area_km2": equal_area_km2(unknown),
+        "land_area_km2": equal_area_km2(land),
+        "fine_map_added_land_area_km2": equal_area_km2(added_land),
+        "fine_map_removed_coarse_land_area_km2": equal_area_km2(base_land_removed),
+        "fine_map_land_label_change_area_km2": equal_area_km2(
+            unary_union([added_land, base_land_removed])
+        ),
+        "known_fraction": equal_area_km2(known) / equal_area_km2(domain),
+        "unknown_fraction": equal_area_km2(unknown) / equal_area_km2(domain),
+        "coarse_base_map": base_metrics,
+        "known_area_gain_vs_base_km2": equal_area_km2(known)
+        - float(base_metrics["known_area_km2"]),
+        "unknown_area_reduction_vs_base_km2": float(base_metrics["unknown_area_km2"])
+        - equal_area_km2(unknown),
+        "known_fraction_gain_vs_base_percentage_points": 100.0
+        * (equal_area_km2(known) - float(base_metrics["known_area_km2"]))
+        / equal_area_km2(domain),
+        "baseline_map": baseline_metrics,
+        "provenance_limitations": [
+            (
+                "The coarse base uses complete General and Coastal coverage and land layers. "
+                "Water is not inferred outside those coverage polygons."
+            ),
+            (
+                "Complete Berthing, Harbour, and Approach layers may override the base. "
+                "Coastal and General port layers do not override equal-scale base data."
+            ),
+            (
+                "Conflicting same-scale port land/water labels stay unknown. Source charts "
+                "may differ by epoch and object generalization."
+            ),
+            (
+                "The detailed Harbour coverage union is wholly inside coarse known coverage. "
+                "The reported 0.044 km2 known-area delta versus the independently serialized "
+                "coarse base is a boundary representation residual, not added source coverage."
+            ),
+            (
+                "This is a chart-derived geometry candidate. It does not model navigable "
+                "depth, tides, or real-time shoreline conditions."
+            ),
+        ],
+    }
+    manifest_path = CACHE / "noaa-enc-east-coast-fullcoast-map-v3-candidate.manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(
+        json.dumps(
+            {
+                "candidate_map_path": str(candidate_path),
+                "manifest_path": str(manifest_path),
+                "manifest": manifest,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--coast-base-candidate", action="store_true")
+    args = parser.parse_args()
+    if args.coast_base_candidate:
+        return build_coast_base_candidate()
     free_bytes = shutil.disk_usage(SHARED_ROOT).free
     if free_bytes < 40 * 1024**3:
         raise RuntimeError(f"Refusing new artifacts with only {free_bytes / 1024**3:.1f} GiB free.")
