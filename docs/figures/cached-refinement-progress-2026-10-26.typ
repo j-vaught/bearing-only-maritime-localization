@@ -29,7 +29,7 @@
   #text(size: 9pt)[Development diagnostic. 64 modes were score-selected from an incomplete partial-cache run. Snapshot dated 2026-10-26.]
 ]
 #v(2mm)
-#align(center)[#text(size: 8.5pt, weight: "bold")[The stage score winner moved from 853.002 km to 11.127 m. The last result is provisional among 60 completed modes; four remain pending and full branch replay is incomplete.]]
+#align(center)[#text(size: 8.5pt, weight: "bold")[The stage score winner moved from 853.002 km to 11.127 m. The last result leads the 60 completed modes; four remain pending, so the selected set is incomplete.]]
 #v(3mm)
 
 #text(size: 10pt, weight: "bold")[Actual minimum-score estimate at each stage]
@@ -53,11 +53,11 @@
 #v(2mm)
 
 #text(size: 10pt, weight: "bold")[Single-addition leader. Local error progression for the same selected mode.]
-#text(size: 7.5pt)[This was the lowest-error alternative before expansion. It moved from 296.286 m to 266.378 m, then to 181.279 m, and finally to 11.127 m after adding the fifth assignment. It ranks 1 of 60 completed modes by expansion objective, with four modes pending.]
+#text(size: 7.5pt)[This was the lowest-error selected alternative before expansion. The audited branch replay moved from 296.286 m to 266.378 m, then to 181.279 m, and finally to 11.127 m after adding the fifth assignment. It ranks 1 of 60 completed modes by expansion objective, with four modes pending.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
-    title: [Local error progression for the provisional expansion leader],
+    title: [Local error progression for the audited expansion leader],
     xlabel: [Geodesic location error (m)],
     xlim: (0, 350),
     ylim: (0.4, 4.6),
@@ -88,7 +88,7 @@
 
 #v(2mm)
 #text(size: 10pt, weight: "bold")[Errors across the selected subset]
-#text(size: 7.5pt)[The first three marker series include all 64 score-selected modes. The single-addition series includes only 60 completed mode rows. Four modes remain pending; expansion ranks are within the completed subset only.]
+#text(size: 7.5pt)[The first three marker series include all 64 score-selected modes. The single-addition series includes 60 completed mode rows. Four modes remain pending; expansion ranks are within the completed subset only.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
@@ -111,5 +111,5 @@
 
 #v(1mm)
 #text(size: 6.2pt)[
-  The assigned-fit diagnostic used 57.6525 s for 64 modes and 128 starts. The provisional single-addition pass took #str(rounded(data.at("assignment_expansion_summary").at("serial_runtime_s"), 6)) s serially, covering #str(data.at("assignment_expansion_summary").at("completed_modes")) of 64 modes; four are pending and full branch replay is incomplete. These are independent stage diagnostics, not end-to-end or per-frame latency. The source search left #str(data.at("source_exact_hypothesis_count")) hypotheses exact-scored, #str(data.at("source_exact_unresolved_count")) unresolved, and #str(data.at("source_unknown_count")) in an unknown state at interruption. Cached-refinement evaluator SHA-256: #actual.at("source_artifact").at("sha256"). Assigned-fit evaluator SHA-256: #actual.at("assigned_artifact").at("sha256"). Assignment-expansion provisional evaluator SHA-256: #actual.at("expansion_artifact").at("sha256"). The provisional stage has no accepted-fix claim, no certificate scope, and no completed branch replay. Authorship J.C. Vaught.
+  The assigned-fit diagnostic used 57.6525 s for 64 modes and 128 starts. The single-addition pass took #str(rounded(data.at("assignment_expansion_summary").at("serial_runtime_s"), 6)) s serially, covering #str(data.at("assignment_expansion_summary").at("completed_modes")) of 64 modes; four are pending and full branch-result replay is independently audited for this completed prefix. These are independent stage diagnostics, not end-to-end or per-frame latency. The source search left #str(data.at("source_exact_hypothesis_count")) hypotheses exact-scored, #str(data.at("source_exact_unresolved_count")) unresolved, and #str(data.at("source_unknown_count")) in an unknown state at interruption. Cached-refinement evaluator SHA-256: #actual.at("source_artifact").at("sha256"). Assigned-fit evaluator SHA-256: #actual.at("assigned_artifact").at("sha256"). Assignment-expansion full-audit evaluator SHA-256: #actual.at("expansion_artifact").at("sha256"). The audit reconciled 20,435 branch-result events: 12,204 exact-rescored poses, 8,225 invalid-water outcomes, and 6 solver-limit outcomes without an exact score. Four selected modes remain pending; the run is interrupted, with no accepted-fix claim, no certificate scope, and no full-domain completion. The preceding provisional artifact SHA-256 is #actual.at("pre_audit_provisional_expansion_artifact").at("sha256"). Authorship J.C. Vaught.
 ]
