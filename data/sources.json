@@ -319,9 +319,9 @@
   },
   "observers": {
     "filename": "observer_locations.csv",
-    "note": "Original coordinates retained with water status for the recorded map hash.",
+    "note": "User-adjusted and original coordinates with water status for the recorded map hash.",
     "record_count": 24,
-    "sha256": "d34cf09b5c05ec81c9f946f69c9ce27717fa7827b3f95d378f020a2cdfa5c185",
+    "sha256": "f0c20e7214662bfb49a9e2803fab27d955fe4f66cfad0036579f83c30c0c3580",
     "source_url": "https://www.iwr.usace.army.mil/Missions/Navigation/Navigation-Data-and-Information/US-Port-Statistics/"
   },
   "schema_version": 2

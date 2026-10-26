@@ -18,6 +18,6 @@ Choose `CATALOG_MODE = "ais"`, `"chart_aids"`, or `"both"` in an example. Search
 
 The map uses EPSG:4326 and searches use EPSG:32618. Approximately 23.7 percent of the declared region has unknown coverage, which is not inferred as water. Chart sources have unresolved physical identities and mixed epochs; their original metadata remain in the object records.
 
-Observer coordinates are truth for simulation and evaluation. Search never receives them. The locations retain their original coordinates. Fifteen are water and nine are land on the map identified in the table. The simulator rechecks geometry and rejects invalid positions.
+Observer coordinates are truth for simulation and evaluation. Search never receives them. Some observer coordinates were adjusted after chart review; the `placement_note` field identifies user-selected positions. The table records water status against the map hash in each row. The simulator rechecks geometry and rejects positions on land or outside known coverage.
 
 The duplicate source CSVs and saved demonstration bearings have been removed. Historical source tables remain in Git history; source descriptions and checksums are retained in `sources.json`.
