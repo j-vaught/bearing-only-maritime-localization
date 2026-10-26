@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pyproj import CRS, Geod, Transformer
 
 from bearing_localization.evaluation.metrics import (
     SupportManifest,
@@ -31,10 +32,10 @@ def manifest(*, supported: bool = True, port: str = "p1", placement: str = "x1")
     )
 
 
-def truth() -> EvaluationTruth:
+def truth(east_m: float = 0.0, north_m: float = 0.0) -> EvaluationTruth:
     return EvaluationTruth(
-        observer_east_m=0.0,
-        observer_north_m=0.0,
+        observer_east_m=east_m,
+        observer_north_m=north_m,
         observer_heading_deg=0.0,
         objects=(
             TrueObject("a", "physical_aid", 1_000.0, 1_000.0, "a", 0),
@@ -47,6 +48,7 @@ def truth() -> EvaluationTruth:
 def result(
     error_m: float = 0.0,
     *,
+    north_error_m: float = 0.0,
     decision: DecisionStatus = "accepted",
     search: SearchStatus = "completed",
     assignments: tuple[Assignment, ...] = (
@@ -55,7 +57,9 @@ def result(
         Assignment(2, "c"),
     ),
 ) -> LocalizationResult:
-    hypotheses = (Hypothesis(error_m, 0.0, 0.0, assignments),) if decision == "accepted" else ()
+    hypotheses = (
+        (Hypothesis(error_m, north_error_m, 0.0, assignments),) if decision == "accepted" else ()
+    )
     return LocalizationResult(
         hypotheses=hypotheses,
         elapsed_s=0.25,
@@ -183,3 +187,125 @@ def test_support_manifest_validation_and_clustered_interval_are_deterministic() 
     assert first == second
     assert first is not None
     assert first[0] <= first[1]
+
+
+def test_explicit_geodesic_crs_includes_exact_100m_and_rejects_just_over() -> None:
+    geod = Geod(ellps="WGS84")
+    longitude_100m, latitude_100m, _ = geod.fwd(0.0, 0.0, 90.0, 100.0)
+    longitude_over_100m, latitude_over_100m, _ = geod.fwd(0.0, 0.0, 90.0, 100.001)
+
+    at_boundary = evaluate_localization(
+        result(longitude_100m, north_error_m=latitude_100m),
+        truth(),
+        manifest(),
+        coordinate_crs="EPSG:4326",
+    )
+    over_boundary = evaluate_localization(
+        result(longitude_over_100m, north_error_m=latitude_over_100m),
+        truth(),
+        manifest(),
+        coordinate_crs=CRS.from_epsg(4326),
+    )
+
+    assert at_boundary.position_error_m == pytest.approx(100.0, abs=1e-8)
+    assert at_boundary.within_100m is True
+    assert over_boundary.position_error_m == pytest.approx(100.001, abs=1e-8)
+    assert over_boundary.within_100m is False
+
+
+def test_geodesic_distance_handles_different_utm_zones_after_common_crs_transform() -> None:
+    truth_lon, estimate_lon, latitude = 5.9999, 6.0010, 50.0
+    truth_crs = CRS.from_epsg(32630)
+    estimate_crs = CRS.from_epsg(32631)
+    truth_to_local = Transformer.from_crs("EPSG:4326", truth_crs, always_xy=True)
+    estimate_to_local = Transformer.from_crs("EPSG:4326", estimate_crs, always_xy=True)
+    estimate_to_truth_crs = Transformer.from_crs(estimate_crs, truth_crs, always_xy=True)
+    truth_east, truth_north = truth_to_local.transform(truth_lon, latitude)
+    estimate_east_source, estimate_north_source = estimate_to_local.transform(
+        estimate_lon, latitude
+    )
+    estimate_east, estimate_north = estimate_to_truth_crs.transform(
+        estimate_east_source, estimate_north_source
+    )
+    expected = Geod(ellps="WGS84").inv(truth_lon, latitude, estimate_lon, latitude)[2]
+
+    scored = evaluate_localization(
+        result(estimate_east, north_error_m=estimate_north),
+        truth(truth_east, truth_north),
+        manifest(),
+        coordinate_crs=truth_crs,
+    )
+
+    assert scored.position_error_m == pytest.approx(expected, abs=1e-5)
+    assert scored.position_error_m is not None
+    assert scored.position_error_m < 100.0
+
+
+def test_geodesic_distance_wraps_longitude_across_antimeridian() -> None:
+    estimate_lon = -179.999
+    truth_lon = 179.999
+    expected = Geod(ellps="WGS84").inv(truth_lon, 0.0, estimate_lon, 0.0)[2]
+
+    scored = evaluate_localization(
+        result(estimate_lon),
+        truth(truth_lon, 0.0),
+        manifest(),
+        coordinate_crs="EPSG:4326",
+    )
+
+    assert scored.position_error_m == pytest.approx(expected, abs=1e-8)
+    assert scored.position_error_m is not None
+    assert scored.position_error_m < 250.0
+
+
+def test_invalid_crs_and_nonfinite_coordinate_transform_are_rejected() -> None:
+    with pytest.raises(ValueError, match="coordinate_crs"):
+        evaluate_localization(result(), truth(), manifest(), coordinate_crs="not-a-crs")
+    with pytest.raises(ValueError, match="projected or geographic"):
+        evaluate_localization(result(), truth(), manifest(), coordinate_crs="EPSG:4978")
+    with pytest.raises(ValueError, match="latitude"):
+        evaluate_localization(
+            result(0.0, north_error_m=91.0),
+            truth(),
+            manifest(),
+            coordinate_crs="EPSG:4326",
+        )
+    with pytest.raises(ValueError, match="coordinate_crs"):
+        evaluate_localization(
+            result(1e308),
+            truth(),
+            manifest(),
+            coordinate_crs="EPSG:32618",
+        )
+
+
+def test_geodesic_flag_does_not_change_acceptance_denominators() -> None:
+    rows = [
+        evaluate_localization(
+            result(500_000.001, north_error_m=4_000_000.0),
+            truth(500_000.0, 4_000_000.0),
+            manifest(),
+            coordinate_crs="EPSG:32618",
+        ),
+        evaluate_localization(
+            result(decision="ambiguous"), truth(), manifest(), coordinate_crs="EPSG:4326"
+        ),
+        evaluate_localization(
+            result(decision="no_fix"), truth(), manifest(), coordinate_crs="EPSG:4326"
+        ),
+        evaluate_localization(None, None, manifest()),
+    ]
+    summary = aggregate_release_metrics(rows)
+
+    assert [row.acceptance_status for row in rows] == ["accepted", "ambiguous", "no_fix", "missing"]
+    assert summary.supported_trial_count == 4
+    assert summary.accepted_count == 1
+    assert summary.within_100m_count == 1
+    assert summary.availability == 0.25
+    assert summary.conditional_accuracy == 1.0
+
+
+def test_coordinate_crs_none_preserves_projected_euclidean_error() -> None:
+    scored = evaluate_localization(result(40.0, north_error_m=30.0), truth(), manifest())
+
+    assert scored.position_error_m == 50.0

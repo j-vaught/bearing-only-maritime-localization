@@ -9,9 +9,12 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from math import hypot, isfinite, sqrt
+from math import hypot, isfinite, sqrt, ulp
 from random import Random
 from typing import Literal
+
+from pyproj import CRS, Geod, Transformer
+from pyproj.exceptions import ProjError
 
 from maritime_localization_shared.contracts.estimate import PositionEstimate
 from maritime_localization_shared.contracts.localization import LocalizationResult
@@ -180,14 +183,19 @@ def evaluate_localization(
     manifest: SupportManifest,
     *,
     outcome_status: OutcomeStatus | None = None,
+    coordinate_crs: str | int | CRS | None = None,
 ) -> LocalizationTrialMetrics:
     """Evaluate one v2 result or v1 estimate against a result-independent manifest.
 
     V1 estimates have no acceptance decision, so they retain legacy position
     and association diagnostics while their release acceptance remains unknown.
     Pass ``outcome_status`` for absent results caused by missing output, timeout,
-    or process crash.
+    or process crash. When supplied, coordinate_crs declares the common
+    CRS of estimate and truth east/north values; error is measured as a WGS84
+    ellipsoidal geodesic after transforming both positions to longitude and
+    latitude. With None, projected-meter Euclidean distance is preserved.
     """
+    source_crs = _parse_coordinate_crs(coordinate_crs)
     if not isinstance(manifest, SupportManifest):
         raise TypeError("manifest must be a SupportManifest.")
     if outcome_status not in (None, "missing", "timeout", "crash"):
@@ -219,10 +227,17 @@ def evaluate_localization(
                 "legacy_unknown_acceptance",
             )
         legacy = evaluate_estimate(result, truth)
+        position_error = _position_error_m(
+            result.east_m,
+            result.north_m,
+            truth.observer_east_m,
+            truth.observer_north_m,
+            source_crs,
+        )
         return _trial_metrics(
             manifest,
             "legacy_unknown",
-            legacy.position_error_m,
+            position_error,
             None,
             legacy.correct_associations,
             legacy.false_associations,
@@ -274,9 +289,12 @@ def evaluate_localization(
         )
     assert result.accepted_index is not None
     hypothesis = result.hypotheses[result.accepted_index]
-    position_error = hypot(
-        hypothesis.east_m - truth.observer_east_m,
-        hypothesis.north_m - truth.observer_north_m,
+    position_error = _position_error_m(
+        hypothesis.east_m,
+        hypothesis.north_m,
+        truth.observer_east_m,
+        truth.observer_north_m,
+        source_crs,
     )
     true_by_group = {
         (item.observation_index, key)
@@ -296,7 +314,7 @@ def evaluate_localization(
         manifest,
         "accepted",
         position_error,
-        position_error <= 100.0,
+        _within_100m(position_error),
         correct,
         false,
         missed,
@@ -306,6 +324,62 @@ def evaluate_localization(
         result.elapsed_s,
         None,
     )
+
+
+def _within_100m(position_error_m: float) -> bool:
+    return position_error_m <= 100.0 or position_error_m - 100.0 <= 8 * ulp(100.0)
+
+
+def _parse_coordinate_crs(coordinate_crs: str | int | CRS | None) -> CRS | None:
+    if coordinate_crs is None:
+        return None
+    if isinstance(coordinate_crs, bool):
+        raise ValueError("coordinate_crs must identify a projected or geographic CRS.")
+    try:
+        crs = CRS.from_user_input(coordinate_crs)
+    except (ProjError, TypeError, ValueError) as exc:
+        raise ValueError(
+            "coordinate_crs must identify a valid projected or geographic CRS."
+        ) from exc
+    if not (crs.is_projected or crs.is_geographic):
+        raise ValueError("coordinate_crs must be projected or geographic.")
+    return crs
+
+
+def _position_error_m(
+    estimate_east: float,
+    estimate_north: float,
+    truth_east: float,
+    truth_north: float,
+    coordinate_crs: CRS | None,
+) -> float:
+    if coordinate_crs is None:
+        return hypot(estimate_east - truth_east, estimate_north - truth_north)
+    if coordinate_crs.is_geographic and any(
+        abs(latitude) > 90.0 for latitude in (estimate_north, truth_north)
+    ):
+        raise ValueError("Geographic coordinate_crs requires latitude values in [-90, 90].")
+    try:
+        to_wgs84 = Transformer.from_crs(
+            coordinate_crs,
+            CRS.from_epsg(4326),
+            always_xy=True,
+            allow_ballpark=False,
+            only_best=True,
+        )
+        estimate_lon, estimate_lat = to_wgs84.transform(estimate_east, estimate_north)
+        truth_lon, truth_lat = to_wgs84.transform(truth_east, truth_north)
+    except (ProjError, TypeError, ValueError) as exc:
+        raise ValueError("Could not transform coordinates from coordinate_crs to WGS84.") from exc
+    transformed = (estimate_lon, estimate_lat, truth_lon, truth_lat)
+    if not all(isfinite(value) for value in transformed):
+        raise ValueError("coordinate_crs produced non-finite WGS84 coordinates.")
+    if any(abs(latitude) > 90.0 for latitude in (estimate_lat, truth_lat)):
+        raise ValueError("coordinate_crs transform produced invalid WGS84 latitude.")
+    _, _, distance_m = Geod(ellps="WGS84").inv(truth_lon, truth_lat, estimate_lon, estimate_lat)
+    if not isfinite(distance_m) or distance_m < 0.0:
+        raise ValueError("coordinate_crs produced an invalid WGS84 geodesic distance.")
+    return float(distance_m)
 
 
 def _trial_metrics(
