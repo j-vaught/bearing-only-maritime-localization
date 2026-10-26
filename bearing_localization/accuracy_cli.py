@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass, fields, replace
 from math import hypot, isfinite
 from pathlib import Path
 from time import perf_counter
+from types import SimpleNamespace
 from typing import Any, Literal, cast
 
 import numpy as np
@@ -320,6 +321,7 @@ def _calibration_binding(
     refine_initial_step_m: float,
     refine_iterations: int,
     expand_assignments_enabled: bool = False,
+    expand_assignments_from_coarse: bool = False,
     expansion_local_radius_m: float = 1_000.0,
     expansion_max_nfev: int = 100,
     expansion_max_branches: int = 5_000,
@@ -361,6 +363,7 @@ def _calibration_binding(
             "max_nfev": expansion_max_nfev,
             "max_branches": expansion_max_branches,
             "expansion_request_timeout_s": expansion_request_timeout_s,
+            "seed_stage": "coarse" if expand_assignments_from_coarse else "refined",
         }
     scope_sha256 = (
         _file_sha256(scope_manifest_path)
@@ -1646,6 +1649,7 @@ def _search_v2_request(
     refine_initial_step_m: float = 100.0,
     refine_iterations: int = 50,
     expand_assignments_enabled: bool = False,
+    expand_assignments_from_coarse: bool = False,
     expansion_local_radius_m: float = 1_000.0,
     expansion_max_nfev: int = 100,
     expansion_max_branches: int = 5_000,
@@ -1680,8 +1684,8 @@ def _search_v2_request(
     def deadline_reached() -> bool:
         return expansion_deadline is not None and _clock() >= expansion_deadline
 
-    if expand_assignments_enabled and not refine:
-        raise ValueError("Assignment expansion requires continuous mode refinement.")
+    if expand_assignments_enabled and not refine and not expand_assignments_from_coarse:
+        raise ValueError("Assignment expansion requires refinement or explicit coarse seeds.")
     _session._verify_static_inputs()
     out = Path(output_path).expanduser().resolve()
     inputs = [
@@ -1763,6 +1767,7 @@ def _search_v2_request(
             refine_initial_step_m=refine_initial_step_m,
             refine_iterations=refine_iterations,
             expand_assignments_enabled=expand_assignments_enabled,
+            expand_assignments_from_coarse=expand_assignments_from_coarse,
             expansion_local_radius_m=expansion_config.local_radius_m,
             expansion_max_nfev=expansion_config.max_nfev,
             expansion_max_branches=expansion_config.max_branches,
@@ -1882,234 +1887,274 @@ def _search_v2_request(
     candidate_result = result
     mode_evidence: tuple[SearchModeEvidence, ...] = ()
     deadline_before_refinement = expand_assignments_enabled and deadline_reached()
-    if refine and result.hypotheses and not deadline_before_refinement:
-        with telemetry.stage("continuous_refinement"):
-            seeds = []
+    if (
+        (refine or expand_assignments_from_coarse)
+        and result.hypotheses
+        and not deadline_before_refinement
+    ):
+        if expand_assignments_from_coarse:
+            selected_hypotheses = []
             min_separation = max(25.0, refine_initial_step_m)
-            for hypothesis in result.hypotheses:
+            for hypothesis in sorted(result.hypotheses, key=lambda item: item.score):
                 if all(
-                    np.hypot(hypothesis.east_m - x, hypothesis.north_m - y) >= min_separation
-                    for x, y in seeds
+                    np.hypot(
+                        hypothesis.east_m - selected.east_m,
+                        hypothesis.north_m - selected.north_m,
+                    )
+                    >= min_separation
+                    for selected in selected_hypotheses
                 ):
-                    seeds.append((hypothesis.east_m, hypothesis.north_m))
-                if len(seeds) >= refine_modes_count:
-                    break
-            seed_hypotheses = []
-            for position in seeds:
-                evaluated = scorer.evaluate(position)
-                if evaluated.hypothesis is not None:
-                    seed_hypotheses.append(evaluated.hypothesis)
-            refined = refine_modes(
-                measurements,
-                catalog,
-                vector_map,
-                config,
-                tuple(seed_hypotheses),
-                initial_step_m=refine_initial_step_m,
-                max_iterations=refine_iterations,
+                    selected_hypotheses.append(hypothesis)
+                    if len(selected_hypotheses) >= refine_modes_count:
+                        break
+            coarse_modes = tuple(
+                SimpleNamespace(hypothesis=hypothesis) for hypothesis in selected_hypotheses
             )
-            refined_hypotheses = tuple(
-                mode.hypothesis for mode in refined.modes if mode.hypothesis is not None
-            )
-            mode_evidence = converged_mode_evidence(refined)
-            merged = {
-                (round(item.east_m, 8), round(item.north_m, 8)): item for item in result.hypotheses
+            refined = SimpleNamespace(modes=coarse_modes, elapsed_s=0.0)
+            refined_hypotheses = ()
+            mode_evidence = ()
+            diagnostics["assignment_expansion_seed_selection"] = {
+                "seed_stage": "coarse",
+                "available_candidate_count": len(result.hypotheses),
+                "selected_mode_count": len(coarse_modes),
+                "unselected_candidate_count": len(result.hypotheses) - len(coarse_modes),
+                "mode_cap": refine_modes_count,
+                "deduplication_radius_m": min_separation,
             }
-            merged.update(
-                {
-                    (round(item.east_m, 8), round(item.north_m, 8)): item
-                    for item in refined_hypotheses
-                }
-            )
-            ranked = tuple(sorted(merged.values(), key=lambda item: item.score))
-            diagnostics["refinement"] = {
-                "mode_count": len(refined.modes),
-                "stop_reasons": [mode.stop_reason for mode in refined.modes],
-            }
-            if expand_assignments_enabled:
-                expansion_records: list[dict[str, Any]] = []
-                expanded_hypotheses = []
-                expansion_started = perf_counter()
-                deadline_stopped = False
-                branch_budget_exhausted = False
-                with telemetry.stage("assignment_expansion"):
-                    for mode_index, mode in enumerate(refined.modes):
-                        if deadline_reached():
-                            deadline_stopped = True
-                            break
-                        seed_hypothesis = mode.hypothesis
-                        if seed_hypothesis is None:
-                            expansion_records.append(
-                                {
-                                    "mode_index": mode_index,
-                                    "status": "no_refined_hypothesis",
-                                    "completed": True,
-                                    "budget_exhausted": False,
-                                    "pending_mode": False,
-                                    "counters": {},
-                                    "elapsed_s": 0.0,
-                                }
-                            )
-                            continue
-                        mode_started = perf_counter()
-                        branch_callbacks = {"started": 0, "completed": 0}
-
-                        def check_branch_deadline(_event: dict[str, Any]) -> None:
-                            if deadline_reached():
-                                raise _AssignmentExpansionDeadline
-                            branch_callbacks["started"] += 1
-
-                        def record_completed_branch(_event: dict[str, Any]) -> None:
-                            branch_callbacks["completed"] += 1
-
-                        try:
-                            expanded = expand_assignments(
-                                scorer,
-                                seed_hypothesis,
-                                config=expansion_config,
-                                progress_callback=check_branch_deadline,
-                                result_callback=record_completed_branch,
-                            )
-                        except _AssignmentExpansionDeadline:
-                            elapsed = perf_counter() - mode_started
-                            expansion_records.append(
-                                {
-                                    "mode_index": mode_index,
-                                    "seed_east_m": seed_hypothesis.east_m,
-                                    "seed_north_m": seed_hypothesis.north_m,
-                                    "seed_score": seed_hypothesis.score,
-                                    "status": "request_deadline_exhausted",
-                                    "completed": False,
-                                    "budget_exhausted": True,
-                                    "pending_mode": True,
-                                    "counters": {
-                                        "started_branch_callbacks": branch_callbacks["started"],
-                                        "completed_branch_callbacks": branch_callbacks["completed"],
-                                        "pending_branch_count": None,
-                                    },
-                                    "elapsed_s": elapsed,
-                                }
-                            )
-                            deadline_stopped = True
-                            break
-                        branch_budget_exhausted |= expanded.budget_exhausted
-                        expansion_records.append(
-                            {
-                                "mode_index": mode_index,
-                                "seed_east_m": seed_hypothesis.east_m,
-                                "seed_north_m": seed_hypothesis.north_m,
-                                "seed_score": expanded.original_score,
-                                "best_score": expanded.best_score,
-                                "improved": expanded.improved,
-                                "status": expanded.status,
-                                "completed": expanded.completed,
-                                "budget_exhausted": expanded.budget_exhausted,
-                                "pending_mode": expanded.budget_exhausted,
-                                "counters": expanded.counters,
-                                "elapsed_s": expanded.elapsed_s,
-                            }
-                        )
-                        if expanded.improved:
-                            expanded_hypotheses.append(expanded.best_hypothesis)
-                merged_expanded = {
+        else:
+            with telemetry.stage("continuous_refinement"):
+                seeds = []
+                min_separation = max(25.0, refine_initial_step_m)
+                for hypothesis in result.hypotheses:
+                    if all(
+                        np.hypot(hypothesis.east_m - x, hypothesis.north_m - y) >= min_separation
+                        for x, y in seeds
+                    ):
+                        seeds.append((hypothesis.east_m, hypothesis.north_m))
+                    if len(seeds) >= refine_modes_count:
+                        break
+                seed_hypotheses = []
+                for position in seeds:
+                    evaluated = scorer.evaluate(position)
+                    if evaluated.hypothesis is not None:
+                        seed_hypotheses.append(evaluated.hypothesis)
+                refined = refine_modes(
+                    measurements,
+                    catalog,
+                    vector_map,
+                    config,
+                    tuple(seed_hypotheses),
+                    initial_step_m=refine_initial_step_m,
+                    max_iterations=refine_iterations,
+                )
+                refined_hypotheses = tuple(
+                    mode.hypothesis for mode in refined.modes if mode.hypothesis is not None
+                )
+                mode_evidence = converged_mode_evidence(refined)
+                merged = {
                     (round(item.east_m, 8), round(item.north_m, 8)): item
                     for item in result.hypotheses
                 }
-                merged_expanded.update(
+                merged.update(
                     {
                         (round(item.east_m, 8), round(item.north_m, 8)): item
                         for item in refined_hypotheses
                     }
                 )
-                merged_expanded.update(
-                    {
-                        (round(item.east_m, 8), round(item.north_m, 8)): item
-                        for item in expanded_hypotheses
-                    }
-                )
-                if deadline_stopped:
-                    pending_start = len(expansion_records)
-                    for pending_index in range(pending_start, len(refined.modes)):
+                ranked = tuple(sorted(merged.values(), key=lambda item: item.score))
+                diagnostics["refinement"] = {
+                    "mode_count": len(refined.modes),
+                    "stop_reasons": [mode.stop_reason for mode in refined.modes],
+                }
+        if expand_assignments_enabled:
+            expansion_records: list[dict[str, Any]] = []
+            expanded_hypotheses = []
+            expansion_started = perf_counter()
+            deadline_stopped = False
+            branch_budget_exhausted = False
+            with telemetry.stage("assignment_expansion"):
+                for mode_index, mode in enumerate(refined.modes):
+                    if deadline_reached():
+                        deadline_stopped = True
+                        break
+                    seed_hypothesis = mode.hypothesis
+                    if seed_hypothesis is None:
                         expansion_records.append(
                             {
-                                "mode_index": pending_index,
-                                "status": "not_started_due_to_request_deadline",
-                                "completed": False,
-                                "budget_exhausted": True,
-                                "pending_mode": True,
+                                "mode_index": mode_index,
+                                "status": "no_refined_hypothesis",
+                                "completed": True,
+                                "budget_exhausted": False,
+                                "pending_mode": False,
                                 "counters": {},
                                 "elapsed_s": 0.0,
                             }
                         )
-                pending_mode_count = sum(
-                    bool(item.get("pending_mode", False)) for item in expansion_records
+                        continue
+                    mode_started = perf_counter()
+                    branch_callbacks = {"started": 0, "completed": 0}
+
+                    def check_branch_deadline(_event: dict[str, Any]) -> None:
+                        if deadline_reached():
+                            raise _AssignmentExpansionDeadline
+                        branch_callbacks["started"] += 1
+
+                    def record_completed_branch(_event: dict[str, Any]) -> None:
+                        branch_callbacks["completed"] += 1
+
+                    try:
+                        expanded = expand_assignments(
+                            scorer,
+                            seed_hypothesis,
+                            config=expansion_config,
+                            progress_callback=check_branch_deadline,
+                            result_callback=record_completed_branch,
+                        )
+                    except _AssignmentExpansionDeadline:
+                        elapsed = perf_counter() - mode_started
+                        expansion_records.append(
+                            {
+                                "mode_index": mode_index,
+                                "seed_east_m": seed_hypothesis.east_m,
+                                "seed_north_m": seed_hypothesis.north_m,
+                                "seed_score": seed_hypothesis.score,
+                                "status": "request_deadline_exhausted",
+                                "completed": False,
+                                "budget_exhausted": True,
+                                "pending_mode": True,
+                                "counters": {
+                                    "started_branch_callbacks": branch_callbacks["started"],
+                                    "completed_branch_callbacks": branch_callbacks["completed"],
+                                    "pending_branch_count": None,
+                                },
+                                "elapsed_s": elapsed,
+                            }
+                        )
+                        deadline_stopped = True
+                        break
+                    branch_budget_exhausted |= expanded.budget_exhausted
+                    expansion_records.append(
+                        {
+                            "mode_index": mode_index,
+                            "seed_east_m": seed_hypothesis.east_m,
+                            "seed_north_m": seed_hypothesis.north_m,
+                            "seed_score": expanded.original_score,
+                            "best_score": expanded.best_score,
+                            "improved": expanded.improved,
+                            "status": expanded.status,
+                            "completed": expanded.completed,
+                            "budget_exhausted": expanded.budget_exhausted,
+                            "pending_mode": expanded.budget_exhausted,
+                            "counters": expanded.counters,
+                            "elapsed_s": expanded.elapsed_s,
+                        }
+                    )
+                    if expanded.improved:
+                        expanded_hypotheses.append(expanded.best_hypothesis)
+            merged_expanded = {
+                (round(item.east_m, 8), round(item.north_m, 8)): item for item in result.hypotheses
+            }
+            merged_expanded.update(
+                {
+                    (round(item.east_m, 8), round(item.north_m, 8)): item
+                    for item in refined_hypotheses
+                }
+            )
+            merged_expanded.update(
+                {
+                    (round(item.east_m, 8), round(item.north_m, 8)): item
+                    for item in expanded_hypotheses
+                }
+            )
+            if deadline_stopped:
+                pending_start = len(expansion_records)
+                for pending_index in range(pending_start, len(refined.modes)):
+                    expansion_records.append(
+                        {
+                            "mode_index": pending_index,
+                            "status": "not_started_due_to_request_deadline",
+                            "completed": False,
+                            "budget_exhausted": True,
+                            "pending_mode": True,
+                            "counters": {},
+                            "elapsed_s": 0.0,
+                        }
+                    )
+            pending_mode_count = sum(
+                bool(item.get("pending_mode", False)) for item in expansion_records
+            )
+            expansion_elapsed = perf_counter() - expansion_started
+            # Preserve domain budgets; record postprocessing interruption explicitly.
+            final_search_status = (
+                "budget_exhausted"
+                if deadline_stopped or branch_budget_exhausted
+                else result.search_status
+            )
+            exhaustion_reason = (
+                "request_deadline"
+                if deadline_stopped
+                else (
+                    "assignment_branch_limit"
+                    if branch_budget_exhausted
+                    else result.budget_exhaustion_reason
                 )
-                expansion_elapsed = perf_counter() - expansion_started
-                # Preserve domain budgets; record postprocessing interruption explicitly.
-                final_search_status = (
-                    "budget_exhausted"
-                    if deadline_stopped or branch_budget_exhausted
-                    else result.search_status
-                )
-                exhaustion_reason = (
-                    "request_deadline"
+            )
+            result = LocalizationResult(
+                hypotheses=tuple(sorted(merged_expanded.values(), key=lambda item: item.score)),
+                elapsed_s=result.elapsed_s + refined.elapsed_s + expansion_elapsed,
+                decision_status="ambiguous",
+                search_status=final_search_status,
+                certificate_scope="none",
+                budget_limit=result.budget_limit,
+                budget_used=result.budget_used,
+                report_count=result.report_count,
+                objective_version=result.objective_version,
+                bound_gap=None,
+                budget_exhaustion_reason=exhaustion_reason,
+            )
+            diagnostics["assignment_expansion"] = {
+                "enabled": True,
+                "config": asdict(expansion_config),
+                "seed_stage": "coarse" if expand_assignments_from_coarse else "refined",
+                "status": (
+                    "request_deadline_exhausted"
                     if deadline_stopped
                     else (
-                        "assignment_branch_limit"
+                        "completed_with_branch_budget_exhaustion"
                         if branch_budget_exhausted
-                        else result.budget_exhaustion_reason
+                        else "completed"
                     )
-                )
-                result = LocalizationResult(
-                    hypotheses=tuple(sorted(merged_expanded.values(), key=lambda item: item.score)),
-                    elapsed_s=result.elapsed_s + refined.elapsed_s + expansion_elapsed,
-                    decision_status="ambiguous",
-                    search_status=final_search_status,
-                    certificate_scope="none",
-                    budget_limit=result.budget_limit,
-                    budget_used=result.budget_used,
-                    report_count=result.report_count,
-                    objective_version=result.objective_version,
-                    bound_gap=None,
-                    budget_exhaustion_reason=exhaustion_reason,
-                )
-                diagnostics["assignment_expansion"] = {
-                    "enabled": True,
-                    "config": asdict(expansion_config),
-                    "status": (
-                        "request_deadline_exhausted"
-                        if deadline_stopped
-                        else (
-                            "completed_with_branch_budget_exhaustion"
-                            if branch_budget_exhausted
-                            else "completed"
-                        )
-                    ),
-                    "request_timeout_s": expansion_request_timeout_s,
-                    "selected_mode_count": len(refined.modes),
-                    "pending_mode_count": pending_mode_count,
-                    "completed_mode_count": sum(
-                        bool(item.get("completed")) and not bool(item.get("pending_mode", False))
-                        for item in expansion_records
-                    ),
-                    "calibration_gate": "not_calibrated_for_assignment_expansion",
-                    "mode_results": expansion_records,
-                }
-                mode_evidence = ()
-            else:
-                result = LocalizationResult(
-                    hypotheses=ranked,
-                    elapsed_s=result.elapsed_s + refined.elapsed_s,
-                    decision_status=result.decision_status,
-                    search_status=result.search_status,
-                    certificate_scope="none",
-                    budget_limit=result.budget_limit,
-                    budget_used=result.budget_used,
-                    report_count=result.report_count,
-                    objective_version=result.objective_version,
-                    bound_gap=None,
-                    budget_exhaustion_reason=result.budget_exhaustion_reason,
-                )
+                ),
+                "request_timeout_s": expansion_request_timeout_s,
+                "selected_mode_count": len(refined.modes),
+                "pending_mode_count": pending_mode_count,
+                "unselected_mode_count": (
+                    diagnostics.get("assignment_expansion_seed_selection", {}).get(
+                        "unselected_candidate_count", 0
+                    )
+                ),
+                "completed_mode_count": sum(
+                    bool(item.get("completed")) and not bool(item.get("pending_mode", False))
+                    for item in expansion_records
+                ),
+                "calibration_gate": "not_calibrated_for_assignment_expansion",
+                "mode_results": expansion_records,
+            }
+            mode_evidence = ()
+        else:
+            result = LocalizationResult(
+                hypotheses=ranked,
+                elapsed_s=result.elapsed_s + refined.elapsed_s,
+                decision_status=result.decision_status,
+                search_status=result.search_status,
+                certificate_scope="none",
+                budget_limit=result.budget_limit,
+                budget_used=result.budget_used,
+                report_count=result.report_count,
+                objective_version=result.objective_version,
+                bound_gap=None,
+                budget_exhaustion_reason=result.budget_exhaustion_reason,
+            )
     if expand_assignments_enabled and "assignment_expansion" not in diagnostics:
         if deadline_before_refinement:
             pending_count = (
@@ -2145,7 +2190,11 @@ def _search_v2_request(
             status = (
                 "request_deadline_before_candidate_search"
                 if deadline_before_candidate_search
-                else "request_deadline_before_refinement"
+                else (
+                    "request_deadline_before_seed_selection"
+                    if expand_assignments_from_coarse
+                    else "request_deadline_before_refinement"
+                )
             )
         else:
             pending_records = []
@@ -2154,6 +2203,7 @@ def _search_v2_request(
         diagnostics["assignment_expansion"] = {
             "enabled": True,
             "config": asdict(expansion_config),
+            "seed_stage": "coarse" if expand_assignments_from_coarse else "refined",
             "status": status,
             "request_timeout_s": expansion_request_timeout_s,
             "pending_mode_count": pending_count,
@@ -2367,6 +2417,7 @@ def search_v2_files(
     refine_initial_step_m: float = 100.0,
     refine_iterations: int = 50,
     expand_assignments_enabled: bool = False,
+    expand_assignments_from_coarse: bool = False,
     expansion_local_radius_m: float = 1_000.0,
     expansion_max_nfev: int = 100,
     expansion_max_branches: int = 5_000,
@@ -2402,6 +2453,7 @@ def search_v2_files(
         refine_initial_step_m=refine_initial_step_m,
         refine_iterations=refine_iterations,
         expand_assignments_enabled=expand_assignments_enabled,
+        expand_assignments_from_coarse=expand_assignments_from_coarse,
         expansion_local_radius_m=expansion_local_radius_m,
         expansion_max_nfev=expansion_max_nfev,
         expansion_max_branches=expansion_max_branches,
@@ -2657,7 +2709,9 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--refine-modes", type=int, default=8)
     parser.add_argument("--refine-initial-step-m", type=float, default=100.0)
     parser.add_argument("--refine-iterations", type=int, default=50)
-    parser.add_argument("--expand-assignments", action="store_true")
+    expansion_group = parser.add_mutually_exclusive_group()
+    expansion_group.add_argument("--expand-assignments", action="store_true")
+    expansion_group.add_argument("--expand-assignments-from-coarse", action="store_true")
     parser.add_argument("--expansion-local-radius-m", type=float, default=1_000.0)
     parser.add_argument("--expansion-max-nfev", type=int, default=100)
     parser.add_argument("--expansion-max-branches", type=int, default=5_000)
@@ -2718,7 +2772,10 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             "refine_modes_count": args.refine_modes,
             "refine_initial_step_m": args.refine_initial_step_m,
             "refine_iterations": args.refine_iterations,
-            "expand_assignments_enabled": args.expand_assignments,
+            "expand_assignments_enabled": (
+                args.expand_assignments or args.expand_assignments_from_coarse
+            ),
+            "expand_assignments_from_coarse": args.expand_assignments_from_coarse,
             "expansion_local_radius_m": args.expansion_local_radius_m,
             "expansion_max_nfev": args.expansion_max_nfev,
             "expansion_max_branches": args.expansion_max_branches,
