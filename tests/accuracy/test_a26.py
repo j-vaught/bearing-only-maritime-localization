@@ -4,10 +4,10 @@ import csv
 import hashlib
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from types import SimpleNamespace
 
 import pytest
 from pyproj import CRS, Geod, Transformer
@@ -489,10 +489,14 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
 
     def fake_run(argv, **kwargs):
         nonlocal fail_search
-        if argv[0] == "git":
-            return SimpleNamespace(returncode=0, stdout="abc123\n", stderr="")
         if argv[1] == "search" and fail_search:
-            return SimpleNamespace(returncode=17, stdout="search stdout", stderr="search failed")
+            return {
+                "status": "failed",
+                "returncode": 17,
+                "elapsed_s": 0.01,
+                "stdout": "search stdout",
+                "stderr": "search failed",
+            }
         if argv[1] == "search":
             write_contract(
                 Path(argv[-1]),
@@ -505,9 +509,15 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
             )
         elif argv[1] == "evaluate":
             Path(argv[-1]).write_text("{}")
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return {
+            "status": "completed",
+            "returncode": 0,
+            "elapsed_s": 0.01,
+            "stdout": "",
+            "stderr": "",
+        }
 
-    monkeypatch.setattr("tools.run_accuracy_suite.subprocess.run", fake_run)
+    monkeypatch.setattr("tools.run_accuracy_suite._run_process", fake_run)
     state_path = run_trials(
         config_path,
         command_config_path=commands,
@@ -708,8 +718,6 @@ def test_run_trials_binds_six_conditions_crs_outputs_and_resume_hashes(
     process_calls = []
 
     def fake_run(argv, **kwargs):
-        if argv[0] == "git":
-            return SimpleNamespace(returncode=0, stdout="source-sha\n", stderr="")
         process_calls.append(list(argv))
         if argv[1] == "search":
             assert "--truth" not in argv
@@ -727,9 +735,15 @@ def test_run_trials_binds_six_conditions_crs_outputs_and_resume_hashes(
             )
         else:
             Path(argv[argv.index("--output") + 1]).write_text("{}")
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return {
+            "status": "completed",
+            "returncode": 0,
+            "elapsed_s": 0.01,
+            "stdout": "",
+            "stderr": "",
+        }
 
-    monkeypatch.setattr("tools.run_accuracy_suite.subprocess.run", fake_run)
+    monkeypatch.setattr("tools.run_accuracy_suite._run_process", fake_run)
     state_path = run_trials(
         plan_path,
         command_config_path=commands_path,
@@ -973,14 +987,35 @@ def test_support_extension_adds_one_deterministic_25_placement_batch(tmp_path: P
     }
 
 
-def test_subprocess_timeout_is_an_explicit_outcome(monkeypatch) -> None:
-    def timeout(*_args, **_kwargs):
-        raise __import__("subprocess").TimeoutExpired(["search"], timeout=0.01, output="partial")
-
-    monkeypatch.setattr("tools.run_accuracy_suite.subprocess.run", timeout)
-    outcome = _run_process(["search"], cwd=Path("."), timeout_s=0.01)
+def test_subprocess_timeout_kills_and_reaps_spawned_descendant(tmp_path: Path) -> None:
+    pid_path = tmp_path / "grandchild.pid"
+    grandchild_code = "import time; time.sleep(60)"
+    parent_code = (
+        "import subprocess,sys,time; "
+        "child=subprocess.Popen([sys.executable,'-c',sys.argv[1]]); "
+        "open(sys.argv[2],'w').write(str(child.pid)); "
+        "print('child-started',flush=True); time.sleep(60)"
+    )
+    outcome = _run_process(
+        [sys.executable, "-c", parent_code, grandchild_code, str(pid_path)],
+        cwd=Path("."),
+        timeout_s=0.4,
+    )
     assert outcome["status"] == "timeout"
-    assert outcome["stdout"] == "partial"
+    assert outcome["process_group_terminated"] is True
+    assert outcome["returncode"] is not None
+    child_pid = int(pid_path.read_text())
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        proc_stat = Path(f"/proc/{child_pid}/stat")
+        if not proc_stat.exists():
+            break
+        state = proc_stat.read_text().split()[2]
+        if state == "Z":
+            break
+        time.sleep(0.02)
+    else:
+        pytest.fail(f"timed-out subprocess descendant {child_pid} remained alive")
 
 
 def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
@@ -993,7 +1028,7 @@ def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
     from maritime_localization_shared.contracts.inputs_v2 import MapV2
     from maritime_localization_shared.serialization import contract_to_dict
 
-    trial_id = "tiny-zone-crossing"
+    trial_id = "development/port-001/placement-001/r0/range1000m/typeson/nominal"
     timestamp = "2023-07-15T12:00:30Z"
     observer_lon, observer_lat = -78.05, 37.0
     geod = Geod(ellps="WGS84")
@@ -1101,6 +1136,7 @@ def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
             {
                 "valid_reference_water": True,
                 "detected_physical_catalog_matched_groups": 3,
+                "supported": True,
                 "port_id": "port-001",
                 "placement_id": "placement-001",
             }
@@ -1146,14 +1182,68 @@ def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
             candidate_budget=500,
         ),
     )
-    table_path = plan_dir / "trials.csv"
-    table_path.write_text(
-        "trial_id,split,port_id,placement_id,realization,range_m,report_types,physical_seed,sensor_condition\n"
-        f"{trial_id},development,port-001,placement-001,0,1000,True,11,nominal\n",
-        encoding="utf-8",
-    )
-    plan_path = plan_dir / "plan.json"
-    plan_path.write_text(json.dumps({"trial_table": "trials.csv"}), encoding="utf-8")
+    plan_path, table_path = create_plan(plan_dir)
+    planned_rows = list(csv.DictReader(table_path.open()))
+    assert trial_id in {row["trial_id"] for row in planned_rows}
+    prep_path = input_root / "development" / "preparation.csv"
+    prep_path.parent.mkdir(parents=True, exist_ok=True)
+    prep_rows = []
+    for planned in planned_rows:
+        if planned["split"] != "development":
+            continue
+        type_folder = "types-on" if planned["report_types"] == "True" else "types-off"
+        support_dir = (
+            input_root
+            / "development"
+            / planned["port_id"]
+            / planned["placement_id"]
+            / f"r{planned['realization']}"
+            / f"{planned['range_m']}m"
+            / type_folder
+            / planned["sensor_condition"]
+        )
+        support_dir.mkdir(parents=True, exist_ok=True)
+        supported = planned["trial_id"] == trial_id
+        support_count = 3 if supported else 0
+        (support_dir / "support.json").write_text(
+            json.dumps(
+                {
+                    "valid_reference_water": supported,
+                    "detected_physical_catalog_matched_groups": support_count,
+                    "supported": supported,
+                    "port_id": planned["port_id"],
+                    "placement_id": planned["placement_id"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        prep_rows.append(
+            {
+                **{
+                    key: planned[key]
+                    for key in (
+                        "trial_id",
+                        "port_id",
+                        "placement_id",
+                        "realization",
+                        "range_m",
+                        "report_types",
+                        "physical_seed",
+                        "sensor_condition",
+                    )
+                },
+                "status": "completed",
+                "failure": "",
+            }
+        )
+    with prep_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(prep_rows[0]))
+        writer.writeheader()
+        writer.writerows(prep_rows)
+    from tools.accuracy_eligibility import freeze_eligibility_manifest
+
+    eligibility_path = plan_dir / "eligibility.json"
+    freeze_eligibility_manifest(plan_dir, input_root, eligibility_path, "development")
     commands_path = tmp_path / "commands.json"
     commands_path.write_text(
         json.dumps(
@@ -1212,6 +1302,7 @@ def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
         encoding="utf-8",
     )
 
+    frozen_support_bytes = support_path.read_bytes()
     state_path = run_trials(
         plan_path,
         command_config_path=commands_path,
@@ -1219,13 +1310,30 @@ def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
         run_root=tmp_path / "runs",
         split="development",
         timeout_s=60.0,
+        eligibility_manifest_path=eligibility_path,
     )
     state = list(csv.DictReader(state_path.open()))
-    assert len(state) == 1
-    row = state[0]
+    assert len(state) == 6_120
+    row = next(item for item in state if item["trial_id"] == trial_id)
     assert row["status"] == "completed", row["failure"]
-    run_manifest = json.loads((state_path.parent / "run-manifest.json").read_text())
-    assert run_manifest["trials"][0]["trial_id"] == trial_id
+    assert support_path.read_bytes() == frozen_support_bytes
+    assert Path(row["support_path"]) == support_path
+    run_manifest_path = state_path.parent / "run-manifest.json"
+    run_manifest = json.loads(run_manifest_path.read_text())
+    completed_manifest_row = next(
+        item for item in run_manifest["trials"] if item["trial_id"] == trial_id
+    )
+    assert completed_manifest_row["status"] == "completed"
+    assert completed_manifest_row["range_m"] == 1000
+    assert completed_manifest_row["report_types"] is True
+    expected_seed = int(
+        next(item["physical_seed"] for item in planned_rows if item["trial_id"] == trial_id)
+    )
+    assert completed_manifest_row["physical_seed"] == expected_seed
+    assert completed_manifest_row["telemetry_sha256"]
+    assert set(run_manifest["condition_contexts"]) == {
+        f"{range_m}m_types{label}" for range_m in (1000, 5000, 10000) for label in ("on", "off")
+    }
     assert row["truth_coordinate_crs"] == "EPSG:32617"
     provenance = json.loads((state_path.parent / row["coordinate_provenance_path"]).read_text())
     assert provenance["estimate_source_crs"] == search_crs
@@ -1233,3 +1341,27 @@ def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
     metrics = json.loads((state_path.parent / row["evaluation_path"]).read_text())
     assert "position_error_m" in metrics
     assert measurements_path.is_file() and truth_path.is_file()
+
+    from bearing_localization.search.calibration import (
+        CalibrationContext,
+        CalibrationOperatingCondition,
+    )
+    from tools.a38_calibration_v2 import build_condition_document
+    from tools.accuracy_eligibility import verify_eligibility_manifest
+
+    eligibility = verify_eligibility_manifest(eligibility_path, plan_dir, input_root, "development")
+    binding = run_manifest["condition_contexts"]["1000m_typeson"]
+    document = build_condition_document(
+        trial_rows=planned_rows,
+        run_manifest=run_manifest,
+        manifest_path=run_manifest_path,
+        input_root=input_root,
+        split="development",
+        eligibility_snapshot=eligibility,
+        eligibility_manifest_path=eligibility_path,
+        condition=CalibrationOperatingCondition.from_dict(binding["calibration_condition"]),
+        context=CalibrationContext.from_dict(binding["calibration_context"]),
+    )
+    assert document["population"]["nominal_planned"]["count"] == 600
+    assert document["population"]["supported_nominal"]["count"] == 1
+    assert any(item["trial_id"] == trial_id for item in document["trials"])

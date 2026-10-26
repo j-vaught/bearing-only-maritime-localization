@@ -6,7 +6,9 @@ import argparse
 import csv
 import hashlib
 import json
+import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -31,6 +33,52 @@ from tools.run_accuracy_suite import sha256_file  # noqa: E402
 
 GATES = tuple((range_m, label) for range_m in (1_000, 5_000, 10_000) for label in ("True", "False"))
 DEFAULT_CONFIG = ROOT / "benchmarks/accuracy/pilots/development-feasibility.json"
+
+
+def _run_search_process(
+    argv: list[str], *, cwd: Path, timeout_s: float, grace_s: float = 1.0
+) -> dict[str, Any]:
+    """Run one search in its own process group and reap descendants on timeout."""
+    started = time.monotonic()
+    process = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_s)
+        return {
+            "status": "completed" if process.returncode == 0 else "failed",
+            "returncode": process.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "elapsed_s": time.monotonic() - started,
+            "process_group_terminated": False,
+        }
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            stdout, stderr = process.communicate(timeout=grace_s)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            stdout, stderr = process.communicate()
+        return {
+            "status": "timeout",
+            "returncode": process.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "elapsed_s": time.monotonic() - started,
+            "process_group_terminated": True,
+        }
 
 
 def _read_rows(path: Path) -> list[dict[str, str]]:
@@ -731,32 +779,21 @@ def run_pilot(
                     "--output",
                     str(estimate_path),
                 ]
-                started = time.monotonic()
                 status = "completed"
                 failure = ""
                 returncode: int | None = None
-                try:
-                    searches_started += 1
-                    completed = subprocess.run(
-                        argv,
-                        cwd=ROOT,
-                        check=False,
-                        capture_output=True,
-                        text=True,
-                        timeout=float(config["timeout_s"]),
-                    )
-                    returncode = completed.returncode
-                    stdout_path.write_text(completed.stdout, encoding="utf-8")
-                    stderr_path.write_text(completed.stderr, encoding="utf-8")
-                    if returncode != 0:
-                        status = "search_failed"
-                        failure = f"search_returncode_{returncode}"
-                except subprocess.TimeoutExpired as exc:
+                searches_started += 1
+                outcome = _run_search_process(argv, cwd=ROOT, timeout_s=float(config["timeout_s"]))
+                returncode = outcome["returncode"]
+                stdout_path.write_text(str(outcome["stdout"]), encoding="utf-8")
+                stderr_path.write_text(str(outcome["stderr"]), encoding="utf-8")
+                if outcome["status"] == "timeout":
                     status = "search_timeout"
-                    failure = "search_timeout"
-                    stdout_path.write_text(str(exc.stdout or ""), encoding="utf-8")
-                    stderr_path.write_text(str(exc.stderr or ""), encoding="utf-8")
-                elapsed = time.monotonic() - started
+                    failure = "search_timeout_process_group_terminated"
+                elif outcome["status"] != "completed":
+                    status = "search_failed"
+                    failure = f"search_returncode_{returncode}"
+                elapsed = float(outcome["elapsed_s"])
                 telemetry_doc: dict[str, Any] = {}
                 result_status = ""
                 result_contract = {}

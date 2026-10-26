@@ -7,6 +7,8 @@ import csv
 import hashlib
 import json
 import math
+import os
+import signal
 import subprocess
 import time
 from dataclasses import asdict, replace
@@ -16,10 +18,12 @@ from typing import Any, cast
 import numpy as np
 from pyproj import CRS, Geod, Transformer
 
+from bearing_localization.accuracy_cli import _calibration_binding
 from bearing_localization.evaluation.difficulty import (
     build_support_manifest,
     evaluate_scene_difficulty,
 )
+from bearing_localization.search.config_serialization import search_config_from_dict
 from bearing_localization.simulator.mismatch import (
     KnownWaterObserver,
     PhysicalSceneV2,
@@ -31,6 +35,7 @@ from maritime_localization_shared.contracts.inputs_v2 import CatalogV2, MapV2
 from maritime_localization_shared.contracts.localization import LocalizationResult
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 from maritime_localization_shared.serialization import read_contract, write_contract
+from tools.accuracy_eligibility import EligibilitySnapshot, verify_eligibility_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 PORTS_CSV = ROOT / "data/sites/east-coast-major-ports-top150-2024.csv"
@@ -380,25 +385,35 @@ def _read_table(path: Path) -> list[dict[str, Any]]:
         return list(csv.DictReader(stream))
 
 
+def _terminate_process_group(process: subprocess.Popen[str], *, grace_s: float = 1.0) -> None:
+    """Stop and reap a command plus descendants in its isolated process group."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        process.communicate(timeout=grace_s)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.communicate()
+
+
 def _run_process(argv: list[str], *, cwd: Path, timeout_s: float) -> dict[str, Any]:
     started = time.monotonic()
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             argv,
             cwd=cwd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout_s,
-            check=False,
+            start_new_session=True,
         )
-    except subprocess.TimeoutExpired as exc:
-        return {
-            "status": "timeout",
-            "returncode": None,
-            "elapsed_s": time.monotonic() - started,
-            "stdout": _decode_output(exc.stdout),
-            "stderr": _decode_output(exc.stderr),
-        }
     except OSError as exc:
         return {
             "status": "crash",
@@ -407,12 +422,25 @@ def _run_process(argv: list[str], *, cwd: Path, timeout_s: float) -> dict[str, A
             "stdout": "",
             "stderr": f"{type(exc).__name__}: {exc}",
         }
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired as exc:
+        _terminate_process_group(process)
+        return {
+            "status": "timeout",
+            "returncode": process.returncode,
+            "elapsed_s": time.monotonic() - started,
+            "stdout": _decode_output(exc.stdout),
+            "stderr": _decode_output(exc.stderr),
+            "process_group_terminated": True,
+        }
     return {
-        "status": "completed" if result.returncode == 0 else "failed",
-        "returncode": result.returncode,
+        "status": "completed" if process.returncode == 0 else "failed",
+        "returncode": process.returncode,
         "elapsed_s": time.monotonic() - started,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        "stdout": stdout,
+        "stderr": stderr,
+        "process_group_terminated": False,
     }
 
 
@@ -1116,6 +1144,123 @@ def _write_evaluator_estimate(
     return provenance
 
 
+def _search_execution_options(search_argv: list[str], *, algorithm: str) -> dict[str, Any]:
+    """Read the exact execution options whose values enter telemetry provenance."""
+    values: dict[str, Any] = {
+        "spacing_m": 250.0,
+        "seed": 0,
+        "seed_policy": "fixed",
+        "wedge_error_deg": None,
+        "wedge_tolerance_deg": 0.5,
+        "wedge_cell_size_m": 250.0,
+        "branch_max_regions": 999,
+        "refine": True,
+        "refine_modes_count": 8,
+        "refine_initial_step_m": 100.0,
+        "refine_iterations": 50,
+        "device_ids": [],
+    }
+    value_options = {
+        "--spacing-m": ("spacing_m", float),
+        "--seed": ("seed", int),
+        "--seed-policy": ("seed_policy", str),
+        "--max-grid-bearing-error-deg": ("wedge_error_deg", float),
+        "--wedge-tolerance-deg": ("wedge_tolerance_deg", float),
+        "--wedge-cell-size-m": ("wedge_cell_size_m", float),
+        "--branch-max-regions": ("branch_max_regions", int),
+        "--refine-modes": ("refine_modes_count", int),
+        "--refine-initial-step-m": ("refine_initial_step_m", float),
+        "--refine-iterations": ("refine_iterations", int),
+    }
+    index = 0
+    while index < len(search_argv):
+        token = search_argv[index]
+        if token in value_options:
+            if index + 1 >= len(search_argv):
+                raise ValueError(f"Search command option {token} has no value.")
+            key, converter = value_options[token]
+            raw = search_argv[index + 1]
+            if "{" in raw or "}" in raw:
+                raise ValueError(f"Search execution option {token} must be concrete before search.")
+            values[key] = converter(raw)
+            index += 2
+            continue
+        if token == "--device-id":
+            if index + 1 >= len(search_argv):
+                raise ValueError("Search command --device-id has no value.")
+            values["device_ids"].append(int(search_argv[index + 1]))
+            index += 2
+            continue
+        if token == "--no-refine":
+            values["refine"] = False
+            index += 1
+            continue
+        if token == "--algorithm":
+            if index + 1 >= len(search_argv) or search_argv[index + 1] != algorithm:
+                raise ValueError("Search command algorithm must match SearchConfig.algorithm.")
+            index += 2
+            continue
+        if token.startswith("--"):
+            if token not in {
+                "--schema-version",
+                "--measurements",
+                "--catalog",
+                "--map",
+                "--config",
+                "--projected-crs",
+                "--scope-manifest",
+                "--output",
+                "--telemetry-output",
+            }:
+                raise ValueError(f"Unbound search command option {token}.")
+            if index + 1 >= len(search_argv):
+                raise ValueError(f"Search command option {token} has no value.")
+            index += 2
+            continue
+        index += 1
+    return values
+
+
+def _formal_bindings(
+    *,
+    rows: list[dict[str, Any]],
+    base_search_config: dict[str, Any],
+    command_config: dict[str, Any],
+    catalog_path: Path,
+    map_path: Path,
+    scope_manifest_path: Path,
+    projected_crs: str,
+) -> dict[str, dict[str, Any]]:
+    """Freeze all six condition/context pairs using the search telemetry binding."""
+    cli_options = _search_execution_options(
+        command_config["search_argv"], algorithm=str(base_search_config["algorithm"])
+    )
+    bindings: dict[str, dict[str, Any]] = {}
+    for range_m in (1000, 5000, 10000):
+        for use_types in (True, False):
+            key = f"{range_m}m_types{'on' if use_types else 'off'}"
+            trial_config = dict(base_search_config)
+            trial_config["max_range_m"] = float(range_m)
+            trial_config["use_types"] = use_types
+            config = search_config_from_dict(trial_config)
+            condition, context = _calibration_binding(
+                config=config,
+                algorithm=config.algorithm,
+                projected_crs=projected_crs,
+                catalog_path=catalog_path,
+                map_path=map_path,
+                scope_manifest_path=scope_manifest_path,
+                **cli_options,
+            )
+            bindings[key] = {
+                "calibration_condition": condition.as_dict(),
+                "calibration_context": context.as_dict(),
+            }
+    if not rows:
+        raise ValueError("Formal run has no trial table rows.")
+    return bindings
+
+
 def _run_identity(
     *,
     split: str,
@@ -1141,6 +1286,92 @@ def _run_identity(
     return hashlib.sha256(canonical).hexdigest()[:24]
 
 
+def _formal_run_identity(
+    *,
+    plan_sha256: str,
+    eligibility_plan_sha256: str,
+    eligibility_manifest_sha256: str,
+    config_sha256: str,
+    splits_sha256: str,
+    trial_table_sha256: str,
+    condition_contexts: dict[str, dict[str, Any]],
+) -> str:
+    identity = {
+        "plan_sha256": plan_sha256,
+        "eligibility_plan_sha256": eligibility_plan_sha256,
+        "eligibility_manifest_sha256": eligibility_manifest_sha256,
+        "config_sha256": config_sha256,
+        "splits_sha256": splits_sha256,
+        "trial_table_sha256": trial_table_sha256,
+        "condition_contexts": condition_contexts,
+    }
+    payload = json.dumps(
+        {"schema": "accuracy-formal-run-identity-v1", **identity},
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _formal_trial_rows(
+    *,
+    rows: list[dict[str, Any]],
+    split: str,
+    snapshot: EligibilitySnapshot,
+    condition_contexts: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    eligibility_by_id = {item.trial_id: item for item in snapshot.all_trials}
+    result: list[dict[str, Any]] = []
+    for planned in rows:
+        if planned["split"] != split:
+            continue
+        trial_id = str(planned["trial_id"])
+        eligibility = eligibility_by_id.get(trial_id)
+        if eligibility is None:
+            raise ValueError(f"Eligibility snapshot does not contain planned trial {trial_id}.")
+        range_m = int(planned["range_m"])
+        report_types = planned["report_types"] == "True"
+        key = f"{range_m}m_types{'on' if report_types else 'off'}"
+        binding = condition_contexts[key]
+
+        def canonical(value: Any) -> bytes:
+            return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode(
+                "utf-8"
+            )
+
+        result.append(
+            {
+                "trial_id": trial_id,
+                "split": str(planned["split"]),
+                "port_id": str(planned["port_id"]),
+                "placement_id": str(planned["placement_id"]),
+                "realization": str(planned["realization"]),
+                "range_m": range_m,
+                "report_types": report_types,
+                "physical_seed": int(planned["physical_seed"]),
+                "sensor_condition": str(planned["sensor_condition"]),
+                "condition_context_key": key,
+                "condition_context_sha256": hashlib.sha256(canonical(binding)).hexdigest(),
+                "calibration_condition_sha256": hashlib.sha256(
+                    canonical(binding["calibration_condition"])
+                ).hexdigest(),
+                "calibration_context_sha256": hashlib.sha256(
+                    canonical(binding["calibration_context"])
+                ).hexdigest(),
+                "eligibility_record_sha256": hashlib.sha256(
+                    canonical(asdict(eligibility))
+                ).hexdigest(),
+                "eligibility_status": eligibility.eligibility_status,
+                "supported": eligibility.supported,
+                "support_sha256": eligibility.support_sha256 or "",
+                "status": "missing",
+                "failure": "search_not_attempted",
+            }
+        )
+    return result
+
+
 def run_trials(
     plan_path: Path,
     *,
@@ -1152,6 +1383,7 @@ def run_trials(
     heldout_manifest: Path | None = None,
     authorize_a38_release: bool = False,
     retry_failures: bool = False,
+    eligibility_manifest_path: Path | None = None,
 ) -> Path:
     """Run independent estimator/evaluator programs with hash-bound artifacts."""
     if timeout_s <= 0.0 or not math.isfinite(timeout_s):
@@ -1174,6 +1406,13 @@ def run_trials(
     plan: dict[str, Any] = json.loads(plan_path.read_text(encoding="utf-8"))
     trial_table_path = plan_path.parent / str(plan["trial_table"])
     rows = _read_table(trial_table_path)
+    formal_snapshot: EligibilitySnapshot | None = None
+    eligibility_manifest_hash = ""
+    if eligibility_manifest_path is not None:
+        formal_snapshot = verify_eligibility_manifest(
+            eligibility_manifest_path, plan_path.parent, input_root, split
+        )
+        eligibility_manifest_hash = sha256_file(eligibility_manifest_path)
     command_config_hash = sha256_file(command_config_path)
     source_sha = _git_head()
     catalog_path = Path(str(command_config["search_catalog"])).expanduser().resolve()
@@ -1195,16 +1434,75 @@ def run_trials(
             "values."
         )
     projected_crs = str(command_config["projected_crs"])
-    run_id = _run_identity(
-        split=split,
-        command_config_hash=command_config_hash,
-        plan_path=plan_path,
-        trial_table_path=trial_table_path,
-        catalog_path=catalog_path,
-        map_path=search_map_path,
-        search_config_path=base_search_config_path,
-        projected_crs=projected_crs,
+    plan_config_sha256 = sha256_file(plan_path)
+    trial_table_sha256 = sha256_file(trial_table_path)
+    split_manifest_name = plan.get("split_manifest")
+    splits_path = plan_path.parent / str(split_manifest_name) if split_manifest_name else Path()
+    if formal_snapshot is not None and not split_manifest_name:
+        raise ValueError("Formal plan must name its split manifest.")
+    splits_sha256 = (
+        sha256_file(splits_path) if split_manifest_name and splits_path.is_file() else ""
     )
+    if formal_snapshot is not None and (
+        formal_snapshot.config_sha256 != plan_config_sha256
+        or formal_snapshot.trial_table_sha256 != trial_table_sha256
+        or formal_snapshot.splits_sha256 != splits_sha256
+    ):
+        raise ValueError("Verified eligibility snapshot hashes differ from the current plan.")
+    scope_manifest = {
+        "schema_version": 1,
+        "geographic_scope": "full_coast",
+        "catalog_sha256": sha256_file(catalog_path),
+        "map_sha256": sha256_file(search_map_path),
+        "projected_crs": projected_crs,
+        "bounds_xy_m": bounds_xy,
+    }
+    formal_contexts: dict[str, dict[str, Any]] = {}
+    formal_run_identity = ""
+    formal_trial_rows: list[dict[str, Any]] = []
+    if formal_snapshot is not None:
+        preflight_dir = run_root / ".preflight" / split / eligibility_manifest_hash
+        preflight_dir.mkdir(parents=True, exist_ok=True)
+        preflight_scope = preflight_dir / "scope-manifest.json"
+        _atomic_json(preflight_scope, scope_manifest)
+        formal_contexts = _formal_bindings(
+            rows=rows,
+            base_search_config=base_search_config,
+            command_config=command_config,
+            catalog_path=catalog_path,
+            map_path=search_map_path,
+            scope_manifest_path=preflight_scope,
+            projected_crs=projected_crs,
+        )
+        formal_run_identity = _formal_run_identity(
+            plan_sha256=plan_config_sha256,
+            eligibility_plan_sha256=formal_snapshot.plan_sha256,
+            eligibility_manifest_sha256=eligibility_manifest_hash,
+            config_sha256=formal_snapshot.config_sha256,
+            splits_sha256=formal_snapshot.splits_sha256,
+            trial_table_sha256=formal_snapshot.trial_table_sha256,
+            condition_contexts=formal_contexts,
+        )
+        formal_trial_rows = _formal_trial_rows(
+            rows=rows,
+            split=split,
+            snapshot=formal_snapshot,
+            condition_contexts=formal_contexts,
+        )
+        run_id = hashlib.sha256(
+            f"{formal_run_identity}:{command_config_hash}".encode("ascii")
+        ).hexdigest()[:24]
+    else:
+        run_id = _run_identity(
+            split=split,
+            command_config_hash=command_config_hash,
+            plan_path=plan_path,
+            trial_table_path=trial_table_path,
+            catalog_path=catalog_path,
+            map_path=search_map_path,
+            search_config_path=base_search_config_path,
+            projected_crs=projected_crs,
+        )
     run_dir = run_root / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     state_path = run_dir / "trials.csv"
@@ -1215,14 +1513,6 @@ def run_trials(
     )
     attempts: list[dict[str, Any]] = _read_table(attempts_path) if attempts_path.exists() else []
     scope_manifest_path = run_dir / "scope-manifest.json"
-    scope_manifest = {
-        "schema_version": 1,
-        "geographic_scope": "full_coast",
-        "catalog_sha256": sha256_file(catalog_path),
-        "map_sha256": sha256_file(search_map_path),
-        "projected_crs": projected_crs,
-        "bounds_xy_m": bounds_xy,
-    }
     _atomic_json(scope_manifest_path, scope_manifest)
     scope_manifest_sha256 = sha256_file(scope_manifest_path)
 
@@ -1241,12 +1531,39 @@ def run_trials(
         "geographic_scope": "full_coast",
         "trials": [],
     }
+    if formal_snapshot is not None:
+        run_manifest.update(
+            {
+                "config_sha256": formal_snapshot.config_sha256,
+                "splits_sha256": formal_snapshot.splits_sha256,
+                "eligibility_plan_sha256": formal_snapshot.plan_sha256,
+                "eligibility_manifest_sha256": eligibility_manifest_hash,
+                "condition_contexts": formal_contexts,
+                "run_identity_sha256": formal_run_identity,
+            }
+        )
 
     def flush_state() -> None:
         _write_table(state_path, list(current.values()))
         _write_table(attempts_path, attempts)
-        run_manifest["trials"] = [current[key] for key in sorted(current)]
+        merged = {row["trial_id"]: row for row in formal_trial_rows}
+        merged.update(current)
+        if formal_snapshot is not None:
+            for row in merged.values():
+                for path_key, hash_key in (
+                    ("estimate_path", "estimate_sha256"),
+                    ("telemetry_path", "telemetry_sha256"),
+                    ("evaluator_estimate_path", "evaluator_estimate_sha256"),
+                    ("evaluation_path", "evaluation_sha256"),
+                    ("coordinate_provenance_path", "coordinate_provenance_sha256"),
+                ):
+                    if not row.get(hash_key):
+                        row[path_key] = ""
+        run_manifest["trials"] = [merged[key] for key in sorted(merged)]
         _atomic_json(manifest_path, run_manifest)
+
+    if formal_snapshot is not None:
+        flush_state()
 
     hash_names = (
         "measurements_sha256",
@@ -1259,7 +1576,12 @@ def run_trials(
         "search_catalog_sha256",
         "search_map_sha256",
         "search_scope_manifest_sha256",
+        "condition_context_sha256",
+        "calibration_condition_sha256",
+        "calibration_context_sha256",
+        "eligibility_record_sha256",
     )
+    missing_input_updates = 0
     for row in rows:
         if row["split"] != split:
             continue
@@ -1300,20 +1622,35 @@ def run_trials(
         _atomic_json(search_config_path, trial_search_config)
         search_config_hash = sha256_file(search_config_path)
         estimate_path = artifact_dir / "estimate.json"
+        telemetry_path = artifact_dir / "estimate.json.telemetry.json"
         evaluator_estimate_path = artifact_dir / "evaluator-estimate.json"
         evaluation_path = artifact_dir / "evaluation.json"
         provenance_path = artifact_dir / "evaluation-coordinate-provenance.json"
+        formal_base = (
+            next((item for item in formal_trial_rows if item["trial_id"] == trial_id), {})
+            if formal_snapshot is not None
+            else {}
+        )
         base: dict[str, Any] = {
+            **formal_base,
             "trial_id": trial_id,
             "trial_key": trial_key,
             "split": split,
             "port_id": row["port_id"],
             "placement_id": row["placement_id"],
-            "realization": row["realization"],
-            "range_m": row["range_m"],
-            "report_types": row["report_types"],
+            "realization": (
+                str(row["realization"]) if formal_snapshot is not None else row["realization"]
+            ),
+            "range_m": (int(row["range_m"]) if formal_snapshot is not None else row["range_m"]),
+            "report_types": (
+                row["report_types"] == "True"
+                if formal_snapshot is not None
+                else row["report_types"]
+            ),
             "sensor_condition": row["sensor_condition"],
-            "physical_seed": row["physical_seed"],
+            "physical_seed": (
+                int(row["physical_seed"]) if formal_snapshot is not None else row["physical_seed"]
+            ),
             "source_sha": source_sha,
             "command_config_sha256": command_config_hash,
             "search_catalog_sha256": sha256_file(catalog_path),
@@ -1327,6 +1664,7 @@ def run_trials(
             "support_path": str(support_path),
             "truth_crs_path": str(truth_crs_path),
             "estimate_path": str(estimate_path.relative_to(run_dir)),
+            "telemetry_path": str(telemetry_path.relative_to(run_dir)),
             "evaluator_estimate_path": str(evaluator_estimate_path.relative_to(run_dir)),
             "evaluation_path": str(evaluation_path.relative_to(run_dir)),
             "coordinate_provenance_path": str(provenance_path.relative_to(run_dir)),
@@ -1344,6 +1682,7 @@ def run_trials(
             if (input_trial_dir / "difficulty.json").is_file()
             else "",
             "estimate_sha256": "",
+            "telemetry_sha256": "",
             "evaluator_estimate_sha256": "",
             "evaluation_sha256": "",
             "coordinate_provenance_sha256": "",
@@ -1357,6 +1696,8 @@ def run_trials(
                 ("evaluation_sha256", "evaluation_path"),
                 ("coordinate_provenance_sha256", "coordinate_provenance_path"),
             }
+            if formal_snapshot is not None:
+                output_hashes.add(("telemetry_sha256", "telemetry_path"))
             current_output_hashes = {
                 hash_name: (
                     sha256_file(run_dir / str(prior[path_name]))
@@ -1413,7 +1754,9 @@ def run_trials(
                 "status": "missing_inputs",
                 "failure": "simulator_input_missing",
             }
-            flush_state()
+            missing_input_updates += 1
+            if formal_snapshot is None or missing_input_updates % 64 == 0:
+                flush_state()
             continue
         audit = json.loads(audit_path.read_text(encoding="utf-8"))
         if audit.get("catalog_sha256") != base["search_catalog_sha256"]:
@@ -1444,6 +1787,7 @@ def run_trials(
         artifact_dir.mkdir(parents=True, exist_ok=True)
         for output_path in (
             estimate_path,
+            telemetry_path,
             evaluator_estimate_path,
             evaluation_path,
             provenance_path,
@@ -1463,6 +1807,7 @@ def run_trials(
             "search_scope_manifest_path": scope_manifest_path,
             "projected_crs": projected_crs,
             "estimate_path": estimate_path,
+            "telemetry_path": telemetry_path,
             "evaluator_estimate_path": evaluator_estimate_path,
             "evaluation_path": evaluation_path,
             "coordinate_provenance_path": provenance_path,
@@ -1541,6 +1886,7 @@ def run_trials(
             "failure": failure,
             "truth_coordinate_crs": truth_coordinate_crs,
             "estimate_sha256": sha256_file(estimate_path) if estimate_path.is_file() else "",
+            "telemetry_sha256": sha256_file(telemetry_path) if telemetry_path.is_file() else "",
             "evaluator_estimate_sha256": (
                 sha256_file(evaluator_estimate_path) if evaluator_estimate_path.is_file() else ""
             ),
@@ -1594,6 +1940,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--timeout-s", type=float, default=1800.0)
     run_parser.add_argument("--retry-failures", action="store_true")
+    run_parser.add_argument(
+        "--eligibility-manifest",
+        type=Path,
+        required=True,
+        help="A42 pre-search eligibility snapshot verified against the full plan and support root",
+    )
     run_parser.add_argument("--frozen-release-manifest", type=Path)
     run_parser.add_argument("--authorize-a38-release", action="store_true")
     return parser
@@ -1632,6 +1984,7 @@ def main(argv: list[str] | None = None) -> int:
                 heldout_manifest=args.frozen_release_manifest,
                 authorize_a38_release=args.authorize_a38_release,
                 retry_failures=args.retry_failures,
+                eligibility_manifest_path=args.eligibility_manifest,
             )
             print(result)
     except (OSError, TypeError, ValueError, subprocess.SubprocessError) as exc:
