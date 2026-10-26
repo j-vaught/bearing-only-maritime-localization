@@ -556,7 +556,35 @@
         "matching_count": 3,
         "mean_normalized_angular_residual": 0.50403457726375,
         "unique_witness_count": 15,
-        "vote_count": 5
+        "vote_count": 5,
+        "witness_keys_by_report": {
+          "0": [],
+          "1": [],
+          "2": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+            "enc-physical:1c7f0a2b2862a3f1fe65",
+            "enc-physical:c30ab7a249b5bd0eb23a",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "3": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-physical:a95b866935d5ebd4962b",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "4": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ]
+        }
       },
       {
         "by_report": {
@@ -608,7 +636,32 @@
         "matching_count": 4,
         "mean_normalized_angular_residual": 0.4294796381686279,
         "unique_witness_count": 11,
-        "vote_count": 5
+        "vote_count": 5,
+        "witness_keys_by_report": {
+          "0": [],
+          "1": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+            "enc-physical:c30ab7a249b5bd0eb23a",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "2": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "3": [
+            "enc-physical:a95b866935d5ebd4962b"
+          ],
+          "4": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ]
+        }
       },
       {
         "by_report": {
@@ -660,7 +713,37 @@
         "matching_count": 5,
         "mean_normalized_angular_residual": 0.7037073630434338,
         "unique_witness_count": 11,
-        "vote_count": 5
+        "vote_count": 5,
+        "witness_keys_by_report": {
+          "0": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "1": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+            "enc-physical:c30ab7a249b5bd0eb23a",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "2": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-physical:a95b866935d5ebd4962b",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "3": [
+            "enc-physical:a95b866935d5ebd4962b"
+          ],
+          "4": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ]
+        }
       },
       {
         "by_report": {
@@ -712,7 +795,44 @@
         "matching_count": 5,
         "mean_normalized_angular_residual": 0.20506528592302325,
         "unique_witness_count": 13,
-        "vote_count": 5
+        "vote_count": 5,
+        "witness_keys_by_report": {
+          "0": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ],
+          "1": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f"
+          ],
+          "2": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:c30ab7a249b5bd0eb23a"
+          ],
+          "3": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "4": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ]
+        }
       },
       {
         "by_report": {
@@ -764,7 +884,37 @@
         "matching_count": 5,
         "mean_normalized_angular_residual": 0.23667468000051567,
         "unique_witness_count": 13,
-        "vote_count": 5
+        "vote_count": 5,
+        "witness_keys_by_report": {
+          "0": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f"
+          ],
+          "1": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-physical:43a772dcf0ef12367b3f"
+          ],
+          "2": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+            "enc-physical:c30ab7a249b5bd0eb23a"
+          ],
+          "3": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "4": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ]
+        }
       },
       {
         "by_report": {
@@ -816,7 +966,41 @@
         "matching_count": 5,
         "mean_normalized_angular_residual": 0.41161182896269305,
         "unique_witness_count": 14,
-        "vote_count": 5
+        "vote_count": 5,
+        "witness_keys_by_report": {
+          "0": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f"
+          ],
+          "1": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-physical:43a772dcf0ef12367b3f"
+          ],
+          "2": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+            "enc-physical:c30ab7a249b5bd0eb23a",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "3": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-physical:a95b866935d5ebd4962b",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "4": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ]
+        }
       },
       {
         "by_report": {
@@ -868,7 +1052,28 @@
         "matching_count": 4,
         "mean_normalized_angular_residual": 0.3339345216753634,
         "unique_witness_count": 7,
-        "vote_count": 5
+        "vote_count": 5,
+        "witness_keys_by_report": {
+          "0": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ],
+          "1": [
+            "enc-physical:091a183d8a3a865a3df9"
+          ],
+          "2": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f"
+          ],
+          "3": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-physical:43a772dcf0ef12367b3f"
+          ],
+          "4": []
+        }
       },
       {
         "by_report": {
@@ -920,7 +1125,36 @@
         "matching_count": 4,
         "mean_normalized_angular_residual": 0.292134568369517,
         "unique_witness_count": 13,
-        "vote_count": 5
+        "vote_count": 5,
+        "witness_keys_by_report": {
+          "0": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ],
+          "1": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f"
+          ],
+          "2": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:c30ab7a249b5bd0eb23a"
+          ],
+          "3": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "4": []
+        }
       },
       {
         "by_report": {
@@ -972,10 +1206,84 @@
         "matching_count": 5,
         "mean_normalized_angular_residual": 0.41898595242831577,
         "unique_witness_count": 13,
-        "vote_count": 5
+        "vote_count": 5,
+        "witness_keys_by_report": {
+          "0": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ],
+          "1": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-physical:091a183d8a3a865a3df9",
+            "enc-physical:43a772dcf0ef12367b3f"
+          ],
+          "2": [
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+            "enc-physical:43a772dcf0ef12367b3f",
+            "enc-physical:c30ab7a249b5bd0eb23a"
+          ],
+          "3": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+            "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+            "enc-physical:e47ad3e940b12e5429bc"
+          ],
+          "4": [
+            "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+            "enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+            "enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+            "enc-physical:67b4ff4a46afbeba469e"
+          ]
+        }
       }
     ],
     "containing_cell_evaluated": false,
+    "containing_cell_sample_splat": {
+      "angular_offset_count": 3,
+      "cell_i": 1594,
+      "cell_j": 4161,
+      "eligible_source_pair_count": 18,
+      "per_report": [
+        {
+          "predicate_eligible_source_pairs": 3,
+          "report_index": 0,
+          "source_pairs_with_neighbor_splat_to_cell": 3,
+          "valid_sample_neighbor_hits": 54
+        },
+        {
+          "predicate_eligible_source_pairs": 2,
+          "report_index": 1,
+          "source_pairs_with_neighbor_splat_to_cell": 2,
+          "valid_sample_neighbor_hits": 36
+        },
+        {
+          "predicate_eligible_source_pairs": 3,
+          "report_index": 2,
+          "source_pairs_with_neighbor_splat_to_cell": 3,
+          "valid_sample_neighbor_hits": 54
+        },
+        {
+          "predicate_eligible_source_pairs": 3,
+          "report_index": 3,
+          "source_pairs_with_neighbor_splat_to_cell": 3,
+          "valid_sample_neighbor_hits": 63
+        },
+        {
+          "predicate_eligible_source_pairs": 7,
+          "report_index": 4,
+          "source_pairs_with_neighbor_splat_to_cell": 7,
+          "valid_sample_neighbor_hits": 126
+        }
+      ],
+      "range_sample_count": 83,
+      "source_pair_count_with_neighbor_splat": 18
+    },
     "evaluated_final_witness": {
       "candidate_id": "cell:-2747:-4461",
       "evidence_score": 0.7137672916580855,
