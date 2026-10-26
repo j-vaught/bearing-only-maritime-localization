@@ -175,12 +175,14 @@ def run_finite_domain(
         raise ValueError("workers, chunk size, memory budget, and timeout must be positive.")
     wall_start = time.monotonic()
     stages: dict[str, float] = {}
+    provenance_start = time.perf_counter()
     generation_manifest, static_paths = validate_generation_provenance(
         search_root=search_root,
         run_root=generation_run_root,
         static_root=static_root,
         cache_path=cache_path,
     )
+    stages["generation_provenance_validation_s"] = time.perf_counter() - provenance_start
     sys.path.insert(0, str(search_root.resolve()))
     import importlib
 
@@ -272,7 +274,26 @@ def run_finite_domain(
                         for index, hypothesis in chunk.hypotheses
                     ]
                     append_jsonl(
-                        chunk_path, [{"chunk_index": chunk.chunk_index, "candidates": chunk_rows}]
+                        chunk_path,
+                        [
+                            {
+                                "chunk_index": chunk.chunk_index,
+                                "candidate_count": chunk.candidate_count,
+                                "exact_scored_count": chunk.exact_scored_count,
+                                "exact_evaluation_count": chunk.exact_evaluation_count,
+                                "invalid_water_count": chunk.invalid_water_count,
+                                "unresolved_count": chunk.unresolved_count,
+                                "pruned_count": chunk.pruned_count,
+                                "request_complete": chunk.request_complete,
+                                "finite_candidate_set": chunk.finite_candidate_set,
+                                "screened_elapsed_s": chunk.screened_elapsed_s,
+                                "exact_elapsed_s": chunk.exact_elapsed_s,
+                                "worker_evaluation_s": chunk.worker_evaluation_s,
+                                "estimated_memory_bytes": chunk.estimated_memory_bytes,
+                                "worker_rss_bytes": chunk.worker_rss_bytes,
+                                "candidates": chunk_rows,
+                            }
+                        ],
                     )
                     append_jsonl(hypotheses_path, hyp_rows)
                     totals["completed_candidate_count"] += chunk.candidate_count
@@ -348,17 +369,29 @@ def main() -> int:
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
     parser.add_argument("--timeout-s", type=float, default=DEFAULT_TIMEOUT_S)
     args = parser.parse_args()
-    manifest = run_finite_domain(
-        search_root=args.search_root,
-        static_root=args.static_root,
-        cache_path=args.cache_path,
-        generation_run_root=args.generation_run_root,
-        output_root=args.output_root,
-        workers=args.workers,
-        memory_budget_bytes=args.memory_budget_bytes,
-        chunk_size=args.chunk_size,
-        timeout_s=args.timeout_s,
-    )
+    import fcntl
+
+    project_root = args.search_root.resolve().parents[2]
+    lock_path = project_root / ".agent-work/benchmark.lock"
+    with lock_path.open("a+") as lock_stream:
+        try:
+            fcntl.flock(lock_stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("Benchmark lock is busy; do not queue a timed run.") from exc
+        try:
+            manifest = run_finite_domain(
+                search_root=args.search_root,
+                static_root=args.static_root,
+                cache_path=args.cache_path,
+                generation_run_root=args.generation_run_root,
+                output_root=args.output_root,
+                workers=args.workers,
+                memory_budget_bytes=args.memory_budget_bytes,
+                chunk_size=args.chunk_size,
+                timeout_s=args.timeout_s,
+            )
+        finally:
+            fcntl.flock(lock_stream, fcntl.LOCK_UN)
     print(json.dumps({"totals": manifest["totals"], "run_id": manifest["run_id"]}, sort_keys=True))
     return 0 if manifest["totals"]["request_complete"] else 1
 
