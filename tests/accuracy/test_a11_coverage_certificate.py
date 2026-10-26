@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pyproj import Transformer
 from shapely import to_geojson
 from shapely.geometry import Polygon, box
 
@@ -11,6 +12,7 @@ from maritime_localization_shared.geospatial.coverage_certificate import (
     certify_candidate_coverage,
     prepare_candidate_coverage_context,
 )
+from maritime_localization_shared.geospatial.vector_map import VectorMap
 
 CRS = "EPSG:32618"
 
@@ -184,3 +186,65 @@ def test_certificate_is_frozen_after_proof_minting() -> None:
     else:
         raise AssertionError("Certificate fields must be immutable.")
     assert certificate.covers((0.0, 0.0), [("one", (1.0, 0.0))])
+
+
+def test_geographic_map_projects_once_and_matches_vector_map_queries() -> None:
+    source_coverage = Polygon(
+        [(-75.02, 37.98), (-74.98, 37.98), (-74.98, 38.02), (-75.02, 38.02)],
+        holes=[[(-75.006, 37.994), (-74.994, 37.994), (-74.994, 38.006), (-75.006, 38.006)]],
+    )
+    source_unknown = box(-75.004, 38.008, -74.996, 38.016)
+    source_land = box(-75.018, 37.99, -75.012, 38.01)
+    source = map_v2(
+        source_coverage,
+        land=source_land,
+        unknown=source_unknown,
+        crs="EPSG:4326",
+        coverage_status="partial",
+    )
+    context = prepare_candidate_coverage_context(source, target_crs="EPSG:32618")
+    vector_map = VectorMap.from_map_v2(source, target_crs="EPSG:32618")
+    assert context is not None
+    assert context.map_source_crs == "EPSG:4326"
+    assert context.map_crs == "EPSG:32618"
+
+    project = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True).transform
+    candidates_geo = [
+        (-75.015, 38.015),  # covered water
+        (-75.015, 38.0),  # land interior
+        (-75.0, 38.0),  # coverage hole
+        (-75.0, 38.012),  # explicit unknown
+        (-75.03, 38.0),  # outside coverage
+    ]
+    expected = ["water", "land", "unknown", "unknown", "unknown"]
+    for coordinate, expected_status in zip(candidates_geo, expected, strict=True):
+        xy_m = project(*coordinate)
+        assert vector_map.point_water_status(xy_m) == expected_status
+        targets = [("target", (xy_m[0] + 10.0, xy_m[1]))]
+        certificate = certify_candidate_coverage(context, xy_m, targets)
+        if expected_status == "water":
+            assert certificate is not None
+            assert certificate.matches_map(context)
+        else:
+            assert certificate is None
+
+    candidate = project(-75.015, 38.015)
+    target = project(-75.01, 38.015)
+    certificate = certify_candidate_coverage(context, candidate, [("nearby", target)])
+    assert certificate is not None
+    assert certificate.map_source_crs == "EPSG:4326"
+    assert certificate.map_crs == "EPSG:32618"
+    equivalent_context = prepare_candidate_coverage_context(source, target_crs=32618)
+    assert equivalent_context is not None
+    assert certificate.matches_map(equivalent_context)
+    other_projection = prepare_candidate_coverage_context(source, target_crs="EPSG:32617")
+    assert other_projection is not None
+    assert not certificate.matches_map(other_projection)
+
+
+def test_geographic_map_needs_explicit_projected_metre_target_crs() -> None:
+    source = map_v2(box(-75.02, 37.98, -74.98, 38.02), crs="EPSG:4326")
+
+    assert prepare_candidate_coverage_context(source) is None
+    assert prepare_candidate_coverage_context(source, target_crs="EPSG:4326") is None
+    assert prepare_candidate_coverage_context(source, target_crs="EPSG:32618") is not None
