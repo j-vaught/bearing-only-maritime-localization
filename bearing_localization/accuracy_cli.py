@@ -75,6 +75,12 @@ from maritime_localization_shared.serialization import (
 )
 
 
+def _effective_proposal_sigma_deg(sigma_deg: float | None, config: SearchConfig) -> float:
+    """Use the generated sigma for absent uncertainty and honor the configured floor."""
+    declared_sigma = sigma_deg if sigma_deg is not None else config.generated_sigma_deg
+    return max(declared_sigma, config.sigma_floor_deg)
+
+
 def _candidate_outcome_evidence(
     diagnostics: dict[str, Any],
 ) -> tuple[dict[str, int] | None, int | None]:
@@ -550,7 +556,6 @@ def _search_dispatch(
             [
                 WedgeObservation(index, item.bearing_deg)
                 for index, item in enumerate(scorer.measurements.measurements)
-                if item.sigma_deg is not None
             ],
             [
                 GeographicWedgeCatalogObject(
@@ -609,7 +614,6 @@ def _search_dispatch(
         observations = [
             WedgeObservation(index, item.bearing_deg)
             for index, item in enumerate(scorer.measurements.measurements)
-            if item.sigma_deg is not None
         ]
         geographic_catalog = [
             GeographicWedgeCatalogObject(
@@ -705,12 +709,10 @@ def _search_dispatch(
         observations = [
             WedgeObservation(index, item.bearing_deg)
             for index, item in enumerate(scorer.measurements.measurements)
-            if item.sigma_deg is not None
         ]
         observation_sigmas = {
-            index: item.sigma_deg
+            index: _effective_proposal_sigma_deg(item.sigma_deg, config)
             for index, item in enumerate(scorer.measurements.measurements)
-            if item.sigma_deg is not None
         }
         geographic_catalog = [
             GeographicWedgeCatalogObject(
@@ -721,13 +723,7 @@ def _search_dispatch(
         effective_source_pair_budget = config.proposal_source_pair_budget
         if effective_source_pair_budget is None:
             effective_source_pair_budget = max(1, len(observations) * len(geographic_catalog))
-        effective_sigmas = [
-            max(
-                item.sigma_deg if item.sigma_deg is not None else config.generated_sigma_deg,
-                config.sigma_floor_deg,
-            )
-            for item in scorer.measurements.measurements
-        ]
+        effective_sigmas = list(observation_sigmas.values())
         maximum_solver_tolerance = min(
             0.001,
             0.01 * min(effective_sigmas) if effective_sigmas else 0.001,
