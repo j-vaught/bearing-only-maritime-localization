@@ -6,6 +6,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from dataclasses import replace
 
 import pytest
 
@@ -14,6 +15,7 @@ from bearing_localization.accuracy_cli import (
     _calibration_binding,
     _candidate_outcome_evidence,
     _distant_region_bound_evidence,
+    _order_wedge_proposals_for_scoring,
     _run_jsonl_searches,
     evaluate_v2_files,
     evaluate_v2_main,
@@ -26,6 +28,12 @@ from bearing_localization.search.config_serialization import (
     search_config_from_dict,
     search_config_to_dict,
     write_search_config,
+)
+from bearing_localization.search.proposals.wedge import (
+    WedgeCatalogObject,
+    WedgeObservation,
+    WedgeProposal,
+    generate_reverse_wedge_proposals_complete,
 )
 from maritime_localization_shared.contracts import (
     CatalogV2,
@@ -154,9 +162,10 @@ def test_calibration_binding_is_path_independent_and_records_seed_policy(tmp_pat
         seed=17,
         seed_policy="fixed",
         spacing_m=50.0,
+        config_override=None,
     ):
         return _calibration_binding(
-            config=config,
+            config=config if config_override is None else config_override,
             algorithm="grid",
             projected_crs="EPSG:32618",
             catalog_path=catalog_path,
@@ -201,6 +210,19 @@ def test_calibration_binding_is_path_independent_and_records_seed_policy(tmp_pat
     )
     _, changed_spacing = bind(catalog_a, map_a, spacing_m=25.0)
     assert context_a.search_execution_sha256 != changed_spacing.search_execution_sha256
+
+    for field, value in (
+        ("proposal_source_pair_budget", 10),
+        ("proposal_cell_budget", 10),
+        ("proposal_chunk_size", 10),
+    ):
+        changed_condition, changed_context = bind(
+            catalog_a,
+            map_a,
+            config_override=replace(config, **{field: value}),
+        )
+        assert changed_condition == condition_a
+        assert changed_context.search_execution_sha256 != context_a.search_execution_sha256
 
 
 def test_evaluated_unresolved_outcomes_are_counted_without_branch_sentinels() -> None:
@@ -763,3 +785,75 @@ def test_evaluator_accepts_prepared_support_without_derived_flag(tmp_path):
     estimate, truth, support, output = _write_evaluation_handoff(tmp_path, payload)
     result = evaluate_v2_files(estimate, truth, support, output)
     assert result["supported"] is True
+
+
+def test_wedge_complete_generates_full_vote_set_before_scoring_budget() -> None:
+    # One bearing and a dense range create far more than the historical 64-cell cap.
+    generated = generate_reverse_wedge_proposals_complete(
+        [WedgeObservation(0, 90.0)],
+        [WedgeCatalogObject("target", 1_000.0, 0.0)],
+        max_range_m=5_000.0,
+        cell_size_m=50.0,
+        angular_tolerance_deg=1.0,
+        max_source_pairs=1,
+        max_candidate_cells=100_000,
+        source_chunk_size=1,
+    )
+    assert generated.generation_status == "completed"
+    assert generated.source_pairs_processed == generated.source_pairs_total == 1
+    assert generated.candidate_cells_total == len(generated.proposals)
+    assert len(generated.proposals) > 64
+
+
+def test_wedge_complete_orders_votes_then_spreads_equal_vote_prefix() -> None:
+    # The later proposal has strictly more votes and must survive a small score cap.
+    proposals = (
+        WedgeProposal("cell:0:0", 0, 0, -900.0, -900.0, 2),
+        WedgeProposal("cell:1:0", 1, 0, -800.0, -800.0, 3),
+        WedgeProposal("cell:2:0", 2, 0, 800.0, 800.0, 3),
+        WedgeProposal("cell:3:0", 3, 0, 900.0, 900.0, 3),
+        WedgeProposal("cell:4:0", 4, 0, -700.0, 700.0, 3),
+    )
+    positions = tuple((item.east_m, item.north_m) for item in proposals)
+    order = _order_wedge_proposals_for_scoring(
+        proposals,
+        positions,
+        water_status=lambda _position: "water",
+        bounds=(-1_000, 1_000, -1_000, 1_000),
+    )
+    assert order[0] != 0
+    assert proposals[order[0]].vote_count == 3
+    first_three = [positions[index] for index in order[:3]]
+    assert all(proposals[index].vote_count == 3 for index in order[:3])
+    assert (
+        max(
+            ((left[0] - right[0]) ** 2 + (left[1] - right[1]) ** 2) ** 0.5
+            for offset, left in enumerate(first_three)
+            for right in first_three[offset + 1 :]
+        )
+        > 1_000.0
+    )
+    assert set(order) == set(range(len(proposals)))
+    assert len({proposals[index].candidate_id for index in order}) == len(proposals)
+
+
+def test_wedge_proposal_limits_are_validated_and_old_configs_keep_defaults() -> None:
+    config = SearchConfig(algorithm="wedge_complete", bounds_xy=(0.0, 10.0, 0.0, 10.0))
+    document = search_config_to_dict(config)
+    assert document["proposal_source_pair_budget"] is None
+    assert document["proposal_cell_budget"] == 1_000_000
+    assert document["proposal_chunk_size"] == 4_096
+    old_document = {
+        key: value for key, value in document.items() if not key.startswith("proposal_")
+    }
+    legacy = search_config_from_dict(old_document)
+    assert legacy.proposal_source_pair_budget is None
+    assert legacy.proposal_cell_budget == 1_000_000
+    assert legacy.proposal_chunk_size == 4_096
+    for field, value in (
+        ("proposal_source_pair_budget", 0),
+        ("proposal_cell_budget", 0),
+        ("proposal_chunk_size", True),
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            search_config_from_dict(document | {field: value})

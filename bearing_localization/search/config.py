@@ -27,6 +27,9 @@ class SearchConfig:
     max_range_m: float = 10_000.0
     range_inclusive: bool = True
     candidate_budget: int = 20_000
+    proposal_source_pair_budget: int | None = None
+    proposal_cell_budget: int = 1_000_000
+    proposal_chunk_size: int = 4_096
     absolute_score_tolerance: float = 1e-8
     relative_score_tolerance: float = 1e-10
     generated_sigma_deg: float = 0.5
@@ -63,6 +66,15 @@ class SearchConfig:
             raise TypeError("uniform_eligible_water_prior must be bool.")
         if type(self.candidate_budget) is not int or self.candidate_budget < 1:
             raise ValueError("candidate_budget must be a positive integer.")
+        if self.proposal_source_pair_budget is not None and (
+            type(self.proposal_source_pair_budget) is not int
+            or self.proposal_source_pair_budget < 1
+        ):
+            raise ValueError("proposal_source_pair_budget must be a positive integer or None.")
+        if type(self.proposal_cell_budget) is not int or self.proposal_cell_budget < 1:
+            raise ValueError("proposal_cell_budget must be a positive integer.")
+        if type(self.proposal_chunk_size) is not int or self.proposal_chunk_size < 1:
+            raise ValueError("proposal_chunk_size must be a positive integer.")
         for name, value in (
             ("absolute_score_tolerance", self.absolute_score_tolerance),
             ("relative_score_tolerance", self.relative_score_tolerance),

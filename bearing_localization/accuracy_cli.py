@@ -6,7 +6,7 @@ import argparse
 import hashlib
 import json
 from collections.abc import Callable, Sequence
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, replace
 from math import hypot, isfinite
 from pathlib import Path
 from time import perf_counter
@@ -42,6 +42,7 @@ from bearing_localization.search.proposals.wedge import (
     GeographicWedgeCatalogObject,
     WedgeObservation,
     generate_geographic_reverse_wedge_proposals,
+    generate_geographic_reverse_wedge_proposals_complete,
 )
 from bearing_localization.search.randomized import run_randomized_search_v2
 from bearing_localization.search.reference_grid import search_reference_grid
@@ -278,6 +279,38 @@ def _read_support_manifest(path: str | Path) -> SupportManifest:
         if derived_supported != manifest.supported:
             raise ValueError("SupportManifest supported disagrees with its source fields.")
     return manifest
+
+
+def _order_wedge_proposals_for_scoring(
+    proposals: Sequence[Any],
+    positions_xy: Sequence[tuple[float, float]],
+    *,
+    water_status: Any,
+    bounds: tuple[float, float, float, float],
+) -> tuple[int, ...]:
+    """Keep vote tiers intact and spatially spread each tier before bounded scoring."""
+    if len(proposals) != len(positions_xy):
+        raise ValueError("Every wedge proposal must have exactly one projected position.")
+    if len(set(positions_xy)) != len(positions_xy):
+        raise ValueError("Wedge proposals must map to distinct projected positions.")
+    from bearing_localization.search.candidate_order import order_candidate_positions
+
+    by_vote: dict[int, list[int]] = {}
+    for index, proposal in enumerate(proposals):
+        by_vote.setdefault(proposal.vote_count, []).append(index)
+    position_to_index = {position: index for index, position in enumerate(positions_xy)}
+    ordered: list[int] = []
+    for vote_count in sorted(by_vote, reverse=True):
+        tier_positions = (positions_xy[index] for index in by_vote[vote_count])
+        tier_order = order_candidate_positions(
+            tier_positions,
+            water_status=water_status,
+            bounds=bounds,
+        )
+        ordered.extend(position_to_index[position] for position in tier_order)
+    if len(ordered) != len(proposals) or set(ordered) != set(range(len(proposals))):
+        raise RuntimeError("Wedge proposal ordering lost candidates.")
+    return tuple(ordered)
 
 
 def _search_dispatch(
@@ -524,6 +557,103 @@ def _search_dispatch(
             "outcome_counts": dict(run.outcome_counts),
         }
         return run.localization, diagnostics, run.candidate_count, False
+    if algorithm == "wedge_complete":
+        if wedge_error_deg is None:
+            raise ValueError("algorithm wedge_complete requires --max-grid-bearing-error-deg.")
+        bounds = config.bounds_xy
+        if bounds is None:
+            raise ValueError("Wedge search requires finite config.bounds_xy.")
+        xmin, xmax, ymin, ymax = bounds
+        to_geo = Transformer.from_crs(scorer.vector_map.crs, "EPSG:4326", always_xy=True)
+        origin = to_geo.transform((xmin + xmax) / 2.0, (ymin + ymax) / 2.0)
+        frame = LocalFrame((float(origin[0]), float(origin[1])))
+        observations = [
+            WedgeObservation(index, item.bearing_deg)
+            for index, item in enumerate(scorer.measurements.measurements)
+        ]
+        geographic_catalog = [
+            GeographicWedgeCatalogObject(
+                record.key, record.longitude_deg, record.latitude_deg, record.normalized_type
+            )
+            for record in scorer.catalog.records
+        ]
+        effective_source_pair_budget = config.proposal_source_pair_budget
+        if effective_source_pair_budget is None:
+            effective_source_pair_budget = max(1, len(observations) * len(geographic_catalog))
+        proposals = generate_geographic_reverse_wedge_proposals_complete(
+            observations,
+            geographic_catalog,
+            frame=frame,
+            max_range_m=config.max_range_m,
+            cell_size_m=wedge_cell_size_m,
+            angular_tolerance_deg=wedge_tolerance_deg,
+            max_grid_bearing_error_deg=wedge_error_deg,
+            max_source_pairs=effective_source_pair_budget,
+            max_candidate_cells=config.proposal_cell_budget,
+            source_chunk_size=config.proposal_chunk_size,
+        )
+        to_map = Transformer.from_crs("EPSG:4326", scorer.vector_map.crs, always_xy=True)
+        positions = []
+        for proposal in proposals.proposals:
+            lon, lat = frame.to_geographic(proposal.east_m, proposal.north_m)
+            east_m, north_m = to_map.transform(lon, lat)
+            positions.append((float(east_m), float(north_m)))
+        proposal_order = _order_wedge_proposals_for_scoring(
+            proposals.proposals,
+            positions,
+            water_status=scorer.vector_map.point_water_status,
+            bounds=bounds,
+        )
+        positions = [positions[index] for index in proposal_order]
+        scoring_run = score_candidate_positions(
+            scorer, positions, candidate_limit=config.candidate_budget
+        )
+        result = scoring_run.localization
+        scoring_incomplete = result.search_status == "budget_exhausted"
+        generation_incomplete = proposals.generation_status != "completed"
+        if generation_incomplete and not scoring_incomplete:
+            if proposals.budget_reason == "source_pairs":
+                exhausted_limit = effective_source_pair_budget
+                exhausted_used = proposals.source_pairs_processed
+            elif proposals.budget_reason == "candidate_cells":
+                exhausted_limit = config.proposal_cell_budget
+                exhausted_used = proposals.candidate_cells_total
+            else:
+                raise RuntimeError("Incomplete wedge generation must declare its exhausted budget.")
+            result = replace(
+                result,
+                search_status="budget_exhausted",
+                budget_limit=exhausted_limit,
+                budget_used=exhausted_used,
+            )
+        diagnostics = {
+            "proposal_count": len(proposals.proposals),
+            "source_pairs_total": proposals.source_pairs_total,
+            "source_pairs_processed": proposals.source_pairs_processed,
+            "candidate_cells_total": proposals.candidate_cells_total,
+            "generation_status": proposals.generation_status,
+            "generation_budget_reason": proposals.budget_reason,
+            "generation_complete": not generation_incomplete,
+            "scoring_status": scoring_run.localization.search_status,
+            "scoring_complete": not scoring_incomplete,
+            "candidate_count": scoring_run.candidate_count,
+            "outcome_counts": dict(scoring_run.outcome_counts),
+            "grid_bearing_error_bound_deg": wedge_error_deg,
+            "proposal_ordering_policy": (
+                "vote_count_descending_then_known_water_spatial_broad_first"
+            ),
+            "proposal_config": {
+                "proposal_source_pair_budget_configured": config.proposal_source_pair_budget,
+                "proposal_source_pair_budget_effective": effective_source_pair_budget,
+                "proposal_cell_budget": config.proposal_cell_budget,
+                "proposal_chunk_size": config.proposal_chunk_size,
+                "candidate_scoring_budget": config.candidate_budget,
+                "cell_size_m": wedge_cell_size_m,
+                "angular_tolerance_deg": wedge_tolerance_deg,
+                "max_grid_bearing_error_deg": wedge_error_deg,
+            },
+        }
+        return result, diagnostics, scoring_run.candidate_count, False
     raise ValueError(f"Unsupported v2 search algorithm {algorithm!r}.")
 
 
@@ -1327,6 +1457,7 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             "reference_grid",
             "branch_bound",
             "wedge",
+            "wedge_complete",
         ),
     )
     parser.add_argument("--spacing-m", type=float, default=250.0)
