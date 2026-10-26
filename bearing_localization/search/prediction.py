@@ -59,6 +59,7 @@ class PredictedGroupSet:
     unresolved_member_keys: tuple[str, ...]
     unresolved_model: bool = False
     unresolved_model_keys: tuple[str, ...] = ()
+    identity_limited_keys: tuple[str, ...] = ()
 
 
 def predict_visible_groups(
@@ -86,8 +87,9 @@ def predict_visible_groups(
 
     Explicit visible-feature east/north offset metadata are applied as
     true-east/north WGS84 offsets from the catalog reference point. Missing
-    offsets use a nominal zero with unknown quality. Nearby ambiguous identities
-    become unresolved only after range and line-of-sight filtering. Supplied unsupported
+    offsets use a nominal zero with unknown quality. Physical-linkage uncertainty
+    is listed in ``identity_limited_keys`` after range and clear line-of-sight
+    filtering, but does not reject valid source-record geometry. Supplied unsupported
     dimensional or antenna-offset metadata sets unresolved_model and excludes
     that record from definite groups. catalog_uncertainty_m carries recognized
     position uncertainty when supplied; otherwise it is None.
@@ -169,6 +171,7 @@ def predict_visible_groups(
     offset_applied_by_key: dict[str, OffsetQuality] = {}
     unresolved: list[str] = []
     unresolved_model_keys: list[str] = []
+    identity_limited_keys: list[str] = []
     observer_status = vector_map.point_water_status(observer_xy)
 
     for record_index in nearby_indices:
@@ -207,9 +210,12 @@ def predict_visible_groups(
             continue
         if visibility == "blocked" or observer_status == "land":
             continue
-        if _record_metadata(record).get("identity_ambiguous") is True:
-            unresolved_model_keys.append(record.key)
-            continue
+        metadata = _record_metadata(record)
+        if (
+            metadata.get("physical_linkage_status") == "unresolved"
+            or metadata.get("identity_ambiguous") is True
+        ):
+            identity_limited_keys.append(record.key)
 
         source_type = record.normalized_type or record.raw_type
         detections.append(
@@ -261,6 +267,7 @@ def predict_visible_groups(
         unresolved_member_keys=tuple(sorted(unresolved)),
         unresolved_model=bool(unresolved_model_keys),
         unresolved_model_keys=tuple(sorted(unresolved_model_keys)),
+        identity_limited_keys=tuple(sorted(identity_limited_keys)),
     )
 
 

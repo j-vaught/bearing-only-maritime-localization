@@ -652,18 +652,7 @@ def prepare_inputs(
         valid_water = maps[port_id][1].observer_valid(
             _project_observer(maps[port_id][1], placement)
         )
-        audit = _physical_identity_audit(catalog, run.diagnostics)
-        entity_by_key = audit["physical_entity_by_catalog_key"]
-        eligible_groups = []
-        seen_entities: set[str] = set()
-        for group in run.diagnostics.groups:
-            if not group.detected or group.representative_catalog_key is None:
-                continue
-            entity = entity_by_key.get(group.representative_catalog_key)
-            if entity is None or entity in seen_entities:
-                continue
-            seen_entities.add(entity)
-            eligible_groups.append(group)
+        eligible_groups, audit = _physical_support_groups(catalog, run.diagnostics)
         eligible_diagnostics = replace(
             run.diagnostics,
             groups=tuple(eligible_groups),
@@ -953,44 +942,86 @@ def _project_observer(vector_map: VectorMap, placement: dict[str, Any]) -> tuple
     )
 
 
-def _physical_identity_audit(catalog: CatalogV2, diagnostics: object) -> dict[str, Any]:
-    """Report entity dedup evidence and conservative support identities per trial."""
+def _physical_support_groups(
+    catalog: CatalogV2, diagnostics: object
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Select detected representatives with proven physical linkage for support."""
     records = {record.key: record for record in catalog.records}
-    groups = getattr(diagnostics, "groups", ())
+    groups = tuple(getattr(diagnostics, "groups", ()))
     entity_by_key: dict[str, str | None] = {}
-    unresolved: list[str] = []
+    identity_limited_keys: list[str] = []
     for record in catalog.records:
         metadata = dict(record.metadata)
         provenance = dict(record.provenance)
         entity = metadata.get("physical_entity_id", provenance.get("physical_entity_id"))
+        if (
+            metadata.get("identity_ambiguous") is True
+            or metadata.get("physical_linkage_status") == "unresolved"
+        ):
+            entity = None
         if not entity and record.key.startswith("mmsi:"):
             entity = record.key
         entity_by_key[record.key] = str(entity) if entity else None
-        if not entity:
-            unresolved.append(record.key)
+        if entity is None:
+            identity_limited_keys.append(record.key)
+
+    selected: list[Any] = []
     observed: dict[str, set[str]] = {}
+    identity_limited_groups: list[dict[str, Any]] = []
+    seen_entities: set[str] = set()
     for group in groups:
-        if (
-            not getattr(group, "detected", False)
-            or getattr(group, "representative_catalog_key", None) is None
-        ):
+        if not getattr(group, "detected", False):
             continue
-        entity = entity_by_key.get(str(group.representative_catalog_key))
-        if entity is not None:
-            observed.setdefault(entity, set()).add(str(group.representative_catalog_key))
+        representative_key = getattr(group, "representative_catalog_key", None)
+        if representative_key is None:
+            continue
+        representative_key = str(representative_key)
+        entity = entity_by_key.get(representative_key)
+        member_keys = tuple(getattr(group, "catalog_member_keys", ()))
+        member_entities = sorted(
+            {entity for key in member_keys if (entity := entity_by_key.get(key)) is not None}
+        )
+        if entity is None:
+            identity_limited_groups.append(
+                {
+                    "representative_catalog_key": representative_key,
+                    "catalog_member_keys": list(member_keys),
+                    "resolved_background_physical_entity_ids": member_entities,
+                }
+            )
+            continue
+        observed.setdefault(entity, set()).add(representative_key)
+        if entity not in seen_entities:
+            selected.append(group)
+            seen_entities.add(entity)
     collapsed = {entity: sorted(keys) for entity, keys in observed.items() if len(keys) > 1}
-    return {
+    audit = {
         "catalog_record_count": len(records),
-        "catalog_with_physical_entity_id_count": len(records) - len(unresolved),
-        "unresolved_catalog_keys": unresolved,
-        "detected_distinct_physical_entity_count": len(observed),
+        "catalog_with_physical_entity_id_count": len(records) - len(identity_limited_keys),
+        "identity_limited_catalog_keys": identity_limited_keys,
+        "detected_distinct_physical_entity_count": len(seen_entities),
+        "detected_identity_limited_group_count": len(identity_limited_groups),
+        "detected_identity_limited_groups": identity_limited_groups,
         "detected_duplicate_representations_collapsed": collapsed,
+        "support_status": "lower_bound_from_resolved_representative_identity",
         "support_policy": (
-            "one detected representative per known physical_entity_id; unresolved chart "
-            "identities are excluded from support"
+            "count at most one post-merge detection per representative's resolved physical "
+            "entity; a resolved background member does not make an identity-limited "
+            "representative a proven detected counterpart"
+        ),
+        "physical_linkage_method": (
+            "same-chart normalized-name complementary-component grouping within 20 m; "
+            "heuristic and not externally validated"
         ),
         "physical_entity_by_catalog_key": entity_by_key,
     }
+    return tuple(selected), audit
+
+
+def _physical_identity_audit(catalog: CatalogV2, diagnostics: object) -> dict[str, Any]:
+    """Report distinct support lower bound and retained identity-limited detections."""
+    _, audit = _physical_support_groups(catalog, diagnostics)
+    return audit
 
 
 def run_trials(

@@ -137,6 +137,8 @@ class GroupTruthDiagnostic:
     representative_object_id: str
     catalog_member_keys: tuple[str, ...]
     representative_catalog_key: str | None
+    catalog_member_physical_ids: tuple[str, ...]
+    identity_limited_catalog_member_keys: tuple[str, ...]
     detected: bool
     observation_index: int | None
 

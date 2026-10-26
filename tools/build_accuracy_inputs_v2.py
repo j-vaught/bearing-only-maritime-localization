@@ -24,7 +24,7 @@ from maritime_localization_shared.serialization import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARED_ROOT = Path(__file__).resolve().parents[4]
+SHARED_ROOT = next(parent for parent in (ROOT, *ROOT.parents) if (parent / ".agent-work").is_dir())
 CACHE = SHARED_ROOT / ".agent-work" / "cache" / "maps"
 SOURCE_MAP_MANIFEST = ROOT / "data" / "maps" / "accuracy-east-coast-enc.manifest.json"
 OUTPUT_MANIFEST = ROOT / "data" / "maps" / "eastern-seaboard-accuracy-v2.manifest.json"
@@ -98,7 +98,7 @@ def main() -> int:
     aid_manifest_path = aid_path.with_suffix(".manifest.json")
     aid_catalog = load_enc_physical_aid_catalog(aid_path)
     raw_aid_catalog = enc_aids_catalog_to_catalog_v2(aid_catalog)
-    raw_aid_path = CACHE / "noaa-enc-east-coast-aids-catalog-v2.json"
+    raw_aid_path = CACHE / "noaa-enc-east-coast-aids-catalog-row-identity-v2.json"
     if raw_aid_path.exists():
         saved_raw_aids = read_contract(raw_aid_path, CatalogV2)
         if saved_raw_aids != raw_aid_catalog:
@@ -140,10 +140,31 @@ def main() -> int:
         for record in runtime_aid_records
         if dict(record.metadata).get("identity_ambiguous") is True
     )
+    aid_source_identity_counts = Counter(
+        str(dict(record.metadata).get("source_record_identity_status", "unspecified"))
+        for record in runtime_aid_records
+    )
+    aid_physical_linkage_counts = Counter(
+        str(dict(record.metadata).get("physical_linkage_status", "unspecified"))
+        for record in runtime_aid_records
+    )
     aid_merged_group_count = sum(
         len(aid.feature_ids) > 1 and not aid.identity_ambiguous and bool(aid.fullname)
         for aid in aid_catalog.physical_aids
     )
+    aid_fid_rows = [
+        aid
+        for aid in aid_catalog.features
+        if any(key.endswith(".fid") and value not in (None, "") for key, value in aid.attributes)
+    ]
+    aid_unnamed_fid_rows = [
+        aid
+        for aid in aid_fid_rows
+        if not any(
+            key in {"fullname", "objnam", "name"} and value not in (None, "")
+            for key, value in aid.attributes
+        )
+    ]
     type_counts = Counter(record.normalized_type or "untyped" for record in combined.records)
     port_status_counts = Counter(item["coverage_status"] for item in map_inputs)
     map_manifest = {
@@ -235,6 +256,12 @@ def main() -> int:
                 "source_manifest_sha256": sha256(aid_manifest_path),
                 "source_retrieved_utc": aid_catalog.retrieved_utc,
                 "source_raw_component_count": len(aid_catalog.features),
+                "qualified_fid_source_row_count": len(aid_fid_rows),
+                "unnamed_qualified_fid_source_row_count": len(aid_unnamed_fid_rows),
+                "qualified_fid_source_keys_are_unique": len(
+                    {aid.feature_id for aid in aid_fid_rows}
+                )
+                == len(aid_fid_rows),
                 "lossless_raw_catalog_path": str(raw_aid_path),
                 "lossless_raw_catalog_sha256": raw_catalog_hash,
                 "lossless_raw_catalog_record_count": len(raw_aid_catalog.records),
@@ -246,6 +273,19 @@ def main() -> int:
                 ),
                 "runtime_unresolved_reason_counts": dict(
                     sorted(aid_unresolved_reason_counts.items())
+                ),
+                "runtime_source_record_identity_status_counts": dict(
+                    sorted(aid_source_identity_counts.items())
+                ),
+                "runtime_physical_linkage_status_counts": dict(
+                    sorted(aid_physical_linkage_counts.items())
+                ),
+                "runtime_unresolved_records_remain_geometry_candidates": True,
+                "observation_association_is_not_inferred_from_physical_linkage": True,
+                "support_counts_only_resolved_representative_after_angular_merge": True,
+                "physical_linkage_heuristic": (
+                    "same-chart normalized-name complementary-component grouping within 20 m; "
+                    "heuristic and not externally validated"
                 ),
                 "raw_component_count_preserved_in_runtime_or_resolved_provenance": (
                     len(aid_catalog.features)

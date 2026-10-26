@@ -321,15 +321,21 @@ def enc_aids_catalog_to_catalog_v2(catalog: ENCAidCatalog) -> CatalogV2:
     for aid in catalog.features:
         physical = group_for_feature.get(aid.feature_id)
         attrs = dict(aid.attributes)
+        linkage_resolved = bool(physical and physical.fullname and not physical.identity_ambiguous)
         metadata: dict[str, Any] = {
             "chart_id": aid.chart_id,
             "scale_band": aid.scale_band,
             "service_layer": aid.service_layer,
             "source_feature_id": aid.feature_id,
-            "identity_ambiguous": (True if physical is None else physical.identity_ambiguous),
+            "source_record_identity_status": (
+                "snapshot_row_derived" if aid.identity_ambiguous else "qualified_source_key"
+            ),
+            "physical_linkage_status": "resolved" if linkage_resolved else "unresolved",
+            "observation_association_status": "candidate_geometry_only",
+            "identity_ambiguous": not linkage_resolved,
             "source_attributes": attrs,
         }
-        if physical is not None and not physical.identity_ambiguous:
+        if linkage_resolved and physical is not None:
             metadata["physical_entity_id"] = physical.physical_id
         provenance = {
             "source": aid.source or catalog.source or "NOAA ENC Direct to GIS",
@@ -437,6 +443,9 @@ def combine_ais_and_enc_physical_catalogs(
         )
         metadata = {
             "identity_ambiguous": False,
+            "source_record_identity_status": "qualified_source_components",
+            "physical_linkage_status": "resolved_by_chart_heuristic",
+            "observation_association_status": "candidate_geometry_only",
             "identity_resolution": "same_chart_name_and_proximity",
             "physical_entity_id": physical.physical_id,
             "source_component_count": len(components),
@@ -492,6 +501,11 @@ def combine_ais_and_enc_physical_catalogs(
         component_type = _component_type(aid)
         metadata = {
             "identity_ambiguous": True,
+            "source_record_identity_status": (
+                "snapshot_row_derived" if aid.identity_ambiguous else "qualified_source_key"
+            ),
+            "physical_linkage_status": "unresolved",
+            "observation_association_status": "candidate_geometry_only",
             "identity_resolution": "unresolved",
             "identity_resolution_reason": reason,
             "source_feature_id": aid.feature_id,
