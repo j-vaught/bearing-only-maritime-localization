@@ -402,6 +402,7 @@ def test_pilot_executes_truth_free_search_and_separates_counters(
     record = next(row for row in run_doc["trials"] if row["selection_role"] == "supported_nominal")
     assert record["proposal_generation_counters"]["candidate_counts"]["total"] == 1000
     assert record["scoring_and_refinement_telemetry"]["counts"]["evaluated"] == 64
+    assert record["process_group_terminated"] is False
 
     import pytest
 
@@ -455,7 +456,10 @@ def test_pilot_timeout_reaps_search_grandchild_before_return(tmp_path: Path) -> 
         except ProcessLookupError:
             return False
         stat_path = Path(f"/proc/{child_pid}/stat")
-        return not stat_path.exists() or stat_path.read_text().split()[2] != "Z"
+        try:
+            return stat_path.read_text().split()[2] != "Z"
+        except (FileNotFoundError, ProcessLookupError):
+            return False
 
     deadline = time.monotonic() + 2.0
     while child_is_running() and time.monotonic() < deadline:
