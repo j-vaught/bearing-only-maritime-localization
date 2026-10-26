@@ -13,8 +13,14 @@
     },
     "directory": "evaluator-only/",
     "error_and_residual_diagnostic_sha256": "e5faca63b9d1a8fbf2cab693548b1807e34605c9a45ffac190adf450ad768a13",
-    "fixed_point_and_proposal_omission_audit_sha256": "5a3f574d34f6c51a54b1979045d887be9035e1d0637d9a54df461c1f0c07d5d2",
+    "fixed_point_and_proposal_omission_audit_sha256": "58eed8123e615e92127fb8f2511e44c02d6139f7456a49c080a2cc952651b0d7",
     "physical_identity_audit_sha256": "ee98da171bb52dd52dac859b0ac5caf721eaebc9d58700412a3ab9abea906ad4",
+    "source_pair_to_cell_replay": {
+      "conclusion": "cell was generated and omitted after ranking at the 256-witness evaluation cutoff",
+      "eligible_pairs": 18,
+      "pairs_emitting_containing_cell": 18,
+      "valid_sample_neighbor_hits": 333
+    },
     "support_sha256": "fcd0d0bc5afbe10125d80799d99c83ac84beccbadc90223c23800c4bf9a400de",
     "truth_crs_sha256": "ab92cb4c3c74d31fa039ecee0cd17078a28521cdd05b181815b0e6d7728ab895",
     "truth_sha256": "4cce08dae52b823d94233f6c60ccb049297e4e4ec9648fb0017eae52c11d7d48"
@@ -90,7 +96,7 @@
     "solver_baseline_failures_sha256": "80f1f0dfd13f5d28a6f84532bdcc22a515a0a643c54159ae12bc4810c2d3875d",
     "telemetry_sha256": "1bb8f0ac09ebc6f8f6ad884a675b5e246133fb9463ba0b6f5543c7955cf9a77d",
     "tracked_telemetry_gzip_sha256": "69a1aa0098953f18049105089384fa0b20e0a400fa2b67120c4286c2102fad02",
-    "wedge_omission_audit_sha256": "5a3f574d34f6c51a54b1979045d887be9035e1d0637d9a54df461c1f0c07d5d2"
+    "wedge_omission_audit_sha256": "58eed8123e615e92127fb8f2511e44c02d6139f7456a49c080a2cc952651b0d7"
   },
   "post_search_solver_audit": {
     "baseline_failures_path": "post-search-audit/audit-baseline-failures.json",
