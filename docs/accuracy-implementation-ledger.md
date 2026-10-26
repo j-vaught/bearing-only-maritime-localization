@@ -1,6 +1,6 @@
 # Accuracy implementation ledger
 
-The implementation uses the original 40 bounded workstreams and seven additional specialist workstreams. All computation and environments remain on the server. The integration branch is accuracy/integration, starting from 32456174d6f7baea2c25bdfca6490f940b4214bf.
+The implementation uses the original 40 bounded workstreams and eight additional specialist workstreams. All computation and environments remain on the server. The integration branch is accuracy/integration, starting from 32456174d6f7baea2c25bdfca6490f940b4214bf.
 
 ## Release gates
 
@@ -135,3 +135,13 @@ A43 rejected slower CPU proposal multiprocessing and published its failed experi
 A13's reusable proposal cache and A14/A21's visibility/cardinality lower-bound helpers are integrated through 25747d6. A06 owns the independent mathematical and adversarial review. A14 is resolving metadata support and profiling its exact screen. A22 owns the finite-candidate screened controller. A33 owns cache CLI wiring. A37 is running a renewed repository-wide gate. These tasks are active in separate worktrees; pruning is not yet approved as a complete integrated path.
 
 A38 completed validation preparation and the eligibility-only extension. The resulting 2,340 rows include 1,500 nominal rows, with per-type supported counts 136, 178, and 181 at 1, 5, and 10 km. The first 60 extension attempts failed before the placement-limit adapter repair; successful retries and every original failure remain recorded. All six support-count minima are met. No validation search or held-out outcomes have been opened. Release accuracy, calibration, latency, and final independent review remain outstanding.
+
+## Independent finite-set approval and scalable experiment handoff
+
+A06 permits experimental finite-candidate pruning at ecc991d after independent mathematical and adversarial review. The focused review passed 59 tests and the complete suite passed 872 tests, with 31 optional skips and seven passing subtests. Unknown coverage and unsupported models receive exact fallback, supplied incumbents are re-scored, and no continuous-domain claim follows. A14's private batched screen preserves full result parity but remains non-default pending a fixed-threshold workload check.
+
+A30's bounded parallel pool is integrated at 9654702. One-, two-, and four-worker tests pass, and the coordinator's combined pool/controller/reference checks pass 35 tests. A37 is reviewing out-of-order worker failures and the new cached experiment driver. A26 owns explicit per-ID failure/unvisited records, process-wide deadlines, and separate generation/scoring source identities. Large candidate scoring has not begun.
+
+Two cache attempts failed before publishing a cache. The missing-parent failure motivated A33's early destination preflight. The interrupted second attempt exposed A13's repeated full-catalog lookup construction in the per-proposal validation loop. That lookup now builds once; all validation remains enabled. The coordinator's combined cache and CLI gate passed 64 tests. A26's new cache-build source is pinned to 33fded7, preserving generation settings and physical inputs. This retry remains a cache handoff experiment, not evidence of location recovery.
+
+An additional storage specialist recovered approximately 460 MB of disposable or duplicate allocated content while preserving active outputs, data hashes, and all archived paths. The tracked storage report distinguishes reclaimed bytes from unrelated free-space movement. Release accuracy, calibration, clean scaling timings, and final release review remain unfinished.

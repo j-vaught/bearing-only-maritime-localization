@@ -2,7 +2,7 @@
 
 ## Current outcome
 
-The implementation is continuing on the accuracy/integration branch. Forty-seven specialist roles have contributed, with the coordinator separate. The source, tests, figures, and reproducibility work are pushed in logical milestones. Release accuracy, complete-search latency, and measured-bearing field accuracy remain unvalidated.
+The implementation is continuing on the accuracy/integration branch. Forty-eight specialist roles have contributed, with the coordinator separate. The source, tests, figures, and reproducibility work are pushed in logical milestones. Release accuracy, complete-search latency, and measured-bearing field accuracy remain unvalidated.
 
 The current development population is fixed before search. It contains 6,120 planned rows, including 3,600 nominal rows and twelve explicitly failed stress preparations. There are 600 nominal rows in each range and type condition. Supported counts are 269 at 1 km, 438 at 5 km, and 448 at 10 km for each type mode. Missing results, crashes, ambiguity, and timeouts remain in the supported denominator.
 
@@ -81,6 +81,20 @@ A CPU multiprocessing proposal experiment was rejected. Its 20,000-pair serial r
 The optional GPU reverse-geodesic prototype passed six actual-device checks. In one locked one-million-sample comparison it took 1.523 seconds including transfers, against 1.734 seconds for the corrected CPU helper. This is a component experiment with all samples converged, not a full-search or scaling benchmark. The prototype is not the search's final scoring authority.
 
 The latest comparison is available as a [zoomable diagnostic PDF](figures/geodesic-search-diagnostic-2026-10-26.pdf). Exact failed-run artifacts and evaluator evidence are retained under data/accuracy/diagnostics/2026-10-26/a26-wedge-geodesic. The next experiment changes candidate selection under the same complete objective and frozen physical inputs.
+
+## Finite-candidate review and full-scale cache repair
+
+The independent A06 review permits experimental pruning over an explicitly supplied finite candidate set for the supported bearing_set_map_v1 model. It verifies the cardinality lower bound against independent exhaustive assignments, complete coverage checks before pruning, exact revalidation of supplied incumbent positions, tie retention, and resumable candidate accounting. Unsupported conditions still receive exact scoring. The audited integration checkpoint passed 872 tests, with 31 optional skips and seven passing subtests. This result establishes the reviewed software behavior and does not establish localization accuracy or a continuous-domain certificate.
+
+A persistent CPU pool now emits bounded, ordered candidate chunks in exact or screened mode. Actual one-, two-, and four-worker fixtures agree on optimum and ties. The coordinator's combined pool, controller, and independent-bound review passed 35 tests. A further independent review identified missing per-ID failure details for out-of-order chunks and an old source-version assumption in the new experiment driver. Those repairs remain prerequisites for the large candidate-scoring run.
+
+The first full-scale cache attempt failed at publication because the cache parent directory did not exist. The new CLI checks and creates the parent before generation. The second attempt was interrupted after code inspection found that cache validation rebuilt the 66,668-entry catalog lookup inside the loop over approximately 1.46 million proposals. That repeated construction would perform about 97 billion iterations. The corrected validator prepares the lookup once while preserving every check, and a count-based regression verifies that property across multiple candidates. The combined cache/CLI gate passed 64 tests. Both failed attempts and their logs remain retained, and unavailable generation counters are not reconstructed.
+
+A fresh cache-build retry is pinned to 33fded7 with unchanged physical inputs and generation settings. It uses one exact scoring candidate only to complete the cache handoff and is not an accuracy experiment. The cache is tied to this measurement set; later cached scoring times are selection-stage measurements, not new-frame latency. The next full-domain driver will retain all generated candidates and explicit outcomes for interrupted or unvisited work.
+
+The visibility-screen profile found a useful performance tradeoff. Batched geometry reduces expensive high-ray cases but adds overhead for small cases. A fixed 32-ray switch is being checked against a separate saved-hypothesis subset, with full scalar/batch result equality required. No change to land geometry or the likelihood is involved.
+
+A separate storage audit reclaimed 49,795,072 bytes from three inactive regenerable environments and approximately 410,456,064 allocated bytes through verified hardlinks of immutable duplicate inputs. All data paths and hashes were preserved, and active cache-generation files were excluded. Background free-space changes are reported separately in docs/storage-audit-2026-10-26.md. The 40 GiB reserve remains mandatory.
 
 ## Scene geometry and map coverage
 
