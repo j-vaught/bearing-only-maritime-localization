@@ -11,6 +11,113 @@
     "starts": 128,
     "timing_scope": "all 64 score-selected modes and 128 starts; selected-mode diagnostic only"
   },
+  "assignment_expansion_artifact": {
+    "accepted_fix_claim": false,
+    "branch_rescore_complete": false,
+    "certificate_scope": "none",
+    "completed_mode_count": 60,
+    "expansion_event_digest": "70a682e2766f18fb6fb83819ed945e078b2958cf3ac465ecdb990f79ed87f3ae",
+    "expansion_events_sha256": "a92acc79294bd045605f5bcce9e76e26ab7ccddc03ccba1ace0df69eb982b7bf",
+    "expansion_manifest_sha256": "290c2645f8252a951491a99e2fa6bca6b29d2222d04cec8c9935a75b27db5e23",
+    "expansion_rows_sha256": "2bb8a9f2f3e0e46f4456c7ead57efda5afab6776465552156ea863a8574a7c7c",
+    "full_domain_complete": false,
+    "mode_count": 64,
+    "path": ".agent-work/outputs/a35-cached-evaluation/assignment-expansion-provisional.json",
+    "pending_mode_count": 4,
+    "run_status": "interrupted",
+    "serial_runtime_s": 1800.016071,
+    "sha256": "b7e3541a77a86943e5553f449769cdc12329696a3c3b96cf69d4199e54f279a5",
+    "status": "provisional",
+    "timing_scope": "single-addition branch expansion over the fixed selected-mode prefix; 60 of 64 mode rows completed; diagnostic runner time, not end-to-end or per-frame latency"
+  },
+  "assignment_expansion_summary": {
+    "accepted_fix_claim": false,
+    "branch_rescore_complete": false,
+    "certificate_scope": "none",
+    "completed_modes": 60,
+    "expanded_modes_within_100m": 1,
+    "pending_modes": 4,
+    "serial_runtime_s": 1800.016071,
+    "status": "provisional interrupted evaluation; full branch replay pending"
+  },
+  "assignment_expansion_winner": {
+    "candidate_id": "cell:cell:1594:4160",
+    "expanded": {
+      "assignment_count": 5,
+      "assignments": [
+        {
+          "catalog_key": "enc-physical:091a183d8a3a865a3df9",
+          "correct": true,
+          "report_index": 0
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+          "correct": true,
+          "report_index": 1
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+          "correct": true,
+          "report_index": 2
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+          "correct": true,
+          "report_index": 3
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+          "correct": true,
+          "report_index": 4
+        }
+      ],
+      "correct_assignment_count": 5,
+      "geodesic_error_m": 11.127008292425764,
+      "position_xy_m": [
+        986156.5041500626,
+        4940656.397735875
+      ],
+      "score": 5.026904167180264
+    },
+    "expanded_error_rank_within_completed_modes": 1,
+    "expanded_score_rank_within_completed_modes": 1,
+    "mode_index": 4,
+    "seed": {
+      "assignment_count": 4,
+      "assignments": [
+        {
+          "catalog_key": "enc-physical:091a183d8a3a865a3df9",
+          "correct": true,
+          "report_index": 0
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+          "correct": true,
+          "report_index": 1
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+          "correct": true,
+          "report_index": 2
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+          "correct": true,
+          "report_index": 4
+        }
+      ],
+      "correct_assignment_count": 4,
+      "geodesic_error_m": 181.27936114907126,
+      "position_xy_m": [
+        986107.0287770141,
+        4940470.628734506
+      ],
+      "score": 14.777114904001566
+    },
+    "seed_score_rank_within_completed_modes": 16,
+    "source_score_rank": 5,
+    "summary": "Provisional score and error winner among the 60 completed modes. Four selected modes remain pending, so this is not a certificate or acceptance claim."
+  },
   "author": "J.C. Vaught",
   "completed_count": 64,
   "evaluation_input_hashes": {
@@ -19,6 +126,858 @@
     "truth_crs": "ab92cb4c3c74d31fa039ecee0cd17078a28521cdd05b181815b0e6d7728ab895"
   },
   "evaluation_schema": "a35-assigned-refinement-evaluation-v1",
+  "expanded_mode_comparisons": [
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 852887.4581073085,
+      "expanded_error_rank": 22,
+      "expanded_score": 14.416427597019277,
+      "expanded_score_rank": 12,
+      "mode_index": 0,
+      "seed_error_m": 852887.4581073085,
+      "seed_score": 14.416427597019277,
+      "source_score_rank": 1,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 778659.4415870035,
+      "expanded_error_rank": 17,
+      "expanded_score": 11.536684732756164,
+      "expanded_score_rank": 5,
+      "mode_index": 1,
+      "seed_error_m": 778659.4415870035,
+      "seed_score": 11.536684732756164,
+      "source_score_rank": 2,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 853439.780080993,
+      "expanded_error_rank": 24,
+      "expanded_score": 10.324237291618351,
+      "expanded_score_rank": 2,
+      "mode_index": 2,
+      "seed_error_m": 853439.780080993,
+      "seed_score": 10.324237291618351,
+      "source_score_rank": 3,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 756741.0731143567,
+      "expanded_error_rank": 16,
+      "expanded_score": 15.157991096246068,
+      "expanded_score_rank": 23,
+      "mode_index": 3,
+      "seed_error_m": 756741.0731143567,
+      "seed_score": 15.157991096246068,
+      "source_score_rank": 4,
+      "status": "no_unmatched_reports"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 5,
+      "expanded_error_m": 11.127008292425764,
+      "expanded_error_rank": 1,
+      "expanded_score": 5.026904167180264,
+      "expanded_score_rank": 1,
+      "mode_index": 4,
+      "seed_error_m": 181.27936114907126,
+      "seed_score": 14.777114904001566,
+      "source_score_rank": 5,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 852887.4580812325,
+      "expanded_error_rank": 21,
+      "expanded_score": 14.41642759702948,
+      "expanded_score_rank": 13,
+      "mode_index": 5,
+      "seed_error_m": 852887.4580812325,
+      "seed_score": 14.41642759702948,
+      "source_score_rank": 6,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 756741.073098745,
+      "expanded_error_rank": 15,
+      "expanded_score": 15.157991096245476,
+      "expanded_score_rank": 22,
+      "mode_index": 6,
+      "seed_error_m": 756741.073098745,
+      "seed_score": 15.157991096245476,
+      "source_score_rank": 7,
+      "status": "no_unmatched_reports"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 797602.9948406937,
+      "expanded_error_rank": 18,
+      "expanded_score": 14.561265425804457,
+      "expanded_score_rank": 17,
+      "mode_index": 7,
+      "seed_error_m": 797602.9948406937,
+      "seed_score": 14.561265425804457,
+      "source_score_rank": 8,
+      "status": "no_unmatched_reports"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2162975.2364273565,
+      "expanded_error_rank": 54,
+      "expanded_score": 15.721530840309857,
+      "expanded_score_rank": 27,
+      "mode_index": 8,
+      "seed_error_m": 2162975.2364273565,
+      "seed_score": 15.721530840309857,
+      "source_score_rank": 9,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 567893.3398010851,
+      "expanded_error_rank": 9,
+      "expanded_score": 16.262418923944445,
+      "expanded_score_rank": 33,
+      "mode_index": 9,
+      "seed_error_m": 567893.3398010851,
+      "seed_score": 16.262418923944445,
+      "source_score_rank": 10,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 852960.2763012733,
+      "expanded_error_rank": 23,
+      "expanded_score": 14.471860095926694,
+      "expanded_score_rank": 16,
+      "mode_index": 10,
+      "seed_error_m": 853911.7708072384,
+      "seed_score": 16.88896016732659,
+      "source_score_rank": 11,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 866984.9318096751,
+      "expanded_error_rank": 26,
+      "expanded_score": 15.88029958914592,
+      "expanded_score_rank": 29,
+      "mode_index": 11,
+      "seed_error_m": 867851.196654955,
+      "seed_score": 17.221241738168686,
+      "source_score_rank": 13,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 867061.9127981719,
+      "expanded_error_rank": 27,
+      "expanded_score": 16.249879532412635,
+      "expanded_score_rank": 32,
+      "mode_index": 12,
+      "seed_error_m": 867061.9127981719,
+      "seed_score": 16.249879532412635,
+      "source_score_rank": 14,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2164539.193148889,
+      "expanded_error_rank": 56,
+      "expanded_score": 11.363958041444643,
+      "expanded_score_rank": 3,
+      "mode_index": 13,
+      "seed_error_m": 2164539.193148889,
+      "seed_score": 11.363958041444643,
+      "source_score_rank": 15,
+      "status": "no_unmatched_reports"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 578818.5049495539,
+      "expanded_error_rank": 10,
+      "expanded_score": 14.03518617288082,
+      "expanded_score_rank": 10,
+      "mode_index": 14,
+      "seed_error_m": 578818.5049495539,
+      "seed_score": 14.03518617288082,
+      "source_score_rank": 16,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1166833.889858333,
+      "expanded_error_rank": 37,
+      "expanded_score": 13.032745518228543,
+      "expanded_score_rank": 7,
+      "mode_index": 15,
+      "seed_error_m": 1166833.889858333,
+      "seed_score": 13.032745518228543,
+      "source_score_rank": 17,
+      "status": "no_unmatched_reports"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 814089.6855507388,
+      "expanded_error_rank": 19,
+      "expanded_score": 13.611764673007166,
+      "expanded_score_rank": 8,
+      "mode_index": 16,
+      "seed_error_m": 814089.6855507388,
+      "seed_score": 13.611764673007166,
+      "source_score_rank": 18,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1267492.6992333883,
+      "expanded_error_rank": 41,
+      "expanded_score": 15.459780932474658,
+      "expanded_score_rank": 24,
+      "mode_index": 17,
+      "seed_error_m": 1267492.6992333883,
+      "seed_score": 15.459780932474658,
+      "source_score_rank": 19,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 116508.26195460948,
+      "expanded_error_rank": 5,
+      "expanded_score": 18.273573975490322,
+      "expanded_score_rank": 39,
+      "mode_index": 18,
+      "seed_error_m": 115516.87693669021,
+      "seed_score": 18.549817572415172,
+      "source_score_rank": 20,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2162975.235805752,
+      "expanded_error_rank": 53,
+      "expanded_score": 15.721530840306581,
+      "expanded_score_rank": 26,
+      "mode_index": 19,
+      "seed_error_m": 2162975.235805752,
+      "seed_score": 15.721530840306581,
+      "source_score_rank": 22,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1268813.6310499113,
+      "expanded_error_rank": 42,
+      "expanded_score": 14.460577378991253,
+      "expanded_score_rank": 15,
+      "mode_index": 20,
+      "seed_error_m": 1268813.6310499113,
+      "seed_score": 14.460577378991253,
+      "source_score_rank": 24,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1582692.3257927638,
+      "expanded_error_rank": 46,
+      "expanded_score": 19.422835987178907,
+      "expanded_score_rank": 47,
+      "mode_index": 21,
+      "seed_error_m": 1582692.3257927638,
+      "seed_score": 19.422835987178907,
+      "source_score_rank": 25,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 959228.8265734004,
+      "expanded_error_rank": 33,
+      "expanded_score": 14.28015026755933,
+      "expanded_score_rank": 11,
+      "mode_index": 22,
+      "seed_error_m": 959228.8265734004,
+      "seed_score": 14.28015026755933,
+      "source_score_rank": 26,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1252323.9869995879,
+      "expanded_error_rank": 39,
+      "expanded_score": 18.779219842928274,
+      "expanded_score_rank": 44,
+      "mode_index": 23,
+      "seed_error_m": 1252323.9869995879,
+      "seed_score": 18.779219842928274,
+      "source_score_rank": 27,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2185398.587525363,
+      "expanded_error_rank": 57,
+      "expanded_score": 16.385598594860884,
+      "expanded_score_rank": 34,
+      "mode_index": 24,
+      "seed_error_m": 2185398.587525363,
+      "seed_score": 16.385598594860884,
+      "source_score_rank": 28,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 120158.7302463507,
+      "expanded_error_rank": 7,
+      "expanded_score": 16.216977961901,
+      "expanded_score_rank": 31,
+      "mode_index": 25,
+      "seed_error_m": 120158.7302463507,
+      "seed_score": 16.216977961901,
+      "source_score_rank": 29,
+      "status": "no_unmatched_reports"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 926569.9404752804,
+      "expanded_error_rank": 30,
+      "expanded_score": 18.538375179801598,
+      "expanded_score_rank": 41,
+      "mode_index": 26,
+      "seed_error_m": 926569.9404752804,
+      "seed_score": 18.538375179801598,
+      "source_score_rank": 30,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2006589.843049966,
+      "expanded_error_rank": 49,
+      "expanded_score": 17.655407048313243,
+      "expanded_score_rank": 37,
+      "mode_index": 27,
+      "seed_error_m": 2006589.843049966,
+      "seed_score": 17.655407048313243,
+      "source_score_rank": 31,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1297144.9327838204,
+      "expanded_error_rank": 43,
+      "expanded_score": 14.725603228899287,
+      "expanded_score_rank": 19,
+      "mode_index": 28,
+      "seed_error_m": 1297144.9327838204,
+      "seed_score": 14.725603228899287,
+      "source_score_rank": 32,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1442260.9336325594,
+      "expanded_error_rank": 45,
+      "expanded_score": 19.422835987178907,
+      "expanded_score_rank": 48,
+      "mode_index": 29,
+      "seed_error_m": 1442260.9336325594,
+      "seed_score": 19.422835987178907,
+      "source_score_rank": 33,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1201668.6639530247,
+      "expanded_error_rank": 38,
+      "expanded_score": 17.40083170889945,
+      "expanded_score_rank": 36,
+      "mode_index": 30,
+      "seed_error_m": 1201668.6639530247,
+      "seed_score": 17.40083170889945,
+      "source_score_rank": 34,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 867814.9186854833,
+      "expanded_error_rank": 28,
+      "expanded_score": 17.279026633314587,
+      "expanded_score_rank": 35,
+      "mode_index": 31,
+      "seed_error_m": 867632.3034682367,
+      "seed_score": 18.231933828754453,
+      "source_score_rank": 35,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 857902.6039832424,
+      "expanded_error_rank": 25,
+      "expanded_score": 12.389496969001609,
+      "expanded_score_rank": 6,
+      "mode_index": 32,
+      "seed_error_m": 858115.5087510431,
+      "seed_score": 19.01778351104627,
+      "source_score_rank": 36,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 99636.55670057515,
+      "expanded_error_rank": 4,
+      "expanded_score": 14.719172377380167,
+      "expanded_score_rank": 18,
+      "mode_index": 33,
+      "seed_error_m": 99604.03954643903,
+      "seed_score": 15.765655671878132,
+      "source_score_rank": 38,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2239589.1949978583,
+      "expanded_error_rank": 59,
+      "expanded_score": 20.33099022398538,
+      "expanded_score_rank": 54,
+      "mode_index": 34,
+      "seed_error_m": 2239589.1949978583,
+      "seed_score": 20.33099022398538,
+      "source_score_rank": 39,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 595163.238572968,
+      "expanded_error_rank": 13,
+      "expanded_score": 14.979741676979462,
+      "expanded_score_rank": 21,
+      "mode_index": 35,
+      "seed_error_m": 595163.238572968,
+      "seed_score": 14.979741676979462,
+      "source_score_rank": 40,
+      "status": "no_unmatched_reports"
+    },
+    {
+      "assignment_count": 5,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2164539.1543135084,
+      "expanded_error_rank": 55,
+      "expanded_score": 11.363958111041587,
+      "expanded_score_rank": 4,
+      "mode_index": 36,
+      "seed_error_m": 2164539.1543135084,
+      "seed_score": 11.363958111041587,
+      "source_score_rank": 41,
+      "status": "no_unmatched_reports"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1806696.6728897358,
+      "expanded_error_rank": 47,
+      "expanded_score": 21.725421080172953,
+      "expanded_score_rank": 57,
+      "mode_index": 37,
+      "seed_error_m": 1806696.6728897358,
+      "seed_score": 21.725421080172953,
+      "source_score_rank": 42,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 93258.22018260333,
+      "expanded_error_rank": 3,
+      "expanded_score": 21.725421080172953,
+      "expanded_score_rank": 58,
+      "mode_index": 38,
+      "seed_error_m": 93258.22018260333,
+      "seed_score": 21.725421080172953,
+      "source_score_rank": 43,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 940942.8369084215,
+      "expanded_error_rank": 32,
+      "expanded_score": 15.608097891493287,
+      "expanded_score_rank": 25,
+      "mode_index": 39,
+      "seed_error_m": 940942.8369084215,
+      "seed_score": 15.608097891493287,
+      "source_score_rank": 44,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 852887.4578533289,
+      "expanded_error_rank": 20,
+      "expanded_score": 14.416427597052552,
+      "expanded_score_rank": 14,
+      "mode_index": 40,
+      "seed_error_m": 852887.4578533289,
+      "seed_score": 14.416427597052552,
+      "source_score_rank": 45,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2030016.0506710648,
+      "expanded_error_rank": 50,
+      "expanded_score": 20.65271246673663,
+      "expanded_score_rank": 55,
+      "mode_index": 41,
+      "seed_error_m": 2030016.0506710648,
+      "seed_score": 20.65271246673663,
+      "source_score_rank": 47,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 981401.529366624,
+      "expanded_error_rank": 35,
+      "expanded_score": 18.296005139588697,
+      "expanded_score_rank": 40,
+      "mode_index": 42,
+      "seed_error_m": 981401.529366624,
+      "seed_score": 18.296005139588697,
+      "source_score_rank": 48,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 119581.31863503846,
+      "expanded_error_rank": 6,
+      "expanded_score": 19.42283598717891,
+      "expanded_score_rank": 51,
+      "mode_index": 43,
+      "seed_error_m": 119581.31863503846,
+      "seed_score": 19.42283598717891,
+      "source_score_rank": 49,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1060616.7032434482,
+      "expanded_error_rank": 36,
+      "expanded_score": 19.422835987178907,
+      "expanded_score_rank": 49,
+      "mode_index": 44,
+      "seed_error_m": 1060616.7032434482,
+      "seed_score": 19.422835987178907,
+      "source_score_rank": 50,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 36612.70330951569,
+      "expanded_error_rank": 2,
+      "expanded_score": 18.10076022792535,
+      "expanded_score_rank": 38,
+      "mode_index": 45,
+      "seed_error_m": 36358.4645410655,
+      "seed_score": 18.848772183753976,
+      "source_score_rank": 51,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 972564.9106564193,
+      "expanded_error_rank": 34,
+      "expanded_score": 18.95891249894403,
+      "expanded_score_rank": 45,
+      "mode_index": 46,
+      "seed_error_m": 972564.9106564193,
+      "seed_score": 18.95891249894403,
+      "source_score_rank": 52,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 586930.412824411,
+      "expanded_error_rank": 12,
+      "expanded_score": 22.149556899159098,
+      "expanded_score_rank": 60,
+      "mode_index": 47,
+      "seed_error_m": 586930.412824411,
+      "seed_score": 22.149556899159098,
+      "source_score_rank": 53,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2312709.7722681114,
+      "expanded_error_rank": 60,
+      "expanded_score": 21.56048311236886,
+      "expanded_score_rank": 56,
+      "mode_index": 48,
+      "seed_error_m": 2312709.7722681114,
+      "seed_score": 21.56048311236886,
+      "source_score_rank": 54,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2224628.0637991996,
+      "expanded_error_rank": 58,
+      "expanded_score": 13.80562672620935,
+      "expanded_score_rank": 9,
+      "mode_index": 49,
+      "seed_error_m": 2224628.0637991996,
+      "seed_score": 13.80562672620935,
+      "source_score_rank": 55,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1264259.319459276,
+      "expanded_error_rank": 40,
+      "expanded_score": 20.22246748799902,
+      "expanded_score_rank": 53,
+      "mode_index": 50,
+      "seed_error_m": 1264259.319459276,
+      "seed_score": 20.22246748799902,
+      "source_score_rank": 57,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2162975.2355187675,
+      "expanded_error_rank": 52,
+      "expanded_score": 15.721530840317186,
+      "expanded_score_rank": 28,
+      "mode_index": 51,
+      "seed_error_m": 2162975.2355187675,
+      "seed_score": 15.721530840317186,
+      "source_score_rank": 58,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 3,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 872475.9867550367,
+      "expanded_error_rank": 29,
+      "expanded_score": 18.71323628321203,
+      "expanded_score_rank": 43,
+      "mode_index": 52,
+      "seed_error_m": 872475.9867550367,
+      "seed_score": 18.71323628321203,
+      "source_score_rank": 59,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 422119.7452973064,
+      "expanded_error_rank": 8,
+      "expanded_score": 18.62393878675741,
+      "expanded_score_rank": 42,
+      "mode_index": 53,
+      "seed_error_m": 422119.7452973064,
+      "seed_score": 18.62393878675741,
+      "source_score_rank": 61,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1370300.2368826084,
+      "expanded_error_rank": 44,
+      "expanded_score": 20.037019560407007,
+      "expanded_score_rank": 52,
+      "mode_index": 54,
+      "seed_error_m": 1370300.2368826084,
+      "seed_score": 20.037019560407007,
+      "source_score_rank": 63,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 584652.1061760712,
+      "expanded_error_rank": 11,
+      "expanded_score": 19.12065653685299,
+      "expanded_score_rank": 46,
+      "mode_index": 55,
+      "seed_error_m": 584261.2296715787,
+      "seed_score": 19.422835987178907,
+      "source_score_rank": 64,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 1811408.4395679669,
+      "expanded_error_rank": 48,
+      "expanded_score": 21.725421080172953,
+      "expanded_score_rank": 59,
+      "mode_index": 56,
+      "seed_error_m": 1811408.4395679669,
+      "seed_score": 21.725421080172953,
+      "source_score_rank": 66,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 2,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 926782.4788588111,
+      "expanded_error_rank": 31,
+      "expanded_score": 19.422835987178907,
+      "expanded_score_rank": 50,
+      "mode_index": 57,
+      "seed_error_m": 926782.4788588111,
+      "seed_score": 19.422835987178907,
+      "source_score_rank": 68,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 666513.8482639276,
+      "expanded_error_rank": 14,
+      "expanded_score": 16.06838154607505,
+      "expanded_score_rank": 30,
+      "mode_index": 58,
+      "seed_error_m": 666513.0289885906,
+      "seed_score": 16.07213289402619,
+      "source_score_rank": 69,
+      "status": "completed"
+    },
+    {
+      "assignment_count": 4,
+      "correct_assignment_count": 0,
+      "expanded_error_m": 2046212.2687023738,
+      "expanded_error_rank": 51,
+      "expanded_score": 14.734864374536679,
+      "expanded_score_rank": 20,
+      "mode_index": 59,
+      "seed_error_m": 2045763.4557578706,
+      "seed_score": 15.284178268694674,
+      "source_score_rank": 70,
+      "status": "completed"
+    }
+  ],
+  "expanded_prior_score_winner": {
+    "expanded": {
+      "assignment_count": 4,
+      "assignments": [
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5MD50M.000:source_object_id=213641",
+          "correct": false,
+          "report_index": 0
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5MD50M.000:source_object_id=213646",
+          "correct": false,
+          "report_index": 1
+        },
+        {
+          "catalog_key": "enc-component:coastal:Coastal.Beacon_Special_Purpose_General_point:US3DE01M.000:source_object_id=249638",
+          "correct": false,
+          "report_index": 2
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5MD50M.000:source_object_id=213645",
+          "correct": false,
+          "report_index": 3
+        }
+      ],
+      "correct_assignment_count": 0,
+      "geodesic_error_m": 853439.780080993,
+      "position_xy_m": [
+        493306.8423388086,
+        4243315.763943311
+      ],
+      "score": 10.324237291618351
+    },
+    "expanded_error_rank_within_completed_modes": 24,
+    "expanded_score_rank_within_completed_modes": 2,
+    "mode_index": 2,
+    "seed": {
+      "assignment_count": 4,
+      "assignments": [
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5MD50M.000:source_object_id=213641",
+          "correct": false,
+          "report_index": 0
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5MD50M.000:source_object_id=213646",
+          "correct": false,
+          "report_index": 1
+        },
+        {
+          "catalog_key": "enc-component:coastal:Coastal.Beacon_Special_Purpose_General_point:US3DE01M.000:source_object_id=249638",
+          "correct": false,
+          "report_index": 2
+        },
+        {
+          "catalog_key": "enc-component:harbour:Harbor.Light_point:US5MD50M.000:source_object_id=213645",
+          "correct": false,
+          "report_index": 3
+        }
+      ],
+      "correct_assignment_count": 0,
+      "geodesic_error_m": 853439.780080993,
+      "position_xy_m": [
+        493306.8423388086,
+        4243315.763943311
+      ],
+      "score": 10.324237291618351
+    },
+    "source_score_rank": 3
+  },
   "full_domain_complete": false,
   "geometry_diagnostic_at_truth": {
     "all_five_reports": {
@@ -110,6 +1069,14 @@
         "score": 14.859610304730099,
         "score_rank": 11,
         "true_assignments": 4
+      },
+      "expanded": {
+        "assignments": 5,
+        "error_m": 11.127008292425764,
+        "error_rank": 1,
+        "score": 5.026904167180264,
+        "score_rank": 1,
+        "true_assignments": 5
       },
       "source": {
         "assignments": 4,
@@ -574,7 +1541,7 @@
     }
   ],
   "plot_error_max_m": 2500000,
-  "schema": "a39-cached-refinement-figure-v2",
+  "schema": "a39-cached-refinement-figure-v3",
   "selected_count": 64,
   "selection_rule": "64 modes selected by source search score before evaluator-only truth access",
   "source_artifact_commit": "a2dcc34799f00b9abd5f145b5661324b749e3ea1",
@@ -634,6 +1601,14 @@
         "error_rank": 23,
         "score": 10.324237291618351,
         "score_rank": 1,
+        "true_assignments": 0
+      },
+      "expanded": {
+        "assignments": 4,
+        "error_m": 853439.780080993,
+        "error_rank": 24,
+        "score": 10.324237291618351,
+        "score_rank": 2,
         "true_assignments": 0
       },
       "source": {
