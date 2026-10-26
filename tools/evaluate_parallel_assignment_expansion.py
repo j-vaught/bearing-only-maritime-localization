@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,7 +15,7 @@ EVENTS_NAME = "branch-events.jsonl"
 CHECKPOINT_NAME = "checkpoint.json"
 TIMING_KEYS = {"elapsed_s", "elapsed_seconds", "validation_and_setup_elapsed_s"}
 BRANCH_PHASES = {"branch_started", "branch_result"}
-TERMINAL_PHASES = {"mode_result", "mode_failure"}
+TERMINAL_PHASES = {"mode_result", "mode_failure", "failure"}
 
 
 class EvaluationError(ValueError):
@@ -78,6 +79,7 @@ def verify_event_chain(path: Path, manifest: dict[str, Any]) -> list[dict[str, A
     )
     records = read_jsonl(path)
     previous = ""
+    mode_event_counts: dict[int, int] = {}
     for index, record in enumerate(records):
         require(record.get("event_index") == index, f"{path.name} event indices are not contiguous")
         require(
@@ -90,6 +92,14 @@ def verify_event_chain(path: Path, manifest: dict[str, Any]) -> list[dict[str, A
         require(record.get("event_sha256") == digest, f"{path.name} event hash mismatch at {index}")
         mode = record.get("mode_index")
         require(type(mode) is int and 0 <= mode < MODE_COUNT, "event mode_index is invalid")
+        mode_index = cast(int, mode)
+        if "mode_event_index" in record:
+            mode_event_index = record.get("mode_event_index")
+            require(
+                mode_event_index == mode_event_counts.get(mode_index, 0),
+                f"{path.name} mode event indices are not contiguous for mode {mode_index}",
+            )
+            mode_event_counts[mode_index] = mode_event_counts.get(mode_index, 0) + 1
         require(record.get("phase") in BRANCH_PHASES | TERMINAL_PHASES, "unknown event phase")
         require(type(record.get("event")) is dict, "event payload must be an object")
         previous = digest
@@ -107,6 +117,9 @@ def event_index(records: list[dict[str, Any]]) -> dict[tuple[int, str, int], dic
     per_mode: dict[int, list[tuple[str, int]]] = {}
     for record in records:
         phase = record["phase"]
+        if phase == "failure":
+            require(record["event"].get("status") == "mode_exception", "malformed failure event")
+            continue
         if phase not in BRANCH_PHASES:
             continue
         event = record["event"]
@@ -160,6 +173,31 @@ def validate_rows(root: Path, manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def verify_checkpoint_prefix(
+    root: Path, checkpoint: dict[str, Any], records: list[dict[str, Any]]
+) -> None:
+    count = checkpoint.get("event_count")
+    require(type(count) is int and 0 <= count <= len(records), "checkpoint event prefix is invalid")
+    raw_lines = (root / EVENTS_NAME).read_bytes().splitlines(keepends=True)
+    require(len(raw_lines) == len(records), "event lines differ from parsed records")
+    prefix_bytes = b"".join(raw_lines[:count])
+    require(
+        hashlib.sha256(prefix_bytes).hexdigest() == checkpoint.get("events_sha256"),
+        "checkpoint is not an exact event prefix",
+    )
+    previous = ""
+    for index, record in enumerate(records[:count]):
+        require(record.get("event_index") == index, "checkpoint prefix event index is invalid")
+        require(
+            record.get("previous_event_sha256") == previous, "checkpoint prefix chain is broken"
+        )
+        previous = canonical_hash(
+            {key: value for key, value in record.items() if key != "event_sha256"}
+        )
+        require(record.get("event_sha256") == previous, "checkpoint prefix hash is invalid")
+    require(previous == checkpoint.get("event_digest"), "checkpoint prefix digest differs")
+
+
 def validate_manifest(
     root: Path,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -175,30 +213,100 @@ def validate_manifest(
         checkpoint.get("rows_sha256") == manifest.get("rows_sha256"),
         "checkpoint rows binding mismatch",
     )
-    require(
-        checkpoint.get("event_digest") == manifest.get("event_digest"),
-        "checkpoint event binding mismatch",
-    )
+    verify_checkpoint_prefix(root, checkpoint, events)
     return manifest, rows, events
 
 
+def verify_immutable_sources(manifest: dict[str, Any], label: str) -> None:
+    for key in ("package_commit", "harness_commit"):
+        value = manifest.get(key)
+        require(
+            isinstance(value, str)
+            and len(value) == 40
+            and all(character in "0123456789abcdef" for character in value),
+            f"{label} is missing immutable {key}",
+        )
+    source_hash = manifest.get("assignment_expansion_sha256")
+    require(
+        isinstance(source_hash, str)
+        and len(source_hash) == 64
+        and all(character in "0123456789abcdef" for character in source_hash),
+        f"{label} is missing immutable assignment_expansion_sha256",
+    )
+    require(
+        manifest["package_commit"] == manifest["harness_commit"],
+        f"{label} package and harness commits differ internally",
+    )
+    module_value = manifest.get("assignment_expansion_source")
+    package_value = manifest.get("package_source")
+    runner_hash = manifest.get("runner_sha256")
+    if module_value is None and package_value is None and runner_hash is None:
+        return
+    require(
+        isinstance(module_value, str) and isinstance(package_value, str),
+        f"{label} source paths are incomplete",
+    )
+    module_path = Path(cast(str, module_value))
+    package_path = Path(cast(str, package_value))
+    require(module_path.is_file(), f"{label} assignment source is missing")
+    require(package_path.is_file(), f"{label} package source is missing")
+    require(
+        sha256_file(module_path) == manifest["assignment_expansion_sha256"],
+        f"{label} assignment source hash differs",
+    )
+    require(
+        isinstance(runner_hash, str) and len(runner_hash) == 64, f"{label} runner hash is missing"
+    )
+    repo_root = package_path.resolve().parents[1]
+    commit = str(manifest["package_commit"])
+    exists = subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+    )
+    require(exists.returncode == 0, f"{label} immutable package commit is unavailable")
+    module_relative = module_path.resolve().relative_to(repo_root.resolve())
+    module_bytes = subprocess.check_output(
+        ["git", "show", f"{commit}:{module_relative.as_posix()}"], cwd=repo_root
+    )
+    require(
+        hashlib.sha256(module_bytes).hexdigest() == manifest["assignment_expansion_sha256"],
+        f"{label} assignment source does not match immutable commit",
+    )
+    runner_matches = []
+    for relative in (
+        Path("tools/run_assignment_expansion_diagnostic.py"),
+        Path("tools/run_parallel_assignment_expansion_diagnostic.py"),
+    ):
+        try:
+            data = subprocess.check_output(
+                ["git", "show", f"{commit}:{relative.as_posix()}"],
+                cwd=repo_root,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            continue
+        runner_matches.append(hashlib.sha256(data).hexdigest() == runner_hash)
+    require(any(runner_matches), f"{label} runner source does not match immutable commit")
+
+
 def compare_bindings(serial: dict[str, Any], parallel: dict[str, Any]) -> None:
+    verify_immutable_sources(serial, "serial")
+    verify_immutable_sources(parallel, "parallel")
     for key in (
-        "package_commit",
-        "harness_commit",
         "assignment_expansion_sha256",
         "frozen_scoring_source_sha",
         "assigned_manifest_sha256",
         "a20_manifest_sha256",
         "a20_rows_sha256",
     ):
-        require(serial.get(key) == parallel.get(key), f"source binding differs for {key}")
+        require(
+            serial.get(key) == parallel.get(key),
+            f"shared source binding differs for {key}",
+        )
     require(serial.get("source_pins") == parallel.get("source_pins"), "source_pins differ")
     require(serial.get("input_paths") == parallel.get("input_paths"), "input_paths differ")
-    require(
-        serial.get("package_commit") == serial.get("harness_commit"),
-        "serial package and harness commits differ",
-    )
     provenance_raw = parallel.get("worker_provenance")
     require(
         type(provenance_raw) is list and len(provenance_raw) == 4,
@@ -301,8 +409,19 @@ def compare_events(
         set(serial_index).issubset(parallel_index), "parallel event ledger is missing serial events"
     )
     for key, serial_payload in serial_index.items():
+        parallel_payload = parallel_index[key]
+        serial_normalized = {
+            name: value
+            for name, value in serial_payload.items()
+            if name not in {"mode_index", "phase"}
+        }
+        parallel_normalized = {
+            name: value
+            for name, value in parallel_payload.items()
+            if name not in {"mode_index", "phase"}
+        }
         require(
-            serial_payload == parallel_index[key],
+            serial_normalized == parallel_normalized,
             f"branch payload differs for mode/phase/branch {key}",
         )
     for mode in range(60):
@@ -344,15 +463,63 @@ def evaluate(
     audit_reason = "full audit artifact not supplied"
     if audit_path is not None:
         audit = read_json(audit_path)
+        mode_evaluations = audit.get("mode_evaluations")
+        mode_evaluation_ids = (
+            [item.get("mode_index") for item in mode_evaluations]
+            if isinstance(mode_evaluations, list)
+            and all(isinstance(item, dict) for item in mode_evaluations)
+            else []
+        )
+        audit_event_counts = audit.get("event_mode_counts")
+        event_counts_match = False
+        if isinstance(audit_event_counts, dict):
+            expected_event_counts = {
+                str(mode): {
+                    "started": sum(
+                        1
+                        for record in parallel_events
+                        if record.get("mode_index") == mode
+                        and record.get("phase") == "branch_started"
+                    ),
+                    "result": sum(
+                        1
+                        for record in parallel_events
+                        if record.get("mode_index") == mode
+                        and record.get("phase") == "branch_result"
+                    ),
+                    "failure": sum(
+                        1
+                        for record in parallel_events
+                        if record.get("mode_index") == mode and record.get("phase") == "failure"
+                    ),
+                }
+                for mode in range(MODE_COUNT)
+            }
+            event_counts_match = audit_event_counts == expected_event_counts
         audit_ok = (
-            audit.get("branch_rescore_complete") is True
-            and audit.get("matched_raw_branch_payloads") is True
-            and audit.get("assignment_expansion_sha256")
-            == serial_manifest.get("assignment_expansion_sha256")
-            and audit.get("events_sha256") == serial_manifest.get("events_sha256")
+            audit.get("evaluation_status") == "complete_audit"
+            and audit.get("branch_rescore_complete") is True
+            and audit.get("evaluation_only") is True
+            and audit.get("truth_used_for_search_or_proposal_selection") is False
+            and audit.get("certificate_scope") == "none"
+            and audit.get("mode_count") == MODE_COUNT
+            and audit.get("completed_mode_count") == MODE_COUNT
+            and audit.get("pending_mode_count") == 0
+            and audit.get("expansion_status") == "completed"
+            and audit.get("expansion_event_count") == parallel_manifest.get("event_count")
+            and audit.get("expansion_event_digest") == parallel_manifest.get("event_digest")
+            and audit.get("expansion_events_sha256") == parallel_manifest.get("events_sha256")
+            and audit.get("expansion_rows_sha256") == parallel_manifest.get("rows_sha256")
+            and audit.get("expansion_manifest_sha256")
+            == sha256_file(parallel_root / "manifest.json")
+            and mode_evaluation_ids == list(range(MODE_COUNT))
+            and event_counts_match
         )
         if not audit_ok:
-            audit_reason = "audit artifact lacks exact source hashes or matched raw branch payloads"
+            audit_reason = (
+                "full audit is missing exact source hashes, branch payload hashes, "
+                "or complete 64-mode branch rescoring"
+            )
     return {
         "schema": "parallel-assignment-expansion-evaluation-v1",
         "evaluation_status": "complete_audit" if audit_ok else "provisional",
