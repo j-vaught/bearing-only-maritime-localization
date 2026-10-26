@@ -518,6 +518,13 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
     if plan_by_id and set(disposition_ids) != set(plan_by_id):
         raise ValueError("Candidate dispositions do not cover the complete frozen plan.")
     disposition_by_id = {row["candidate_id"]: row for row in disposition_rows}
+    for input_index in orphan_input_indices:
+        candidate_id = plan_by_index[input_index]
+        if (
+            disposition_by_id.get(candidate_id, {}).get("status")
+            != "worker_state_unknown_at_interruption"
+        ):
+            raise ValueError("Uncommitted orphan hypothesis is not marked unknown in dispositions.")
     allowed_dispositions = {
         "exact_scored",
         "exact_invalid_water",
