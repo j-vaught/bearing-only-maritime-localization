@@ -8,21 +8,21 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from shapely.geometry import box
+
+from bearing_localization.search import parallel_assignment_expansion as parallel
 from bearing_localization.search.assignment_expansion import ExpansionConfig, expand_assignments
+from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.parallel_assignment_expansion import (
     ModeTask,
     ParallelExpansionError,
     run_expansion_modes,
 )
-from shapely.geometry import box
-
-from bearing_localization.search import parallel_assignment_expansion as parallel
-from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.scoring import CandidateScorer
 from maritime_localization_shared.contracts.inputs_v2 import CatalogV2, MeasurementSetV2
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 
-from . import test_assignment_expansion_review as fixture  # ty: ignore[unresolved-import]
+from . import test_assignment_expansion_review as fixture
 
 
 @dataclass(frozen=True)
