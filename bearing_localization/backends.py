@@ -81,22 +81,25 @@ def angular_cost_cupy(
     CuPy is imported lazily. Callers may inject a compatible module for testing
     or to reuse an already imported CuPy installation.
     """
-    poses, obs, ais = _validated_inputs(
-        candidate_xy, observed_bearing_deg, ais_xy, dtype=np.float32
-    )
+    poses, obs, ais = _validated_inputs(candidate_xy, observed_bearing_deg, ais_xy)
     cp = cupy_module if cupy_module is not None else import_module("cupy")
-    device_poses = cp.asarray(poses)
-    device_obs = cp.asarray(obs)
-    device_ais = cp.asarray(ais)
-    absolute = cp.degrees(
-        cp.arctan2(
-            device_ais[None, :, 0] - device_poses[:, None, 0],
-            device_ais[None, :, 1] - device_poses[:, None, 1],
+    output = np.empty((len(poses), len(obs), len(ais)), dtype=np.float64)
+    device_obs = cp.asarray(obs, dtype=cp.float32)
+    # Rebase in host FP64 before converting differences to FP32. Casting global
+    # coordinates first can erase local metre-scale differences at large offsets.
+    batch_size = max(1, min(64, 1_000_000 // max(1, len(ais))))
+    for start in range(0, len(poses), batch_size):
+        stop = min(start + batch_size, len(poses))
+        relative = ais[None, :, :] - poses[start:stop, None, :]
+        local = cp.asarray(relative, dtype=cp.float32)
+        absolute = cp.degrees(cp.arctan2(local[:, :, 0], local[:, :, 1]))
+        residual = cp.abs(
+            (absolute[:, None, :] - device_obs[None, :, None] + 180.0) % 360.0 - 180.0
         )
-    )
-    residual = cp.abs((absolute[:, None, :] - device_obs[None, :, None] + 180.0) % 360.0 - 180.0)
-    cp.cuda.Stream.null.synchronize()
-    return cp.asnumpy(residual)
+        cp.cuda.Stream.null.synchronize()
+        output[start:stop] = cp.asnumpy(residual)
+        del local, absolute, residual
+    return output
 
 
 def _cupy_kernel(cp: Any, poses: Any, obs: Any, ais: Any) -> Any:
