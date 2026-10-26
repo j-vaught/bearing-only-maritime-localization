@@ -456,17 +456,9 @@ def test_mode_60_is_rescored_even_if_source_label_says_serial() -> None:
     assert result["serial_audited_branch_results_reused"] == 0
 
 
-def test_final_best_assignment_must_include_winning_branch_edge() -> None:
+def test_tampered_winning_branch_retention_flag_is_rejected() -> None:
     seed = _hypothesis(0.0, 2.0)
-    best = Hypothesis(
-        east_m=1.0,
-        north_m=0.0,
-        score=1.0,
-        assignments=tuple(
-            Assignment(report_index=i, catalog_key=f"bad{i}", residual_deg=0.0, cost=0.0)
-            for i in range(5)
-        ),
-    )
+    best = _hypothesis(1.0, 1.0)
     rows: list[dict[str, Any]] = []
     events_by_mode = {i: [] for i in range(64)}
     for i in range(64):
@@ -499,11 +491,11 @@ def test_final_best_assignment_must_include_winning_branch_edge() -> None:
                 "proposed_pose": [1.0, 0.0],
                 "report_index": 3,
                 "catalog_key": "k3",
-                "added_assignment_retained": True,
+                "added_assignment_retained": False,
             },
         },
     ]
-    with pytest.raises(ValueError, match="omits winning branch assignment"):
+    with pytest.raises(ValueError, match="winning branch assignment retention differs"):
         _replay_composite_events(
             rows,
             events_by_mode,
@@ -511,3 +503,79 @@ def test_final_best_assignment_must_include_winning_branch_edge() -> None:
             {},
             validated_serial_audit_modes=set(range(60)),
         )
+
+
+@dataclass
+class DroppedEdgeFakeScorer:
+    def evaluate(self, position: tuple[float, float]) -> object:
+        east, _ = position
+        if east == 0.0:
+            hypothesis = _hypothesis(0.0, 2.0)
+        else:
+            hypothesis = Hypothesis(
+                east_m=east,
+                north_m=0.0,
+                score=1.0,
+                assignments=tuple(
+                    Assignment(report_index=i, catalog_key=f"k{i}", residual_deg=0.0, cost=0.0)
+                    for i in range(4)
+                ),
+            )
+        return SimpleNamespace(status="scored", hypothesis=hypothesis)
+
+
+def test_strict_improvement_may_legitimately_drop_proposed_edge() -> None:
+    seed = _hypothesis(0.0, 2.0)
+    best = Hypothesis(
+        east_m=1.0,
+        north_m=0.0,
+        score=1.0,
+        assignments=tuple(
+            Assignment(report_index=i, catalog_key=f"k{i}", residual_deg=0.0, cost=0.0)
+            for i in range(4)
+        ),
+    )
+    rows: list[dict[str, Any]] = []
+    events_by_mode = {i: [] for i in range(64)}
+    for i in range(64):
+        rows.append(
+            {
+                "seed": _hyp_json(seed),
+                "best_hypothesis": _hyp_json(best if i == 0 else seed),
+                "counters": {},
+                "status": "no_unmatched_reports",
+                "_source_run": "serial",
+            }
+        )
+    rows[0].update(
+        {
+            "counters": {"visited_branches": 1, "unvisited_branches": 0},
+            "status": "completed",
+            "completed": True,
+            "budget_exhausted": False,
+        }
+    )
+    events_by_mode[0] = [
+        _event(0, "branch_started", 0),
+        {
+            "mode_index": 0,
+            "phase": "branch_result",
+            "event": {
+                "branch_id": 0,
+                "status": "improved",
+                "exact_score": 1.0,
+                "proposed_pose": [1.0, 0.0],
+                "report_index": 4,
+                "catalog_key": "k4",
+                "added_assignment_retained": False,
+            },
+        },
+    ]
+    counts = _replay_composite_events(
+        rows,
+        events_by_mode,
+        DroppedEdgeFakeScorer(),
+        {},
+        validated_serial_audit_modes=set(range(60)),
+    )
+    assert counts["serial_audited_branch_results_reused"] == 1

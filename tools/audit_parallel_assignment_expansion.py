@@ -597,6 +597,17 @@ def _replay_composite_events(
             _same_score(best_score, final_best.score),
             f"mode {mode} final score differs from branch sequence",
         )
+        final_exact = evaluate_exact_position(
+            scorer, cache, (final_best.east_m, final_best.north_m)
+        )
+        require(
+            final_exact.status == "scored" and final_exact.hypothesis is not None,
+            f"mode {mode} final best cannot be canonically scored",
+        )
+        require(
+            _same_hypothesis(final_best, final_exact.hypothesis),
+            f"mode {mode} final best differs from canonical scorer hypothesis",
+        )
         if winning_branch is None:
             require(
                 _same_hypothesis(seed, final_best),
@@ -609,13 +620,15 @@ def _replay_composite_events(
                 and float(winning_pose[1]) == final_best.north_m,
                 f"mode {mode} final best pose differs from strict winning branch",
             )
+            winning_edge_retained = any(
+                item.report_index == winning_branch.get("report_index")
+                and item.catalog_key == winning_branch.get("catalog_key")
+                for item in final_best.assignments
+            )
             require(
-                any(
-                    item.report_index == winning_branch.get("report_index")
-                    and item.catalog_key == winning_branch.get("catalog_key")
-                    for item in final_best.assignments
-                ),
-                f"mode {mode} final best omits winning branch assignment",
+                type(winning_branch.get("added_assignment_retained")) is bool
+                and winning_branch.get("added_assignment_retained") is winning_edge_retained,
+                f"mode {mode} winning branch assignment retention differs from final best",
             )
         require(
             row.get("counters", {}).get("visited_branches", 0)
