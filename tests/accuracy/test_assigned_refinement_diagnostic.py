@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import cast
@@ -12,7 +13,9 @@ from bearing_localization.search.likelihood import LikelihoodCostMatrix
 from bearing_localization.search.prediction import PredictedGroupSet
 from bearing_localization.search.scoring import CandidateEvaluation, CandidateScorer
 from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
-from tools.run_assigned_refinement_diagnostic import (
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools.run_assigned_refinement_diagnostic import (  # noqa: E402
     DiagnosticInputError,
     _hypothesis,
     _row_from_dict,
