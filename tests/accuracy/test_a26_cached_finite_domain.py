@@ -42,19 +42,38 @@ def test_chunk_checkpoint_appends_ordered_audit_rows(tmp_path: Path) -> None:
 def test_candidate_dispositions_keep_dispatched_work_unknown(tmp_path: Path) -> None:
     output = tmp_path / "out"
     output.mkdir()
+    plan_rows = [
+        {"candidate_id": f"cell:{letter}", "position_xy_m": [float(i), 0.0]}
+        for i, letter in enumerate("abc")
+    ]
     (output / "candidate-plan.jsonl").write_text(
-        "".join(json.dumps({"candidate_id": f"cell:{letter}"}) + "\n" for letter in "abc")
+        "".join(json.dumps(row) + "\n" for row in plan_rows)
     )
-    (output / "chunk-results.jsonl").write_text(
+    (output / "chunk-results").mkdir()
+    (output / "hypotheses").mkdir()
+    hypothesis_path = output / "hypotheses/chunk-00000000.json"
+    hypothesis_path.write_text(
+        json.dumps(
+            [{"input_index": 0, "hypothesis": {"east_m": 0.0, "north_m": 0.0, "score": 0.0}}]
+        )
+    )
+    (output / "chunk-results/chunk-00000000.json").write_text(
         json.dumps(
             {
                 "chunk_index": 0,
+                "candidate_count": 1,
+                "hypotheses_sha256": sha256_file(hypothesis_path),
                 "candidates": [
-                    {"candidate_id": "cell:a", "action": "exact_scored", "input_index": 0}
+                    {
+                        "candidate_id": "cell:a",
+                        "action": "exact_scored",
+                        "input_index": 0,
+                        "position_xy_m": [0.0, 0.0],
+                        "score": 0.0,
+                    }
                 ],
             }
         )
-        + "\n"
     )
     (output / "checkpoint.json").write_text(json.dumps({"pool_timings": {"input_count": 2}}))
 
@@ -319,18 +338,36 @@ def test_prefix_profile_marks_unselected_candidates_without_certifying_domain(
 ) -> None:
     output = tmp_path / "out"
     output.mkdir()
-    plan = [{"candidate_id": f"cell:{letter}"} for letter in "abc"]
+    plan = [
+        {"candidate_id": f"cell:{letter}", "position_xy_m": [float(i), 0.0]}
+        for i, letter in enumerate("abc")
+    ]
     (output / "candidate-plan.jsonl").write_text("".join(json.dumps(row) + "\n" for row in plan))
     (output / "candidate-inventory.jsonl").write_text(
         "".join(json.dumps({"candidate_id": row["candidate_id"]}) + "\n" for row in plan)
     )
     (output / "chunk-results").mkdir()
+    (output / "hypotheses").mkdir()
+    hypothesis_path = output / "hypotheses/chunk-00000000.json"
+    hypothesis_path.write_text(
+        json.dumps(
+            [{"input_index": 0, "hypothesis": {"east_m": 0.0, "north_m": 0.0, "score": 0.0}}]
+        )
+    )
     (output / "chunk-results/chunk-00000000.json").write_text(
         json.dumps(
             {
                 "chunk_index": 0,
+                "candidate_count": 1,
+                "hypotheses_sha256": sha256_file(hypothesis_path),
                 "candidates": [
-                    {"candidate_id": "cell:a", "action": "exact_scored", "input_index": 0}
+                    {
+                        "candidate_id": "cell:a",
+                        "action": "exact_scored",
+                        "input_index": 0,
+                        "position_xy_m": [0.0, 0.0],
+                        "score": 0.0,
+                    }
                 ],
             }
         )
@@ -423,16 +460,40 @@ def test_resume_reuses_only_identity_matched_durable_chunks(tmp_path: Path) -> N
         json.dumps(
             {
                 "chunk_index": 0,
+                "candidate_count": 1,
                 "candidates": [
-                    {"candidate_id": "cell:a", "input_index": 0, "action": "exact_scored"}
+                    {
+                        "candidate_id": "cell:a",
+                        "input_index": 0,
+                        "position_xy_m": [1.0, 2.0],
+                        "score": 0.0,
+                        "action": "exact_scored",
+                    }
                 ],
             }
         )
     )
     hypothesis = source / "hypotheses/chunk-00000000.json"
-    hypothesis.write_text("[]\n")
+    hypothesis.write_text(
+        json.dumps(
+            [
+                {
+                    "input_index": 0,
+                    "hypothesis": {"east_m": 1.0, "north_m": 2.0, "score": 0.0},
+                }
+            ]
+        )
+    )
+    chunk_document = json.loads(chunk.read_text())
+    chunk_document["hypotheses_sha256"] = sha256_file(hypothesis)
+    chunk.write_text(json.dumps(chunk_document))
     (source / "run-manifest.json").write_text(
-        json.dumps({"chunk_results_sha256": sha256_tree(source / "chunk-results")})
+        json.dumps(
+            {
+                "chunk_results_sha256": sha256_tree(source / "chunk-results"),
+                "hypotheses_sha256": sha256_tree(source / "hypotheses"),
+            }
+        )
     )
     (source / "candidate-plan.jsonl").write_text(
         '{"candidate_id":"cell:a","position_xy_m":[1.0,2.0]}\n'
@@ -472,21 +533,30 @@ def test_durable_chunks_are_checked_against_global_candidate_plan(tmp_path: Path
         {"candidate_id": "cell:a", "position_xy_m": [1.0, 2.0]},
         {"candidate_id": "cell:b", "position_xy_m": [3.0, 4.0]},
     ]
-    chunk = {
-        "chunk_index": 4,
-        "candidate_count": 1,
-        "candidates": [
-            {
-                "candidate_id": "cell:b",
-                "input_index": 1,
-                "position_xy_m": [3.0, 4.0],
-                "action": "exact_scored",
-            }
-        ],
+    candidate = {
+        "candidate_id": "cell:b",
+        "input_index": 1,
+        "position_xy_m": [3.0, 4.0],
+        "action": "exact_scored",
+        "score": 0.0,
     }
-    (output / "hypotheses/chunk-00000004.json").write_text(
-        json.dumps([{"input_index": 1, "hypothesis": {"score": 0.0}}])
+    chunk = {
+        "chunk_index": 0,
+        "candidate_count": 1,
+        "candidates": [candidate],
+    }
+    hypothesis_path = output / "hypotheses/chunk-00000000.json"
+    hypothesis_path.write_text(
+        json.dumps(
+            [
+                {
+                    "input_index": 1,
+                    "hypothesis": {"east_m": 3.0, "north_m": 4.0, "score": 0.0},
+                }
+            ]
+        )
     )
+    chunk["hypotheses_sha256"] = sha256_file(hypothesis_path)
     assert validate_durable_chunk_history(records=records, chunks=[chunk], output_root=output) == {
         "cell:b"
     }
@@ -495,3 +565,29 @@ def test_durable_chunks_are_checked_against_global_candidate_plan(tmp_path: Path
     bad_chunk["candidates"][0]["input_index"] = 0
     with pytest.raises(ValueError, match="input index differs"):
         validate_durable_chunk_history(records=records, chunks=[bad_chunk], output_root=output)
+
+    sidecar = json.loads(hypothesis_path.read_text())
+    sidecar[0]["input_index"] = 0
+    hypothesis_path.write_text(json.dumps(sidecar))
+    bad_sidecar_chunk = json.loads(json.dumps(chunk))
+    bad_sidecar_chunk["hypotheses_sha256"] = sha256_file(hypothesis_path)
+    with pytest.raises(ValueError, match="is not exact-scored"):
+        validate_durable_chunk_history(
+            records=records, chunks=[bad_sidecar_chunk], output_root=output
+        )
+
+    hypothesis_path.write_text(
+        json.dumps(
+            [
+                {
+                    "input_index": 1,
+                    "hypothesis": {"east_m": 3.0, "north_m": 4.0, "score": 0.0},
+                }
+            ]
+        )
+    )
+    gap_chunk = json.loads(json.dumps(chunk))
+    gap_chunk["chunk_index"] = 2
+    (output / "hypotheses/chunk-00000002.json").write_text(hypothesis_path.read_text())
+    with pytest.raises(ValueError, match="contiguous prefix"):
+        validate_durable_chunk_history(records=records, chunks=[gap_chunk], output_root=output)
