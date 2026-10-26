@@ -1,0 +1,45 @@
+{
+  "schema": "a39-development-scene-coverage-v1",
+  "snapshot_date": "2026-10-26",
+  "source": {
+    "commit": "fcac843526862253ea5f8cbd9d09b448ac927fee",
+    "path": "results/accuracy/development-information-summary-2026-10-26.json",
+    "sha256": "0d59b959bcf8c482dba0db9c62dd0f0fee4d6dba761d64afc76dcc8b0d6e15ba"
+  },
+  "unit_of_count": "physical scenes; report_types=true rows used once, report_types=false rows omitted because on/off rows are paired views of the same scenes",
+  "ranges": [
+    {
+      "range_km": 1,
+      "nominal_physical_scene_pairs": 600,
+      "supported": 269,
+      "unsupported": 331
+    },
+    {
+      "range_km": 5,
+      "nominal_physical_scene_pairs": 600,
+      "supported": 438,
+      "unsupported": 162
+    },
+    {
+      "range_km": 10,
+      "nominal_physical_scene_pairs": 600,
+      "supported": 448,
+      "unsupported": 152
+    }
+  ],
+  "unique_physical_scene_pairs": 1800,
+  "supported_physical_scenes": 1155,
+  "unsupported_physical_scenes": 645,
+  "known_association_geometry_strata_supported_unique_scenes": {
+    "<=25m": 1029,
+    "25-100m": 106,
+    ">100m": 20,
+    "singular": 0
+  },
+  "geometry_denominator": 1155,
+  "interpretation": "Dataset support and known-association geometry only; not localization/search accuracy. Geometry strata are descriptive and do not establish an oracle error bound.",
+  "heldout_inputs_read": false,
+  "search_outputs_read": false,
+  "validation_outcomes_read": false,
+  "author": "J.C. Vaught"
+}

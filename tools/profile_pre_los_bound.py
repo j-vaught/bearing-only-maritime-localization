@@ -29,6 +29,23 @@ from maritime_localization_shared.serialization import read_contract
 ABS_TOL = 1e-8
 REL_TOL = 1e-10
 THREAD_KEYS = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
+SCORE_CONFIG_KEYS = (
+    "objective_version",
+    "min_range_m",
+    "max_range_m",
+    "range_inclusive",
+    "circular_merge_tolerance_deg",
+    "generated_sigma_deg",
+    "sigma_floor_deg",
+    "detection_probability",
+    "bearing_outlier_probability",
+    "expected_unmatched_reports",
+    "correct_type_probability",
+    "use_types",
+    "common_bearing_bias_prior_deg",
+    "absolute_score_tolerance",
+    "relative_score_tolerance",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +79,115 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _scoring_config_projection(values: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(values)
+    normalized.pop("contract_type", None)
+    normalized.pop("proposal_cache_path", None)
+    config = SearchConfig(**normalized)
+    return {key: getattr(config, key) for key in SCORE_CONFIG_KEYS}
+
+
+def load_truth_free_expanded_incumbent(
+    manifest_path: Path,
+    rows_path: Path,
+    *,
+    expected_static_hashes: dict[str, str],
+    active_config: dict[str, Any],
+    expected_score: float,
+) -> tuple[CandidatePoint, float, dict[str, Any]]:
+    """Select and validate the lowest-score completed row from truth-free raw output."""
+    manifest = json.loads(manifest_path.read_text())
+    if manifest.get("schema") != "assignment-expansion-diagnostic-v1":
+        raise ValueError("Expanded incumbent manifest has an unexpected schema")
+    if manifest.get("truth_used") is not False or manifest.get("evaluator_used") is not False:
+        raise ValueError("Expanded incumbent source must explicitly exclude truth and evaluation")
+    rows_sha = sha256_file(rows_path)
+    if rows_sha != manifest.get("rows_sha256"):
+        raise ValueError("Expanded incumbent rows do not match the saved manifest hash")
+    source_input_hashes = (
+        manifest.get("source_pins", {})
+        .get("attempt_tree_bindings", {})
+        .get("identity", {})
+        .get("static_input_sha256")
+    )
+    expected = {
+        "measurements": expected_static_hashes["measurements.json"],
+        "catalog": expected_static_hashes["catalog.json"],
+        "map": expected_static_hashes["map.json"],
+    }
+    if source_input_hashes != expected:
+        raise ValueError("Expanded incumbent uses different measurement, catalog, or map inputs")
+    source_config_pins = manifest.get("source_pins", {})
+    source_config_path = Path(source_config_pins.get("config_path", manifest["config_path"]))
+    expected_config_hash = source_config_pins.get("config_sha256", manifest.get("config_sha256"))
+    if expected_config_hash is None or sha256_file(source_config_path) != expected_config_hash:
+        raise ValueError("Expanded incumbent scoring configuration hash is invalid")
+    source_config = json.loads(source_config_path.read_text())
+    source_projection = _scoring_config_projection(source_config)
+    active_projection = _scoring_config_projection(active_config)
+    if source_projection != active_projection:
+        raise ValueError("Expanded incumbent scoring objective/config differs from this profile")
+    excluded_config_fields = {"candidate_budget", "proposal_cache_path"}
+    config_differences = {
+        key: {"source": source_config.get(key), "profile": active_config.get(key)}
+        for key in sorted(set(source_config) | set(active_config))
+        if source_config.get(key) != active_config.get(key)
+    }
+    if any(key not in excluded_config_fields for key in config_differences):
+        raise ValueError("Expanded incumbent differs in a non-search scoring configuration field")
+    rows: list[tuple[float, int, dict[str, Any]]] = []
+    for row_index, line in enumerate(rows_path.read_text().splitlines()):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        hypothesis = row.get("best_hypothesis")
+        if row.get("completed") is not True or row.get("budget_exhausted") is True:
+            continue
+        if not isinstance(hypothesis, dict) or not isinstance(row.get("candidate_id"), str):
+            continue
+        score = hypothesis.get("score")
+        east, north = hypothesis.get("east_m"), hypothesis.get("north_m")
+        if (
+            isinstance(score, bool)
+            or not isinstance(score, (int, float))
+            or not math.isfinite(score)
+            or isinstance(east, bool)
+            or isinstance(north, bool)
+            or not isinstance(east, (int, float))
+            or not isinstance(north, (int, float))
+            or not math.isfinite(east)
+            or not math.isfinite(north)
+        ):
+            continue
+        rows.append((float(score), row_index, row))
+    if not rows:
+        raise ValueError("Expanded incumbent source contains no completed finite score rows")
+    raw_score, row_index, winning_row = min(rows, key=lambda item: (item[0], item[1]))
+    if not math.isclose(raw_score, expected_score, abs_tol=ABS_TOL, rel_tol=REL_TOL):
+        raise ValueError("Truth-free expanded scorewinner differs from expected diagnostic value")
+    hypothesis = winning_row["best_hypothesis"]
+    point = CandidatePoint(
+        winning_row["candidate_id"],
+        (float(hypothesis["east_m"]), float(hypothesis["north_m"])),
+    )
+    provenance = {
+        "manifest_sha256": sha256_file(manifest_path),
+        "rows_sha256": rows_sha,
+        "source_config_sha256": expected_config_hash,
+        "raw_winner_row_index": row_index,
+        "raw_winner_mode_index": winning_row.get("mode_index"),
+        "raw_winner_candidate_id": point.candidate_id,
+        "raw_winner_declared_score": raw_score,
+        "raw_winner_position_xy_m": list(point.position_xy_m),
+        "completed_score_row_count": len(rows),
+        "source_truth_used": False,
+        "source_evaluator_used": False,
+        "scoring_config_projection_matches": True,
+        "search_only_config_differences": config_differences,
+    }
+    return point, raw_score, provenance
 
 
 def _activity() -> dict[str, Any]:
@@ -112,6 +238,22 @@ def _exact(scorer: CandidateScorer, position: tuple[float, float]):
     return scorer.evaluate(position)
 
 
+def _best_and_ties(
+    scores: dict[str, float], ordered_ids: Sequence[str]
+) -> tuple[float | None, list[str]]:
+    """Return the best finite score and its tied IDs, or an empty result."""
+    if not scores:
+        return None, []
+    best = min(scores.values())
+    tied = [
+        candidate_id
+        for candidate_id in ordered_ids
+        if candidate_id in scores
+        and math.isclose(scores[candidate_id], best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
+    ]
+    return best, tied
+
+
 def _isclose_tie_margin(best_score: float, *, abs_tol: float, rel_tol: float) -> float:
     """Return a strict score gap outside math.isclose's tie band."""
     if not 0.0 <= rel_tol < 1.0 or abs_tol < 0.0:
@@ -124,16 +266,30 @@ def pre_los_screen(
     scorer: CandidateScorer,
     candidates: Sequence[CandidatePoint],
     *,
-    incumbent_id: str,
+    incumbent_id: str | None = None,
     saved_incumbent_score: float,
+    external_incumbent: CandidatePoint | None = None,
 ) -> tuple[tuple[CandidateDisposition, ...], dict[str, Any]]:
     """Experimental serial controller; every unsupported case uses exact scoring."""
     by_id = {candidate.candidate_id: candidate for candidate in candidates}
     if len(by_id) != len(candidates):
         raise ValueError("candidate IDs must be unique")
-    seed = by_id.get(incumbent_id)
-    if seed is None or not math.isfinite(saved_incumbent_score):
-        raise ValueError("A saved finite exact incumbent in the candidate sample is required")
+    if (incumbent_id is None) == (external_incumbent is None):
+        raise ValueError("provide exactly one in-sample or external incumbent")
+    if not math.isfinite(saved_incumbent_score):
+        raise ValueError("a finite saved exact incumbent score is required")
+    if external_incumbent is None:
+        seed = by_id.get(incumbent_id)
+        if seed is None:
+            raise ValueError("saved exact incumbent ID is absent from the candidate sample")
+        incumbent_key = seed.candidate_id
+    else:
+        seed = external_incumbent
+        if seed.candidate_id in by_id:
+            raise ValueError("external incumbent ID must be outside the candidate sample")
+        if any(candidate.position_xy_m == seed.position_xy_m for candidate in candidates):
+            raise ValueError("external incumbent position must be outside the candidate sample")
+        incumbent_key = seed.candidate_id
     timing: dict[str, float] = {
         "incumbent_validation_s": 0.0,
         "preparation_s": 0.0,
@@ -144,16 +300,16 @@ def pre_los_screen(
     seed_evaluation = _exact(scorer, seed.position_xy_m)
     timing["incumbent_validation_s"] = time.perf_counter() - exact_start
     if seed_evaluation.status != "scored" or seed_evaluation.hypothesis is None:
-        raise ValueError("Saved incumbent is not exactly scoreable by current scorer")
+        raise ValueError("saved incumbent is not exactly scoreable by current scorer")
     incumbent_score = float(seed_evaluation.hypothesis.score)
     if not math.isclose(incumbent_score, saved_incumbent_score, abs_tol=ABS_TOL, rel_tol=REL_TOL):
-        raise ValueError("Revalidated incumbent score differs from score-only artifact")
+        raise ValueError("revalidated incumbent score differs from score-only artifact")
 
     dispositions: list[CandidateDisposition] = []
-    exact_results: dict[str, Any] = {incumbent_id: seed_evaluation}
+    exact_results: dict[str, Any] = {incumbent_key: seed_evaluation}
     margins: list[float] = []
     for candidate in candidates:
-        if candidate.candidate_id == incumbent_id:
+        if external_incumbent is None and candidate.candidate_id == incumbent_id:
             dispositions.append(
                 CandidateDisposition(
                     candidate.candidate_id,
@@ -180,11 +336,7 @@ def pre_los_screen(
                 abs_tol=scorer.config.absolute_score_tolerance,
                 rel_tol=scorer.config.relative_score_tolerance,
             ),
-            _isclose_tie_margin(
-                incumbent_score,
-                abs_tol=ABS_TOL,
-                rel_tol=REL_TOL,
-            ),
+            _isclose_tie_margin(incumbent_score, abs_tol=ABS_TOL, rel_tol=REL_TOL),
         )
         margins.append(margin)
         incumbent_score_before = incumbent_score
@@ -264,7 +416,15 @@ def pre_los_screen(
         )
     timing["margin_min"] = min(margins, default=0.0)
     timing["margin_max"] = max(margins, default=0.0)
-    return tuple(dispositions), {"stage_seconds": timing, "exact_results": exact_results}
+    return tuple(dispositions), {
+        "stage_seconds": timing,
+        "exact_results": exact_results,
+        "incumbent_candidate_id": incumbent_key,
+        "incumbent_position_xy_m": list(seed.position_xy_m),
+        "incumbent_score": incumbent_score,
+        "incumbent_outside_candidate_set": external_incumbent is not None,
+        "candidate_count": len(candidates),
+    }
 
 
 def independently_validate_prunes(
@@ -317,6 +477,9 @@ def main() -> int:
         help="cached-profile input-hash and exact-audit artifact",
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--incumbent-manifest", type=Path)
+    parser.add_argument("--incumbent-rows", type=Path)
+    parser.add_argument("--expected-incumbent-score", type=float)
     parser.add_argument(
         "--lock",
         type=Path,
@@ -325,6 +488,11 @@ def main() -> int:
     )
     parser.add_argument("--run-screening", action="store_true")
     args = parser.parse_args()
+    incumbent_args = (args.incumbent_manifest, args.incumbent_rows, args.expected_incumbent_score)
+    if any(value is not None for value in incumbent_args) and not all(
+        value is not None for value in incumbent_args
+    ):
+        parser.error("incumbent manifest, rows, and expected score must be supplied together")
     lock_fd = os.open(args.lock, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -375,10 +543,14 @@ def main() -> int:
         raise ValueError("Selection manifest hash differs from A22 exact-score artifact")
     config_hash = sha256_file(args.config)
     config_data = json.loads(args.config.read_text())
+    raw_config_data = dict(config_data)
     config_data.pop("contract_type", None)
     config_data.pop("proposal_cache_path", None)
     if config_hash != score_artifact["config_sha256"]:
         raise ValueError("Scoring configuration hash differs from A22 exact-score artifact")
+    scoring_config_hash = hashlib.sha256(
+        json.dumps(_scoring_config_projection(config_data), sort_keys=True).encode()
+    ).hexdigest()
     for key, expected in profile_metadata["config"].items():
         if config_data.get(key) != expected:
             raise ValueError(f"Effective config field differs from exact reference: {key}")
@@ -419,6 +591,23 @@ def main() -> int:
             raise ValueError(
                 f"Candidate score differs from cached-profile audit for {candidate.candidate_id}"
             )
+    external_incumbent = None
+    external_incumbent_raw_score = None
+    external_incumbent_provenance = None
+    if args.incumbent_manifest is not None:
+        external_incumbent, external_incumbent_raw_score, external_incumbent_provenance = (
+            load_truth_free_expanded_incumbent(
+                args.incumbent_manifest,
+                args.incumbent_rows,
+                expected_static_hashes=static_hashes,
+                active_config=raw_config_data,
+                expected_score=args.expected_incumbent_score,
+            )
+        )
+        if external_incumbent.candidate_id in {item.candidate_id for item in candidates}:
+            raise ValueError("expanded incumbent ID overlaps the frozen candidate sample")
+        if external_incumbent.position_xy_m in {item.position_xy_m for item in candidates}:
+            raise ValueError("expanded incumbent position overlaps the frozen candidate sample")
     measurements = read_contract(args.static / "measurements.json", MeasurementSetV2)
     catalog = read_contract(args.static / "catalog.json", CatalogV2)
     map_input = read_contract(args.static / "map.json", MapV2)
@@ -432,8 +621,30 @@ def main() -> int:
         (candidate.candidate_id, _exact(scorer, candidate.position_xy_m))
         for candidate in candidates
     ]
-    exact_wall = time.perf_counter() - direct_start
+    exact_candidate_wall = time.perf_counter() - direct_start
     exact_by_id = dict(exact_results)
+    external_incumbent_evaluation = None
+    external_incumbent_validation_s = 0.0
+    if external_incumbent is not None:
+        assert external_incumbent_raw_score is not None
+        external_start = time.perf_counter()
+        external_incumbent_evaluation = _exact(scorer, external_incumbent.position_xy_m)
+        external_incumbent_validation_s = time.perf_counter() - external_start
+        if (
+            external_incumbent_evaluation.status != "scored"
+            or external_incumbent_evaluation.hypothesis is None
+        ):
+            raise ValueError(
+                "expanded incumbent is not exactly scoreable by the frozen profile scorer"
+            )
+        if not math.isclose(
+            external_incumbent_evaluation.hypothesis.score,
+            external_incumbent_raw_score,
+            abs_tol=ABS_TOL,
+            rel_tol=REL_TOL,
+        ):
+            raise ValueError("expanded incumbent score differs under the frozen profile scorer")
+    exact_wall = exact_candidate_wall + external_incumbent_validation_s
     for audit in a22_exact_audits:
         evaluation = exact_by_id[audit["candidate_id"]]
         direct_score = float(evaluation.hypothesis.score) if evaluation.hypothesis else None
@@ -451,6 +662,8 @@ def main() -> int:
         "selected_count": len(candidates),
         "setup_elapsed_s": setup_elapsed,
         "direct_exact_wall_s": exact_wall,
+        "direct_exact_candidate_wall_s": exact_candidate_wall,
+        "direct_exact_incumbent_validation_s": external_incumbent_validation_s,
         "direct_exact_status_counts": dict(Counter(value.status for _, value in exact_results)),
         "direct_exact_audits": [
             {
@@ -467,16 +680,29 @@ def main() -> int:
     }
     if args.run_screening:
         screen_start = time.perf_counter()
+        screen_saved_incumbent_score = saved_incumbent_score
+        if external_incumbent is not None:
+            assert external_incumbent_raw_score is not None
+            screen_saved_incumbent_score = external_incumbent_raw_score
         dispositions, screened_info = pre_los_screen(
             scorer,
             candidates,
-            incumbent_id=incumbent_id,
-            saved_incumbent_score=saved_incumbent_score,
+            incumbent_id=incumbent_id if external_incumbent is None else None,
+            saved_incumbent_score=screen_saved_incumbent_score,
+            external_incumbent=external_incumbent,
         )
         screen_wall = time.perf_counter() - screen_start
         pruned = [item for item in dispositions if item.action == "proposed_prune"]
+        exact_union_scores = [
+            float(value.hypothesis.score)
+            for value in exact_by_id.values()
+            if value.status == "scored" and value.hypothesis is not None
+        ]
+        if external_incumbent_evaluation is not None:
+            exact_union_scores.append(float(external_incumbent_evaluation.hypothesis.score))
+        exact_union_best = min(exact_union_scores)
         validation, validation_elapsed = independently_validate_prunes(
-            scorer, pruned, exact_best_score=float(exact_reference["best_score"])
+            scorer, pruned, exact_best_score=exact_union_best
         )
         if len(dispositions) != len(candidates) or len(
             {item.candidate_id for item in dispositions}
@@ -524,10 +750,14 @@ def main() -> int:
             raise AssertionError(
                 "current direct exact scores differ from saved score-only artifact"
             )
-        screened_scores = {
+        screened_all_scores = {
             key: float(value.hypothesis.score)
             for key, value in screened_info["exact_results"].items()
             if value.status == "scored" and value.hypothesis is not None
+        }
+        candidate_ids = {candidate.candidate_id for candidate in candidates}
+        screened_scores = {
+            key: value for key, value in screened_all_scores.items() if key in candidate_ids
         }
         exact_best = min(exact_scores.values())
         if not math.isclose(exact_best, a22_best_score, abs_tol=ABS_TOL, rel_tol=REL_TOL):
@@ -539,7 +769,6 @@ def main() -> int:
         ]
         if exact_ties_from_a22 != exact_reference["tie_candidate_ids"]:
             raise AssertionError("A22 and cached-profile exact artifacts disagree on tie IDs")
-        screened_best = min(screened_scores.values())
         exact_ties = [
             candidate.candidate_id
             for candidate in candidates
@@ -548,22 +777,43 @@ def main() -> int:
                 exact_scores[candidate.candidate_id], exact_best, abs_tol=ABS_TOL, rel_tol=REL_TOL
             )
         ]
-        screened_ties = [
-            candidate.candidate_id
-            for candidate in candidates
-            if candidate.candidate_id in screened_scores
-            and math.isclose(
-                screened_scores[candidate.candidate_id],
-                screened_best,
-                abs_tol=ABS_TOL,
-                rel_tol=REL_TOL,
-            )
-        ]
-        parity = (
-            math.isclose(exact_best, screened_best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
-            and exact_ties == screened_ties
-            and screened_ties == exact_ties_from_a22
+        screened_best, screened_ties = _best_and_ties(
+            screened_scores, [candidate.candidate_id for candidate in candidates]
         )
+        sample_parity = (
+            None
+            if external_incumbent is not None
+            else bool(
+                screened_best is not None
+                and math.isclose(exact_best, screened_best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
+                and exact_ties == screened_ties
+                and screened_ties == exact_ties_from_a22
+            )
+        )
+        exact_union_id_score = dict(exact_scores)
+        if external_incumbent_evaluation is not None:
+            assert external_incumbent is not None
+            assert external_incumbent_evaluation.hypothesis is not None
+            exact_union_id_score[external_incumbent.candidate_id] = float(
+                external_incumbent_evaluation.hypothesis.score
+            )
+        screened_union_id_score = dict(screened_all_scores)
+        exact_union_best = min(exact_union_id_score.values())
+        screened_union_best = min(screened_union_id_score.values())
+        exact_union_ties = sorted(
+            candidate_id
+            for candidate_id, score in exact_union_id_score.items()
+            if math.isclose(score, exact_union_best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
+        )
+        screened_union_ties = sorted(
+            candidate_id
+            for candidate_id, score in screened_union_id_score.items()
+            if math.isclose(score, screened_union_best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
+        )
+        union_parity = math.isclose(
+            exact_union_best, screened_union_best, abs_tol=ABS_TOL, rel_tol=REL_TOL
+        ) and set(exact_union_ties) == set(screened_union_ties)
+        parity = (sample_parity is not False) and union_parity
         if not parity:
             raise AssertionError(
                 {
@@ -571,6 +821,10 @@ def main() -> int:
                     "screened_best": screened_best,
                     "exact_ties": exact_ties,
                     "screened_ties": screened_ties,
+                    "exact_union_best": exact_union_best,
+                    "screened_union_best": screened_union_best,
+                    "exact_union_ties": exact_union_ties,
+                    "screened_union_ties": screened_union_ties,
                 }
             )
         result.update(
@@ -584,15 +838,44 @@ def main() -> int:
                 "all_pruned_candidates_outside_exact_best_tie_set": True,
                 "candidate_accounting_complete": len(dispositions) == len(candidates),
                 "prune_ids_unique": len({item.candidate_id for item in pruned}) == len(pruned),
-                "unsupported_exact_fallback_count": sum(
+                "exact_action_count": sum(
+                    item.action.startswith("exact_") for item in dispositions
+                ),
+                "unsupported_preparation_exact_fallback_count": sum(
                     item.action.startswith("exact_") and item.preparation_supported is False
                     for item in dispositions
                 ),
-                "best_score": screened_best,
-                "tie_candidate_ids": screened_ties,
+                "unsupported_bound_exact_fallback_count": sum(
+                    item.action.startswith("exact_") and item.bound_supported is False
+                    for item in dispositions
+                ),
+                "unresolved_coverage_exact_fallback_count": sum(
+                    item.exact_status == "unresolved_coverage" for item in dispositions
+                ),
+                "invalid_water_exact_status_count": sum(
+                    item.exact_status == "invalid_water" for item in dispositions
+                ),
+                "best_score": screened_union_best,
+                "tie_candidate_ids": screened_union_ties,
+                "candidate_sample_best_score": screened_best,
+                "candidate_sample_best_preserved": sample_parity,
+                "candidate_sample_tie_candidate_ids": screened_ties,
                 "saved_a22_exact_best_score": a22_best_score,
                 "saved_a22_exact_tie_ids": exact_ties_from_a22,
                 "score_and_tie_parity": parity,
+                "sample_score_and_tie_parity": sample_parity,
+                "union_score_and_tie_parity": union_parity,
+                "exact_union_best_score": exact_union_best,
+                "screened_union_best_score": screened_union_best,
+                "exact_union_tie_candidate_ids": exact_union_ties,
+                "screened_union_tie_candidate_ids": screened_union_ties,
+                "incumbent_outside_candidate_set": external_incumbent is not None,
+                "expanded_incumbent_source": external_incumbent_provenance,
+                "expanded_incumbent_exact_revalidated_score": (
+                    external_incumbent_evaluation.hypothesis.score
+                    if external_incumbent_evaluation is not None
+                    else None
+                ),
                 "screened_exact_status_counts": dict(
                     Counter(
                         item.exact_status for item in dispositions if item.exact_status is not None
@@ -620,9 +903,18 @@ def main() -> int:
             "score_artifact_sha256": sha256_file(args.score_only),
             "profile_metadata_sha256": sha256_file(args.profile_metadata),
             "profile_source_commit": profile_metadata.get("scoring_source_sha"),
-            "incumbent_candidate_id": incumbent_id,
-            "saved_incumbent_score": saved_incumbent_score,
+            "incumbent_candidate_id": (
+                external_incumbent.candidate_id if external_incumbent is not None else incumbent_id
+            ),
+            "saved_incumbent_score": (
+                external_incumbent_raw_score
+                if external_incumbent is not None
+                else saved_incumbent_score
+            ),
+            "active_scoring_config_projection_sha256": scoring_config_hash,
             "incumbent_exact_revalidated_before_screening": True,
+            "incumbent_outside_candidate_set": external_incumbent is not None,
+            "expanded_incumbent_source": external_incumbent_provenance,
             "thread_settings": {key: os.environ.get(key, "<unset>") for key in THREAD_KEYS},
             "peak_rss_mib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
             "no_truth_or_held_out_data": True,

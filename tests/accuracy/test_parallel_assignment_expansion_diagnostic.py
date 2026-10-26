@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 import types
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -117,6 +117,120 @@ def test_input_selection_matches_serial_best_of_two_and_keeps_mode_ids(
     assert [item["candidate_id"] for item in metadata.values()] == ["cell:0", "cell:1"]
     assert len({task.input_digest for task in tasks}) == 2
     assert all(len(item["start_alternatives"]) == 2 for item in metadata.values())
+    assert all(item["seed_stage"] == "best_saved" for item in metadata.values())
+    assert all(
+        item["candidate_branch_count_delta_vs_best_saved"] == 0 for item in metadata.values()
+    )
+    explicit_tasks, explicit_metadata = runner.prepare_mode_tasks(
+        rows, pins, identity, config, scorer, seed_stage="best_saved"
+    )
+    assert explicit_tasks == tasks
+    assert explicit_metadata == metadata
+
+
+def test_coarse_seed_uses_original_a20_cached_pose_despite_better_saved_refined_pose() -> None:
+    from bearing_localization.search.assigned_bearing_refinement import refine_assigned_bearing
+    from bearing_localization.search.assignment_expansion import ExpansionConfig
+    from bearing_localization.search.config import SearchConfig
+    from bearing_localization.search.refinement import refine_modes
+    from bearing_localization.search.scoring import CandidateScorer
+    from tests.accuracy.test_a20 import _inputs, _xy
+
+    measurements, catalog, vector_map = _inputs(noisy=True)
+    east, north = _xy()
+    search_config = SearchConfig(
+        bounds_xy=(east - 1000.0, east + 1000.0, north - 1000.0, north + 1000.0),
+        max_range_m=8000.0,
+    )
+    scorer = CandidateScorer(measurements, catalog, vector_map, search_config)
+    original_cached = scorer.evaluate((east + 250.0, north - 250.0)).hypothesis
+    assert original_cached is not None
+    a20_refinement = refine_modes(
+        measurements,
+        catalog,
+        vector_map,
+        search_config,
+        [original_cached],
+        initial_step_m=250,
+    ).modes[0]
+    pattern_refined = a20_refinement.hypothesis
+    assert pattern_refined is not None and pattern_refined.score < original_cached.score
+    assigned_refinement = refine_assigned_bearing(scorer, pattern_refined)
+    assigned_refined = assigned_refinement.exact_hypothesis or pattern_refined
+    assert assigned_refined.score < original_cached.score
+
+    mode_identity = {"candidate_id": "production-fixture-cell", "input_index": 17}
+    from tools.run_assigned_refinement_diagnostic import ModeRow
+
+    a20_row = ModeRow(
+        mode_index=0,
+        input_index=mode_identity["input_index"],
+        candidate_id=mode_identity["candidate_id"],
+        chunk_name="fixture-chunk.json",
+        chunk_sha256="a" * 64,
+        sidecar_sha256="b" * 64,
+        cached_hypothesis=original_cached,
+        refined_hypothesis=pattern_refined,
+    )
+    assigned_row = {
+        "mode_index": 0,
+        **mode_identity,
+        "starts": [
+            {"label": "cached_hypothesis", "final_hypothesis": asdict(pattern_refined)},
+            {"label": "refined_mode.hypothesis", "final_hypothesis": asdict(assigned_refined)},
+        ],
+    }
+    identity = runner._loaded_package_identity()
+    config = ExpansionConfig(local_radius_m=1000.0, max_nfev=100, max_branches=5000)
+    pins = {"fixture_source": "production CandidateScorer with noisy A20 inputs"}
+    coarse_tasks, coarse_rows = runner.prepare_mode_tasks(
+        [assigned_row],
+        pins,
+        identity,
+        config,
+        scorer,
+        seed_stage="coarse",
+        a20_rows=[a20_row],
+    )
+    default_tasks, default_rows = runner.prepare_mode_tasks(
+        [assigned_row], pins, identity, config, scorer
+    )
+
+    assert coarse_tasks[0].seed.score == original_cached.score
+    assert coarse_rows[0]["selected_start_label"] == "a20.cached_hypothesis"
+    assert coarse_rows[0]["candidate_id"] == mode_identity["candidate_id"]
+    assert default_tasks[0].seed.score == assigned_refined.score
+    expected_best_label, _ = runner.serial.choose_best_start(assigned_row)
+    assert default_rows[0]["selected_start_label"] == expected_best_label
+    assert default_tasks[0].seed.score < original_cached.score
+    assert coarse_tasks[0].seed.score > default_tasks[0].seed.score
+    assert coarse_tasks[0].source_digest != default_tasks[0].source_digest
+    assert coarse_tasks[0].input_digest != default_tasks[0].input_digest
+    assert coarse_rows[0]["candidate_pool_counts"]["eligible_records"] >= 0
+    assert coarse_rows[0]["candidate_branch_count_delta_vs_best_saved"] == (
+        coarse_rows[0]["candidate_branch_count"]
+        - coarse_rows[0]["best_saved_candidate_pool_counts"]["eligible_records"]
+        * coarse_rows[0]["best_saved_candidate_pool_counts"]["unmatched_reports"]
+    )
+    assert sum(item["selected"] for item in coarse_rows[0]["start_alternatives"]) == 1
+    assert all(item["canonical_match"] for item in coarse_rows[0]["start_alternatives"])
+    assert all(item["canonical_match"] for item in default_rows[0]["start_alternatives"])
+
+    with pytest.raises(runner.serial.DiagnosticInputError, match="A20 origin"):
+        runner.prepare_mode_tasks(
+            [assigned_row],
+            pins,
+            identity,
+            config,
+            scorer,
+            seed_stage="coarse",
+            a20_rows=[replace(a20_row, candidate_id="mismatched-cell")],
+        )
+
+
+def test_seed_stage_must_be_explicitly_supported() -> None:
+    with pytest.raises(ValueError, match="seed_stage"):
+        runner.prepare_mode_tasks([], {}, {}, object(), object(), seed_stage="truth-selected")
 
 
 def test_worker_source_hash_mismatch_is_rejected() -> None:
@@ -274,5 +388,6 @@ def test_current_package_identity_uses_checkout_source_and_hash() -> None:
 
 def test_manifest_never_certifies_heuristic_search() -> None:
     assert runner.OUTPUT_NAME == "parallel-assignment-expansion-diagnostic-v1"
+    assert runner.COARSE_OUTPUT_NAME == "parallel-coarse-assignment-expansion-diagnostic-v1"
     assert runner.WORKER_COUNT == 4
     assert runner.MAX_OUTPUT_BYTES == 50 * 1024**2
