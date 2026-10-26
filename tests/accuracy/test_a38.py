@@ -1093,6 +1093,20 @@ def _v2_fixture(tmp_path: Path):
             eligibility_manifest.read_bytes()
         ).hexdigest(),
         "condition_contexts": condition_contexts,
+        "execution_protocol": {
+            "schema": "accuracy-execution-protocol-v1",
+            "timeout_s": 1800.0,
+            "timeout_scope": "per_command_subprocess",
+            "deadline_clock": "monotonic_wall_clock_from_spawn",
+            "timeout_status": "search_timeout",
+            "termination_policy": {
+                "start_new_session": True,
+                "timeout_signal": "SIGTERM",
+                "grace_s": 1.0,
+                "escalation_signal": "SIGKILL",
+                "reap_process_group": True,
+            },
+        },
         "trials": [],
     }
     identity_fields = (
@@ -1103,6 +1117,7 @@ def _v2_fixture(tmp_path: Path):
         "splits_sha256",
         "trial_table_sha256",
         "condition_contexts",
+        "execution_protocol",
     )
     identity = {key: manifest[key] for key in identity_fields}
     manifest["run_identity_sha256"] = hashlib.sha256(
@@ -1116,7 +1131,49 @@ def _v2_fixture(tmp_path: Path):
     return plans, snapshot, eligibility_manifest, run_manifest_path, manifest, condition, context
 
 
+def _v2_run_row(planned, eligibility, manifest):
+    import hashlib
+
+    range_m = int(planned["range_m"])
+    report_types = planned["report_types"] == "True"
+    key = f"{range_m}m_types{'on' if report_types else 'off'}"
+    binding = manifest["condition_contexts"][key]
+
+    def canonical(value):
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+
+    return {
+        "trial_id": planned["trial_id"],
+        "split": planned["split"],
+        "port_id": planned["port_id"],
+        "placement_id": planned["placement_id"],
+        "realization": planned["realization"],
+        "range_m": range_m,
+        "report_types": report_types,
+        "physical_seed": int(planned["physical_seed"]),
+        "sensor_condition": planned["sensor_condition"],
+        "condition_context_key": key,
+        "condition_context_sha256": hashlib.sha256(canonical(binding)).hexdigest(),
+        "calibration_condition_sha256": hashlib.sha256(
+            canonical(binding["calibration_condition"])
+        ).hexdigest(),
+        "calibration_context_sha256": hashlib.sha256(
+            canonical(binding["calibration_context"])
+        ).hexdigest(),
+        "eligibility_record_sha256": hashlib.sha256(canonical(vars(eligibility))).hexdigest(),
+        "execution_protocol_sha256": hashlib.sha256(
+            canonical(manifest["execution_protocol"])
+        ).hexdigest(),
+        "supported": eligibility.supported,
+        "support_sha256": eligibility.support_sha256 or "",
+        "status": "failed",
+        "failure": "controlled test row",
+    }
+
+
 def test_v2_condition_document_keeps_full_population_and_failure_rows(tmp_path: Path) -> None:
+    import hashlib
+
     from tools.calibrate_accuracy_decision import _v2_split
 
     plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
@@ -1140,6 +1197,15 @@ def test_v2_condition_document_keeps_full_population_and_failure_rows(tmp_path: 
     assert document["population"]["nominal_planned"]["count"] == 2
     assert document["population"]["supported_nominal"]["count"] == 1
     assert document["population"]["unsupported_nominal"]["count"] == 1
+    assert document["execution_protocol"] == manifest["execution_protocol"]
+    assert (
+        document["provenance"]["execution_protocol_sha256"]
+        == hashlib.sha256(
+            json.dumps(
+                manifest["execution_protocol"], sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+    )
     missing_stress = document["all_trials"][-1]
     assert missing_stress["sensor_condition"] == "stress"
     assert missing_stress["sensor_profile"] == "map_buffer"
@@ -1232,6 +1298,15 @@ def test_v2_condition_projection_accepts_other_conditions_in_split_manifest(
                     separators=(",", ":"),
                 ).encode()
             ).hexdigest(),
+            "execution_protocol_sha256": hashlib.sha256(
+                json.dumps(
+                    manifest["execution_protocol"],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest(),
+            "supported": other_eligibility.supported,
+            "support_sha256": other_eligibility.support_sha256 or "",
         }
     ]
     document = build_condition_document(
@@ -1247,6 +1322,78 @@ def test_v2_condition_projection_accepts_other_conditions_in_split_manifest(
     )
     assert document["trial_count"] == 4
     assert other["trial_id"] not in {row["trial_id"] for row in document["all_trials"]}
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("supported", False, "supported flag mismatch"),
+        ("supported", 1, "supported flag mismatch"),
+        ("supported", None, "supported flag mismatch"),
+        ("support_sha256", "0" * 64, "support hash mismatch"),
+        ("execution_protocol_sha256", "0" * 64, "execution-protocol hash mismatch"),
+    ],
+)
+def test_v2_run_rows_reject_support_provenance_mismatches(
+    tmp_path: Path, field: str, value, message: str
+) -> None:
+    plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
+        tmp_path
+    )
+    row = _v2_run_row(plans[0], snapshot.all_trials[0], manifest)
+    row[field] = value
+    manifest["trials"] = [row]
+    with pytest.raises(ValueError, match=message):
+        build_condition_document(
+            trial_rows=plans,
+            run_manifest=manifest,
+            manifest_path=run_path,
+            input_root=tmp_path / "inputs",
+            split="development",
+            eligibility_snapshot=snapshot,
+            eligibility_manifest_path=eligibility_path,
+            condition=condition,
+            context=context,
+        )
+
+
+def test_v2_run_rows_require_explicit_supported_and_support_hash_fields(
+    tmp_path: Path,
+) -> None:
+    plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
+        tmp_path
+    )
+    row = _v2_run_row(plans[0], snapshot.all_trials[0], manifest)
+    del row["supported"]
+    manifest["trials"] = [row]
+    with pytest.raises(ValueError, match="supported flag mismatch"):
+        build_condition_document(
+            trial_rows=plans,
+            run_manifest=manifest,
+            manifest_path=run_path,
+            input_root=tmp_path / "inputs",
+            split="development",
+            eligibility_snapshot=snapshot,
+            eligibility_manifest_path=eligibility_path,
+            condition=condition,
+            context=context,
+        )
+
+    row = _v2_run_row(plans[0], snapshot.all_trials[0], manifest)
+    del row["support_sha256"]
+    manifest["trials"] = [row]
+    with pytest.raises(ValueError, match="support hash mismatch"):
+        build_condition_document(
+            trial_rows=plans,
+            run_manifest=manifest,
+            manifest_path=run_path,
+            input_root=tmp_path / "inputs",
+            split="development",
+            eligibility_snapshot=snapshot,
+            eligibility_manifest_path=eligibility_path,
+            condition=condition,
+            context=context,
+        )
 
 
 def test_v2_condition_document_rejects_truncated_eligibility_plan(
