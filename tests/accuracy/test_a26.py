@@ -13,11 +13,14 @@ import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
 
+from bearing_localization.evaluation.metrics import SupportManifest, evaluate_localization
 from maritime_localization_shared.contracts.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
     MeasurementSetV2,
 )
+from maritime_localization_shared.contracts.localization import Hypothesis, LocalizationResult
+from maritime_localization_shared.contracts.truth import EvaluationTruth
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 from maritime_localization_shared.serialization import read_contract, write_contract
 from tools.run_accuracy_suite import (  # noqa: E402
@@ -87,16 +90,22 @@ def test_command_config_requires_full_coast_search_and_hides_truth(tmp_path: Pat
             "{search_map_path}",
             "{search_config_path}",
             "--projected-crs",
-            "EPSG:32618",
+            "{projected_crs}",
             "--scope-manifest",
             "{search_scope_manifest_path}",
             "{estimate_path}",
         ],
         "evaluator_argv": [
             "eval",
-            "{estimate_path}",
+            "--estimate",
+            "{evaluator_estimate_path}",
+            "--truth",
             "{truth_path}",
+            "--support",
             "{support_path}",
+            "--coordinate-crs",
+            "{truth_coordinate_crs}",
+            "--output",
             "{evaluation_path}",
         ],
         "search_catalog": "catalog.json",
@@ -206,6 +215,14 @@ def test_prepared_measurements_use_catalog_timestamp(tmp_path: Path, monkeypatch
         _allow_extension=False,
     )
 
+    truth_crs_document = json.loads(
+        (
+            input_root
+            / "development/port-001/placement-001/r0/1000m/types-on/nominal/truth-crs.json"
+        ).read_text()
+    )
+    assert truth_crs_document["coordinate_reference_system"] == "EPSG:32618"
+    assert truth_crs_document["trial_id"] == trial_id
     measurements = read_contract(
         input_root
         / "development/port-001/placement-001/r0/1000m/types-on/nominal/measurements.json",
@@ -361,8 +378,18 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
     plan_dir.mkdir()
     input_dir = input_root / "development/port-001/placement-001/r0/1000m/types-on/nominal"
     input_dir.mkdir(parents=True)
-    for name in ("measurements.json", "truth.json", "support.json"):
+    for name in ("measurements.json", "support.json"):
         (input_dir / name).write_text("{}")
+    write_contract(
+        input_dir / "truth.json",
+        EvaluationTruth(
+            observer_east_m=0.0,
+            observer_north_m=0.0,
+            observer_heading_deg=0.0,
+            objects=(),
+            trial_id="trial-1",
+        ),
+    )
     table = plan_dir / "trials.csv"
     table.write_text(
         "trial_id,split,port_id,placement_id,realization,range_m,report_types,physical_seed,sensor_condition\n"
@@ -386,6 +413,19 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
     (input_dir / "physical-identity-audit.json").write_text(
         json.dumps({"catalog_sha256": catalog_hash})
     )
+    local_map = tmp_path / "local-map.json"
+    local_map.write_text("local-map")
+    (input_dir / "truth-crs.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "trial_id": "trial-1",
+                "reference_map_path": str(local_map),
+                "reference_map_sha256": hashlib.sha256(local_map.read_bytes()).hexdigest(),
+                "coordinate_reference_system": "EPSG:32618",
+            }
+        )
+    )
     commands = tmp_path / "commands.json"
     commands.write_text(
         json.dumps(
@@ -398,17 +438,24 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
                     "{search_map_path}",
                     "{search_config_path}",
                     "--projected-crs",
-                    "EPSG:32618",
+                    "{projected_crs}",
                     "--scope-manifest",
                     "{search_scope_manifest_path}",
+                    "--output",
                     "{estimate_path}",
                 ],
                 "evaluator_argv": [
                     "stub",
                     "evaluate",
-                    "{estimate_path}",
+                    "--estimate",
+                    "{evaluator_estimate_path}",
+                    "--truth",
                     "{truth_path}",
+                    "--support",
                     "{support_path}",
+                    "--coordinate-crs",
+                    "{truth_coordinate_crs}",
+                    "--output",
                     "{evaluation_path}",
                 ],
                 "search_catalog": str(tmp_path / "catalog.json"),
@@ -429,7 +476,15 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
         if argv[1] == "search" and fail_search:
             return SimpleNamespace(returncode=17, stdout="search stdout", stderr="search failed")
         if argv[1] == "search":
-            Path(argv[-1]).write_text("{}")
+            write_contract(
+                Path(argv[-1]),
+                LocalizationResult(
+                    hypotheses=(),
+                    elapsed_s=0.0,
+                    decision_status="no_fix",
+                    search_status="completed",
+                ),
+            )
         elif argv[1] == "evaluate":
             Path(argv[-1]).write_text("{}")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -445,7 +500,8 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
     )
     first = list(csv.DictReader(state_path.open()))
     assert first[0]["status"] == "search_failed"
-    scope_manifest = json.loads((run_root / "scope-manifest.json").read_text())
+    run_dir = state_path.parent
+    scope_manifest = json.loads((run_dir / "scope-manifest.json").read_text())
     assert scope_manifest == {
         "schema_version": 1,
         "geographic_scope": "full_coast",
@@ -454,7 +510,7 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
         "projected_crs": "EPSG:32618",
         "bounds_xy_m": [-10.0, 10.0, -20.0, 20.0],
     }
-    attempts_path = run_root / "attempts.csv"
+    attempts_path = run_dir / "attempts.csv"
     prior_attempts = list(csv.DictReader(attempts_path.open()))
     assert len(prior_attempts) == 1
     assert prior_attempts[0]["returncode"] == "17"
@@ -473,6 +529,352 @@ def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch
     assert resumed[0]["status"] == "completed"
     attempts = list(csv.DictReader(attempts_path.open()))
     assert [row["status"] for row in attempts] == ["failed", "completed", "completed"]
+
+
+def test_run_trials_binds_six_conditions_crs_outputs_and_resume_hashes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    plan_dir = tmp_path / "plan"
+    plan_dir.mkdir()
+    input_root = tmp_path / "inputs"
+    run_root = tmp_path / "runs"
+    catalog_path = tmp_path / "catalog.json"
+    map_path = tmp_path / "coast-map.json"
+    search_config_path = tmp_path / "search.json"
+    catalog_path.write_text("catalog")
+    map_path.write_text("map")
+    search_config_path.write_text(
+        json.dumps(
+            {
+                "contract_type": "SearchConfig",
+                "algorithm": "pairwise",
+                "bounds_xy": [300_000.0, 900_000.0, 3_800_000.0, 4_500_000.0],
+                "max_range_m": 10_000.0,
+                "use_types": True,
+            }
+        )
+    )
+    catalog_hash = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+    local_map = tmp_path / "reference.map"
+    local_map.write_text("map")
+    local_map_hash = hashlib.sha256(local_map.read_bytes()).hexdigest()
+    observer_xy = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True).transform(
+        -76.3, 37.0
+    )
+    trial_rows = []
+    six_conditions = [
+        (range_m, report_types) for range_m in (1000, 5000, 10000) for report_types in (True, False)
+    ]
+    for index, (range_m, report_types) in enumerate(six_conditions):
+        port_id = "port-001" if index % 2 == 0 else "port-002"
+        trial_id = f"trial-{index + 1}"
+        row = {
+            "trial_id": trial_id,
+            "split": "development",
+            "port_id": port_id,
+            "placement_id": "placement-001",
+            "realization": "0",
+            "range_m": str(range_m),
+            "report_types": str(report_types),
+            "physical_seed": str(100 + index),
+            "sensor_condition": "nominal",
+        }
+        trial_rows.append(row)
+        trial_dir = (
+            input_root
+            / "development"
+            / port_id
+            / "placement-001"
+            / "r0"
+            / f"{range_m}m"
+            / ("types-on" if report_types else "types-off")
+            / "nominal"
+        )
+        trial_dir.mkdir(parents=True)
+        (trial_dir / "measurements.json").write_text("{}")
+        (trial_dir / "support.json").write_text("{}")
+        source_crs = "EPSG:32617" if index % 2 == 0 else "EPSG:32618"
+        truth_xy = Transformer.from_crs("EPSG:4326", source_crs, always_xy=True).transform(
+            -76.3, 37.0
+        )
+        write_contract(
+            trial_dir / "truth.json",
+            EvaluationTruth(
+                observer_east_m=truth_xy[0],
+                observer_north_m=truth_xy[1],
+                observer_heading_deg=0.0,
+                objects=(),
+                trial_id=trial_id,
+            ),
+        )
+        (trial_dir / "truth-crs.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "trial_id": trial_id,
+                    "reference_map_path": str(local_map),
+                    "reference_map_sha256": local_map_hash,
+                    "coordinate_reference_system": source_crs,
+                }
+            )
+        )
+        (trial_dir / "physical-identity-audit.json").write_text(
+            json.dumps({"catalog_sha256": catalog_hash})
+        )
+    # This planned row lacks prepared artifacts and must remain visible in state/manifest.
+    trial_rows.append(
+        {
+            "trial_id": "trial-missing",
+            "split": "development",
+            "port_id": "port-001",
+            "placement_id": "placement-002",
+            "realization": "0",
+            "range_m": "1000",
+            "report_types": "True",
+            "physical_seed": "999",
+            "sensor_condition": "nominal",
+        }
+    )
+    fieldnames = list(trial_rows[0])
+    with (plan_dir / "trials.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(trial_rows)
+    plan_path = plan_dir / "plan.json"
+    plan_path.write_text(json.dumps({"trial_table": "trials.csv", "split_manifest": "splits.json"}))
+    commands_path = tmp_path / "commands.json"
+    commands_path.write_text(
+        json.dumps(
+            {
+                "search_argv": [
+                    "stub",
+                    "search",
+                    "--measurements",
+                    "{measurements_path}",
+                    "--catalog",
+                    "{search_catalog_path}",
+                    "--map",
+                    "{search_map_path}",
+                    "--config",
+                    "{search_config_path}",
+                    "--projected-crs",
+                    "{projected_crs}",
+                    "--scope-manifest",
+                    "{search_scope_manifest_path}",
+                    "--output",
+                    "{estimate_path}",
+                ],
+                "evaluator_argv": [
+                    "stub",
+                    "evaluate",
+                    "--estimate",
+                    "{evaluator_estimate_path}",
+                    "--truth",
+                    "{truth_path}",
+                    "--support",
+                    "{support_path}",
+                    "--coordinate-crs",
+                    "{truth_coordinate_crs}",
+                    "--output",
+                    "{evaluation_path}",
+                ],
+                "search_catalog": str(catalog_path),
+                "search_map": str(map_path),
+                "search_config": str(search_config_path),
+                "search_domain_scope": "full_coast",
+                "search_map_scope": "full_coast",
+                "projected_crs": "EPSG:32618",
+            }
+        )
+    )
+    process_calls = []
+
+    def fake_run(argv, **kwargs):
+        if argv[0] == "git":
+            return SimpleNamespace(returncode=0, stdout="source-sha\n", stderr="")
+        process_calls.append(list(argv))
+        if argv[1] == "search":
+            assert "--truth" not in argv
+            output_path = Path(argv[argv.index("--output") + 1])
+            write_contract(
+                output_path,
+                LocalizationResult(
+                    hypotheses=(
+                        Hypothesis(east_m=observer_xy[0], north_m=observer_xy[1], score=1.0),
+                    ),
+                    elapsed_s=0.0,
+                    decision_status="no_fix",
+                    search_status="completed",
+                ),
+            )
+        else:
+            Path(argv[argv.index("--output") + 1]).write_text("{}")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("tools.run_accuracy_suite.subprocess.run", fake_run)
+    state_path = run_trials(
+        plan_path,
+        command_config_path=commands_path,
+        input_root=input_root,
+        run_root=run_root,
+        split="development",
+        timeout_s=2.0,
+    )
+    state = {row["trial_id"]: row for row in csv.DictReader(state_path.open())}
+    assert state["trial-missing"]["status"] == "missing_inputs"
+    completed = [state[f"trial-{index}"] for index in range(1, 7)]
+    assert all(row["status"] == "completed" for row in completed)
+    assert len({row["estimate_path"] for row in completed}) == 6
+    assert len({row["evaluation_path"] for row in completed}) == 6
+    run_dir = state_path.parent
+    run_manifest = json.loads((run_dir / "run-manifest.json").read_text())
+    assert len(run_manifest["trials"]) == 7
+    assert run_manifest["projected_crs"] == "EPSG:32618"
+    for row in completed:
+        search_config = json.loads((run_dir / row["search_config_path"]).read_text())
+        assert search_config["max_range_m"] == float(row["range_m"])
+        assert search_config["use_types"] is (row["report_types"] == "True")
+        provenance = json.loads((run_dir / row["coordinate_provenance_path"]).read_text())
+        assert provenance["source_truth_sha256"] == row["truth_sha256"]
+        assert provenance["estimate_target_crs"] == provenance["truth_coordinate_crs"]
+        converted_estimate = read_contract(
+            run_dir / row["evaluator_estimate_path"], LocalizationResult
+        )
+        expected = Transformer.from_crs(
+            "EPSG:32618", provenance["truth_coordinate_crs"], always_xy=True
+        ).transform(observer_xy[0], observer_xy[1])
+        assert converted_estimate.hypotheses[0].east_m == pytest.approx(expected[0])
+        assert converted_estimate.hypotheses[0].north_m == pytest.approx(expected[1])
+    assert len([argv for argv in process_calls if argv[1] == "search"]) == 6
+    assert len([argv for argv in process_calls if argv[1] == "evaluate"]) == 6
+
+    changed_row = completed[0]
+    changed_input_dir = input_root / "development/port-001/placement-001/r0/1000m/types-on/nominal"
+    (changed_input_dir / "support.json").write_text('{"updated":true}')
+    old_artifact_path = changed_row["estimate_path"]
+    rerun_state_path = run_trials(
+        plan_path,
+        command_config_path=commands_path,
+        input_root=input_root,
+        run_root=run_root,
+        split="development",
+        timeout_s=2.0,
+    )
+    rerun = {row["trial_id"]: row for row in csv.DictReader(rerun_state_path.open())}
+    assert rerun["trial-1"]["status"] == "completed"
+    assert rerun["trial-1"]["estimate_path"] != old_artifact_path
+    attempts = list(csv.DictReader((run_dir / "attempts.csv").open()))
+    assert any(
+        row["stage"] == "resume_validation" and row["status"] == "hash_mismatch" for row in attempts
+    )
+    assert len([argv for argv in process_calls if argv[1] == "search"]) == 7
+
+    search_config_path.write_text(
+        json.dumps(
+            {
+                "contract_type": "SearchConfig",
+                "algorithm": "grid",
+                "bounds_xy": [300_000.0, 900_000.0, 3_800_000.0, 4_500_000.0],
+                "max_range_m": 10_000.0,
+                "use_types": True,
+            }
+        )
+    )
+    other_algorithm_state = run_trials(
+        plan_path,
+        command_config_path=commands_path,
+        input_root=input_root,
+        run_root=run_root,
+        split="development",
+        timeout_s=2.0,
+    )
+    other_algorithm = {row["trial_id"]: row for row in csv.DictReader(other_algorithm_state.open())}
+    assert other_algorithm_state.parent != run_dir
+    assert other_algorithm["trial-1"]["estimate_path"] != rerun["trial-1"]["estimate_path"]
+    assert len([argv for argv in process_calls if argv[1] == "search"]) == 13
+
+
+def test_evaluator_estimate_transform_preserves_geodesic_100m_gate_and_raw_files(
+    tmp_path: Path,
+) -> None:
+    longitude, latitude = -78.05, 37.0
+    estimate_crs = "EPSG:32618"
+    truth_crs = "EPSG:32617"
+    truth_xy = Transformer.from_crs("EPSG:4326", truth_crs, always_xy=True).transform(
+        longitude, latitude
+    )
+    truth_path = tmp_path / "truth.json"
+    truth = EvaluationTruth(
+        observer_east_m=truth_xy[0],
+        observer_north_m=truth_xy[1],
+        observer_heading_deg=0.0,
+        objects=(),
+        trial_id="utm-boundary",
+    )
+    write_contract(truth_path, truth)
+    truth_crs_path = tmp_path / "truth-crs.json"
+    truth_crs_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "trial_id": "utm-boundary",
+                "coordinate_reference_system": truth_crs,
+            }
+        )
+    )
+    support = SupportManifest(
+        valid_reference_water=True,
+        detected_physical_catalog_matched_groups=3,
+    )
+    for separation_m, expected_within in ((99.0, True), (101.0, False)):
+        estimate_lon, estimate_lat, _ = Geod(ellps="WGS84").fwd(
+            longitude, latitude, 90.0, separation_m
+        )
+        estimate_xy = Transformer.from_crs("EPSG:4326", estimate_crs, always_xy=True).transform(
+            estimate_lon, estimate_lat
+        )
+        estimate_path = tmp_path / f"estimate-{separation_m}.json"
+        write_contract(
+            estimate_path,
+            LocalizationResult(
+                hypotheses=(Hypothesis(east_m=estimate_xy[0], north_m=estimate_xy[1], score=0.0),),
+                elapsed_s=0.0,
+                decision_status="accepted",
+                search_status="completed",
+                accepted_index=0,
+            ),
+        )
+        raw_estimate_hash = hashlib.sha256(estimate_path.read_bytes()).hexdigest()
+        raw_truth_hash = hashlib.sha256(truth_path.read_bytes()).hexdigest()
+        evaluator_estimate_path = tmp_path / f"evaluator-estimate-{separation_m}.json"
+        provenance_path = tmp_path / f"provenance-{separation_m}.json"
+        from tools.run_accuracy_suite import _write_evaluator_estimate
+
+        _write_evaluator_estimate(
+            estimate_path,
+            truth_path,
+            truth_crs_path,
+            evaluator_estimate_path,
+            provenance_path,
+            trial_id="utm-boundary",
+            estimate_crs=estimate_crs,
+        )
+        evaluator_estimate = read_contract(evaluator_estimate_path, LocalizationResult)
+        scored = evaluate_localization(
+            evaluator_estimate,
+            truth,
+            support,
+            coordinate_crs=truth_crs,
+        )
+        assert scored.position_error_m == pytest.approx(separation_m, abs=1e-5)
+        assert scored.within_100m is expected_within
+        assert hashlib.sha256(estimate_path.read_bytes()).hexdigest() == raw_estimate_hash
+        assert hashlib.sha256(truth_path.read_bytes()).hexdigest() == raw_truth_hash
+        provenance = json.loads(provenance_path.read_text())
+        assert provenance["estimate_source_crs"] == estimate_crs
+        assert provenance["estimate_target_crs"] == truth_crs
+        assert provenance["source_estimate_sha256"] == raw_estimate_hash
+        assert provenance["source_truth_sha256"] == raw_truth_hash
 
 
 def _write_nominal_support_fixture(
