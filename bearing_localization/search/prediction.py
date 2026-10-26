@@ -297,7 +297,7 @@ def predict_visible_groups(
     if not isfinite(observer_lon) or not isfinite(observer_lat):
         raise ValueError("observer_xy_m cannot be transformed to a valid geographic position.")
 
-    nearby_indices = prepared_context.spatial_index.query_radius(
+    nearby_geometry = prepared_context.spatial_index.query_radius_with_geometry(
         observer_lon, observer_lat, visibility_radius_m + prepared_context.max_offset_m
     )
     detections: list[DetectedObject] = []
@@ -309,7 +309,7 @@ def predict_visible_groups(
     observer_status = vector_map.point_water_status(observer_xy)
     los_candidates: list[tuple[_PreparedRecord, BearingDistance, tuple[float, float]]] = []
 
-    for record_index in nearby_indices:
+    for record_index, indexed_bearing_deg, indexed_distance_m in nearby_geometry:
         prepared_record = prepared_context.records[record_index]
         record = prepared_record.record
         if not prepared_record.is_physical:
@@ -329,12 +329,19 @@ def predict_visible_groups(
                 offset_bearing_deg,
                 offset_range_m,
             )
+            geometry = geodesic_bearing_distance(
+                (float(observer_lon), float(observer_lat)),
+                (float(target_lon), float(target_lat)),
+            )
         else:
             target_lon, target_lat = record.longitude_deg, record.latitude_deg
-        geometry = geodesic_bearing_distance(
-            (float(observer_lon), float(observer_lat)),
-            (float(target_lon), float(target_lat)),
-        )
+            geometry = BearingDistance(
+                true_bearing_deg=indexed_bearing_deg,
+                distance_m=indexed_distance_m,
+                grid_bearing_deg=indexed_bearing_deg,
+                meridian_convergence_deg=0.0,
+                bearing_error_deg=0.0,
+            )
         if range_inclusive:
             if geometry.distance_m < minimum_range_m or geometry.distance_m > visibility_radius_m:
                 continue
