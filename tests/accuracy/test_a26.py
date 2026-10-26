@@ -963,3 +963,255 @@ def test_subprocess_timeout_is_an_explicit_outcome(monkeypatch) -> None:
     outcome = _run_process(["search"], cwd=Path("."), timeout_s=0.01)
     assert outcome["status"] == "timeout"
     assert outcome["stdout"] == "partial"
+
+
+def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
+    tmp_path: Path,
+) -> None:
+    from pyproj import Geod
+
+    from bearing_localization.search.config import SearchConfig
+    from bearing_localization.search.config_serialization import write_search_config
+    from maritime_localization_shared.contracts.inputs_v2 import MapV2
+    from maritime_localization_shared.serialization import contract_to_dict
+
+    trial_id = "tiny-zone-crossing"
+    timestamp = "2023-07-15T12:00:30Z"
+    observer_lon, observer_lat = -78.05, 37.0
+    geod = Geod(ellps="WGS84")
+    records = []
+    for index, (bearing, distance) in enumerate(((20.0, 650.0), (138.0, 900.0), (265.0, 1_100.0))):
+        lon, lat, _ = geod.fwd(observer_lon, observer_lat, bearing, distance)
+        records.append(
+            CatalogRecordV2(
+                key=f"mmsi:{index + 1}",
+                latitude_deg=lat,
+                longitude_deg=lon,
+                raw_type="vessel",
+                normalized_type="vessel",
+                metadata=(("physical_entity_id", f"vessel-{index + 1}"),),
+            )
+        )
+    catalog = CatalogV2(tuple(records), timestamp, "tiny-cli-fixture", "1", "tiny-cli")
+    ring = [
+        [-79.0, 36.0],
+        [-77.0, 36.0],
+        [-77.0, 38.0],
+        [-79.0, 38.0],
+        [-79.0, 36.0],
+    ]
+    map_input = MapV2(
+        crs="EPSG:4326",
+        source="tiny-cli-fixture",
+        map_version="1",
+        coverage_status="known",
+        coverage_geometry_geojson=json.dumps(
+            {"type": "Polygon", "coordinates": [ring]}, separators=(",", ":")
+        ),
+    )
+    catalog_path = tmp_path / "catalog.json"
+    map_path = tmp_path / "coast-map.json"
+    write_contract(catalog_path, catalog)
+    write_contract(map_path, map_input)
+
+    plan_dir = tmp_path / "plan"
+    plan_dir.mkdir()
+    input_root = tmp_path / "inputs"
+    trial_dir = input_root / "development/port-001/placement-001/r0/1000m/types-on/nominal"
+    trial_dir.mkdir(parents=True)
+    fixture_path = tmp_path / "scene.json"
+    fixture_path.write_text(
+        json.dumps(
+            {
+                "catalog": contract_to_dict(catalog),
+                "map": contract_to_dict(map_input),
+                "observer": {
+                    "longitude_deg": observer_lon,
+                    "latitude_deg": observer_lat,
+                    "heading_deg": 37.0,
+                },
+                "sensor": {
+                    "visibility_radius_m": 3_000.0,
+                    "angular_resolution_deg": 0.1,
+                    "bearing_sigma_deg": 0.05,
+                    "detection_probability": 1.0,
+                    "type_error_probability": 0.0,
+                    "expected_clutter_reports": 0.0,
+                    "outlier_probability": 0.0,
+                    "report_type_labels": True,
+                },
+                "timestamp_utc": timestamp,
+            }
+        ),
+        encoding="utf-8",
+    )
+    measurements_path = trial_dir / "measurements.json"
+    truth_path = trial_dir / "truth.json"
+    diagnostics_path = trial_dir / "diagnostics.json"
+    import subprocess
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bearing_localization.simulator.cli",
+            "--schema-version",
+            "2",
+            "--fixture",
+            str(fixture_path),
+            "--projected-crs",
+            "EPSG:32617",
+            "--measurements-out",
+            str(measurements_path),
+            "--truth-out",
+            str(truth_path),
+            "--diagnostics-out",
+            str(diagnostics_path),
+            "--seed",
+            "11",
+            "--trial-id",
+            trial_id,
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    support_path = trial_dir / "support.json"
+    support_path.write_text(
+        json.dumps(
+            {
+                "valid_reference_water": True,
+                "detected_physical_catalog_matched_groups": 3,
+                "port_id": "port-001",
+                "placement_id": "placement-001",
+            }
+        ),
+        encoding="utf-8",
+    )
+    identity_audit_path = trial_dir / "physical-identity-audit.json"
+    identity_audit_path.write_text(
+        json.dumps({"catalog_sha256": hashlib.sha256(catalog_path.read_bytes()).hexdigest()}),
+        encoding="utf-8",
+    )
+    reference_map = tmp_path / "reference-map.json"
+    reference_map.write_bytes(map_path.read_bytes())
+    (trial_dir / "truth-crs.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "trial_id": trial_id,
+                "reference_map_path": str(reference_map),
+                "reference_map_sha256": hashlib.sha256(reference_map.read_bytes()).hexdigest(),
+                "coordinate_reference_system": "EPSG:32617",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    search_crs = "EPSG:32618"
+    observer_xy = Transformer.from_crs("EPSG:4326", search_crs, always_xy=True).transform(
+        observer_lon, observer_lat
+    )
+    search_config_path = tmp_path / "search.json"
+    write_search_config(
+        search_config_path,
+        SearchConfig(
+            algorithm="grid",
+            bounds_xy=(
+                observer_xy[0] - 1_000.0,
+                observer_xy[0] + 1_000.0,
+                observer_xy[1] - 1_000.0,
+                observer_xy[1] + 1_000.0,
+            ),
+            max_range_m=1_000.0,
+            candidate_budget=500,
+        ),
+    )
+    table_path = plan_dir / "trials.csv"
+    table_path.write_text(
+        "trial_id,split,port_id,placement_id,realization,range_m,report_types,physical_seed,sensor_condition\n"
+        f"{trial_id},development,port-001,placement-001,0,1000,True,11,nominal\n",
+        encoding="utf-8",
+    )
+    plan_path = plan_dir / "plan.json"
+    plan_path.write_text(json.dumps({"trial_table": "trials.csv"}), encoding="utf-8")
+    commands_path = tmp_path / "commands.json"
+    commands_path.write_text(
+        json.dumps(
+            {
+                "search_argv": [
+                    sys.executable,
+                    "-m",
+                    "bearing_localization.search_cli",
+                    "--schema-version",
+                    "2",
+                    "--measurements",
+                    "{measurements_path}",
+                    "--catalog",
+                    "{search_catalog_path}",
+                    "--map",
+                    "{search_map_path}",
+                    "--config",
+                    "{search_config_path}",
+                    "--projected-crs",
+                    "{projected_crs}",
+                    "--scope-manifest",
+                    "{search_scope_manifest_path}",
+                    "--algorithm",
+                    "grid",
+                    "--spacing-m",
+                    "100",
+                    "--no-refine",
+                    "--output",
+                    "{estimate_path}",
+                ],
+                "evaluator_argv": [
+                    sys.executable,
+                    "-m",
+                    "bearing_localization.evaluate_cli",
+                    "--schema-version",
+                    "2",
+                    "--estimate",
+                    "{evaluator_estimate_path}",
+                    "--truth",
+                    "{truth_path}",
+                    "--support",
+                    "{support_path}",
+                    "--coordinate-crs",
+                    "{truth_coordinate_crs}",
+                    "--output",
+                    "{evaluation_path}",
+                ],
+                "search_catalog": str(catalog_path),
+                "search_map": str(map_path),
+                "search_config": str(search_config_path),
+                "search_domain_scope": "full_coast",
+                "search_map_scope": "full_coast",
+                "projected_crs": search_crs,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    state_path = run_trials(
+        plan_path,
+        command_config_path=commands_path,
+        input_root=input_root,
+        run_root=tmp_path / "runs",
+        split="development",
+        timeout_s=60.0,
+    )
+    state = list(csv.DictReader(state_path.open()))
+    assert len(state) == 1
+    row = state[0]
+    assert row["status"] == "completed", row["failure"]
+    run_manifest = json.loads((state_path.parent / "run-manifest.json").read_text())
+    assert run_manifest["trials"][0]["trial_id"] == trial_id
+    assert row["truth_coordinate_crs"] == "EPSG:32617"
+    provenance = json.loads((state_path.parent / row["coordinate_provenance_path"]).read_text())
+    assert provenance["estimate_source_crs"] == search_crs
+    assert provenance["estimate_target_crs"] == "EPSG:32617"
+    metrics = json.loads((state_path.parent / row["evaluation_path"]).read_text())
+    assert "position_error_m" in metrics
+    assert measurements_path.is_file() and truth_path.is_file()
