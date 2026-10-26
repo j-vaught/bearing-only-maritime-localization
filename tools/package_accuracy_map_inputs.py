@@ -7,11 +7,13 @@ import gzip
 import hashlib
 import json
 import tarfile
+import zlib
 from pathlib import Path
 from typing import Any
 
 MANIFEST = Path("data/maps/accuracy-inputs/manifest.json")
 MAX_ARCHIVE_BYTES = 100_000_000
+ARCHIVE_READ_ERRORS = (OSError, EOFError, tarfile.TarError, zlib.error)
 
 
 def sha256_stream(stream: Any) -> tuple[str, int]:
@@ -41,14 +43,19 @@ def verify_manifest(root: Path = Path(".")) -> list[str]:
         if not archive_path.is_file():
             errors.append(f"missing archive: {archive_path}")
             continue
-        if archive_path.stat().st_size >= MAX_ARCHIVE_BYTES:
-            errors.append(f"archive is not below 100 MB: {archive_path}")
-        if archive_path.stat().st_size != archive["bytes"]:
-            errors.append(f"archive byte count mismatch: {archive_path}")
-        with archive_path.open("rb") as stream:
-            digest, _ = sha256_stream(stream)
-        if digest != archive["sha256"]:
-            errors.append(f"archive checksum mismatch: {archive_path}")
+        try:
+            archive_size = archive_path.stat().st_size
+            with archive_path.open("rb") as stream:
+                archive_digest, _ = sha256_stream(stream)
+        except OSError as exc:
+            errors.append(f"archive could not be read: {archive_path.name}: {exc}")
+            continue
+        if archive_size >= MAX_ARCHIVE_BYTES:
+            errors.append(f"archive is not below 100 MB: {archive_path.name}")
+        if archive_size != archive["bytes"]:
+            errors.append(f"archive byte count mismatch: {archive_path.name}")
+        if archive_digest != archive["sha256"]:
+            errors.append(f"archive checksum mismatch: {archive_path.name}")
 
         expected = {item["name"]: item for item in archive["payloads"]}
         for name, item in expected.items():
@@ -59,35 +66,41 @@ def verify_manifest(root: Path = Path(".")) -> list[str]:
             ):
                 errors.append(f"archive payload disagrees with source index: {name}")
         seen: set[str] = set()
-        if archive["compression"] == "gzip":
-            item = next(iter(expected.values()))
-            with gzip.open(archive_path, "rb") as stream:
-                digest, size = sha256_stream(stream)
-            seen.add(item["name"])
-            if (digest, size) != (item["sha256"], item["bytes"]):
-                errors.append(f"payload mismatch: {item[name]}")
-        elif archive["compression"] == "tar+gzip":
-            with tarfile.open(archive_path, mode="r:gz") as tar:
-                for member in tar:
-                    item = expected.get(Path(member.name).name)
-                    if item is None or not member.isfile():
-                        errors.append(f"unexpected tar member: {member.name}")
-                        continue
-                    if item["name"] in seen:
-                        errors.append(f"duplicate tar member: {member.name}")
-                        continue
-                    extracted = tar.extractfile(member)
-                    if extracted is None:
-                        errors.append(f"unreadable tar member: {member.name}")
-                        continue
-                    digest, size = sha256_stream(extracted)
+        try:
+            if archive["compression"] == "gzip":
+                if len(expected) != 1:
+                    errors.append(f"gzip archive must index one payload: {archive_path.name}")
+                item = next(iter(expected.values()), None)
+                if item is not None:
+                    with gzip.open(archive_path, "rb") as stream:
+                        digest, size = sha256_stream(stream)
                     seen.add(item["name"])
                     if (digest, size) != (item["sha256"], item["bytes"]):
-                        errors.append(f"payload mismatch: {member.name}")
-        else:
-            errors.append(f"unsupported compression: {archive['compression']}")
+                        errors.append(f"payload mismatch: {item['name']}")
+            elif archive["compression"] == "tar+gzip":
+                with tarfile.open(archive_path, mode="r:gz") as tar:
+                    for member in tar:
+                        item = expected.get(Path(member.name).name)
+                        if item is None or not member.isfile():
+                            errors.append(f"unexpected tar member: {member.name}")
+                            continue
+                        if item["name"] in seen:
+                            errors.append(f"duplicate tar member: {member.name}")
+                            continue
+                        extracted = tar.extractfile(member)
+                        if extracted is None:
+                            errors.append(f"unreadable tar member: {member.name}")
+                            continue
+                        digest, size = sha256_stream(extracted)
+                        seen.add(item["name"])
+                        if (digest, size) != (item["sha256"], item["bytes"]):
+                            errors.append(f"payload mismatch: {member.name}")
+            else:
+                errors.append(f"unsupported compression: {archive['compression']}")
+        except ARCHIVE_READ_ERRORS as exc:
+            errors.append(f"archive is corrupt or truncated: {archive_path.name}: {exc}")
         if seen != set(expected):
-            errors.append(f"archive member set mismatch: {archive_path}")
+            errors.append(f"archive member set mismatch: {archive_path.name}")
 
     expected_statuses = [item["coverage_status"] for item in manifest["port_maps"]["files"]]
     if len(expected_statuses) != 24:
