@@ -345,6 +345,13 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
     elif lineage is not None:
         raise ValueError("Run manifest declares a resume lineage without resume-source.json.")
 
+    inventory_path = output_root / "candidate-inventory.jsonl"
+    inventory = read_jsonl(inventory_path) if inventory_path.is_file() else []
+    inventory_ids = [row.get("candidate_id") for row in inventory]
+    if any(
+        not isinstance(candidate_id, str) or not candidate_id for candidate_id in inventory_ids
+    ) or len(inventory_ids) != len(set(inventory_ids)):
+        raise ValueError("Candidate inventory contains missing or duplicate IDs.")
     plan_path = output_root / "candidate-plan.jsonl"
     plan = read_jsonl(plan_path) if plan_path.is_file() else []
     plan_by_id: dict[str, dict[str, Any]] = {}
@@ -368,7 +375,10 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
         plan_by_index[index] = candidate_id
         plan_index_by_id[candidate_id] = index
 
-    if len(plan_by_id) != identity.get("candidate_domain_count"):
+    if set(inventory_ids) != set(plan_by_id):
+        raise ValueError("Candidate inventory IDs differ from the frozen candidate plan.")
+    domain_count = identity.get("candidate_domain_count")
+    if type(domain_count) is not int or domain_count < 0 or len(plan_by_id) != domain_count:
         raise ValueError("Candidate plan count differs from the identity's complete domain count.")
     chunks, hypothesis_rows = _read_chunks(output_root)
     if set(plan_by_index) and set(plan_by_index) != set(range(len(plan_by_index))):
@@ -380,7 +390,10 @@ def load_run(output_root: Path, *, expected_bindings: Mapping[str, Any] | None =
     for chunk in chunks:
         if not isinstance(chunk.get("candidates"), list):
             raise ValueError("Chunk is missing its candidate audit rows.")
-        if chunk.get("candidate_count") != len(chunk["candidates"]):
+        chunk_candidate_count = chunk.get("candidate_count")
+        if type(chunk_candidate_count) is not int or chunk_candidate_count != len(
+            chunk["candidates"]
+        ):
             raise ValueError("Chunk candidate_count differs from its audit row count.")
         for row in chunk["candidates"]:
             action = row.get("action")
