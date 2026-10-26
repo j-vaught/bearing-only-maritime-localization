@@ -34,6 +34,7 @@ MAX_OUTPUT_BYTES = serial.MAX_OUTPUT_BYTES
 DEFAULT_TIMEOUT_S = serial.DEFAULT_TIMEOUT_S
 WORKER_COUNT = 4
 OUTPUT_NAME = "parallel-assignment-expansion-diagnostic-v1"
+COARSE_OUTPUT_NAME = "parallel-coarse-assignment-expansion-diagnostic-v1"
 SEED_STAGES = ("coarse", "best_saved")
 DEFAULT_SEED_STAGE = "best_saved"
 
@@ -438,8 +439,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     expected_lock = serial.canonical_lock_path().resolve()
     if args.lock.resolve() != expected_lock:
         raise ValueError(f"only the canonical benchmark lock is allowed: {expected_lock}")
-    if args.output.name != OUTPUT_NAME:
-        raise ValueError(f"output directory must be the unique {OUTPUT_NAME} path")
+    expected_output_name = COARSE_OUTPUT_NAME if seed_stage == "coarse" else OUTPUT_NAME
+    if args.output.name != expected_output_name:
+        raise ValueError(f"output directory must be the unique {expected_output_name} path")
     if args.output.exists():
         raise FileExistsError(
             f"output already exists; resume is explicitly unsupported: {args.output}"

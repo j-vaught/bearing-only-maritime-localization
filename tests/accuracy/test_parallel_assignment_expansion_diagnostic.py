@@ -381,5 +381,6 @@ def test_current_package_identity_uses_checkout_source_and_hash() -> None:
 
 def test_manifest_never_certifies_heuristic_search() -> None:
     assert runner.OUTPUT_NAME == "parallel-assignment-expansion-diagnostic-v1"
+    assert runner.COARSE_OUTPUT_NAME == "parallel-coarse-assignment-expansion-diagnostic-v1"
     assert runner.WORKER_COUNT == 4
     assert runner.MAX_OUTPUT_BYTES == 50 * 1024**2
