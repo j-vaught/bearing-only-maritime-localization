@@ -31,6 +31,212 @@ class CandidateLowerBoundResult:
     assumptions: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedCandidateObjectiveBound:
+    """Immutable objective preparation reusable across many candidate K values."""
+
+    config: SearchConfig
+    report_count: int
+    baseline_constant: float | None
+    report_clutter_cost: float | None
+    group_miss_cost: float | None
+    per_report_match_floors: tuple[float, ...]
+    variance_model_supported: bool
+    preparation_reason: str | None
+
+    @property
+    def supported(self) -> bool:
+        return (
+            self.config.objective_version == "bearing_set_map_v1"
+            and self.variance_model_supported is True
+            and self.preparation_reason is None
+        )
+
+    @property
+    def reason(self) -> str | None:
+        if self.config.objective_version != "bearing_set_map_v1":
+            return "Only bearing_set_map_v1 has a certified objective floor."
+        if self.variance_model_supported is not True:
+            return "The candidate variance or uncertainty model is unsupported."
+        return self.preparation_reason
+
+    def bound(
+        self,
+        minimum_visible_group_count: int | None,
+        visibility_count_certified: bool,
+        *,
+        numerical_margin: float = 1e-10,
+    ) -> CandidateLowerBoundResult:
+        """Apply the existing cardinality relaxation to one certified K."""
+        if not isfinite(numerical_margin) or numerical_margin < 0.0:
+            raise ValueError("numerical_margin must be finite and nonnegative.")
+        if self.config.objective_version != "bearing_set_map_v1":
+            return _unresolved(
+                "Only bearing_set_map_v1 has a certified objective floor.",
+                minimum_visible_group_count,
+            )
+        if type(visibility_count_certified) is not bool:
+            return _unresolved(
+                "The visibility certification flag must be a bool.",
+                minimum_visible_group_count,
+            )
+        if not visibility_count_certified:
+            return _unresolved(
+                "The supplied visible-group minimum is not certified.",
+                minimum_visible_group_count,
+            )
+        if type(minimum_visible_group_count) is not int or minimum_visible_group_count < 0:
+            return _unresolved(
+                "A nonnegative integer minimum visible-group count K is required.",
+                minimum_visible_group_count,
+            )
+        if type(self.variance_model_supported) is not bool or not self.variance_model_supported:
+            return _unresolved(
+                "The candidate variance or uncertainty model is unsupported.",
+                minimum_visible_group_count,
+            )
+        if self.preparation_reason is not None:
+            return _unresolved(self.preparation_reason, minimum_visible_group_count)
+
+        assert self.baseline_constant is not None
+        assert self.report_clutter_cost is not None
+        assert self.group_miss_cost is not None
+        cardinality_scores: list[float] = []
+        cumulative_matches = 0.0
+        sorted_floors = sorted(self.per_report_match_floors)
+        for cardinality in range(self.report_count + 1):
+            if cardinality:
+                cumulative_matches = fsum((cumulative_matches, sorted_floors[cardinality - 1]))
+            unmatched_reports = self.report_count - cardinality
+            if unmatched_reports == 0:
+                report_term = 0.0
+            elif np.isinf(self.report_clutter_cost):
+                report_term = inf
+            else:
+                report_term = unmatched_reports * self.report_clutter_cost
+            unmatched_groups = max(minimum_visible_group_count - cardinality, 0)
+            group_term = unmatched_groups * self.group_miss_cost
+            cardinality_scores.append(
+                fsum(
+                    (
+                        self.baseline_constant,
+                        report_term,
+                        group_term,
+                        cumulative_matches,
+                    )
+                )
+            )
+
+        raw_bound = min(cardinality_scores)
+        scale = 1.0 + abs(self.baseline_constant)
+        if isfinite(self.report_clutter_cost):
+            scale += self.report_count * abs(self.report_clutter_cost)
+        scale += minimum_visible_group_count * abs(self.group_miss_cost)
+        scale += fsum(abs(value) for value in self.per_report_match_floors)
+        result_bound = nextafter(raw_bound - numerical_margin * scale, -inf)
+        if not isfinite(result_bound):
+            return _unresolved(
+                "The numerical lower bound is outside the finite score domain.",
+                minimum_visible_group_count,
+            )
+        return CandidateLowerBoundResult(
+            bound=result_bound,
+            supported=True,
+            reason=None,
+            minimum_visible_group_count=minimum_visible_group_count,
+            per_report_match_floors=self.per_report_match_floors,
+            cardinality_bounds=tuple(cardinality_scores),
+            assumptions=(
+                "objective is bearing_set_map_v1",
+                "visible-group count certificate is valid",
+                "all predicted type factors are at most one",
+                "predicted angular uncertainty is nonnegative",
+                "unknown predicted-group bearings may attain zero residual",
+                "predicted group count may exceed K",
+                "all unmatched-group costs use the configured detection probability",
+            ),
+        )
+
+
+def prepare_candidate_objective_bound(
+    measurements: MeasurementSetV2 | Sequence[float] | np.ndarray,
+    config: SearchConfig,
+    *,
+    variance_model_supported: bool = True,
+    observation_types: Sequence[str | int | None] | None = None,
+    observation_sigmas_deg: Sequence[float | None] | np.ndarray | None = None,
+) -> PreparedCandidateObjectiveBound:
+    """Cache canonical likelihood constants and global report match floors once."""
+    if not isinstance(config, SearchConfig):
+        raise TypeError("config must be SearchConfig.")
+    base = PreparedCandidateObjectiveBound(
+        config=config,
+        report_count=0,
+        baseline_constant=None,
+        report_clutter_cost=None,
+        group_miss_cost=None,
+        per_report_match_floors=(),
+        variance_model_supported=variance_model_supported,
+        preparation_reason=None,
+    )
+    if config.objective_version != "bearing_set_map_v1":
+        return replace(
+            base,
+            preparation_reason="Only bearing_set_map_v1 has a certified objective floor.",
+        )
+    if not variance_model_supported:
+        return base
+    try:
+        bearings = _report_bearings(measurements)
+        reference = build_likelihood_costs(
+            measurements,
+            bearings,
+            [None] * len(bearings),
+            config,
+            np.zeros(len(bearings)),
+            observation_types=observation_types,
+            observation_sigmas_deg=observation_sigmas_deg,
+        )
+    except NotImplementedError as exc:
+        return replace(base, preparation_reason=f"Unsupported likelihood or variance model: {exc}")
+
+    report_count = reference.matched_costs.shape[0]
+    clutter = (
+        float(reference.report_clutter_costs[0])
+        if report_count
+        else _report_clutter_cost(config.expected_unmatched_reports)
+    )
+    group_miss = (
+        float(reference.group_miss_costs[0])
+        if len(reference.group_miss_costs)
+        else -log(1.0 - config.detection_probability)
+    )
+    floors = _global_report_match_floors(
+        measurements,
+        config,
+        observation_types=observation_types,
+        observation_sigmas_deg=observation_sigmas_deg,
+    )
+    if len(floors) != report_count or not np.isfinite(floors).all():
+        return replace(
+            base,
+            report_count=report_count,
+            preparation_reason=(
+                "The objective did not yield finite report-wise global match floors."
+            ),
+        )
+    return PreparedCandidateObjectiveBound(
+        config=config,
+        report_count=report_count,
+        baseline_constant=float(reference.baseline_constant),
+        report_clutter_cost=clutter,
+        group_miss_cost=group_miss,
+        per_report_match_floors=tuple(float(value) for value in floors),
+        variance_model_supported=variance_model_supported,
+        preparation_reason=None,
+    )
+
+
 def candidate_objective_lower_bound(
     measurements: MeasurementSetV2 | Sequence[float] | np.ndarray,
     minimum_visible_group_count: int | None,
@@ -42,12 +248,7 @@ def candidate_objective_lower_bound(
     observation_sigmas_deg: Sequence[float | None] | np.ndarray | None = None,
     numerical_margin: float = 1e-10,
 ) -> CandidateLowerBoundResult:
-    """Lower-bound the full objective using only a certified visible-group minimum.
-
-    The count K may be smaller than the final visible-group count. The bound
-    therefore allows any number of matched reports up to the report count and
-    minimizes the group-miss term over all possible group counts n >= K.
-    """
+    """One-shot compatibility wrapper around prepared objective bounds."""
     if not isinstance(config, SearchConfig):
         raise TypeError("config must be SearchConfig.")
     if not isfinite(numerical_margin) or numerical_margin < 0.0:
@@ -55,6 +256,11 @@ def candidate_objective_lower_bound(
     if config.objective_version != "bearing_set_map_v1":
         return _unresolved(
             "Only bearing_set_map_v1 has a certified objective floor.",
+            minimum_visible_group_count,
+        )
+    if type(visibility_count_certified) is not bool:
+        return _unresolved(
+            "The visibility certification flag must be a bool.",
             minimum_visible_group_count,
         )
     if not visibility_count_certified:
@@ -67,106 +273,22 @@ def candidate_objective_lower_bound(
             "A nonnegative integer minimum visible-group count K is required.",
             minimum_visible_group_count,
         )
-    if not variance_model_supported:
+    if type(variance_model_supported) is not bool or not variance_model_supported:
         return _unresolved(
             "The candidate variance or uncertainty model is unsupported.",
             minimum_visible_group_count,
         )
-
-    try:
-        objective_reference = build_likelihood_costs(
-            measurements,
-            _report_bearings(measurements),
-            [None] * len(_report_bearings(measurements)),
-            config,
-            np.zeros(len(_report_bearings(measurements))),
-            observation_types=observation_types,
-            observation_sigmas_deg=observation_sigmas_deg,
-        )
-    except NotImplementedError as exc:
-        return _unresolved(
-            f"Unsupported likelihood or variance model: {exc}",
-            minimum_visible_group_count,
-        )
-
-    report_count = objective_reference.matched_costs.shape[0]
-    clutter_cost = (
-        float(objective_reference.report_clutter_costs[0])
-        if report_count
-        else _report_clutter_cost(config.expected_unmatched_reports)
-    )
-    group_miss_cost = (
-        float(objective_reference.group_miss_costs[0])
-        if len(objective_reference.group_miss_costs)
-        else -log(1.0 - config.detection_probability)
-    )
-    match_floors = _global_report_match_floors(
+    prepared = prepare_candidate_objective_bound(
         measurements,
         config,
+        variance_model_supported=variance_model_supported,
         observation_types=observation_types,
         observation_sigmas_deg=observation_sigmas_deg,
     )
-    if len(match_floors) != report_count or not np.isfinite(match_floors).all():
-        return _unresolved(
-            "The objective did not yield finite report-wise global match floors.",
-            minimum_visible_group_count,
-        )
-
-    cardinality_scores: list[float] = []
-    cumulative_matches = 0.0
-    sorted_floors = sorted(match_floors)
-    for cardinality in range(report_count + 1):
-        if cardinality:
-            cumulative_matches = fsum((cumulative_matches, sorted_floors[cardinality - 1]))
-        unmatched_reports = report_count - cardinality
-        if unmatched_reports == 0:
-            report_term = 0.0
-        elif np.isinf(clutter_cost):
-            report_term = inf
-        else:
-            report_term = unmatched_reports * clutter_cost
-        unmatched_groups = max(minimum_visible_group_count - cardinality, 0)
-        group_term = unmatched_groups * group_miss_cost
-        score = fsum(
-            (
-                float(objective_reference.baseline_constant),
-                report_term,
-                group_term,
-                cumulative_matches,
-            )
-        )
-        cardinality_scores.append(score)
-
-    raw_bound = min(cardinality_scores)
-    scale = 1.0 + abs(float(objective_reference.baseline_constant))
-    if isfinite(clutter_cost):
-        scale += report_count * abs(clutter_cost)
-    scale += minimum_visible_group_count * abs(group_miss_cost)
-    scale += fsum(abs(value) for value in match_floors)
-    # The scaled downward slack absorbs floating summation and libm rounding.
-    slack = numerical_margin * scale
-    bound = nextafter(raw_bound - slack, -inf)
-    if not isfinite(bound):
-        return _unresolved(
-            "The numerical lower bound is outside the finite score domain.",
-            minimum_visible_group_count,
-        )
-    return CandidateLowerBoundResult(
-        bound=bound,
-        supported=True,
-        reason=None,
-        minimum_visible_group_count=minimum_visible_group_count,
-        per_report_match_floors=tuple(float(value) for value in match_floors),
-        cardinality_bounds=tuple(float(value) for value in cardinality_scores),
-        assumptions=(
-            "objective is bearing_set_map_v1",
-            "visible-group count certificate is valid",
-            "all predicted type factors are at most one",
-            "predicted angular uncertainty is nonnegative",
-            "unknown predicted-group bearings may attain zero residual",
-            "predicted group count may exceed K",
-            "all unmatched-group costs use the configured detection probability",
-        ),
+    return prepared.bound(
+        minimum_visible_group_count,
+        visibility_count_certified,
+        numerical_margin=numerical_margin,
     )
 
 
@@ -266,6 +388,8 @@ def _unresolved(
 
 __all__ = [
     "CandidateLowerBoundResult",
+    "PreparedCandidateObjectiveBound",
+    "prepare_candidate_objective_bound",
     "candidate_objective_lower_bound",
     "should_prune_candidate",
 ]
