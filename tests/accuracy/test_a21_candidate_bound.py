@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from math import inf, isfinite
+from typing import cast
 
 import pytest
 
 from bearing_localization.search.candidate_lower_bound import (
     candidate_objective_lower_bound,
+    prepare_candidate_objective_bound,
     should_prune_candidate,
 )
 from bearing_localization.search.config import SearchConfig
@@ -199,12 +201,34 @@ def test_uncertified_or_unsupported_variance_and_objective_return_unresolved():
     assert omitted_certificate.reason is not None
     assert "not certified" in omitted_certificate.reason
 
+    string_certificate = candidate_objective_lower_bound(
+        [0.0], 1, config, visibility_count_certified=cast(bool, "false")
+    )
+    assert not string_certificate.supported and string_certificate.bound is None
+    assert string_certificate.reason is not None
+    assert "must be a bool" in string_certificate.reason
+
     variance = candidate_objective_lower_bound(
         [0.0], 1, config, visibility_count_certified=True, variance_model_supported=False
     )
     assert not variance.supported and variance.bound is None
     assert variance.reason is not None
     assert "variance" in variance.reason
+
+    string_variance = candidate_objective_lower_bound(
+        [0.0],
+        1,
+        config,
+        visibility_count_certified=True,
+        variance_model_supported=cast(bool, "false"),
+    )
+    assert not string_variance.supported and string_variance.bound is None
+
+    bad_variance_prepared = prepare_candidate_objective_bound(
+        [0.0], config, variance_model_supported=cast(bool, "false")
+    )
+    assert not bad_variance_prepared.supported
+    assert bad_variance_prepared.reason is not None
 
     legacy = candidate_objective_lower_bound(
         [0.0],
@@ -279,3 +303,92 @@ def test_pruning_is_strict_and_requires_supported_bound_and_feasible_score():
     )
     with pytest.raises(ValueError, match="finite"):
         should_prune_candidate(result, inf)
+
+
+@pytest.mark.parametrize(
+    "config, observations, sigmas, types, k_values",
+    [
+        (SearchConfig(), [0.0, 180.0], [0.05, 2.0], ["vessel", None], [0, 1, 5]),
+        (
+            SearchConfig(expected_unmatched_reports=0.0),
+            [359.9, 0.1],
+            [0.0, 0.4],
+            [None, "physical_aid"],
+            [0, 2],
+        ),
+        (
+            SearchConfig(sigma_floor_deg=0.05, generated_sigma_deg=0.5),
+            [0.0, 120.0],
+            [0.0, 0.05],
+            ["vessel", "physical_aid"],
+            [1, 3],
+        ),
+    ],
+)
+def test_prepared_bound_matches_one_shot_for_multiple_k(
+    config, observations, sigmas, types, k_values
+):
+    prepared = prepare_candidate_objective_bound(
+        observations,
+        config,
+        observation_types=types,
+        observation_sigmas_deg=sigmas,
+    )
+    assert prepared.config is config
+    for k in k_values:
+        cached = prepared.bound(k, True)
+        direct = candidate_objective_lower_bound(
+            observations,
+            k,
+            config,
+            visibility_count_certified=True,
+            observation_types=types,
+            observation_sigmas_deg=sigmas,
+        )
+        assert cached == direct
+
+
+def test_prepared_input_storage_is_immutable_and_does_not_alias_callers():
+    import numpy as np
+
+    bearings = np.asarray([12.0, 240.0])
+    sigmas = np.asarray([0.05, 1.5])
+    types = ["vessel", "physical_aid"]
+    config = SearchConfig(use_types=True)
+    prepared = prepare_candidate_objective_bound(
+        bearings,
+        config,
+        observation_types=types,
+        observation_sigmas_deg=sigmas,
+    )
+    before = prepared.bound(2, True)
+    bearings[:] = [100.0, 101.0]
+    sigmas[:] = 30.0
+    types[:] = ["unknown", "unknown"]
+    after = prepared.bound(2, True)
+    assert before == after
+    assert isinstance(prepared.per_report_match_floors, tuple)
+    with pytest.raises((AttributeError, TypeError)):
+        setattr(prepared, "report_count", 99)
+
+
+def test_prepared_unsupported_state_and_certificate_behavior_matches_wrapper():
+    config = SearchConfig()
+    unsupported = prepare_candidate_objective_bound([0.0], config, variance_model_supported=False)
+    assert not unsupported.supported
+    assert unsupported.reason is not None and "variance" in unsupported.reason
+    for certified in (False, True):
+        cached = unsupported.bound(1, certified)
+        direct = candidate_objective_lower_bound(
+            [0.0],
+            1,
+            config,
+            visibility_count_certified=certified,
+            variance_model_supported=False,
+        )
+        assert cached == direct
+    legacy_config = SearchConfig(objective_version="legacy_corrected_v0")
+    legacy = prepare_candidate_objective_bound([0.0], legacy_config)
+    assert legacy.bound(1, True) == candidate_objective_lower_bound(
+        [0.0], 1, legacy_config, visibility_count_certified=True
+    )

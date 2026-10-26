@@ -6,6 +6,10 @@ This bound applies to one candidate observer position and the `bearing_set_map_v
 
 The bound also requires the configured variance model to be supported. Diagonal per-report covariance and the configured finite generated-sigma fallback use the canonical likelihood implementation. Non-diagonal covariance, common-bearing-bias integration, an unsupported variance model, and any objective version other than `bearing_set_map_v1` return a structured unresolved result.
 
+## Prepared-request API
+
+The preparation function computes the canonical baseline, clutter cost, group-miss cost, and global report match floors once. Its frozen result contains only scalar values, tuples, and the immutable SearchConfig; it retains no aliases to caller-owned arrays or metadata. Call the prepared result's bound method for each candidate K. The existing one-shot function delegates through this API, and the cardinality formula and numerical margin remain the same. Certification and variance-support flags must be actual booleans; other values return unresolved.
+
 ## Objective and derivation
 
 Let $m$ be the number of reports, $n$ the actual number of predicted visible groups, and $k$ the number of matched report/group pairs in a partial injective assignment $A$. The complete score is
