@@ -70,7 +70,7 @@ def check_resources(path: Path) -> int:
     if free < FLOOR_BYTES + MAX_OUTPUT_BYTES:
         raise OSError("40 GiB disk reserve leaves less than the output cap")
     if _output_bytes(path) > MAX_OUTPUT_BYTES:
-        raise OSError("diagnostic output exceeded 20 MiB")
+        raise OSError(f"diagnostic output exceeded {MAX_OUTPUT_BYTES // 1024**2} MiB")
     return free
 
 
@@ -467,7 +467,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         manifest["free_bytes_at_end"] = shutil.disk_usage(args.output).free
         if manifest["output_bytes"] > MAX_OUTPUT_BYTES:
             manifest["status"] = "failed"
-            manifest["error"] = "diagnostic output exceeded 20 MiB"
+            manifest["error"] = f"diagnostic output exceeded {MAX_OUTPUT_BYTES // 1024**2} MiB"
         if not checkpoint_path.exists():
             _checkpoint(
                 checkpoint_path,
