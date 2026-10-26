@@ -2,7 +2,7 @@
 
 ## Current outcome
 
-The implementation is continuing on the accuracy/integration branch. Forty-eight specialist roles have contributed, with the coordinator separate. The source, tests, figures, and reproducibility work are pushed in logical milestones. Release accuracy, complete-search latency, and measured-bearing field accuracy remain unvalidated.
+The implementation is continuing on the accuracy/integration branch. Forty-nine specialist roles have been dispatched, with the coordinator separate. The source, tests, figures, and reproducibility work are pushed in logical milestones. Release accuracy, complete-search latency, and measured-bearing field accuracy remain unvalidated.
 
 The current development population is fixed before search. It contains 6,120 planned rows, including 3,600 nominal rows and twelve explicitly failed stress preparations. There are 600 nominal rows in each range and type condition. Supported counts are 269 at 1 km, 438 at 5 km, and 448 at 10 km for each type mode. Missing results, crashes, ambiguity, and timeouts remain in the supported denominator.
 
@@ -125,3 +125,13 @@ The external cache-build interval was 437.944 seconds, including 351.697 seconds
 The fixed 32-ray visibility switch is integrated at 8d84647. All 520 scalar/batch comparisons across 260 saved hypotheses agree, including complete component evidence. The coordinator's focused screen, controller, worker-pool, and independent visibility gate passed 54 tests. Larger batches reduce expensive visibility cases; small cases retain scalar traversal. These component results do not establish full-search latency.
 
 A26 and A30 are repairing the cached full-domain scoring driver and worker failure ledger under A37's independent review. The review found a nested benchmark-lock acquisition, incomplete out-of-order candidate dispositions, and insufficient source/configuration binding. The driver must pass an actual subprocess smoke before the large run. A20 has supplied the existing multiple-mode continuous refinement handoff. The next experiment retains the entire generated finite candidate domain; no claim of continuous search completeness or accepted localization follows from candidate generation alone.
+
+## Real program handoff verified
+
+The parent-supervised cached driver completed its real prefix smoke using driver 1ef881b and scoring source 0d34a17. It loaded and ordered all 1,457,546 cached IDs, exactly scored its one explicitly selected candidate, and recorded the other 1,457,545 as not selected by the profile. Every disposition ID matched the full candidate plan exactly once. The 123.884-second external interval includes full-cache preparation and output. Selected-request completion is true; full-domain completion and finite-set certification remain false. This verifies executable program handoff rather than position recovery.
+
+The preceding actual run failed on a strict configuration discriminator, and an earlier five-second deadline experiment verified process-group termination and complete unknown-work accounting. All attempts remain intact. The driver now uses the strict versioned configuration reader, acquires the benchmark lock only in its supervisor, and binds generation and scoring sources separately. A30's worker ledger retains committed, pending, failed, outstanding, and not-dispatched IDs. Its focused coordinator gate passed 33 tests.
+
+Integration bb2ff81 repairs standalone test imports after the new tooling tests failed isolated collection. The combined driver, cache-generation, worker-pool, and screened-controller gate passed 45 tests with one environment-gated test skipped in 10.17 seconds; scoped Ruff and ty passed. The bb2ff81 commit body incorrectly says 46 passing tests. The captured result is 45, and this paragraph corrects that transcription.
+
+The next measured work uses a predetermined truth-independent cache sample to compare exact scoring and reviewed pruning on one and four CPU workers. Full-domain execution will preserve hash-bound chunks across explicitly recorded continuations. No full-domain location result has yet been produced by this driver. A further verified hardlink pass reclaimed 468,852,736 allocated bytes from identical completed smoke plans and inventories while preserving differing disposition records.
