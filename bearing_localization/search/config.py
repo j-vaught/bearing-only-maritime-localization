@@ -48,6 +48,7 @@ class SearchConfig:
     seed_candidate_budget: int = 4_096
     candidate_workers: int = 1
     candidate_pool_memory_budget_bytes: int = 8 * 1024**3
+    proposal_cache_path: str | None = None
 
     def __post_init__(self) -> None:
         if self.objective_version not in ("bearing_set_map_v1", "legacy_corrected_v0"):
@@ -77,6 +78,10 @@ class SearchConfig:
             or self.proposal_source_pair_budget < 1
         ):
             raise ValueError("proposal_source_pair_budget must be a positive integer or None.")
+        if self.proposal_cache_path is not None and (
+            not isinstance(self.proposal_cache_path, str) or not self.proposal_cache_path.strip()
+        ):
+            raise ValueError("proposal_cache_path must be a nonempty path string or None.")
         if type(self.proposal_cell_budget) is not int or self.proposal_cell_budget < 1:
             raise ValueError("proposal_cell_budget must be a positive integer.")
         if type(self.proposal_chunk_size) is not int or self.proposal_chunk_size < 1:
