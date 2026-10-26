@@ -134,7 +134,9 @@ def test_batched_helper_preserves_cpu_grid_order_budget_and_counts(
 
 
 @pytest.mark.parametrize("device_ids", [(0,), (0, 1), (0, 1, 2, 3)])
-def test_real_gpu_candidate_batch_matches_cpu_full_result(device_ids: tuple[int, ...]) -> None:
+def test_real_gpu_candidate_batch_matches_cpu_full_result(
+    device_ids: tuple[int, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
     cp = pytest.importorskip("cupy", reason="locked GPU extra is required")
     if cp.cuda.runtime.getDeviceCount() < len(device_ids):
         pytest.skip("requested GPU device count is unavailable")
@@ -162,6 +164,16 @@ def test_real_gpu_candidate_batch_matches_cpu_full_result(device_ids: tuple[int,
         telemetry=telemetry,
         batch_size=3,
     )
+    import bearing_localization.search.gpu.search_adapter as adapter
+
+    original_predict = adapter.predict_visible_groups
+    contexts = []
+
+    def record_context(*args, **kwargs):
+        contexts.append(kwargs.get("prepared_context"))
+        return original_predict(*args, **kwargs)
+
+    monkeypatch.setattr(adapter, "predict_visible_groups", record_context)
     gpu = score_candidate_positions_batched(
         scorer,
         positions,
@@ -174,6 +186,8 @@ def test_real_gpu_candidate_batch_matches_cpu_full_result(device_ids: tuple[int,
     assert gpu.localization.search_status == cpu.localization.search_status
     assert gpu.localization.budget_limit == cpu.localization.budget_limit
     assert gpu.localization.budget_used == cpu.localization.budget_used
+    assert contexts
+    assert all(context is scorer._prediction_context for context in contexts)
     report = telemetry.as_dict()
     assert report["backend"] == "gpu"
     assert set(report["device_ids"]) == set(device_ids)

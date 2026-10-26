@@ -123,6 +123,7 @@ class GpuCandidateScorer(CandidateScorer):
                     angular_resolution_deg=self.config.circular_merge_tolerance_deg,
                     type_labels_enabled=self.config.use_types,
                     spatial_index=self._spatial_index,
+                    prepared_context=self._prediction_context,
                 )
             if pred.unresolved_model:
                 outcomes[index] = CandidateEvaluation(
