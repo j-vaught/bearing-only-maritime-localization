@@ -64,8 +64,15 @@ def calibration_payload(calibration: DecisionCalibration) -> dict[str, Any]:
 def load_frozen_calibration(path: str | Path) -> DecisionCalibration:
     """Load and verify a frozen calibration; validation/held-out files are rejected."""
     document = json.loads(Path(path).read_text(encoding="utf-8"))
-    if document.get("split") != "development" or document.get("frozen") is not True:
-        raise ValueError("Runtime calibration must be frozen and development-only.")
+    if (
+        document.get("split") != "development"
+        or document.get("frozen") is not True
+        or document.get("validation_confirmed") is not True
+        or not isinstance(document.get("validation_metrics"), dict)
+    ):
+        raise ValueError(
+            "Runtime calibration must be frozen, dev-selected, and validation-confirmed."
+        )
     payload = {key: value for key, value in document.items() if key not in ("frozen", "sha256")}
     actual = hashlib.sha256(canonical_json(payload)).hexdigest()
     if document.get("sha256") != actual:

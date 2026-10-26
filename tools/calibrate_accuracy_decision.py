@@ -1,4 +1,4 @@
-"""Select and freeze an accuracy decision threshold grid from dev-only trials."""
+"""Select thresholds on development and confirm them on validation before freezing."""
 
 from __future__ import annotations
 
@@ -8,11 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from bearing_localization.search.calibration import (
-    RADIUS_LIMITS,
-    SCORE_GAPS,
-    canonical_json,
-)
+from bearing_localization.search.calibration import RADIUS_LIMITS, SCORE_GAPS, canonical_json
 
 
 def _eligible(trial: dict[str, Any]) -> bool:
@@ -27,77 +23,102 @@ def _eligible(trial: dict[str, Any]) -> bool:
     )
 
 
-def calibrate(document: dict[str, Any]) -> dict[str, Any]:
-    """Calibrate grid thresholds; input rows must be development split only."""
-    if document.get("split") != "development":
-        raise ValueError("Calibration input must be development split; held-out data is forbidden.")
-    if document.get("frozen") is True:
-        raise ValueError("Calibration input cannot be a previously frozen artifact.")
+def _check_trials(document: dict[str, Any], split: str) -> list[dict[str, Any]]:
+    if document.get("split") != split or document.get("frozen") is True:
+        raise ValueError(f"Metrics input must be unfrozen {split} data.")
     trials = document.get("trials")
     if not isinstance(trials, list) or not trials:
-        raise ValueError("Development calibration requires a nonempty trials list.")
-    if any(
-        not isinstance(row, dict) or row.get("split", "development") != "development"
-        for row in trials
-    ):
-        raise ValueError("Every trial must be explicitly development-only.")
-    support_n = len(trials)
+        raise ValueError(f"{split.capitalize()} metrics require a nonempty trials list.")
+    if any(not isinstance(row, dict) or row.get("split", split) != split for row in trials):
+        raise ValueError(f"Every trial must be explicitly {split}-only.")
+    return trials
+
+
+def _measure(trials: list[dict[str, Any]], gap: float, radius: float | None) -> dict[str, Any]:
     eligible = [row for row in trials if _eligible(row)]
+    accepted = [
+        row
+        for row in eligible
+        if row["score_gap"] >= gap and (radius is None or row["radius_95_m"] <= radius)
+    ]
+    errors = sorted(float(row["error_m"]) for row in accepted)
+    count = len(accepted)
+    return {
+        "supported_trials": len(trials),
+        "eligible_trials": len(eligible),
+        "accepted_trials": count,
+        "availability": count / len(trials),
+        "conditional_accuracy": (
+            sum(row["error_m"] <= 100.0 for row in accepted) / count if count else 0.0
+        ),
+        "accepted_p95_error_m": (
+            errors[min(len(errors) - 1, int(0.95 * len(errors)))] if errors else None
+        ),
+    }
+
+
+def calibrate(
+    document: dict[str, Any], validation_document: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Select thresholds only on dev, then optionally confirm without retuning on validation."""
+    trials = _check_trials(document, "development")
     candidates: list[dict[str, Any]] = []
     for gap in SCORE_GAPS:
         for radius in RADIUS_LIMITS:
-            accepted = [
-                row
-                for row in eligible
-                if row["score_gap"] >= gap and (radius is None or row["radius_95_m"] <= radius)
-            ]
-            n = len(accepted)
-            correct = sum(row["error_m"] <= 100.0 for row in accepted)
-            accuracy = correct / n if n else 0.0
-            availability = n / support_n
-            errors = sorted(float(row["error_m"]) for row in accepted)
-            p95 = errors[min(len(errors) - 1, int(0.95 * len(errors)))] if errors else None
-            candidates.append(
-                {
-                    "gap": gap,
-                    "radius": radius,
-                    "accepted": n,
-                    "availability": availability,
-                    "accuracy": accuracy,
-                    "p95": p95,
-                }
-            )
+            metrics = _measure(trials, gap, radius)
+            candidates.append({"gap": gap, "radius": radius, **metrics})
     accurate = [
         candidate
         for candidate in candidates
-        if candidate["accepted"] and candidate["accuracy"] >= 0.95
+        if candidate["accepted_trials"] and candidate["conditional_accuracy"] >= 0.95
     ]
     pool = accurate if accurate else candidates
     chosen = max(
         pool,
-        key=lambda c: (
-            c["availability"],
-            -(c["p95"] if c["p95"] is not None else float("inf")),
-            c["gap"],
-            -(c["radius"] if c["radius"] is not None else float("inf")),
+        key=lambda candidate: (
+            candidate["availability"],
+            -(
+                candidate["accepted_p95_error_m"]
+                if candidate["accepted_p95_error_m"] is not None
+                else float("inf")
+            ),
+            candidate["gap"],
+            -(candidate["radius"] if candidate["radius"] is not None else float("inf")),
         ),
     )
-    status = "PASS" if chosen["availability"] >= 0.90 and chosen["accuracy"] >= 0.95 else "FAIL"
+    dev_pass = chosen["availability"] >= 0.90 and chosen["conditional_accuracy"] >= 0.95
+    validation_metrics = None
+    validation_pass = False
+    if validation_document is not None:
+        validation_trials = _check_trials(validation_document, "validation")
+        validation_metrics = _measure(validation_trials, chosen["gap"], chosen["radius"])
+        validation_pass = (
+            validation_metrics["availability"] >= 0.90
+            and validation_metrics["conditional_accuracy"] >= 0.95
+        )
+    status = "PASS" if dev_pass and validation_pass else "FAIL"
     payload = {
         "schema_version": 1,
         "split": "development",
         "status": status,
         "thresholds": {"min_score_gap": chosen["gap"], "max_95_radius_m": chosen["radius"]},
         "metrics": {
-            "availability": chosen["availability"],
-            "conditional_accuracy": chosen["accuracy"],
-            "accepted_p95_error_m": chosen["p95"],
-            "supported_trials": support_n,
-            "eligible_trials": len(eligible),
-            "accepted_trials": chosen["accepted"],
+            **{
+                key: chosen[key]
+                for key in (
+                    "availability",
+                    "conditional_accuracy",
+                    "accepted_p95_error_m",
+                    "supported_trials",
+                    "eligible_trials",
+                    "accepted_trials",
+                )
+            },
             "accuracy_gate": 0.95,
             "availability_gate": 0.90,
         },
+        "validation_metrics": validation_metrics,
+        "validation_confirmed": validation_pass,
     }
     return {
         **payload,
@@ -110,9 +131,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("development_metrics", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--validation-metrics", type=Path)
     args = parser.parse_args()
     source = json.loads(args.development_metrics.read_text(encoding="utf-8"))
-    artifact = calibrate(source)
+    validation = (
+        json.loads(args.validation_metrics.read_text(encoding="utf-8"))
+        if args.validation_metrics
+        else None
+    )
+    artifact = calibrate(source, validation)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(
@@ -122,6 +149,7 @@ def main() -> None:
                 "sha256": artifact["sha256"],
                 "thresholds": artifact["thresholds"],
                 "metrics": artifact["metrics"],
+                "validation_metrics": artifact["validation_metrics"],
             },
             indent=2,
         )
