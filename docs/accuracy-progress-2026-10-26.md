@@ -203,3 +203,11 @@ Stage-one pre-visibility bound batching is integrated with unchanged canonical l
 Focused pytest collection exposed an existing path-order dependency in test helper imports. The shared pytest configuration now adds the repository root explicitly, so a focused test does not depend on other collected tests modifying sys.path. The previously failing four-test caller suite passes by itself. The dataset, objective, execution limits, and acceptance thresholds are unchanged.
 
 The serial real-data diagnostic remains active. A separate four-worker implementation and independent review are being prepared using the identical mode population and branch algorithm. Parallel execution will wait for the serial lock and its own correctness gate. The evaluator will retain an interrupted prefix and pending work if the serial deadline is reached.
+
+## Preserved serial assignment-expansion deadline result
+
+The serial diagnostic at executed commit 6f7cdf4354fddbc7237625bde2d82763362068c8 reached its 1,800-second deadline. It finalized 60 of 64 selected modes and left four pending. Actual elapsed time was 1,800.016071 seconds. The event ledger contains 20,435 branch starts, 20,435 branch results, and one deadline failure event. Results comprise 12,185 non-improvements, 8,225 invalid-water proposals, six maximum-evaluation proposals, and 19 running-best improvements. These counts are proposal outcomes, not independent localization trials.
+
+The raw manifest, checkpoint, rows, and events are retained under reports/experiments/assignment-expansion-diagnostic-v1. The manifest hash is 290c2645f8252a951491a99e2fa6bca6b29d2222d04cec8c9935a75b27db5e23; row and event hashes match the producer. The final tracked files total 22,055,971 bytes. The manifest's earlier output_bytes field was sampled before its final atomic rewrite and is 288 bytes smaller; no file is missing.
+
+Decision remains ambiguous, search status remains budget_exhausted, and certificate scope remains none. The unfinished mode's event tail remains preserved but does not become a fabricated completed-mode hypothesis. Independent evaluation is checking the returned results. The parallel runner remains under review, including partial process-start failure cleanup, before any actual execution.
