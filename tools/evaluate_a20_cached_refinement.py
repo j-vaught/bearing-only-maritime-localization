@@ -279,13 +279,29 @@ def main() -> None:
     manifest, rows = load_refinement(args.refinement_root, args.source_root, run)
     # Truth is opened only after source and refinement bindings have been verified.
     truth = read_json(args.truth_dir / "truth.json")
-    support = read_json(args.truth_dir / "support.json")
+    support_path = args.truth_dir / "support.json"
+    support = read_json(support_path)
+    truth_crs_path = args.truth_dir / "truth-crs.json"
+    truth_crs_doc = read_json(truth_crs_path)
     if support.get("supported") is not True or support.get("valid_reference_water") is not True:
         raise ValueError("Frozen evaluator support is invalid.")
+    if (
+        support.get("port_id") != "port-001"
+        or support.get("placement_id") != "placement-001"
+        or type(support.get("detected_physical_catalog_matched_groups")) is not int
+    ):
+        raise ValueError("Frozen evaluator support belongs to a different trial.")
+    trial_id = "development/port-001/placement-001/r0/range10000m/typesoff/nominal"
+    if truth_crs_doc.get("coordinate_reference_system") != "EPSG:32619":
+        raise ValueError("Frozen truth must use EPSG:32619.")
+    if truth_crs_doc.get("trial_id") not in (None, trial_id):
+        raise ValueError("Truth CRS metadata belongs to a different trial.")
     from maritime_localization_shared.contracts.truth import EvaluationTruth
     from maritime_localization_shared.serialization import read_contract
 
     truth_obj = read_contract(args.truth_dir / "truth.json", EvaluationTruth)
+    if truth_obj.trial_id != trial_id or truth.get("trial_id") != trial_id:
+        raise ValueError("Truth does not identify the frozen development trial.")
     ids: dict[int, set[str]] = {}
     for obj in truth.get("objects", []):
         if obj.get("observation_index") is not None:
@@ -300,6 +316,18 @@ def main() -> None:
         "source_run_complete": run.complete,
         "source_run_identity_sha256": run.manifest.get("run_identity_sha256"),
         "refinement_manifest_sha256": sha256_file(args.refinement_root / "manifest.json"),
+        "refinement_rows_sha256": manifest.get("rows_sha256"),
+        "source_supervisor_manifest_sha256": sha256_file(
+            args.source_root / "supervisor-manifest.json"
+        ),
+        "source_candidate_dispositions_sha256": run.manifest.get("candidate_dispositions_sha256"),
+        "source_chunk_results_sha256": run.manifest.get("chunk_results_sha256"),
+        "source_hypotheses_sha256": run.manifest.get("hypotheses_sha256"),
+        "evaluator_inputs_sha256": {
+            "truth": sha256_file(args.truth_dir / "truth.json"),
+            "support": sha256_file(support_path),
+            "truth_crs": sha256_file(truth_crs_path),
+        },
         "refinement_status": manifest.get("status"),
         "refinement_complete": manifest.get("status") == "selected_modes_completed",
         "selected_count": manifest["selected_mode_count"],
