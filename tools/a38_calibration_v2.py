@@ -482,6 +482,7 @@ def build_condition_document(
                 "preparation_status": getattr(eligibility, "preparation_status", None),
                 "preparation_reason": getattr(eligibility, "preparation_reason", None),
                 "support_sha256": getattr(eligibility, "support_sha256", None),
+                "execution_protocol_sha256": execution_protocol_sha,
                 "support_count": getattr(eligibility, "support_count", None),
                 "objective_version": condition.objective_version,
                 "algorithm": condition.algorithm,

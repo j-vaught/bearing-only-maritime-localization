@@ -1206,6 +1206,8 @@ def test_v2_condition_document_keeps_full_population_and_failure_rows(tmp_path: 
             ).encode()
         ).hexdigest()
     )
+    protocol_sha = document["provenance"]["execution_protocol_sha256"]
+    assert all(row["execution_protocol_sha256"] == protocol_sha for row in document["all_trials"])
     missing_stress = document["all_trials"][-1]
     assert missing_stress["sensor_condition"] == "stress"
     assert missing_stress["sensor_profile"] == "map_buffer"
