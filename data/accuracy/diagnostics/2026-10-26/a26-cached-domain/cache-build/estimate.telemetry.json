@@ -1,0 +1,647 @@
+{
+  "catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+  "diagnostics": {
+    "algorithm": "wedge_geodesic",
+    "candidate_count": 1,
+    "candidate_pool": {
+      "failure": null,
+      "memory_budget_bytes": null,
+      "startup_wall_s": 0.0,
+      "timings": null,
+      "workers": 1
+    },
+    "decision_reason": "missing_frozen_calibration",
+    "declared_bounds_xy_m": [
+      -220366.49772326474,
+      1424309.6784374337,
+      2699585.3102704627,
+      5088044.413143414
+    ],
+    "elapsed_time_semantics": {
+      "complete_request_wall_s": "request_timing.request_elapsed_s; request entry through estimate serialization",
+      "localization_result_elapsed_s": "exact_scoring_plus_continuous_refinement; excludes proposal generation and ordering"
+    },
+    "exact_scoring": {
+      "candidate_budget": 1,
+      "candidate_count": 1,
+      "complete": false,
+      "elapsed_wall_s": 0.587629565037787,
+      "evaluated_candidate_ids": [],
+      "evaluated_proposal_witnesses": [
+        {
+          "candidate_id": "cell:-2648:-2950",
+          "evidence_score": 0.6012409277158085,
+          "matching_count": 5,
+          "normalized_angular_residual": 0.007851932326886602,
+          "vote_count": 5,
+          "witness_keys": [
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088640",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088649",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088652",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088653",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088660",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088672",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088695",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088705",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088720",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088730",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088734",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088756",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088757",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088763",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088766",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088775",
+            "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088809",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99216",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99217",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99222",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99224",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99225",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99226",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99227",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99228",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99229",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99232",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99234",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99235",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99239",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99242",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99245",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99250",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99253",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99258",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99260",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99266",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99268",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99269",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99270",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99273",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99274",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99276",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99278",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99282",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99286",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99291",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99292",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99293",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99294",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99296",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99304",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99306",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99307",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99312",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99315",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99321",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99323",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99333",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99336",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99343",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99349",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99353",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99359",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99373",
+            "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99375",
+            "enc-component:harbour:Harbor.Daymark_point:US5PCVBB.000:source_object_id=204973"
+          ],
+          "witness_report_keys": [
+            {
+              "catalog_keys": [
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088809",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99227",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99250",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99260",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99266",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99276",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99291",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99296",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99304",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99306",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99321",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99323",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99333",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99343",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99349",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99353",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99375"
+              ],
+              "report_index": 0
+            },
+            {
+              "catalog_keys": [
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088653",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088660",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088763",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088809",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99216",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99217",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99224",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99229",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99235",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99268",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99273",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99304",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99312",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99315",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99321",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99323",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99333",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99353",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99359",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99373",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99375"
+              ],
+              "report_index": 1
+            },
+            {
+              "catalog_keys": [
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088763",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088809",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99216",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99217",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99228",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99235",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99274",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99286",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99292",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99312",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99315",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99333",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99353",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99359",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99373",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99375",
+                "enc-component:harbour:Harbor.Daymark_point:US5PCVBB.000:source_object_id=204973"
+              ],
+              "report_index": 2
+            },
+            {
+              "catalog_keys": [
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088640",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088649",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088652",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088705",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088720",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088730",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088734",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088756",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088757",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088766",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088775",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088809",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99222",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99225",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99226",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99232",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99239",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99242",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99245",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99258",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99269",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99270",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99278",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99282",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99293",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99294",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99307",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99333",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99353",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99373",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99375"
+              ],
+              "report_index": 3
+            },
+            {
+              "catalog_keys": [
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088672",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088695",
+                "enc-component:approach:Approach.Beacon_Special_Purpose_General_point:US4FL2JH.000:approach.bcnspp.fid=1088809",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99227",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99234",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99250",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99253",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99260",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99266",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99276",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99291",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99296",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBB.000:source_object_id=99306",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99321",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99323",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99333",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99336",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99343",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99349",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99353",
+                "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5PCVBC.000:source_object_id=99375"
+              ],
+              "report_index": 4
+            }
+          ]
+        }
+      ],
+      "outcome_counts": {
+        "invalid_water": 0,
+        "scored": 1,
+        "unresolved_coverage": 0,
+        "unresolved_model": 0
+      },
+      "remaining_unique_candidates": null,
+      "scored_cell_center_candidate_count": 0,
+      "scored_seed_candidate_count": 0,
+      "scored_seed_cell_count": 0,
+      "scored_seed_cell_ids": [],
+      "status": "budget_exhausted"
+    },
+    "map_coverage_status": "partial",
+    "outcome_counts": {
+      "invalid_water": 0,
+      "scored": 1,
+      "unresolved_coverage": 0,
+      "unresolved_model": 0
+    },
+    "projected_crs": "EPSG:32618",
+    "proposal_cache": {
+      "action": "generated_and_saved",
+      "cache_format": "geodesic-proposal-cache-v1",
+      "context": {
+        "catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+        "implementation_sha256": "6bb91876c30e61c65e106af0947834c52784e8ce83a7dced808cd907bcdf576d",
+        "map_sha256": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
+        "measurement_sha256": "ed1145cee93d4f06ffa983f671319dee49e9a95cb4692a2dd14a44c4a8eeceb1",
+        "search_config_sha256": "446b3896c26cc3f64b1b21fa3f97fcdc18afc845349164f14d965f292b8513e1"
+      },
+      "context_sha256": "3e450d04fd82d4bec5c5786d9e49960d51a0dab4615e7237b55bc493251aea44",
+      "enabled": true,
+      "generation_config": {
+        "algorithm": "wedge_geodesic",
+        "angular_sampling_policy": "uniform_offsets_cover_interval_and_include_zero_v1",
+        "angular_tolerance_deg": 0.5,
+        "bounds_xy": [
+          -220366.49772326474,
+          1424309.6784374337,
+          2699585.3102704627,
+          5088044.413143414
+        ],
+        "cell_size_m": 250.0,
+        "effective_observation_sigmas_deg": [
+          [
+            0,
+            0.5
+          ],
+          [
+            1,
+            0.5
+          ],
+          [
+            2,
+            0.5
+          ],
+          [
+            3,
+            0.5
+          ],
+          [
+            4,
+            0.5
+          ]
+        ],
+        "frame_origin_lonlat": [
+          -73.88006033640767,
+          35.18212735680013
+        ],
+        "frame_projected_crs": "+proj=aeqd +lat_0=35.18212735680013 +lon_0=-73.88006033640767 +datum=WGS84 +units=m +no_defs +type=crs",
+        "generated_sigma_deg": 0.5,
+        "map_projected_crs": "EPSG:32618",
+        "max_candidate_cells": 5000000,
+        "max_range_m": 10000.0,
+        "max_source_pairs": 333340,
+        "min_range_m": 0.0,
+        "proposal_source_pair_budget_configured": 333340,
+        "range_inclusive": true,
+        "range_sampling_policy": "uniform_steps_with_exact_final_distance_v1",
+        "range_step_m_configured": null,
+        "range_step_m_effective": 125.0,
+        "sigma_floor_deg": 0.05,
+        "solver_tolerance_deg": 1e-07,
+        "source_chunk_size": 4096,
+        "use_types": false
+      },
+      "hit": false,
+      "load_elapsed_wall_s": 0,
+      "path": "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/outputs/a26-screened-cache-diagnostic-v4/cache/proposals-v1",
+      "save_elapsed_wall_s": 49.87575940415263
+    },
+    "proposal_config": {
+      "angular_sample_count": 3,
+      "angular_sample_gap_deg": 0.7162019067379666,
+      "angular_tolerance_deg": 0.5,
+      "candidate_scoring_budget": 1,
+      "cell_size_m": 250.0,
+      "max_range_m": 10000.0,
+      "proposal_cell_budget": 5000000,
+      "proposal_chunk_size": 4096,
+      "proposal_solver_tolerance_deg": 1e-07,
+      "proposal_source_pair_budget_configured": 333340,
+      "proposal_source_pair_budget_effective": 333340,
+      "range_step_m": 125.0
+    },
+    "proposal_generation": {
+      "candidate_cells_total": 1457546,
+      "elapsed_wall_s": 351.6968064690009,
+      "generation_budget_reason": "none",
+      "generation_complete": true,
+      "generation_status": "completed",
+      "geodesic_samples_degenerate": 1000020,
+      "geodesic_samples_failed": 0,
+      "geodesic_samples_total": 83001660,
+      "matching_count_histogram": [
+        [
+          5,
+          239528
+        ],
+        [
+          4,
+          191041
+        ],
+        [
+          3,
+          216474
+        ],
+        [
+          2,
+          283419
+        ],
+        [
+          1,
+          527084
+        ]
+      ],
+      "matching_vote_histogram": [
+        [
+          5,
+          5,
+          239528
+        ],
+        [
+          4,
+          5,
+          17358
+        ],
+        [
+          4,
+          4,
+          173683
+        ],
+        [
+          3,
+          5,
+          9959
+        ],
+        [
+          3,
+          4,
+          13017
+        ],
+        [
+          3,
+          3,
+          193498
+        ],
+        [
+          2,
+          5,
+          7700
+        ],
+        [
+          2,
+          4,
+          4906
+        ],
+        [
+          2,
+          3,
+          15075
+        ],
+        [
+          2,
+          2,
+          255738
+        ],
+        [
+          1,
+          5,
+          4836
+        ],
+        [
+          1,
+          4,
+          2502
+        ],
+        [
+          1,
+          3,
+          5931
+        ],
+        [
+          1,
+          2,
+          26728
+        ],
+        [
+          1,
+          1,
+          487087
+        ]
+      ],
+      "max_solver_residual_deg": 5.010917902836809e-08,
+      "solver_tolerance_deg": 1e-07,
+      "source_pairs_failed": 0,
+      "source_pairs_processed": 333340,
+      "source_pairs_total": 333340,
+      "unique_witness_edge_count": 24328107,
+      "unique_witness_key_count": 66668,
+      "unresolved_model_count": 0,
+      "vote_histogram": [
+        [
+          5,
+          279381
+        ],
+        [
+          4,
+          194108
+        ],
+        [
+          3,
+          214504
+        ],
+        [
+          2,
+          282466
+        ],
+        [
+          1,
+          487087
+        ]
+      ],
+      "witness_edge_count": 24328107,
+      "witness_edge_uniqueness": "unique_by_candidate_report_catalog_key"
+    },
+    "proposal_ordering": {
+      "candidate_stream_policy": "all_ranked_cell_centers",
+      "elapsed_wall_s": 10.294283827301115,
+      "evaluated_proposal_count": 1,
+      "policy": "matching_count_descending_then_vote_count_descending_then_known_water_within_tier_then_residual_evidence_cell_order",
+      "proposal_count": 1457546,
+      "scored_cell_center_candidate_count": 0,
+      "scored_seed_candidate_count": 0,
+      "scored_seed_cell_count": 0,
+      "scored_seed_cell_ids": []
+    },
+    "public_evidence": {
+      "bound_gap": null,
+      "calibration_binding_status": "not_requested",
+      "calibration_condition": {
+        "algorithm": "wedge_geodesic",
+        "objective_version": "bearing_set_map_v1",
+        "range_m": 10000.0,
+        "use_types": false
+      },
+      "calibration_context": {
+        "catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+        "implementation_sha256": "6d37ce9318af954d0361ba4c7365b9ba3a627f2d6663bc9abc39a02bc8ef7656",
+        "map_sha256": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
+        "scope_manifest_sha256": "d32e42622c7d959a26009bb23b5c5ea8336d4b13329f59e3fffb8e3f25e175e1",
+        "search_execution_sha256": "5c8ba81afee014675760afb52cbbb831a899f3d6f907c7ce2703367a93c2d260"
+      },
+      "calibration_context_schema": "calibration-context-v2",
+      "candidate_bound_gap": null,
+      "candidate_certificate_scope": "none",
+      "candidate_outcome_counts": {
+        "invalid_water": 0,
+        "scored": 1,
+        "unresolved_coverage": 0,
+        "unresolved_model": 0
+      },
+      "candidate_outcome_counts_available": true,
+      "certificate_scope": "none",
+      "coverage_complete": false,
+      "distant_region_bound_scope": null,
+      "distant_region_bound_top_east_m": null,
+      "distant_region_bound_top_north_m": null,
+      "distant_region_score_lower_bound": null,
+      "evaluated_candidate_count": 1,
+      "global_bound_excludes_outside": false,
+      "mode_evidence": [],
+      "mode_source": "none",
+      "raw_distant_hypothesis_veto_evidence": {
+        "alternatives": [],
+        "score_tolerance": 6.266671145916743e-09,
+        "top_score": 62.66671145916743
+      },
+      "schema": "search-mode-evidence-v1",
+      "scope_manifest_verified": true,
+      "search_config_sha256": "a2a306c545b05173105f5c2c7409e603d20497e8193e01c3b773321b54f1675b",
+      "search_status": "budget_exhausted",
+      "seed": 0,
+      "seed_policy": "fixed",
+      "top_mode_converged": false,
+      "top_mode_index": null,
+      "unresolved_candidate_count": 0,
+      "unresolved_region_count": 0
+    },
+    "request_timing_authority": "telemetry.request_timing.request_elapsed_s through serialized estimate output",
+    "result_elapsed_s_scope": "exact_scoring_plus_continuous_refinement; excludes proposal_generation_ordering_and_seed_generation",
+    "seed_generation": null
+  },
+  "map_sha256": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
+  "measurement_sha256": "ed1145cee93d4f06ffa983f671319dee49e9a95cb4692a2dd14a44c4a8eeceb1",
+  "request_timing": {
+    "batch_preflight_included": true,
+    "batch_preflight_s": 0.0,
+    "includes_static_session_startup": true,
+    "measurement_boundary": "request_entry_through_result_file_serialization_before_sidecar_write",
+    "request_elapsed_s": 435.18109126901254,
+    "result_serialization_completed": true,
+    "scope": "cold_one_shot",
+    "session_reuse_policy": "catalog_map_projection_only",
+    "session_startup_s": 12.607557725161314
+  },
+  "telemetry": {
+    "backend": "cpu",
+    "cap_hits": {},
+    "counts": {
+      "evaluated": 1,
+      "generated": 1,
+      "retained": 1
+    },
+    "device_ids": [],
+    "elapsed_wall_s": 422.3714688462205,
+    "exceptions": [],
+    "memory": {
+      "cpu_bytes": null,
+      "gpu_bytes": null
+    },
+    "objective_version": "bearing_set_map_v1",
+    "schema_version": 1,
+    "stages": [
+      {
+        "device_id": null,
+        "gpu_s": null,
+        "name": "load_inputs",
+        "parent": null,
+        "wall_s": 0.37930906005203724
+      },
+      {
+        "device_id": null,
+        "gpu_s": null,
+        "name": "proposal_generation",
+        "parent": "candidate_search",
+        "wall_s": 351.6968064690009
+      },
+      {
+        "device_id": null,
+        "gpu_s": null,
+        "name": "proposal_cache_save",
+        "parent": "candidate_search",
+        "wall_s": 49.87575940415263
+      },
+      {
+        "device_id": null,
+        "gpu_s": null,
+        "name": "proposal_ordering",
+        "parent": "candidate_search",
+        "wall_s": 10.294283827301115
+      },
+      {
+        "device_id": null,
+        "gpu_s": null,
+        "name": "exact_scoring",
+        "parent": "candidate_search",
+        "wall_s": 0.587629565037787
+      },
+      {
+        "device_id": null,
+        "gpu_s": null,
+        "name": "candidate_search",
+        "parent": null,
+        "wall_s": 421.0268726940267
+      },
+      {
+        "device_id": null,
+        "gpu_s": null,
+        "name": "decision",
+        "parent": null,
+        "wall_s": 1.7951242625713348e-06
+      },
+      {
+        "device_id": null,
+        "gpu_s": null,
+        "name": "serialize_result",
+        "parent": null,
+        "wall_s": 0.00027883006259799004
+      }
+    ],
+    "transfers": [],
+    "unresolved_regions": {}
+  }
+}
