@@ -393,9 +393,11 @@ def _terminate_process_group(process: subprocess.Popen[str], *, grace_s: float =
         pass
     try:
         process.communicate(timeout=grace_s)
-        return
     except subprocess.TimeoutExpired:
         pass
+    # The session leader can exit while a descendant remains alive with its
+    # output streams closed. Always signal the original process group after
+    # the grace interval, then wait for the leader and drain its pipes.
     try:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:

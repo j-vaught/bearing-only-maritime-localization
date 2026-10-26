@@ -66,11 +66,16 @@ def _run_search_process(
         try:
             stdout, stderr = process.communicate(timeout=grace_s)
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            stdout, stderr = process.communicate()
+            stdout, stderr = "", ""
+        # The command process may exit before a descendant. Kill the original
+        # session group after the grace period even when communicate returned.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        final_stdout, final_stderr = process.communicate()
+        stdout = final_stdout or stdout
+        stderr = final_stderr or stderr
         return {
             "status": "timeout",
             "returncode": process.returncode,

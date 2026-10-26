@@ -437,7 +437,9 @@ def test_pilot_timeout_reaps_search_grandchild_before_return(tmp_path: Path) -> 
     child_pid_path = tmp_path / "child.pid"
     script = (
         "import pathlib, subprocess, sys, time; "
-        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); "
+        "child = subprocess.Popen([sys.executable, '-c', "
+        "'import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(30)'], "
+        "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
         "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(30)"
     )
     outcome = _run_search_process(

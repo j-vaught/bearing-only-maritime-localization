@@ -989,10 +989,13 @@ def test_support_extension_adds_one_deterministic_25_placement_batch(tmp_path: P
 
 def test_subprocess_timeout_kills_and_reaps_spawned_descendant(tmp_path: Path) -> None:
     pid_path = tmp_path / "grandchild.pid"
-    grandchild_code = "import time; time.sleep(60)"
+    grandchild_code = (
+        "import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(60)"
+    )
     parent_code = (
         "import subprocess,sys,time; "
-        "child=subprocess.Popen([sys.executable,'-c',sys.argv[1]]); "
+        "child=subprocess.Popen([sys.executable,'-c',sys.argv[1]],"
+        "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); "
         "open(sys.argv[2],'w').write(str(child.pid)); "
         "print('child-started',flush=True); time.sleep(60)"
     )
@@ -1007,11 +1010,11 @@ def test_subprocess_timeout_kills_and_reaps_spawned_descendant(tmp_path: Path) -
     child_pid = int(pid_path.read_text())
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline:
-        proc_stat = Path(f"/proc/{child_pid}/stat")
-        if not proc_stat.exists():
+        try:
+            stat_fields = Path(f"/proc/{child_pid}/stat").read_text().rsplit(")", 1)[1].split()
+        except (FileNotFoundError, ProcessLookupError):
             break
-        state = proc_stat.read_text().split()[2]
-        if state == "Z":
+        if stat_fields[0] == "Z":
             break
         time.sleep(0.02)
     else:
