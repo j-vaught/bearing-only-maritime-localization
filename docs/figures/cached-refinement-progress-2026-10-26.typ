@@ -43,7 +43,7 @@
     [Mode key], [Source rank], [Refined rank], [Source error (m)], [Refined error (m)], [Association outcome],
     [#top.at("mode_key")],
     [#str(top.at("source_score_rank"))],
-    [#str(top.at("refined_score_rank"))],
+    [#str(top.at("refined_score_rank_within_selected"))],
     [#str(top.at("source_error_m"))],
     [#str(top.at("refined_error_m"))],
     [#top.at("refined_association_label")],
