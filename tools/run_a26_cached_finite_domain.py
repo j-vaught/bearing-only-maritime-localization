@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import signal
 import subprocess
@@ -177,6 +178,14 @@ def resume_verified_chunks(
             declared = manifest.get("chunk_results_sha256")
             if declared and chunk_root.is_dir() and declared != sha256_tree(chunk_root):
                 raise ValueError(f"Resume source chunk tree hash mismatch at {root}.")
+            hypotheses_root = root / "hypotheses"
+            declared_hypotheses = manifest.get("hypotheses_sha256")
+            if (
+                declared_hypotheses
+                and hypotheses_root.is_dir()
+                and declared_hypotheses != sha256_tree(hypotheses_root)
+            ):
+                raise ValueError(f"Resume source hypothesis tree hash mismatch at {root}.")
         for path in sorted((root / "chunk-results").glob("chunk-*.json")):
             existing = source_files.get(path.name)
             if existing is not None and sha256_file(existing) != sha256_file(path):
@@ -190,12 +199,18 @@ def resume_verified_chunks(
             raise ValueError(f"Invalid candidate IDs in durable chunk {filename}.")
         if not set(chunk_ids) <= candidate_ids:
             raise ValueError("Resume source chunk contains an ID outside the frozen plan.")
-        _link_file(path, output_root / "chunk-results" / filename)
+        source_hypothesis = None
         for root, _ in roots:
             hypothesis_path = root / "hypotheses" / filename
             if hypothesis_path.is_file():
-                _link_file(hypothesis_path, output_root / "hypotheses" / filename)
+                source_hypothesis = hypothesis_path
                 break
+        if source_hypothesis is None:
+            raise ValueError(f"Resume source chunk {filename} has no hypothesis sidecar.")
+        if chunk.get("hypotheses_sha256") != sha256_file(source_hypothesis):
+            raise ValueError(f"Resume source chunk {filename} hypothesis hash mismatch.")
+        _link_file(path, output_root / "chunk-results" / filename)
+        _link_file(source_hypothesis, output_root / "hypotheses" / filename)
 
     all_ids = [
         candidate["candidate_id"]
@@ -285,6 +300,12 @@ def write_candidate_dispositions(
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ValueError("Candidate inventory or plan contains duplicate IDs.")
     chunk_records = _read_chunk_records(output_root)
+    if chunk_records:
+        validate_durable_chunk_history(
+            records=plan,
+            chunks=chunk_records,
+            output_root=output_root,
+        )
     committed_rows = [
         (chunk, candidate)
         for chunk in chunk_records
@@ -662,13 +683,51 @@ def validate_durable_chunk_history(
         hypothesis_path = output_root / "hypotheses" / f"chunk-{chunk_index:08d}.json"
         if not hypothesis_path.is_file():
             raise ValueError(f"Durable chunk {chunk_index} has no hypothesis sidecar.")
+        if chunk.get("hypotheses_sha256") != sha256_file(hypothesis_path):
+            raise ValueError(f"Durable chunk {chunk_index} hypothesis hash mismatch.")
         hypotheses = json.loads(hypothesis_path.read_text(encoding="utf-8"))
         if not isinstance(hypotheses, list):
             raise ValueError(f"Durable chunk {chunk_index} hypothesis sidecar is invalid.")
+        sidecar_indices: list[int] = []
+        exact_scored_by_index = {
+            plan_index[row["candidate_id"]]: row
+            for row in candidates
+            if row.get("action") == "exact_scored"
+        }
         for item in hypotheses:
             input_index = item.get("input_index") if isinstance(item, dict) else None
             if type(input_index) is not int or not 0 <= input_index < len(records):
                 raise ValueError(f"Durable chunk {chunk_index} has an invalid hypothesis index.")
+            if input_index not in exact_scored_by_index:
+                raise ValueError(
+                    f"Durable chunk {chunk_index} hypothesis is not exact-scored."
+                )
+            hypothesis = item.get("hypothesis")
+            if not isinstance(hypothesis, dict):
+                raise ValueError(f"Durable chunk {chunk_index} has a malformed hypothesis.")
+            candidate = exact_scored_by_index[input_index]
+            coordinates = (hypothesis.get("east_m"), hypothesis.get("north_m"))
+            score = hypothesis.get("score")
+            if any(
+                type(value) not in (int, float) or not math.isfinite(value)
+                for value in (*coordinates, score)
+            ):
+                raise ValueError(f"Durable chunk {chunk_index} has nonfinite hypothesis values.")
+            if list(coordinates) != list(candidate["position_xy_m"]) or score != candidate.get(
+                "score"
+            ):
+                raise ValueError(
+                    f"Durable chunk {chunk_index} hypothesis differs from its audit row."
+                )
+            sidecar_indices.append(input_index)
+        if len(sidecar_indices) != len(set(sidecar_indices)):
+            raise ValueError(f"Durable chunk {chunk_index} has duplicate hypothesis indices.")
+        if set(sidecar_indices) != set(exact_scored_by_index):
+            raise ValueError(
+                f"Durable chunk {chunk_index} hypotheses do not cover scored candidates."
+            )
+    if chunk_indices and sorted(chunk_indices) != list(range(max(chunk_indices) + 1)):
+        raise ValueError("Durable chunk indices are not a contiguous prefix.")
     return committed
 
 
@@ -921,9 +980,12 @@ def run_finite_domain(
                         for index, hypothesis in chunk.hypotheses
                     ]
                     global_chunk_index = chunk_index_offset + chunk.chunk_index
+                    hypothesis_path = hypotheses_dir / f"chunk-{global_chunk_index:08d}.json"
+                    write_json(hypothesis_path, hyp_rows)
                     write_json(
                         chunk_dir / f"chunk-{global_chunk_index:08d}.json",
                         {
+                            "hypotheses_sha256": sha256_file(hypothesis_path),
                             "chunk_index": global_chunk_index,
                             "candidate_count": chunk.candidate_count,
                             "exact_scored_count": chunk.exact_scored_count,
@@ -941,7 +1003,6 @@ def run_finite_domain(
                             "candidates": chunk_rows,
                         },
                     )
-                    write_json(hypotheses_dir / f"chunk-{global_chunk_index:08d}.json", hyp_rows)
                     totals["completed_candidate_count"] += chunk.candidate_count
                     totals["exact_scored_count"] += chunk.exact_scored_count
                     totals["invalid_water_count"] += chunk.invalid_water_count
