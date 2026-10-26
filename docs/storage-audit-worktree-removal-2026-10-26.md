@@ -169,7 +169,7 @@ The parent authorized continuation under the same duplicate-checkout rule. A fin
 
 The measured total reclaim was 510,939,136 bytes. The net reading change across the three commands was 510,930,944 bytes; the 8,192-byte difference is concurrent filesystem activity. The later reading at 2026-10-26T13:42:08Z was 43,265,101,824 bytes. The three branch refs remain present, and no common-repository source was modified.
 
-The cumulative measured reclaim in this cleanup sequence is 1,882,649,664 bytes. The current free reading is 1,234,898,176 bytes below the 44.5 GB target and 315,428,864 bytes above the 40 GiB floor.
+The cumulative measured reclaim in this cleanup sequence is 1,884,401,664 bytes. The current free reading is 1,234,898,176 bytes below the 44.5 GB target and 315,428,864 bytes above the 40 GiB floor.
 
 No additional checkout met the same strict rule after this pass. The remaining large inactive candidates a04-wedge-projection, a11-coverage-certificate, a33-calibration-binding, and a36-session-3185116 have shared UV cache editable-finder files containing absolute source paths into those checkouts. Removing their directories would leave persistent shared-cache path mappings, so they were retained. a08-coast-base has immutable map-manifest source paths and was retained. The A37 integration and parallel-review checkouts have shared-cache path mappings and remain protected. The A32, A35, A39, A26, assignment-expansion, reviewer, parallel-expansion, root-environment, shared-cache, frozen scorer configuration, output, dataset, and evidence paths remain protected. The small older checkouts were not removed because each has shared UV cache editable-finder path mappings.
 
