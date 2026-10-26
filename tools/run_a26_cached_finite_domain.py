@@ -47,6 +47,41 @@ def canonical_sha256(value: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _attempt_manifest_path(root: Path) -> Path | None:
+    for name in ("supervisor-manifest.json", "run-manifest.json"):
+        candidate = root / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _partial_state_bindings(output_root: Path) -> dict[str, Any]:
+    identity_path = output_root / "run-identity.json"
+    identity_sha = None
+    if identity_path.is_file():
+        identity = json.loads(identity_path.read_text(encoding="utf-8"))
+        identity_sha = identity.get("identity_sha256")
+        identity_core = dict(identity)
+        identity_core.pop("identity_sha256", None)
+        if identity_sha != canonical_sha256(identity_core):
+            raise ValueError("Partial run identity hash is invalid.")
+    fields = {
+        "run_identity_sha256": identity_sha,
+        "candidate_plan_sha256": None,
+        "candidate_inventory_sha256": None,
+        "chunk_results_sha256": sha256_tree(output_root / "chunk-results"),
+        "hypotheses_sha256": sha256_tree(output_root / "hypotheses"),
+    }
+    for name in ("candidate-plan.jsonl", "candidate-inventory.jsonl"):
+        path = output_root / name
+        fields[
+            "candidate_plan_sha256"
+            if name == "candidate-plan.jsonl"
+            else "candidate_inventory_sha256"
+        ] = sha256_file(path) if path.is_file() else None
+    return fields
+
+
 def _link_file(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
@@ -147,6 +182,7 @@ def resume_verified_chunks(
     roots = []
     cursor = source_root
     seen_roots: set[Path] = set()
+    expected_parent: dict[str, str] | None = None
     while cursor not in seen_roots:
         seen_roots.add(cursor)
         identity_path = cursor / "run-identity.json"
@@ -155,7 +191,23 @@ def resume_verified_chunks(
         identity_sha = identity.pop("identity_sha256", None)
         if identity_sha != canonical_sha256(identity) or identity != run_identity:
             raise ValueError("Resume source has a different or invalid scoring run identity.")
-        roots.append((cursor, identity_sha))
+        attempt_manifest = _attempt_manifest_path(cursor)
+        if attempt_manifest is None:
+            raise ValueError(
+                f"Resume source attempt has no final or supervisor manifest at {cursor}."
+            )
+        manifest_sha = sha256_file(attempt_manifest)
+        chunk_tree_sha = sha256_tree(cursor / "chunk-results")
+        hypothesis_tree_sha = sha256_tree(cursor / "hypotheses")
+        if expected_parent is not None and expected_parent != {
+            "source_run_root": str(cursor),
+            "source_identity_sha256": identity_sha,
+            "source_run_manifest_sha256": manifest_sha,
+            "source_chunk_results_sha256": chunk_tree_sha,
+            "source_hypotheses_sha256": hypothesis_tree_sha,
+        }:
+            raise ValueError("Resume lineage parent identity, manifest, or tree hash mismatch.")
+        roots.append((cursor, identity_sha, manifest_sha, chunk_tree_sha, hypothesis_tree_sha))
         lineage_path = cursor / "resume-source.json"
         if not lineage_path.is_file():
             break
@@ -163,12 +215,21 @@ def resume_verified_chunks(
         parent_root = Path(lineage["source_run_root"]).resolve()
         if parent_root == cursor:
             raise ValueError("Resume lineage contains a self-reference.")
+        expected_parent = {
+            "source_run_root": str(parent_root),
+            "source_identity_sha256": lineage.get("source_identity_sha256"),
+            "source_run_manifest_sha256": lineage.get("source_run_manifest_sha256"),
+            "source_chunk_results_sha256": lineage.get("source_chunk_results_sha256"),
+            "source_hypotheses_sha256": lineage.get("source_hypotheses_sha256"),
+        }
+        if any(value is None for value in expected_parent.values()):
+            raise ValueError("Resume lineage omits parent identity or tree hashes.")
         cursor = parent_root
     else:
         raise ValueError("Resume lineage contains a cycle.")
 
     source_files: dict[str, Path] = {}
-    for root, _ in roots:
+    for root, *_ in roots:
         manifest_path = root / "run-manifest.json"
         if not manifest_path.is_file():
             manifest_path = root / "supervisor-manifest.json"
@@ -176,16 +237,16 @@ def resume_verified_chunks(
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             chunk_root = root / "chunk-results"
             declared = manifest.get("chunk_results_sha256")
-            if declared and chunk_root.is_dir() and declared != sha256_tree(chunk_root):
+            declared_hypotheses = manifest.get("hypotheses_sha256")
+            if declared is None or declared_hypotheses is None:
+                raise ValueError(f"Resume source manifest omits durable tree hashes at {root}.")
+            if declared != sha256_tree(chunk_root):
                 raise ValueError(f"Resume source chunk tree hash mismatch at {root}.")
             hypotheses_root = root / "hypotheses"
-            declared_hypotheses = manifest.get("hypotheses_sha256")
-            if (
-                declared_hypotheses
-                and hypotheses_root.is_dir()
-                and declared_hypotheses != sha256_tree(hypotheses_root)
-            ):
+            if declared_hypotheses != sha256_tree(hypotheses_root):
                 raise ValueError(f"Resume source hypothesis tree hash mismatch at {root}.")
+            if manifest.get("run_identity_sha256") != identity_sha:
+                raise ValueError(f"Resume source manifest identity hash mismatch at {root}.")
         for path in sorted((root / "chunk-results").glob("chunk-*.json")):
             existing = source_files.get(path.name)
             if existing is not None and sha256_file(existing) != sha256_file(path):
@@ -200,7 +261,7 @@ def resume_verified_chunks(
         if not set(chunk_ids) <= candidate_ids:
             raise ValueError("Resume source chunk contains an ID outside the frozen plan.")
         source_hypothesis = None
-        for root, _ in roots:
+        for root, *_ in roots:
             hypothesis_path = root / "hypotheses" / filename
             if hypothesis_path.is_file():
                 source_hypothesis = hypothesis_path
@@ -219,12 +280,21 @@ def resume_verified_chunks(
     ]
     if len(all_ids) != len(set(all_ids)):
         raise ValueError("Resume lineage contains duplicate committed candidate IDs.")
+    source_manifest = _attempt_manifest_path(source_root)
+    if source_manifest is None:
+        raise ValueError("Resume parent has no final or supervisor manifest.")
     return {
         "source_run_root": str(source_root),
         "source_identity_sha256": roots[0][1],
-        "lineage_roots": [str(root) for root, _ in roots],
+        "source_run_manifest_sha256": sha256_file(source_manifest),
+        "source_chunk_results_sha256": sha256_tree(source_root / "chunk-results"),
+        "source_hypotheses_sha256": sha256_tree(source_root / "hypotheses"),
+        "lineage_roots": [str(item[0]) for item in roots],
+        "lineage_identity_sha256": [item[1] for item in roots],
         "lineage_chunk_count": len(source_files),
         "lineage_candidate_count": len(all_ids),
+        "reused_chunk_results_sha256": sha256_tree(output_root / "chunk-results"),
+        "reused_hypotheses_sha256": sha256_tree(output_root / "hypotheses"),
     }
 
 
@@ -351,16 +421,16 @@ def write_candidate_dispositions(
     for index, row in enumerate(plan):
         candidate_id = row["candidate_id"]
         result = committed.get(candidate_id)
-        if selected_candidate_ids is not None and candidate_id not in selected_candidate_ids:
+        if result is not None:
+            status = result["action"] or "durably_recorded"
+            counts["committed"] += 1
+        elif selected_candidate_ids is not None and candidate_id not in selected_candidate_ids:
             status = (
                 "not_selected_by_explicit_prefix_profile"
                 if plan
                 else "prefix_ordering_not_reached_before_interruption"
             )
             counts["not_selected"] += 1
-        elif result is not None:
-            status = result["action"] or "durably_recorded"
-            counts["committed"] += 1
         elif candidate_id in failed_ids:
             status = "worker_reported_failure"
             counts["failed"] += 1
@@ -669,7 +739,19 @@ def validate_durable_chunk_history(
             raise ValueError(f"Durable chunk {chunk_index} is empty.")
         chunk_ids: set[str] = set()
         candidate_plan_indices: list[int] = []
+        action_counts = {
+            "exact_scored": 0,
+            "exact_invalid_water": 0,
+            "exact_unresolved": 0,
+            "pruned": 0,
+        }
         for row in candidates:
+            if not isinstance(row, dict):
+                raise ValueError(f"Durable chunk {chunk_index} has a malformed candidate row.")
+            action = row.get("action")
+            if action not in action_counts:
+                raise ValueError(f"Durable chunk {chunk_index} has an unknown candidate action.")
+            action_counts[action] += 1
             candidate_id = row.get("candidate_id")
             if candidate_id not in plan_index:
                 raise ValueError("Durable chunk refers to an ID outside the candidate plan.")
@@ -684,6 +766,17 @@ def validate_durable_chunk_history(
                 raise ValueError("Durable chunk position differs from the frozen plan.")
         if candidate_plan_indices != sorted(candidate_plan_indices):
             raise ValueError(f"Durable chunk {chunk_index} candidates are out of plan order.")
+        aggregate_fields = {
+            "exact_scored_count": action_counts["exact_scored"],
+            "invalid_water_count": action_counts["exact_invalid_water"],
+            "unresolved_count": action_counts["exact_unresolved"],
+            "pruned_count": action_counts["pruned"],
+        }
+        for field, expected_count in aggregate_fields.items():
+            if type(chunk.get(field)) is not int or chunk[field] != expected_count:
+                raise ValueError(
+                    f"Durable chunk {chunk_index} aggregate {field} differs from candidate actions."
+                )
         ordered_chunks.append((chunk_index, candidate_plan_indices))
         committed.update(chunk_ids)
         hypothesis_path = output_root / "hypotheses" / f"chunk-{chunk_index:08d}.json"
@@ -889,24 +982,31 @@ def run_finite_domain(
         "candidate_plan_sha256": plan_sha,
         "candidate_inventory_sha256": sha256_file(output_root / "candidate-inventory.jsonl"),
         "candidate_domain_count": len(records),
+        "candidate_prefix_limit": candidate_prefix_limit,
         "execution_mode": execution_mode,
     }
     identity_envelope = {**run_identity, "identity_sha256": canonical_sha256(run_identity)}
     write_json(output_root / "run-identity.json", identity_envelope)
     resume_lineage = None
     if resume_from is not None:
-        write_json(
-            output_root / "resume-source.json",
-            {
-                "source_run_root": str(resume_from.resolve()),
-                "source_identity_sha256": identity_envelope["identity_sha256"],
-            },
-        )
         resume_lineage = resume_verified_chunks(
             source_root=resume_from,
             output_root=output_root,
             run_identity=run_identity,
             candidate_ids=set(ids),
+        )
+        write_json(
+            output_root / "resume-source.json",
+            {
+                key: resume_lineage[key]
+                for key in (
+                    "source_run_root",
+                    "source_identity_sha256",
+                    "source_run_manifest_sha256",
+                    "source_chunk_results_sha256",
+                    "source_hypotheses_sha256",
+                )
+            },
         )
     existing_chunk_records = _read_chunk_records(output_root)
     committed_ids = list(
@@ -918,6 +1018,11 @@ def run_finite_domain(
     )
     selected_records = records[:candidate_prefix_limit] if candidate_prefix_limit else records
     selected_ids = {row["candidate_id"] for row in selected_records}
+    already_committed_outside_scope = set(committed_ids) - selected_ids
+    if already_committed_outside_scope:
+        raise ValueError(
+            "Resume source contains scored candidates outside the requested prefix scope."
+        )
     committed_set = set(committed_ids)
     remaining_records = [
         row for row in selected_records if row["candidate_id"] not in committed_set
@@ -1261,6 +1366,7 @@ def supervise_complete_request(args: argparse.Namespace) -> dict[str, Any]:
             )
             timeout_manifest = {
                 "schema_version": 1,
+                **_partial_state_bindings(output_root),
                 "run_id": f"a26-cached-finite-domain-{args.execution_mode}-v2",
                 "execution_mode": args.execution_mode,
                 "resume_from": str(args.resume_from.resolve()) if args.resume_from else None,
@@ -1310,6 +1416,7 @@ def supervise_complete_request(args: argparse.Namespace) -> dict[str, Any]:
             output_root / "supervisor-manifest.json",
             {
                 "schema_version": 1,
+                **_partial_state_bindings(output_root),
                 "run_id": f"a26-cached-finite-domain-{args.execution_mode}-v2",
                 "execution_mode": args.execution_mode,
                 "resume_from": str(args.resume_from.resolve()) if args.resume_from else None,
