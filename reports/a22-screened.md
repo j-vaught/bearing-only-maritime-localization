@@ -4,9 +4,9 @@ Status: implemented and pushed. Independent A06 proof review is pending.
 
 Branch: `accuracy/a22-screened`.
 
-Latest commit: `688ae6cdbdcf6d2874f5b7b54924d0b2f09646a2`.
+Latest controller commit: `43cc6ab901c54c56d198b7d611516660b87286ee`.
 
-This branch includes A14 final metadata hardening at `851c3a9`, based on the visibility screen and A21 objective-bound prerequisites.
+This branch includes A14 hybrid batch screening and final metadata hardening, based on the visibility screen and A21 objective-bound prerequisites.
 
 ## Owned changes
 
@@ -67,11 +67,9 @@ For a generic iterator that reaches its visit budget, `remaining_candidates` beg
 
 ## Pruning and certificate scope
 
-A prepared A21 bound is built once for the measurement/configuration pair, with variance support enabled only for the covered diagonal finite-sigma regime. The controller derives the smallest useful visible-group threshold from cached bound values. It uses A14 screening to obtain K. If the K bound could prune an early-stopped candidate, the controller completes a full LOS/model scan before pruning. This prevents an unknown far member or unsupported model record from being hidden behind an already-visible bridge member. If full visibility cannot be certified, the unchanged exact scorer runs and its unresolved result remains in counts.
+A prepared A21 bound is built once for the measurement/configuration pair, with variance support enabled only for the covered diagonal finite-sigma regime. For each eligible water candidate, the controller runs one complete A14 visibility scan and derives the bound from the certified visible-group count. This avoids doing a scalar partial traversal before the complete hybrid scan. The complete scan checks every physical member, so an unknown far member or unsupported model record cannot be hidden behind an already-visible bridge member. If full visibility cannot be certified, the unchanged exact scorer runs and its unresolved result remains in counts. Known land and unknown-water candidates bypass visibility screening and go directly through CandidateScorer, which records their canonical invalid-water or unresolved-coverage status. The comparison margin is never smaller than the configured absolute plus score-scaled relative tolerance. Tied minima are retained. The finite-candidate certificate is returned only after the entire stream is consumed and no exact-scored candidate has unresolved coverage or model support. Budget exhaustion returns `budget_exhausted`, retains the continuation and unvisited diagnostics, and does not produce a finite-set certificate. The controller does not issue a continuous-objective certificate or accept a location.
 
-The useful group threshold is cached while the exact incumbent score and comparison margin remain unchanged. Known land and unknown-water candidates bypass visibility screening and go directly through CandidateScorer, which records their canonical invalid-water or unresolved-coverage status. The comparison margin is never smaller than the configured absolute plus score-scaled relative tolerance. Tied minima are retained. The finite-candidate certificate is returned only after the entire stream is consumed and no exact-scored candidate has unresolved coverage or model support. Budget exhaustion returns `budget_exhausted`, retains the continuation and unvisited diagnostics, and does not produce a finite-set certificate. The controller does not issue a continuous-objective certificate or accept a location.
-
-A full scan is required before an early-stop bound can exclude a candidate, so this milestone establishes safe objective pruning but does not claim ray-count speedup for pruned candidates. It can still avoid exact likelihood assignment work. No performance benchmark was run.
+A full scan is required before a bound can exclude a candidate. The controller therefore favors one complete hybrid scan over partial screening followed by a repeated full scan; it does not alter the bound or scoring rules. No performance claim is made until the same 255-candidate timing comparison is run under the shared benchmark lock.
 
 ## Verification
 
@@ -80,7 +78,8 @@ Python 3.11.15 was used.
 - `uv sync --locked --all-groups`: passed.
 - Scoped Ruff format/check: passed.
 - Scoped `ty check`: passed.
-- `uv run pytest -q tests/accuracy/test_a22_screened.py tests/accuracy/test_a14_screen.py tests/accuracy/test_a21_candidate_bound.py tests/accuracy/test_a18.py tests/accuracy/test_a20.py tests/test_architecture_boundaries.py`: 67 passed.
+- `uv run pytest -q tests/accuracy/test_a22_screened.py`: 13 passed.
+- `uv run pytest -q tests/accuracy/test_a18* tests/accuracy/test_a20* tests/accuracy/test_a21* tests/test_architecture_boundaries.py`: 41 passed.
 - `git diff --check`: passed.
 - `git push origin accuracy/a22-screened`: passed.
 
