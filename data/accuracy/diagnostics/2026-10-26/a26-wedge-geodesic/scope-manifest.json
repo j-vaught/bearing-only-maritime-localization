@@ -1,0 +1,13 @@
+{
+  "bounds_xy_m": [
+    -220366.49772326474,
+    1424309.6784374337,
+    2699585.3102704627,
+    5088044.413143414
+  ],
+  "catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+  "geographic_scope": "full_coast",
+  "map_sha256": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
+  "projected_crs": "EPSG:32618",
+  "schema_version": 1
+}
