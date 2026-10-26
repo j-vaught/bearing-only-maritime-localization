@@ -5,9 +5,10 @@ from math import hypot
 
 from pyproj import CRS
 
+import bearing_localization.search.assigned_bearing_refinement as assigned_refinement
 from bearing_localization.search.assigned_bearing_refinement import refine_assigned_bearing
 from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.scoring import CandidateScorer
+from bearing_localization.search.scoring import CandidateEvaluation, CandidateScorer
 from maritime_localization_shared.contracts.inputs_v2 import MeasurementSetV2
 from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
 
@@ -38,7 +39,7 @@ def test_noisy_fixture_improves_with_exact_canonical_hypothesis():
     seed = _seed(scorer)
     result = refine_assigned_bearing(scorer, seed)
 
-    assert result.status == "accepted"
+    assert result.status == "improved"
     assert result.exact_hypothesis is not None
     assert result.exact_hypothesis.score < seed.score
     direct = scorer.evaluate(result.proposed_pose)
@@ -76,7 +77,7 @@ def test_final_canonical_rescore_can_change_assignment_set():
     }
 
 
-def test_worse_proposal_keeps_original_exact_hypothesis():
+def test_stale_score_keeps_original_exact_hypothesis():
     scorer = _scorer()
     seed = _seed(scorer)
     artificially_best = Hypothesis(
@@ -88,9 +89,28 @@ def test_worse_proposal_keeps_original_exact_hypothesis():
     )
     result = refine_assigned_bearing(scorer, artificially_best)
 
-    assert result.status == "no_improvement"
+    assert result.status == "stale_hypothesis"
     assert result.exact_hypothesis is None
     assert result.original_hypothesis is artificially_best
+
+
+def test_worse_canonical_proposal_keeps_original_exact_hypothesis(monkeypatch):
+    scorer = _scorer()
+    seed = _seed(scorer)
+    seed_evaluation = scorer.evaluate((seed.east_m, seed.north_m))
+    worse = replace(seed, score=seed.score + 1.0, score_components=None)
+    outcomes = iter(
+        (
+            seed_evaluation,
+            CandidateEvaluation("scored", worse, seed_evaluation.predicted, seed_evaluation.costs),
+        )
+    )
+    monkeypatch.setattr(CandidateScorer, "evaluate", lambda *_a, **_k: next(outcomes))
+    result = refine_assigned_bearing(scorer, seed)
+
+    assert result.status == "no_improvement"
+    assert result.exact_hypothesis is None
+    assert result.original_hypothesis is seed
 
 
 def test_invalid_and_insufficient_assignments_are_rejected():
@@ -154,6 +174,94 @@ def test_missing_global_bounds_are_safe():
     no_bounds_result = refine_assigned_bearing(no_bounds_scorer, seed)
     assert no_bounds_result.status == "invalid_bounds"
     assert no_bounds_result.exact_hypothesis is None
+
+
+def test_stale_hypothesis_is_rejected_before_fitting():
+    scorer = _scorer()
+    seed = _seed(scorer)
+    stale = replace(seed, score=seed.score - 1.0, score_components=None)
+    result = refine_assigned_bearing(scorer, stale)
+
+    assert result.status == "stale_hypothesis"
+    assert result.exact_hypothesis is None
+    assert result.original_hypothesis is stale
+
+
+def test_solver_max_nfev_returns_original_without_constructor_failure(monkeypatch):
+    scorer = _scorer()
+    seed = _seed(scorer)
+
+    class MaxedOut:
+        x = (seed.east_m, seed.north_m)
+        status = 0
+        success = False
+        nfev = 100
+        njev = 100
+        message = "maximum evaluations reached"
+
+    monkeypatch.setattr(assigned_refinement, "least_squares", lambda *_a, **_k: MaxedOut())
+    result = refine_assigned_bearing(scorer, seed)
+
+    assert result.status == "max_nfev"
+    assert result.exact_hypothesis is None
+    assert result.nfev == 100
+
+
+def test_solver_exception_returns_original_without_constructor_failure(monkeypatch):
+    scorer = _scorer()
+    seed = _seed(scorer)
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("synthetic solver failure")
+
+    monkeypatch.setattr(assigned_refinement, "least_squares", fail)
+    result = refine_assigned_bearing(scorer, seed)
+
+    assert result.status == "solver_failed"
+    assert result.exact_hypothesis is None
+    assert result.residual_count == len(seed.assignments)
+
+
+def test_final_invalid_water_and_unknown_coverage_are_rejected(monkeypatch):
+    scorer = _scorer()
+    seed = _seed(scorer)
+    seed_evaluation = scorer.evaluate((seed.east_m, seed.north_m))
+
+    outcomes = iter(
+        (
+            seed_evaluation,
+            CandidateEvaluation("invalid_water", None, None, None, "synthetic land"),
+        )
+    )
+    monkeypatch.setattr(CandidateScorer, "evaluate", lambda *_a, **_k: next(outcomes))
+    land = refine_assigned_bearing(scorer, seed)
+    assert land.status == "invalid_water"
+    assert land.exact_hypothesis is None
+
+    outcomes = iter(
+        (
+            seed_evaluation,
+            CandidateEvaluation("unresolved_coverage", None, None, None, "synthetic unknown"),
+        )
+    )
+    unknown = refine_assigned_bearing(scorer, seed)
+    assert unknown.status == "unresolved_coverage"
+    assert unknown.exact_hypothesis is None
+
+
+def test_unsupported_catalog_metadata_is_rejected_before_fitting():
+    scorer = _scorer()
+    seed = _seed(scorer)
+    records = list(scorer.catalog.records)
+    records[0] = replace(records[0], metadata=(("antenna_length_m", 4.0),))
+    unsupported_catalog = replace(scorer.catalog, records=tuple(records))
+    unsupported = CandidateScorer(
+        scorer.measurements, unsupported_catalog, scorer.vector_map, scorer.config
+    )
+    result = refine_assigned_bearing(unsupported, seed)
+
+    assert result.status == "unresolved_model"
+    assert result.exact_hypothesis is None
 
 
 def test_true_north_pose_is_in_projected_utm_coordinates():
