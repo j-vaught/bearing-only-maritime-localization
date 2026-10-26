@@ -47,11 +47,12 @@ def solve_reverse_bearing_observer(
     ``(longitude, latitude)``. Bearings are normalized modulo 360 degrees.
 
     Each nonzero-range solution starts with ``desired_bearing + 180`` at the
-    catalog point. The start azimuth is iteratively corrected by the wrapped
-    inverse-bearing residual at the candidate observer, then independently
-    checked with a final ``Geod.inv``. ``converged`` is true only when that
-    check meets ``tolerance_deg``. Iteration is capped at 12. A false result
-    retains the last finite position and residual for explicit caller handling.
+    catalog point. The start azimuth is corrected from the forward back-azimuth
+    residual. Iteration stops at half the requested tolerance to leave a
+    numerical margin for the independent final ``Geod.inv`` check. ``converged``
+    is true only when that check meets the full ``tolerance_deg``. Iteration is
+    capped at 12. A false result retains the last finite position and residual
+    for explicit caller handling.
     """
     catalog = _as_finite_float_array(catalog_lonlat_deg, "catalog_lonlat_deg")
     if catalog.ndim < 1 or catalog.shape[-1] != 2:
@@ -97,6 +98,8 @@ def solve_reverse_bearing_observer(
     failed = np.zeros(source_lon.shape, dtype=np.bool_)
     residual = np.zeros(source_lon.shape, dtype=np.float64)
     converged = np.zeros(source_lon.shape, dtype=np.bool_)
+    # Leave room for forward-azimuth rounding before the authoritative inverse check.
+    iteration_tolerance_deg = tolerance_deg * 0.5
     back_azimuth = np.zeros(source_lon.shape, dtype=np.float64)
     if np.any(active):
         candidate_lon, candidate_lat, candidate_back_azimuth, valid = _forward_finite(
@@ -114,7 +117,7 @@ def solve_reverse_bearing_observer(
         if not np.any(pending):
             break
         residual[pending] = _wrap_signed(back_azimuth[pending] - desired[pending])
-        matched = np.abs(residual[pending]) <= tolerance_deg
+        matched = np.abs(residual[pending]) <= iteration_tolerance_deg
         converged[pending] = matched
         pending_indices = np.flatnonzero(pending)
         pending = pending_indices[~matched]
