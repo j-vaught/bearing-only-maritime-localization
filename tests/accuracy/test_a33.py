@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 from dataclasses import replace
+from typing import Any, cast
 
 import pytest
 from pyproj import Geod, Transformer
@@ -942,6 +943,21 @@ def _write_geodesic_search_fixture(tmp_path, *, source_budget=30, candidate_budg
             coverage_geometry_geojson=json.dumps(
                 {"type": "Polygon", "coordinates": [ring]}, separators=(",", ":")
             ),
+            land_geometry_geojson=json.dumps(
+                {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [origin_x + 7_000.0, origin_y - 100.0],
+                            [origin_x + 7_100.0, origin_y - 100.0],
+                            [origin_x + 7_100.0, origin_y + 100.0],
+                            [origin_x + 7_000.0, origin_y + 100.0],
+                            [origin_x + 7_000.0, origin_y - 100.0],
+                        ]
+                    ],
+                },
+                separators=(",", ":"),
+            ),
         ),
     )
     write_contract(
@@ -1172,3 +1188,166 @@ def test_geodesic_wedge_cli_propagates_source_budget_and_failed_samples_block_ac
     public_evidence = sidecar["diagnostics"]["public_evidence"]
     assert public_evidence["mode_evidence"] == []
     assert public_evidence["top_mode_converged"] is False
+
+
+def test_seeded_geodesic_cli_scores_cell_centers_then_seed_candidates_and_reports_budgets(
+    tmp_path,
+):
+    (
+        measurements_path,
+        catalog_path,
+        map_path,
+        config_path,
+        output_path,
+        projected_crs,
+    ) = _write_geodesic_search_fixture(tmp_path, candidate_budget=20_000)
+    config = loads_search_config(config_path.read_text())
+    outcomes = []
+    for workers in (1, 2, 4):
+        worker_config_path = tmp_path / f"seeded-config-{workers}.json"
+        worker_output_path = tmp_path / f"seeded-estimate-{workers}.json"
+        write_search_config(
+            worker_config_path,
+            replace(
+                config,
+                algorithm="wedge_geodesic_seeded",
+                seed_cell_budget=20_000,
+                seed_pair_budget=100_000,
+                seed_candidate_budget=20_000,
+                candidate_workers=workers,
+                candidate_pool_memory_budget_bytes=8 * 1024**3,
+            ),
+        )
+        result = search_v2_files(
+            measurements_path,
+            catalog_path,
+            map_path,
+            worker_config_path,
+            projected_crs,
+            worker_output_path,
+            wedge_error_deg=0.5,
+            wedge_cell_size_m=100.0,
+            refine=False,
+        )
+        sidecar = json.loads(worker_output_path.with_suffix(".json.telemetry.json").read_text())
+        diagnostics = sidecar["diagnostics"]
+        seed = diagnostics["seed_generation"]
+        scoring = diagnostics["exact_scoring"]
+        stage_names = {stage["name"] for stage in sidecar["telemetry"]["stages"]}
+
+        assert seed["generation_status"] == "completed"
+        assert seed["candidate_seeds_generated"] > 0
+        assert seed["pairs_considered"] + seed["pairs_remaining"] == seed["pair_combinations_total"]
+        assert seed["candidate_seeds_generated"] == len(seed["seeds"])
+        assert scoring["candidate_count"] == diagnostics["candidate_count"]
+        assert len(scoring["evaluated_candidate_ids"]) == scoring["candidate_count"]
+        assert scoring["evaluated_candidate_ids"][0].startswith("cell:")
+        assert any(
+            candidate_id.startswith("seed:") for candidate_id in scoring["evaluated_candidate_ids"]
+        )
+        assert {
+            "proposal_generation",
+            "seed_generation",
+            "proposal_ordering",
+            "candidate_pool_startup",
+            "exact_scoring",
+        } <= stage_names
+        assert diagnostics["candidate_pool"]["workers"] == workers
+        assert diagnostics["elapsed_time_semantics"]["complete_request_wall_s"].startswith(
+            "request_timing.request_elapsed_s"
+        )
+        outcomes.append((result, scoring["outcome_counts"], scoring["evaluated_candidate_ids"]))
+
+    baseline = outcomes[0]
+    for outcome in outcomes[1:]:
+        assert outcome[0].search_status == baseline[0].search_status
+        assert outcome[0].decision_status == baseline[0].decision_status
+        assert outcome[0].hypotheses == baseline[0].hypotheses
+        assert outcome[1:] == baseline[1:]
+
+    incomplete_config_path = tmp_path / "seeded-config-incomplete.json"
+    incomplete_output_path = tmp_path / "seeded-estimate-incomplete.json"
+    write_search_config(
+        incomplete_config_path,
+        replace(config, algorithm="wedge_geodesic_seeded", seed_cell_budget=1),
+    )
+    incomplete_result = search_v2_files(
+        measurements_path,
+        catalog_path,
+        map_path,
+        incomplete_config_path,
+        projected_crs,
+        incomplete_output_path,
+        wedge_error_deg=0.5,
+        wedge_cell_size_m=100.0,
+        refine=False,
+    )
+    incomplete_diagnostics = json.loads(
+        incomplete_output_path.with_suffix(".json.telemetry.json").read_text()
+    )["diagnostics"]
+    assert incomplete_diagnostics["seed_generation"]["unselected_cells"] > 0
+    assert incomplete_result.search_status == "budget_exhausted"
+    assert incomplete_result.accepted_index is None
+
+
+def test_seeded_geodesic_pool_startup_failure_is_failed_and_unaccepted(tmp_path, monkeypatch):
+    import bearing_localization.accuracy_cli as accuracy_cli
+
+    (
+        measurements_path,
+        catalog_path,
+        map_path,
+        config_path,
+        output_path,
+        projected_crs,
+    ) = _write_geodesic_search_fixture(tmp_path, candidate_budget=20_000)
+    config = loads_search_config(config_path.read_text())
+    write_search_config(
+        config_path,
+        replace(
+            config,
+            algorithm="wedge_geodesic_seeded",
+            candidate_workers=2,
+            seed_cell_budget=20_000,
+        ),
+    )
+
+    def fail_pool(*_args, **_kwargs):
+        raise RuntimeError("injected worker startup failure")
+
+    monkeypatch.setattr(accuracy_cli, "PersistentCandidatePool", fail_pool)
+    result = search_v2_files(
+        measurements_path,
+        catalog_path,
+        map_path,
+        config_path,
+        projected_crs,
+        output_path,
+        wedge_error_deg=0.5,
+        wedge_cell_size_m=100.0,
+        refine=False,
+    )
+    diagnostics = json.loads(output_path.with_suffix(".json.telemetry.json").read_text())[
+        "diagnostics"
+    ]
+    assert result.search_status == "failed"
+    assert result.accepted_index is None
+    assert diagnostics["candidate_pool"]["failure"]["failure_kind"] == "worker_startup_failed"
+    assert "injected worker startup failure" in diagnostics["candidate_pool"]["failure"]["error"]
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "seed_cell_budget",
+        "seed_pair_budget",
+        "seed_candidate_budget",
+        "candidate_workers",
+        "candidate_pool_memory_budget_bytes",
+    ),
+)
+def test_seeded_geodesic_budgets_require_positive_integers(field):
+    with pytest.raises(ValueError, match=field):
+        cast(Any, SearchConfig)(**{field: 0})
+    with pytest.raises(ValueError, match=field):
+        cast(Any, SearchConfig)(**{field: True})
