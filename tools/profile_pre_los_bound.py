@@ -543,6 +543,7 @@ def main() -> int:
         raise ValueError("Selection manifest hash differs from A22 exact-score artifact")
     config_hash = sha256_file(args.config)
     config_data = json.loads(args.config.read_text())
+    raw_config_data = dict(config_data)
     config_data.pop("contract_type", None)
     config_data.pop("proposal_cache_path", None)
     if config_hash != score_artifact["config_sha256"]:
@@ -599,7 +600,7 @@ def main() -> int:
                 args.incumbent_manifest,
                 args.incumbent_rows,
                 expected_static_hashes=static_hashes,
-                active_config=config_data,
+                active_config=raw_config_data,
                 expected_score=args.expected_incumbent_score,
             )
         )
