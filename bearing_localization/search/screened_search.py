@@ -18,7 +18,6 @@ from maritime_localization_shared.contracts.localization import Hypothesis, Loca
 
 from .candidate_lower_bound import (
     CandidateLowerBoundResult,
-    PreparedCandidateObjectiveBound,
     prepare_candidate_objective_bound,
     should_prune_candidate,
 )
@@ -178,7 +177,6 @@ def screened_candidate_search(
 
     run_started = perf_counter()
     prediction_context = scorer._prediction_context
-    max_group_count = len(prediction_context.records)
     iterator = iter(candidates)
     sequence_candidates = candidates if isinstance(candidates, Sequence) else None
     visits: list[CandidateVisit] = []
@@ -186,9 +184,6 @@ def screened_candidate_search(
     counts: Counter[CandidateStatus] = Counter()
     seen_ids: set[str] = set()
     best: FeasibleIncumbent | None = None
-    threshold_cache_valid = False
-    threshold_cache_key: tuple[float, float] | None = None
-    threshold_cache_value: int | None = None
     incumbent_validation_count = 0
     incumbent_validation_elapsed = 0.0
     if feasible_incumbent is not None:
@@ -246,27 +241,13 @@ def screened_candidate_search(
                 scorer.config.absolute_score_tolerance
                 + scorer.config.relative_score_tolerance * abs(best.score),
             )
-            current_threshold_key = (best.score, candidate_margin)
-            if not threshold_cache_valid or current_threshold_key != threshold_cache_key:
-                threshold_cache_value = _minimum_useful_group_threshold(
-                    prepared_bound,
-                    max_group_count,
-                    best.score,
-                    candidate_margin,
-                )
-                threshold_cache_key = current_threshold_key
-                threshold_cache_valid = True
-            threshold = threshold_cache_value
             screen_start = perf_counter()
             visibility = screen_candidate_visibility(
                 position,
                 prediction_context,
-                stop_after_minimum_groups=threshold,
-                scan_all_members=threshold is None,
+                scan_all_members=True,
             )
             visibility_elapsed += perf_counter() - screen_start
-            if visibility.observer_status == "land":
-                threshold = None
             if visibility.certified and visibility.observer_status != "land":
                 bound_start = perf_counter()
                 lower = prepared_bound.bound(
@@ -456,36 +437,6 @@ def _variance_model_supported(scorer: CandidateScorer) -> bool:
         for column in range(len(covariance))
         if row != column
     )
-
-
-def _minimum_useful_group_threshold(
-    prepared: PreparedCandidateObjectiveBound,
-    maximum_group_count: int,
-    feasible_score: float,
-    margin: float,
-) -> int | None:
-    """Find the smallest useful K using cached prepared likelihood floors."""
-    if maximum_group_count <= 0 or not prepared.supported:
-        return None
-    low, high = 0, 1
-    while high <= maximum_group_count:
-        result = prepared.bound(high, True)
-        if should_prune_candidate(result, feasible_score, comparison_margin=margin):
-            break
-        low, high = high, high * 2
-    if high > maximum_group_count:
-        high = maximum_group_count
-        result = prepared.bound(high, True)
-        if not should_prune_candidate(result, feasible_score, comparison_margin=margin):
-            return None
-    while low + 1 < high:
-        middle = (low + high) // 2
-        result = prepared.bound(middle, True)
-        if should_prune_candidate(result, feasible_score, comparison_margin=margin):
-            high = middle
-        else:
-            low = middle
-    return high
 
 
 __all__ = [
