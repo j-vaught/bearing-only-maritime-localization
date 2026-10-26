@@ -1,0 +1,114 @@
+{
+  "contract_type": "EvaluationTruth",
+  "objects": [
+    {
+      "ais_record_id": "catalog:enc-physical:67b4ff4a46afbeba469e",
+      "east_m": 506754.28291652846,
+      "north_m": 4914836.599676911,
+      "object_id": "truth:enc-physical:67b4ff4a46afbeba469e",
+      "object_type": "physical_aid",
+      "observation_index": 4
+    },
+    {
+      "ais_record_id": "catalog:enc-physical:e47ad3e940b12e5429bc",
+      "east_m": 507799.3897013774,
+      "north_m": 4921091.569682734,
+      "object_id": "truth:enc-physical:e47ad3e940b12e5429bc",
+      "object_type": "physical_aid",
+      "observation_index": 3
+    },
+    {
+      "ais_record_id": "catalog:enc-physical:43a772dcf0ef12367b3f",
+      "east_m": 508374.331476898,
+      "north_m": 4921330.432080314,
+      "object_id": "truth:enc-physical:43a772dcf0ef12367b3f",
+      "object_type": "physical_aid",
+      "observation_index": 1
+    },
+    {
+      "ais_record_id": "catalog:enc-physical:c30ab7a249b5bd0eb23a",
+      "east_m": 506534.99839271803,
+      "north_m": 4917883.927821836,
+      "object_id": "truth:enc-physical:c30ab7a249b5bd0eb23a",
+      "object_type": "physical_aid",
+      "observation_index": 2
+    },
+    {
+      "ais_record_id": "catalog:enc-physical:091a183d8a3a865a3df9",
+      "east_m": 508150.5707999556,
+      "north_m": 4920315.907894838,
+      "object_id": "truth:enc-physical:091a183d8a3a865a3df9",
+      "object_type": "physical_aid",
+      "observation_index": 0
+    },
+    {
+      "ais_record_id": "catalog:enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+      "east_m": 506754.28291652846,
+      "north_m": 4914836.599676911,
+      "object_id": "truth:enc-component:harbour:Harbor.Fog_Signal_point:US5BGRGE.000:source_object_id=11565",
+      "object_type": "unknown",
+      "observation_index": 4
+    },
+    {
+      "ais_record_id": "catalog:enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+      "east_m": 507799.3897013774,
+      "north_m": 4921091.569682734,
+      "object_id": "truth:enc-component:harbour:Harbor.Fog_Signal_point:US5BGRHE.000:source_object_id=11568",
+      "object_type": "unknown",
+      "observation_index": 3
+    },
+    {
+      "ais_record_id": "catalog:enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+      "east_m": 506754.28291652846,
+      "north_m": 4914836.599676911,
+      "object_id": "truth:enc-component:harbour:Harbor.Light_point:US5BGRGE.000:source_object_id=205326",
+      "object_type": "physical_aid",
+      "observation_index": 4
+    },
+    {
+      "ais_record_id": "catalog:enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+      "east_m": 508374.331476898,
+      "north_m": 4921330.432080314,
+      "object_id": "truth:enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205334",
+      "object_type": "physical_aid",
+      "observation_index": 1
+    },
+    {
+      "ais_record_id": "catalog:enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+      "east_m": 506534.99839271803,
+      "north_m": 4917883.927821836,
+      "object_id": "truth:enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205335",
+      "object_type": "physical_aid",
+      "observation_index": 2
+    },
+    {
+      "ais_record_id": "catalog:enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+      "east_m": 507799.3897013774,
+      "north_m": 4921091.569682734,
+      "object_id": "truth:enc-component:harbour:Harbor.Light_point:US5BGRHE.000:source_object_id=205337",
+      "object_type": "physical_aid",
+      "observation_index": 3
+    },
+    {
+      "ais_record_id": "catalog:enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+      "east_m": 506754.28291652846,
+      "north_m": 4914836.599676911,
+      "object_id": "truth:enc-component:harbour:Harbor.Topmark_point:US5BGRGE.000:source_object_id=63976",
+      "object_type": "unknown",
+      "observation_index": 4
+    },
+    {
+      "ais_record_id": "catalog:enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+      "east_m": 506534.99839271803,
+      "north_m": 4917883.927821836,
+      "object_id": "truth:enc-component:harbour:Harbor.Topmark_point:US5BGRHE.000:source_object_id=63979",
+      "object_type": "unknown",
+      "observation_index": 2
+    }
+  ],
+  "observer_east_m": 508789.7115941159,
+  "observer_heading_deg": 0.0,
+  "observer_north_m": 4922460.313577438,
+  "schema_version": 1,
+  "trial_id": "development/port-001/placement-001/r0/range10000m/typesoff/nominal"
+}
