@@ -1,0 +1,59 @@
+{
+  "pool_timings": {
+    "completed_count": 47264,
+    "elapsed_s": 718.7286542891525,
+    "estimated_memory_bytes": 13104388064,
+    "failed_count": 0,
+    "input_count": 47744,
+    "ipc_s": 642.0849952418357,
+    "pool_startup_s": 29.314389310311526,
+    "scorer_setup_s": 6.940491267945617,
+    "worker_evaluation_s": 5719.966854288243,
+    "worker_rss_bytes": [
+      [
+        2092941,
+        1062813696
+      ],
+      [
+        2094754,
+        1071136768
+      ],
+      [
+        2095605,
+        1067921408
+      ],
+      [
+        2095704,
+        1070526464
+      ],
+      [
+        2095811,
+        1065492480
+      ],
+      [
+        2095915,
+        1063616512
+      ],
+      [
+        2096012,
+        1069846528
+      ],
+      [
+        2096106,
+        1065922560
+      ]
+    ]
+  },
+  "totals": {
+    "candidate_domain_count": 1457546,
+    "completed_candidate_count": 47264,
+    "completed_chunk_count": 1477,
+    "exact_scored_count": 47182,
+    "expected_candidate_count": 1457546,
+    "failed_candidate_count": 0,
+    "invalid_water_count": 0,
+    "not_selected_candidate_count": 0,
+    "pruned_candidate_count": 0,
+    "unresolved_count": 82
+  }
+}
