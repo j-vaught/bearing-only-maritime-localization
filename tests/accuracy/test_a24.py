@@ -304,6 +304,8 @@ def _global_proof_trial(**updates):
         "unresolved_region_count": 0,
         "coverage_complete": True,
         "global_bound_excludes_outside": True,
+        "certificate_scope": "continuous_objective",
+        "bound_gap": 0.0,
         "candidate_certificate_scope": "continuous_objective",
         "candidate_bound_gap": 0.0,
         "top_score": 0.0,
@@ -390,3 +392,38 @@ def test_calibration_uses_runtime_serialized_converged_mode_predicate():
         ]
     }
     assert measure([unfinished], 0.0, None)["accepted_trials"] == 0
+
+
+def test_calibration_uses_final_result_certificate_not_candidate_proof():
+    candidate_only_proof = _global_proof_trial(
+        certificate_scope=None,
+        bound_gap=None,
+        candidate_certificate_scope="continuous_objective",
+        candidate_bound_gap=0.0,
+    )
+    final_proof = _global_proof_trial(
+        candidate_certificate_scope="none",
+        candidate_bound_gap=None,
+    )
+    assert measure([candidate_only_proof], 2.0, None)["accepted_trials"] == 0
+    assert measure([final_proof], 2.0, None)["accepted_trials"] == 1
+
+    top = _hypothesis(0.0, 0.0)
+    coverage = _coverage(
+        global_bound_excludes_outside=True,
+        distant_region_score_lower_bound=3.0,
+        distant_region_bound_scope="all_objective_positions_at_least_100m_from_top",
+        distant_region_bound_anchor=(0.0, 0.0),
+    )
+    runtime_candidate_only = decide_localization(
+        _result(top, certificate="none", gap=None),
+        _calibration(),
+        coverage=coverage,
+    )
+    runtime_final_proof = decide_localization(
+        _result(top, certificate="continuous_objective", gap=0.0),
+        _calibration(),
+        coverage=coverage,
+    )
+    assert runtime_candidate_only.decision_status == "ambiguous"
+    assert runtime_final_proof.decision_status == "accepted"

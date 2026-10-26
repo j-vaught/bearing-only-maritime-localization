@@ -74,10 +74,10 @@ def _global_proof_at_gap(trial: dict[str, Any], min_score_gap: float) -> bool:
         or not isfinite(float(top_score))
     ):
         return False
-    certificate_scope = _value(
-        trial, "candidate_certificate_scope", _value(trial, "certificate_scope")
-    )
-    bound_gap = _value(trial, "candidate_bound_gap", _value(trial, "bound_gap"))
+    # These must describe the final refined LocalizationResult. Candidate-stage
+    # certificates can predate refinement and must never upgrade the final result.
+    certificate_scope = _value(trial, "certificate_scope")
+    bound_gap = _value(trial, "bound_gap")
     return global_exclusion_evidence_is_valid(
         search_status=_value(trial, "search_status", ""),
         coverage=coverage,
