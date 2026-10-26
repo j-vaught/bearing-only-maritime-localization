@@ -14,10 +14,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools.run_a26_cached_finite_domain import (  # noqa: E402
     append_jsonl,
+    canonical_sha256,
     resolve_project_root,
+    resume_verified_chunks,
+    reuse_verified_plan,
     sha256_file,
+    sha256_tree,
     smoke_scoring_source,
     terminate_process_group,
+    validate_durable_chunk_history,
     worker_exit_code,
     write_candidate_dispositions,
 )
@@ -345,3 +350,148 @@ def test_prefix_profile_marks_unselected_candidates_without_certifying_domain(
         "not_selected_by_explicit_prefix_profile",
         "not_selected_by_explicit_prefix_profile",
     ]
+
+
+def test_verified_plan_is_hardlinked_and_bound_to_cache_context(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    source.mkdir()
+    output.mkdir()
+    candidate_ids = {"cell:a", "cell:b"}
+    inventory = source / "candidate-inventory.jsonl"
+    plan = source / "candidate-plan.jsonl"
+    inventory.write_text('{"candidate_id":"cell:a"}\n{"candidate_id":"cell:b"}\n')
+    plan.write_text(
+        '{"candidate_id":"cell:a","position_xy_m":[1.0,2.0]}\n'
+        '{"candidate_id":"cell:b","position_xy_m":[3.0,4.0]}\n'
+    )
+    manifest = {
+        "generation_source_sha": "gen",
+        "proposal_cache_tree_sha256": "cache",
+        "proposal_cache_context_sha256": "context",
+        "static_input_sha256": {"measurements": "measurement"},
+        "scoring_config_sha256": "config",
+        "candidate_order": "cli_geodesic_matching_votes_water_residual_evidence_cell_v1",
+        "candidate_plan_sha256": sha256_file(plan),
+    }
+    (source / "run-manifest.json").write_text(json.dumps(manifest))
+    records, binding = reuse_verified_plan(
+        source_root=source,
+        output_root=output,
+        expected_candidate_ids=candidate_ids,
+        generation_source_sha="gen",
+        cache_tree_sha256="cache",
+        cache_context_sha256="context",
+        static_input_sha256={"measurements": "measurement"},
+        scoring_config_sha256="config",
+    )
+    assert [row["candidate_id"] for row in records] == ["cell:a", "cell:b"]
+    assert binding["candidate_plan_sha256"] == sha256_file(plan)
+    assert os.stat(output / "candidate-plan.jsonl").st_ino == os.stat(plan).st_ino
+    assert os.stat(output / "candidate-inventory.jsonl").st_ino == os.stat(inventory).st_ino
+
+    bad_output = tmp_path / "bad-output"
+    bad_output.mkdir()
+    with pytest.raises(ValueError, match="different frozen inputs"):
+        reuse_verified_plan(
+            source_root=source,
+            output_root=bad_output,
+            expected_candidate_ids=candidate_ids,
+            generation_source_sha="gen",
+            cache_tree_sha256="cache",
+            cache_context_sha256="context",
+            static_input_sha256={"measurements": "other"},
+            scoring_config_sha256="config",
+        )
+
+
+def test_resume_reuses_only_identity_matched_durable_chunks(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    (source / "chunk-results").mkdir(parents=True)
+    (source / "hypotheses").mkdir()
+    output.mkdir()
+    identity = {
+        "schema": "a26-cached-finite-domain-identity-v2",
+        "candidate_plan_sha256": "plan",
+        "execution_mode": "exact",
+    }
+    envelope = {**identity, "identity_sha256": canonical_sha256(identity)}
+    (source / "run-identity.json").write_text(json.dumps(envelope))
+    chunk = source / "chunk-results/chunk-00000000.json"
+    chunk.write_text(
+        json.dumps(
+            {
+                "chunk_index": 0,
+                "candidates": [
+                    {"candidate_id": "cell:a", "input_index": 0, "action": "exact_scored"}
+                ],
+            }
+        )
+    )
+    hypothesis = source / "hypotheses/chunk-00000000.json"
+    hypothesis.write_text("[]\n")
+    (source / "run-manifest.json").write_text(
+        json.dumps({"chunk_results_sha256": sha256_tree(source / "chunk-results")})
+    )
+    (source / "candidate-plan.jsonl").write_text(
+        '{"candidate_id":"cell:a","position_xy_m":[1.0,2.0]}\n'
+    )
+    (source / "candidate-inventory.jsonl").write_text('{"candidate_id":"cell:a"}\n')
+
+    result = resume_verified_chunks(
+        source_root=source,
+        output_root=output,
+        run_identity=identity,
+        candidate_ids={"cell:a"},
+    )
+    assert result["lineage_candidate_count"] == 1
+    assert os.stat(output / "chunk-results/chunk-00000000.json").st_ino == os.stat(chunk).st_ino
+    assert os.stat(output / "hypotheses/chunk-00000000.json").st_ino == os.stat(hypothesis).st_ino
+    assert [
+        row["candidate_id"]
+        for row in json.loads((output / "chunk-results/chunk-00000000.json").read_text())[
+            "candidates"
+        ]
+    ] == ["cell:a"]
+
+    mismatch = dict(identity, execution_mode="screened")
+    with pytest.raises(ValueError, match="different or invalid scoring run identity"):
+        resume_verified_chunks(
+            source_root=source,
+            output_root=tmp_path / "mismatch",
+            run_identity=mismatch,
+            candidate_ids={"cell:a"},
+        )
+
+
+def test_durable_chunks_are_checked_against_global_candidate_plan(tmp_path: Path) -> None:
+    output = tmp_path / "out"
+    (output / "hypotheses").mkdir(parents=True)
+    records = [
+        {"candidate_id": "cell:a", "position_xy_m": [1.0, 2.0]},
+        {"candidate_id": "cell:b", "position_xy_m": [3.0, 4.0]},
+    ]
+    chunk = {
+        "chunk_index": 4,
+        "candidate_count": 1,
+        "candidates": [
+            {
+                "candidate_id": "cell:b",
+                "input_index": 1,
+                "position_xy_m": [3.0, 4.0],
+                "action": "exact_scored",
+            }
+        ],
+    }
+    (output / "hypotheses/chunk-00000004.json").write_text(
+        json.dumps([{"input_index": 1, "hypothesis": {"score": 0.0}}])
+    )
+    assert validate_durable_chunk_history(records=records, chunks=[chunk], output_root=output) == {
+        "cell:b"
+    }
+
+    bad_chunk = json.loads(json.dumps(chunk))
+    bad_chunk["candidates"][0]["input_index"] = 0
+    with pytest.raises(ValueError, match="input index differs"):
+        validate_durable_chunk_history(records=records, chunks=[bad_chunk], output_root=output)

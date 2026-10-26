@@ -39,6 +39,180 @@ def sha256_tree(path: Path) -> str:
     return h.hexdigest()
 
 
+def canonical_sha256(value: Any) -> str:
+    payload = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _link_file(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        raise FileExistsError(destination)
+    os.link(source, destination)
+
+
+def _load_candidate_plan(path: Path, expected_ids: set[str]) -> list[dict[str, Any]]:
+    rows = _read_jsonl(path)
+    ids = [row.get("candidate_id") for row in rows]
+    if len(ids) != len(expected_ids) or len(ids) != len(set(ids)) or set(ids) != expected_ids:
+        raise ValueError(
+            "Candidate plan does not enumerate the complete cache domain exactly once."
+        )
+    for row in rows:
+        xy = row.get("position_xy_m")
+        if not isinstance(xy, (list, tuple)) or len(xy) != 2:
+            raise ValueError("Candidate plan row has no valid projected position.")
+    return rows
+
+
+def reuse_verified_plan(
+    *,
+    source_root: Path,
+    output_root: Path,
+    expected_candidate_ids: set[str],
+    generation_source_sha: str,
+    cache_tree_sha256: str,
+    cache_context_sha256: str,
+    static_input_sha256: dict[str, str],
+    scoring_config_sha256: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Hardlink a prior full plan after validating its generation bindings."""
+    source_root = source_root.resolve()
+    manifest_path = source_root / "run-manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    else:
+        identity_path = source_root / "run-identity.json"
+        envelope = json.loads(identity_path.read_text(encoding="utf-8"))
+        identity = dict(envelope)
+        identity_sha = identity.pop("identity_sha256", None)
+        if identity_sha != canonical_sha256(identity):
+            raise ValueError("Plan source run identity hash mismatch.")
+        manifest = identity
+        manifest_path = identity_path
+    if manifest.get("generation_source_sha") != generation_source_sha:
+        raise ValueError("Plan source run uses a different proposal generator.")
+    if manifest.get("proposal_cache_tree_sha256") != cache_tree_sha256:
+        raise ValueError("Plan source run uses a different proposal cache.")
+    if manifest.get("proposal_cache_context_sha256") != cache_context_sha256:
+        raise ValueError("Plan source run has a different cache context.")
+    if manifest.get("static_input_sha256") != static_input_sha256:
+        raise ValueError("Plan source run uses different frozen inputs.")
+    if manifest.get("scoring_config_sha256") != scoring_config_sha256:
+        raise ValueError("Plan source run uses a different scoring configuration.")
+    if (
+        manifest.get("candidate_order")
+        != "cli_geodesic_matching_votes_water_residual_evidence_cell_v1"
+    ):
+        raise ValueError("Plan source run uses an unknown candidate order.")
+    plan_source = source_root / "candidate-plan.jsonl"
+    if manifest.get("candidate_plan_sha256") != sha256_file(plan_source):
+        raise ValueError("Plan source run candidate-plan hash mismatch.")
+    inventory_source = source_root / "candidate-inventory.jsonl"
+    if manifest.get("candidate_inventory_sha256") and (
+        manifest.get("candidate_inventory_sha256") != sha256_file(inventory_source)
+    ):
+        raise ValueError("Plan source run inventory hash mismatch.")
+    inventory_rows = _read_jsonl(inventory_source)
+    inventory_ids = [row.get("candidate_id") for row in inventory_rows]
+    if (
+        len(inventory_ids) != len(expected_candidate_ids)
+        or len(set(inventory_ids)) != len(inventory_ids)
+        or set(inventory_ids) != expected_candidate_ids
+    ):
+        raise ValueError("Plan source run inventory does not match the verified cache domain.")
+    _link_file(inventory_source, output_root / "candidate-inventory.jsonl")
+    _link_file(plan_source, output_root / "candidate-plan.jsonl")
+    plan = _load_candidate_plan(output_root / "candidate-plan.jsonl", expected_candidate_ids)
+    return plan, {
+        "source_run_root": str(source_root),
+        "source_run_manifest_sha256": sha256_file(manifest_path),
+        "source_scoring_sha": manifest.get("scoring_source_sha"),
+        "candidate_plan_sha256": manifest["candidate_plan_sha256"],
+    }
+
+
+def resume_verified_chunks(
+    *,
+    source_root: Path,
+    output_root: Path,
+    run_identity: dict[str, Any],
+    candidate_ids: set[str],
+) -> dict[str, Any]:
+    """Reuse completed immutable chunks from identical attempts in the lineage."""
+    source_root = source_root.resolve()
+    roots = []
+    cursor = source_root
+    seen_roots: set[Path] = set()
+    while cursor not in seen_roots:
+        seen_roots.add(cursor)
+        identity_path = cursor / "run-identity.json"
+        envelope = json.loads(identity_path.read_text(encoding="utf-8"))
+        identity = dict(envelope)
+        identity_sha = identity.pop("identity_sha256", None)
+        if identity_sha != canonical_sha256(identity) or identity != run_identity:
+            raise ValueError("Resume source has a different or invalid scoring run identity.")
+        roots.append((cursor, identity_sha))
+        lineage_path = cursor / "resume-source.json"
+        if not lineage_path.is_file():
+            break
+        lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
+        parent_root = Path(lineage["source_run_root"]).resolve()
+        if parent_root == cursor:
+            raise ValueError("Resume lineage contains a self-reference.")
+        cursor = parent_root
+    else:
+        raise ValueError("Resume lineage contains a cycle.")
+
+    source_files: dict[str, Path] = {}
+    for root, _ in roots:
+        manifest_path = root / "run-manifest.json"
+        if not manifest_path.is_file():
+            manifest_path = root / "supervisor-manifest.json"
+        if manifest_path.is_file():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            chunk_root = root / "chunk-results"
+            declared = manifest.get("chunk_results_sha256")
+            if declared and chunk_root.is_dir() and declared != sha256_tree(chunk_root):
+                raise ValueError(f"Resume source chunk tree hash mismatch at {root}.")
+        for path in sorted((root / "chunk-results").glob("chunk-*.json")):
+            existing = source_files.get(path.name)
+            if existing is not None and sha256_file(existing) != sha256_file(path):
+                raise ValueError(f"Conflicting lineage chunks share filename {path.name}.")
+            source_files[path.name] = path
+
+    for filename, path in sorted(source_files.items()):
+        chunk = json.loads(path.read_text(encoding="utf-8"))
+        chunk_ids = [row.get("candidate_id") for row in chunk.get("candidates", [])]
+        if not chunk_ids or len(chunk_ids) != len(set(chunk_ids)):
+            raise ValueError(f"Invalid candidate IDs in durable chunk {filename}.")
+        if not set(chunk_ids) <= candidate_ids:
+            raise ValueError("Resume source chunk contains an ID outside the frozen plan.")
+        _link_file(path, output_root / "chunk-results" / filename)
+        for root, _ in roots:
+            hypothesis_path = root / "hypotheses" / filename
+            if hypothesis_path.is_file():
+                _link_file(hypothesis_path, output_root / "hypotheses" / filename)
+                break
+
+    all_ids = [
+        candidate["candidate_id"]
+        for chunk in _read_chunk_records(output_root)
+        for candidate in chunk.get("candidates", [])
+    ]
+    if len(all_ids) != len(set(all_ids)):
+        raise ValueError("Resume lineage contains duplicate committed candidate IDs.")
+    return {
+        "source_run_root": str(source_root),
+        "source_identity_sha256": roots[0][1],
+        "lineage_roots": [str(root) for root, _ in roots],
+        "lineage_chunk_count": len(source_files),
+        "lineage_candidate_count": len(all_ids),
+    }
+
+
 def _fsync_directory(path: Path) -> None:
     descriptor = os.open(path, os.O_RDONLY)
     try:
@@ -451,6 +625,53 @@ def smoke_scoring_source(scoring_root: Path, expected_scoring_source_sha: str) -
     return actual_sha
 
 
+def validate_durable_chunk_history(
+    *,
+    records: list[dict[str, Any]],
+    chunks: list[dict[str, Any]],
+    output_root: Path,
+) -> set[str]:
+    """Check durable chunk rows against the immutable global plan before resuming."""
+    plan_index = {row["candidate_id"]: index for index, row in enumerate(records)}
+    committed: set[str] = set()
+    chunk_indices: set[int] = set()
+    for chunk in chunks:
+        chunk_index = chunk.get("chunk_index")
+        if type(chunk_index) is not int or chunk_index in chunk_indices:
+            raise ValueError("Durable chunks have a missing or duplicate chunk index.")
+        chunk_indices.add(chunk_index)
+        candidates = chunk.get("candidates")
+        if not isinstance(candidates, list) or len(candidates) != chunk.get("candidate_count"):
+            raise ValueError(f"Durable chunk {chunk_index} candidate count is inconsistent.")
+        if not candidates:
+            raise ValueError(f"Durable chunk {chunk_index} is empty.")
+        chunk_ids: set[str] = set()
+        for row in candidates:
+            candidate_id = row.get("candidate_id")
+            if candidate_id not in plan_index:
+                raise ValueError("Durable chunk refers to an ID outside the candidate plan.")
+            if candidate_id in committed or candidate_id in chunk_ids:
+                raise ValueError("Durable chunks contain duplicate candidate IDs.")
+            chunk_ids.add(candidate_id)
+            if row.get("input_index") != plan_index[candidate_id]:
+                raise ValueError("Durable chunk input index differs from the frozen plan.")
+            expected_xy = records[plan_index[candidate_id]]["position_xy_m"]
+            if list(row.get("position_xy_m", [])) != list(expected_xy):
+                raise ValueError("Durable chunk position differs from the frozen plan.")
+        committed.update(chunk_ids)
+        hypothesis_path = output_root / "hypotheses" / f"chunk-{chunk_index:08d}.json"
+        if not hypothesis_path.is_file():
+            raise ValueError(f"Durable chunk {chunk_index} has no hypothesis sidecar.")
+        hypotheses = json.loads(hypothesis_path.read_text(encoding="utf-8"))
+        if not isinstance(hypotheses, list):
+            raise ValueError(f"Durable chunk {chunk_index} hypothesis sidecar is invalid.")
+        for item in hypotheses:
+            input_index = item.get("input_index") if isinstance(item, dict) else None
+            if type(input_index) is not int or not 0 <= input_index < len(records):
+                raise ValueError(f"Durable chunk {chunk_index} has an invalid hypothesis index.")
+    return committed
+
+
 def run_finite_domain(
     *,
     generation_root: Path,
@@ -466,8 +687,11 @@ def run_finite_domain(
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     timeout_s: float = DEFAULT_TIMEOUT_S,
     candidate_prefix_limit: int | None = None,
+    execution_mode: str = "exact",
+    reuse_plan_from: Path | None = None,
+    resume_from: Path | None = None,
 ) -> dict[str, Any]:
-    """Load a verified cache and exact-score its entire ordered candidate domain."""
+    """Load a verified cache and score its ordered domain in durable chunks."""
     if output_root.exists() and any(output_root.iterdir()):
         raise FileExistsError(f"Fresh finite-domain output directory required: {output_root}")
     output_root.mkdir(parents=True, exist_ok=True)
@@ -524,35 +748,11 @@ def run_finite_domain(
     context = ProposalCacheContext(**cache_diag["context"])
     cache_result = load_proposal_cache(cache_path, context=context)
     stages["contract_and_cache_load_s"] = time.perf_counter() - load_started
-    inventory_path = output_root / "candidate-inventory.jsonl"
-    inventory_tmp = inventory_path.with_suffix(".jsonl.tmp")
-    with inventory_tmp.open("w", encoding="utf-8") as inventory_stream:
-        for proposal in cache_result.proposals:
-            inventory_stream.write(
-                json.dumps({"candidate_id": f"cell:{proposal.candidate_id}"}, sort_keys=True) + "\n"
-            )
-        inventory_stream.flush()
-        os.fsync(inventory_stream.fileno())
-    inventory_tmp.replace(inventory_path)
-    records, stages["coordinate_transform_and_cli_order_s"] = _candidate_records(
-        cache_result, vector_map
+    original_config_path = (
+        scoring_root / "data/accuracy/diagnostics/2026-10-26/a26-wedge-geodesic/search-config.json"
     )
-    if len(records) != len(cache_result.proposals):
-        raise ValueError("Candidate ordering omitted proposal records.")
-    ids = [row["candidate_id"] for row in records]
-    if len(set(ids)) != len(ids):
-        raise ValueError("Candidate IDs are not unique.")
-    if set(ids) != {f"cell:{proposal.candidate_id}" for proposal in cache_result.proposals}:
-        raise ValueError("Candidate plan does not include every cached proposal ID exactly once.")
-    write_jsonl_atomic(output_root / "candidate-plan.jsonl", records)
-    selected_records = records[:candidate_prefix_limit] if candidate_prefix_limit else records
-    selected_ids = {row["candidate_id"] for row in selected_records}
-    original_config = json.loads(
-        (
-            scoring_root
-            / "data/accuracy/diagnostics/2026-10-26/a26-wedge-geodesic/search-config.json"
-        ).read_text()
-    )
+    scoring_config_sha = sha256_file(original_config_path)
+    original_config = json.loads(original_config_path.read_text())
     original_config.pop("proposal_cache_path", None)
     config = loads_search_config(json.dumps(original_config))
     validate_runtime_config_binding(
@@ -562,6 +762,103 @@ def run_finite_domain(
         catalog,
         vector_map,
     )
+    if execution_mode not in ("exact", "screened"):
+        raise ValueError("Execution mode must be exact or screened.")
+    cache_candidate_ids = {f"cell:{proposal.candidate_id}" for proposal in cache_result.proposals}
+    if len(cache_candidate_ids) != len(cache_result.proposals):
+        raise ValueError("Cache proposal IDs are not unique.")
+    static_hashes = {name: sha256_file(path) for name, path in static_paths.items()}
+    plan_reuse: dict[str, Any] | None = None
+    plan_source_root = reuse_plan_from or resume_from
+    if plan_source_root is not None:
+        records, plan_reuse = reuse_verified_plan(
+            source_root=plan_source_root,
+            output_root=output_root,
+            expected_candidate_ids=cache_candidate_ids,
+            generation_source_sha=expected_generation_source_sha,
+            cache_tree_sha256=sha256_tree(cache_path),
+            cache_context_sha256=context.context_hash,
+            static_input_sha256=static_hashes,
+            scoring_config_sha256=scoring_config_sha,
+        )
+        stages["coordinate_transform_and_cli_order_s"] = 0.0
+    else:
+        write_jsonl_atomic(
+            output_root / "candidate-inventory.jsonl",
+            [
+                {"candidate_id": f"cell:{proposal.candidate_id}"}
+                for proposal in cache_result.proposals
+            ],
+        )
+        records, stages["coordinate_transform_and_cli_order_s"] = _candidate_records(
+            cache_result, vector_map
+        )
+        record_ids = [row["candidate_id"] for row in records]
+        if len(records) != len(cache_candidate_ids):
+            raise ValueError("Candidate ordering omitted proposal records.")
+        if len(set(record_ids)) != len(record_ids) or set(record_ids) != cache_candidate_ids:
+            raise ValueError(
+                "Candidate plan does not include every cached proposal ID exactly once."
+            )
+        write_jsonl_atomic(output_root / "candidate-plan.jsonl", records)
+    ids = [row["candidate_id"] for row in records]
+    if len(ids) != len(set(ids)) or set(ids) != cache_candidate_ids:
+        raise ValueError("Candidate plan does not enumerate the cache domain exactly once.")
+    plan_sha = sha256_file(output_root / "candidate-plan.jsonl")
+    run_identity = {
+        "schema": "a26-cached-finite-domain-identity-v2",
+        "generation_source_sha": expected_generation_source_sha,
+        "scoring_source_sha": actual_scoring_sha,
+        "proposal_generation_run_id": generation_manifest["run_id"],
+        "proposal_cache_tree_sha256": sha256_tree(cache_path),
+        "proposal_cache_context_sha256": context.context_hash,
+        "static_input_sha256": static_hashes,
+        "scoring_config_sha256": scoring_config_sha,
+        "candidate_order": "cli_geodesic_matching_votes_water_residual_evidence_cell_v1",
+        "candidate_plan_sha256": plan_sha,
+        "candidate_inventory_sha256": sha256_file(output_root / "candidate-inventory.jsonl"),
+        "candidate_domain_count": len(records),
+        "execution_mode": execution_mode,
+    }
+    identity_envelope = {**run_identity, "identity_sha256": canonical_sha256(run_identity)}
+    write_json(output_root / "run-identity.json", identity_envelope)
+    resume_lineage = None
+    if resume_from is not None:
+        write_json(
+            output_root / "resume-source.json",
+            {
+                "source_run_root": str(resume_from.resolve()),
+                "source_identity_sha256": identity_envelope["identity_sha256"],
+            },
+        )
+        resume_lineage = resume_verified_chunks(
+            source_root=resume_from,
+            output_root=output_root,
+            run_identity=run_identity,
+            candidate_ids=set(ids),
+        )
+    existing_chunk_records = _read_chunk_records(output_root)
+    committed_ids = list(
+        validate_durable_chunk_history(
+            records=records,
+            chunks=existing_chunk_records,
+            output_root=output_root,
+        )
+    )
+    selected_records = records[:candidate_prefix_limit] if candidate_prefix_limit else records
+    selected_ids = {row["candidate_id"] for row in selected_records}
+    committed_set = set(committed_ids)
+    remaining_records = [
+        row for row in selected_records if row["candidate_id"] not in committed_set
+    ]
+    plan_index = {row["candidate_id"]: index for index, row in enumerate(records)}
+    chunk_index_offset = (
+        max((int(chunk["chunk_index"]) for chunk in existing_chunk_records), default=-1) + 1
+    )
+    if resume_lineage is not None:
+        resume_lineage["reused_chunk_count"] = len(existing_chunk_records)
+        resume_lineage["reused_candidate_count"] = len(committed_ids)
+        resume_lineage["chunk_index_offset"] = chunk_index_offset
     chunk_dir = output_root / "chunk-results"
     hypotheses_dir = output_root / "hypotheses"
     chunk_dir.mkdir(parents=True, exist_ok=True)
@@ -570,13 +867,21 @@ def run_finite_domain(
         "candidate_domain_count": len(records),
         "expected_candidate_count": len(selected_records),
         "not_selected_candidate_count": len(records) - len(selected_records),
-        "completed_candidate_count": 0,
-        "exact_scored_count": 0,
-        "invalid_water_count": 0,
-        "unresolved_count": 0,
+        "completed_candidate_count": len(committed_ids),
+        "exact_scored_count": sum(
+            int(chunk.get("exact_scored_count", 0)) for chunk in existing_chunk_records
+        ),
+        "invalid_water_count": sum(
+            int(chunk.get("invalid_water_count", 0)) for chunk in existing_chunk_records
+        ),
+        "unresolved_count": sum(
+            int(chunk.get("unresolved_count", 0)) for chunk in existing_chunk_records
+        ),
         "failed_candidate_count": 0,
-        "pruned_candidate_count": 0,
-        "completed_chunk_count": 0,
+        "pruned_candidate_count": sum(
+            int(chunk.get("pruned_count", 0)) for chunk in existing_chunk_records
+        ),
+        "completed_chunk_count": len(existing_chunk_records),
     }
     pool_error: dict[str, Any] | None = None
     pool_start = time.perf_counter()
@@ -594,7 +899,7 @@ def run_finite_domain(
             CandidatePosition = getattr(screened_api, "CandidatePosition")
             candidates = (
                 CandidatePosition(row["candidate_id"], tuple(row["position_xy_m"]))
-                for row in selected_records
+                for row in remaining_records
             )
             stage_start = time.perf_counter()
             try:
@@ -602,18 +907,24 @@ def run_finite_domain(
                     measurements,
                     config,
                     candidates,
-                    mode="exact",
-                    complete_candidate_count=len(selected_records),
+                    mode=execution_mode,
+                    complete_candidate_count=len(remaining_records),
                 ):
                     chunk_rows = [asdict(row) for row in chunk.candidates]
+                    local_to_global = {
+                        row["input_index"]: plan_index[row["candidate_id"]] for row in chunk_rows
+                    }
+                    for row in chunk_rows:
+                        row["input_index"] = local_to_global[row["input_index"]]
                     hyp_rows = [
-                        {"input_index": index, "hypothesis": asdict(hypothesis)}
+                        {"input_index": local_to_global[index], "hypothesis": asdict(hypothesis)}
                         for index, hypothesis in chunk.hypotheses
                     ]
+                    global_chunk_index = chunk_index_offset + chunk.chunk_index
                     write_json(
-                        chunk_dir / f"chunk-{chunk.chunk_index:08d}.json",
+                        chunk_dir / f"chunk-{global_chunk_index:08d}.json",
                         {
-                            "chunk_index": chunk.chunk_index,
+                            "chunk_index": global_chunk_index,
                             "candidate_count": chunk.candidate_count,
                             "exact_scored_count": chunk.exact_scored_count,
                             "exact_evaluation_count": chunk.exact_evaluation_count,
@@ -630,7 +941,7 @@ def run_finite_domain(
                             "candidates": chunk_rows,
                         },
                     )
-                    write_json(hypotheses_dir / f"chunk-{chunk.chunk_index:08d}.json", hyp_rows)
+                    write_json(hypotheses_dir / f"chunk-{global_chunk_index:08d}.json", hyp_rows)
                     totals["completed_candidate_count"] += chunk.candidate_count
                     totals["exact_scored_count"] += chunk.exact_scored_count
                     totals["invalid_water_count"] += chunk.invalid_water_count
@@ -652,7 +963,7 @@ def run_finite_domain(
                     "failed_candidate_ids": list(exc.failed_candidate_ids),
                 }
                 totals["failed_candidate_count"] = exc.failed_count
-            stages["ordered_exact_scoring_s"] = time.perf_counter() - stage_start
+            stages[f"ordered_{execution_mode}_scoring_s"] = time.perf_counter() - stage_start
             pool_timings = asdict(pool.last_timings)
     except BaseException as exc:
         pool_error = pool_error or {"type": type(exc).__name__, "message": str(exc)}
@@ -668,8 +979,13 @@ def run_finite_domain(
         full_domain_selected and totals["selected_request_complete"]
     )
     totals["request_complete"] = totals["selected_request_complete"]
+    all_chunk_certificates = all(
+        chunk.get("finite_candidate_set", False) for chunk in _read_chunk_records(output_root)
+    )
     totals["finite_candidate_set_certified"] = (
-        totals["all_candidates_accounted"] and totals["unresolved_count"] == 0
+        totals["all_candidates_accounted"]
+        and totals["unresolved_count"] == 0
+        and all_chunk_certificates
     )
     disposition_counts = write_candidate_dispositions(
         output_root,
@@ -684,11 +1000,7 @@ def run_finite_domain(
     )
     manifest = {
         "schema_version": 1,
-        "run_id": (
-            "a26-cached-finite-domain-prefix-v1"
-            if candidate_prefix_limit is not None
-            else "a26-cached-finite-domain-exact-v1"
-        ),
+        "run_id": f"a26-cached-finite-domain-{execution_mode}-v2",
         "purpose": (
             "development bounded prefix runtime profile; no accuracy claim"
             if candidate_prefix_limit is not None
@@ -700,7 +1012,11 @@ def run_finite_domain(
             else "complete_finite_candidate_domain"
         ),
         "candidate_prefix_limit": candidate_prefix_limit,
-        "execution_mode": "exact",
+        "execution_mode": execution_mode,
+        "run_identity_sha256": identity_envelope["identity_sha256"],
+        "run_identity": run_identity,
+        "plan_reuse": plan_reuse,
+        "resume_lineage": resume_lineage,
         "proposal_generation_run_id": generation_manifest["run_id"],
         "generation_source_sha": expected_generation_source_sha,
         "scoring_source_sha": actual_scoring_sha,
@@ -779,6 +1095,9 @@ def main() -> int:
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
     parser.add_argument("--timeout-s", type=float, default=DEFAULT_TIMEOUT_S)
     parser.add_argument("--candidate-prefix-limit", type=int)
+    parser.add_argument("--execution-mode", choices=("exact", "screened"), default="exact")
+    parser.add_argument("--reuse-plan-from", type=Path)
+    parser.add_argument("--resume-from", type=Path)
     parser.add_argument("--_worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args._worker:
@@ -796,6 +1115,9 @@ def main() -> int:
             chunk_size=args.chunk_size,
             timeout_s=args.timeout_s,
             candidate_prefix_limit=args.candidate_prefix_limit,
+            execution_mode=args.execution_mode,
+            reuse_plan_from=args.reuse_plan_from,
+            resume_from=args.resume_from,
         )
     else:
         import fcntl
@@ -866,7 +1188,12 @@ def supervise_complete_request(args: argparse.Namespace) -> dict[str, Any]:
             )
             timeout_manifest = {
                 "schema_version": 1,
-                "run_id": "a26-cached-finite-domain-exact-v1",
+                "run_id": f"a26-cached-finite-domain-{args.execution_mode}-v2",
+                "execution_mode": args.execution_mode,
+                "resume_from": str(args.resume_from.resolve()) if args.resume_from else None,
+                "reuse_plan_from": str(args.reuse_plan_from.resolve())
+                if args.reuse_plan_from
+                else None,
                 "status": "complete_request_timeout",
                 "timeout_s": args.timeout_s,
                 "pool_request_timeout_s": args.timeout_s,
@@ -910,7 +1237,12 @@ def supervise_complete_request(args: argparse.Namespace) -> dict[str, Any]:
             output_root / "supervisor-manifest.json",
             {
                 "schema_version": 1,
-                "run_id": "a26-cached-finite-domain-exact-v1",
+                "run_id": f"a26-cached-finite-domain-{args.execution_mode}-v2",
+                "execution_mode": args.execution_mode,
+                "resume_from": str(args.resume_from.resolve()) if args.resume_from else None,
+                "reuse_plan_from": str(args.reuse_plan_from.resolve())
+                if args.reuse_plan_from
+                else None,
                 "status": "worker_failed",
                 "worker_returncode": return_code,
                 "timeout_s": args.timeout_s,
