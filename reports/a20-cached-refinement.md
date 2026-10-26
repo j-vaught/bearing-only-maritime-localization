@@ -8,4 +8,8 @@ The corrected reader at 0c0271d accepts implicit ordinals and rejects conflictin
 
 The running diagnostic uses initial pattern-search steps of 125 m, at most 50 iterations, and the existing objective-improvement, relative-change, and 0.01 m termination rules. Every trial recomputes the full exact score. No evaluator truth is read. Runtime is a shared-server diagnostic, not a clean throughput benchmark. Local tests ran concurrently during part of the request; formal timing requires a separate uncontaminated run.
 
-The second invocation is still running. Its final outcomes and independent evaluation will be added after completion.
+The second invocation completed all 64 selected modes in 1255.417692 seconds, including 16.463529 seconds of setup. Its harness commit is 0c0271d and scoring package commit is 0d34a17. Every saved seed objective revalidated within the declared tolerances. All 64 local scores improved, and the lowest refined objective is 10.3242372916. The output occupies 669,978 bytes; the final rows SHA-256 is ac8b3fac53447ec6dbc2ee310ca7ec0e5068411449545ab41dff3e4b418fce49.
+
+Independent evaluation verified the artifact and found that the top refined location remains 853,439.8 m from truth, with zero of four correct associations. The closest selected refined mode is 266.378 m from truth and has four correct associations; it reached the 50-iteration cap and ranks eleventh after refinement. Position error improved in 37 selected modes and worsened in 27. The wrong top result therefore persists despite lower objectives. These are outcomes over the selected partial-domain alternatives, not empirical availability or accepted-fix accuracy.
+
+The original failed attempt, complete retry rows, and manifests remain tracked. A separate assignment-conditioned fitting comparison is being prepared with the same 64 selected modes and both saved coarse and refined starting positions. It does not change this result or use evaluator truth for fitting.
