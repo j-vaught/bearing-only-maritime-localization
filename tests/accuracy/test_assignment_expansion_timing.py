@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import sleep
 from typing import Any, cast
 
 import pytest
@@ -25,6 +26,10 @@ def _assert_zero_timings(result: Any) -> None:
     assert result.stage_timings["residual_call_count"] == 0
     assert result.stage_timings["residual_wall_s"] == 0.0
     assert result.stage_timings["canonical_scorer_wall_s"] == 0.0
+    assert result.stage_timings["progress_callback_wall_s"] == 0.0
+    assert result.stage_timings["result_callback_wall_s"] == 0.0
+    assert result.stage_timings["seed_validation_wall_s"] > 0.0
+    assert result.stage_timings["uninstrumented_remainder_wall_s"] >= 0.0
 
 
 def test_timing_is_opt_in_and_preserves_result_payload() -> None:
@@ -49,6 +54,21 @@ def test_timing_is_opt_in_and_preserves_result_payload() -> None:
         event["nfev"] for event in timed.branch_events
     )
     assert timed.stage_timings["canonical_scorer_wall_s"] >= 0.0
+    accounted = sum(
+        timed.stage_timings[key]
+        for key in (
+            "pool_preparation_wall_s",
+            "frozen_target_preparation_wall_s",
+            "solver_fit_wall_s",
+            "canonical_scorer_wall_s",
+            "seed_validation_wall_s",
+            "progress_callback_wall_s",
+            "result_callback_wall_s",
+        )
+    )
+    assert timed.stage_timings["uninstrumented_remainder_wall_s"] == pytest.approx(
+        max(0.0, timed.elapsed_s - accounted)
+    )
 
 
 def test_timing_metadata_is_zero_for_no_branch_result() -> None:
@@ -140,6 +160,58 @@ def test_callback_exceptions_remain_propagating_with_timing() -> None:
             progress_callback=callback,
             collect_timing=True,
         )
+
+
+def test_seed_validation_timer_records_work(monkeypatch: pytest.MonkeyPatch) -> None:
+    scorer = _scorer_with_fifth()
+    seed, _ = _single_addition_seed(scorer)
+    real_seed_validation = expansion._seed_validation
+
+    def delayed_validation(*args: Any, **kwargs: Any) -> Any:
+        sleep(0.001)
+        return real_seed_validation(*args, **kwargs)
+
+    monkeypatch.setattr(expansion, "_seed_validation", delayed_validation)
+    result = expand_assignments(
+        scorer,
+        seed,
+        config=ExpansionConfig(max_branches=1),
+        collect_timing=True,
+    )
+
+    assert result.stage_timings is not None
+    assert result.stage_timings["seed_validation_wall_s"] >= 0.001
+    assert result.stage_timings["uninstrumented_remainder_wall_s"] >= 0.0
+
+
+def test_callback_timers_include_progress_and_result_bodies() -> None:
+    scorer = _scorer_with_fifth()
+    seed, _ = _single_addition_seed(scorer)
+    progress_events: list[dict[str, Any]] = []
+    result_events: list[dict[str, Any]] = []
+
+    def progress_callback(event: dict[str, Any]) -> None:
+        sleep(0.001)
+        progress_events.append(event)
+
+    def result_callback(event: dict[str, Any]) -> None:
+        sleep(0.001)
+        result_events.append(event)
+
+    result = expand_assignments(
+        scorer,
+        seed,
+        config=ExpansionConfig(max_branches=1),
+        progress_callback=progress_callback,
+        result_callback=result_callback,
+        collect_timing=True,
+    )
+
+    assert result.stage_timings is not None
+    assert len(progress_events) == len(result.branch_events) == 1
+    assert len(result_events) == len(result.branch_events) == 1
+    assert result.stage_timings["progress_callback_wall_s"] >= 0.001
+    assert result.stage_timings["result_callback_wall_s"] >= 0.001
 
 
 def test_collect_timing_requires_a_boolean() -> None:

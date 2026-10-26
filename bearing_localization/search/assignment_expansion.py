@@ -128,6 +128,7 @@ def _result(
     stage_timings: dict[str, Any] | None = None,
     started: float,
 ) -> ExpansionResult:
+    elapsed, finalized_timings = _finalize_stage_timings(stage_timings, started)
     return ExpansionResult(
         seed=seed,
         best_hypothesis=seed,
@@ -136,8 +137,8 @@ def _result(
         budget_exhausted=budget_exhausted,
         counters={} if counters is None else dict(counters),
         branch_events=() if branch_events is None else tuple(branch_events),
-        elapsed_s=perf_counter() - started,
-        stage_timings=None if stage_timings is None else dict(stage_timings),
+        elapsed_s=elapsed,
+        stage_timings=finalized_timings,
     )
 
 
@@ -150,6 +151,10 @@ def _new_stage_timings() -> dict[str, Any]:
         "residual_call_count": 0,
         "residual_wall_s": 0.0,
         "canonical_scorer_wall_s": 0.0,
+        "seed_validation_wall_s": 0.0,
+        "progress_callback_wall_s": 0.0,
+        "result_callback_wall_s": 0.0,
+        "uninstrumented_remainder_wall_s": 0.0,
     }
 
 
@@ -160,6 +165,46 @@ def _add_timing(
 ) -> None:
     if stage_timings is not None:
         stage_timings[key] += value
+
+
+_ACCOUNTED_TIMING_KEYS = (
+    "pool_preparation_wall_s",
+    "frozen_target_preparation_wall_s",
+    "solver_fit_wall_s",
+    "canonical_scorer_wall_s",
+    "seed_validation_wall_s",
+    "progress_callback_wall_s",
+    "result_callback_wall_s",
+)
+
+
+def _finalize_stage_timings(
+    stage_timings: dict[str, Any] | None,
+    started: float,
+) -> tuple[float, dict[str, Any] | None]:
+    elapsed = perf_counter() - started
+    if stage_timings is None:
+        return elapsed, None
+    finalized = dict(stage_timings)
+    accounted = sum(float(finalized[key]) for key in _ACCOUNTED_TIMING_KEYS)
+    finalized["uninstrumented_remainder_wall_s"] = max(0.0, elapsed - accounted)
+    return elapsed, finalized
+
+
+def _timed_callback(
+    callback: Callable[[dict[str, Any]], None] | None,
+    event: dict[str, Any],
+    stage_timings: dict[str, Any] | None,
+    key: str,
+) -> None:
+    if callback is None:
+        return
+    callback_started = perf_counter() if stage_timings is not None else None
+    try:
+        callback(dict(event))
+    finally:
+        if callback_started is not None:
+            _add_timing(stage_timings, key, perf_counter() - callback_started)
 
 
 def _status_for_evaluation(evaluation: CandidateEvaluation) -> ExpansionStatus:
@@ -459,7 +504,8 @@ def expand_assignments(
     proposal an exact objective improvement.
 
     When collect_timing is true, stage_timings contains aggregate CPU wall times
-    for this mode. Residual time is nested within solver_fit_wall_s.
+    for this mode. Residual time is nested within solver_fit_wall_s, and the
+    uninstrumented remainder excludes all non-overlapping recorded stages.
     """
     started = perf_counter()
     if type(collect_timing) is not bool:
@@ -510,7 +556,16 @@ def expand_assignments(
         return early_result("invalid_assignment", completed=False)
     if len(seed.assignments) < 2:
         return early_result("insufficient_assignments", completed=True)
-    validation_status, seed_evaluation = _seed_validation(scorer, seed)
+    seed_validation_started = perf_counter() if stage_timings is not None else None
+    try:
+        validation_status, seed_evaluation = _seed_validation(scorer, seed)
+    finally:
+        if seed_validation_started is not None:
+            _add_timing(
+                stage_timings,
+                "seed_validation_wall_s",
+                perf_counter() - seed_validation_started,
+            )
     if validation_status is not None or seed_evaluation is None:
         return early_result(validation_status or "stale_hypothesis", completed=False)
     report_count = len(measurements.measurements)
@@ -554,6 +609,7 @@ def expand_assignments(
     for branch_id, (report_index, _key, candidate_base) in enumerate(branches):
         if counters["visited_branches"] >= config.max_branches:
             counters["unvisited_branches"] = len(branches) - counters["visited_branches"]
+            elapsed, finalized_timings = _finalize_stage_timings(stage_timings, started)
             return ExpansionResult(
                 seed,
                 best,
@@ -562,8 +618,8 @@ def expand_assignments(
                 True,
                 counters,
                 tuple(events),
-                perf_counter() - started,
-                None if stage_timings is None else dict(stage_timings),
+                elapsed,
+                finalized_timings,
             )
         candidate = _Candidate(
             report_index,
@@ -583,8 +639,12 @@ def expand_assignments(
             "solver_status": None,
             "nfev": 0,
         }
-        if progress_callback is not None:
-            progress_callback(dict(event))
+        _timed_callback(
+            progress_callback,
+            event,
+            stage_timings,
+            "progress_callback_wall_s",
+        )
         counters["visited_branches"] += 1
         counters["unvisited_branches"] = len(branches) - counters["visited_branches"]
         status, proposal, solver_status, nfev, exact, evaluation = _fit_branch(
@@ -605,8 +665,12 @@ def expand_assignments(
         if exact is None:
             counters["rejected_branches"] += 1
             events.append(event)
-            if result_callback is not None:
-                result_callback(dict(event))
+            _timed_callback(
+                result_callback,
+                event,
+                stage_timings,
+                "result_callback_wall_s",
+            )
             continue
         event["exact_score"] = exact.score
         event["added_assignment_retained"] = any(
@@ -621,9 +685,14 @@ def expand_assignments(
             event["status"] = "no_improvement"
             counters["rejected_branches"] += 1
         events.append(event)
-        if result_callback is not None:
-            result_callback(dict(event))
+        _timed_callback(
+            result_callback,
+            event,
+            stage_timings,
+            "result_callback_wall_s",
+        )
     counters["unvisited_branches"] = 0
+    elapsed, finalized_timings = _finalize_stage_timings(stage_timings, started)
     return ExpansionResult(
         seed,
         best,
@@ -632,8 +701,8 @@ def expand_assignments(
         False,
         counters,
         tuple(events),
-        perf_counter() - started,
-        None if stage_timings is None else dict(stage_timings),
+        elapsed,
+        finalized_timings,
     )
 
 
