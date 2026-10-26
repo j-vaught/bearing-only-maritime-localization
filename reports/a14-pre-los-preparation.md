@@ -18,6 +18,6 @@ The extractor performs no candidate-to-target land or line-of-sight test. It ask
 
 Python 3.11.15.
 
-`uv sync --locked --all-groups` passed. Scoped Ruff checks and formatting passed. Scoped `ty check` passed. The new preparation tests, existing A14 prediction tests, and A11 coverage-certificate tests passed together: 30 passed. Cases cover true-north wraparound, nearby merged members, offset-corrected geometry and uncertainty, virtual-aid exclusion, out-of-range rejection, exact inclusive/exclusive range boundaries, duplicate coordinates with distinct keys, empty catalogs, nearby unsupported models, nonwater observers, unknown coverage, bundle immutability, and scorer identity mismatch.
+`uv sync --locked --all-groups` passed. Scoped Ruff checks and formatting passed. Scoped `ty check` passed. The new preparation tests, existing A14 prediction tests, and A11 coverage-certificate tests passed together: 34 passed. Cases cover true-north wraparound, nearby merged members, offset-corrected geometry and uncertainty, virtual-aid exclusion, out-of-range rejection, exact inclusive/exclusive range boundaries, duplicate coordinates with distinct keys, empty catalogs, nearby unsupported models, nonwater observers, unknown coverage, bundle immutability, and scorer identity mismatch.
 
 No scorer, predictor, controller, or objective code was changed. The bound integration remains a separate change; consumers must reject unsupported bundles and verify the bound's measurement/configuration inputs against the bundle before use.
