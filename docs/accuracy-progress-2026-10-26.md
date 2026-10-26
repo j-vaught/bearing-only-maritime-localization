@@ -115,3 +115,13 @@ Remaining gates are the full-search pilot, final source and hardware regression,
 Completed milestones are pushed to their workstream branches and integrated in dependency order. Commit messages record the change, its purpose, validation commands and outcomes, measured comparisons, and remaining limitations. Rejected optimizations and failed runs remain available. The draft pull request stays open until the independent release review has a documented outcome.
 
 Authored by J.C. Vaught.
+
+## Complete proposal-cache handoff and scoring repair
+
+The full frozen development source set was rerun at 33fded7. It processed all 333,340 observation/catalog pairs and 83,001,660 geodesic samples with zero failed pairs or samples. The generator retained 1,457,546 candidate cells and 24,328,107 report/source witness edges. Its largest numerical residual was 5.010917902836809e-8 degrees, below the unchanged 1e-7 degree public tolerance. The 1,000,020 explicitly degenerate samples remain counted. This completes the full-scale replay of the numerical stopping-margin repair.
+
+The external cache-build interval was 437.944 seconds, including 351.697 seconds of generation and 49.876 seconds of cache publication. The cache occupies 126,043,477 bytes and has tree digest d6154c18349842d22ca1cd5eaf2d022a6ac67004eebc9e35c5c59d03ad767e72. Its context digest is 3e450d04fd82d4bec5c5786d9e49960d51a0dab4615e7237b55bc493251aea44. Only one candidate was scored to finish this handoff, so the run establishes cache completeness rather than localization recovery. The saved cache is specific to these measurements and does not remove generation from fresh-frame latency.
+
+The fixed 32-ray visibility switch is integrated at 8d84647. All 520 scalar/batch comparisons across 260 saved hypotheses agree, including complete component evidence. The coordinator's focused screen, controller, worker-pool, and independent visibility gate passed 54 tests. Larger batches reduce expensive visibility cases; small cases retain scalar traversal. These component results do not establish full-search latency.
+
+A26 and A30 are repairing the cached full-domain scoring driver and worker failure ledger under A37's independent review. The review found a nested benchmark-lock acquisition, incomplete out-of-order candidate dispositions, and insufficient source/configuration binding. The driver must pass an actual subprocess smoke before the large run. A20 has supplied the existing multiple-mode continuous refinement handoff. The next experiment retains the entire generated finite candidate domain; no claim of continuous search completeness or accepted localization follows from candidate generation alone.
