@@ -1,0 +1,9 @@
+{
+  "axis_order": "east_north",
+  "coordinate_reference_system": "EPSG:32619",
+  "coordinate_units": "metre",
+  "reference_map_path": "/home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/cache/maps/noaa-enc-port-B1-15km.map-v2.json",
+  "reference_map_sha256": "392b70946655bc54d29260722d743d92baa1f99f89af4ce8848e496eb217df73",
+  "schema_version": 1,
+  "trial_id": "development/port-001/placement-001/r0/range10000m/typesoff/nominal"
+}
