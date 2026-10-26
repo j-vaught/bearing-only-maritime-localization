@@ -10,7 +10,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
-from itertools import combinations, product
+from itertools import combinations
 from math import isfinite, radians, sin
 from typing import Literal
 
@@ -117,6 +117,8 @@ def generate_continuous_witness_seeds(
     intersection provides the nonlinear solver start; the final candidate is
     refined against WGS84 inverse bearings in the supplied projection frame.
     Returned coordinates are frame-relative projected east/north metres.
+    Selected proposal order is preserved for budget priority, while report and
+    catalog-key order within each proposal is canonical for stable pair IDs.
     """
     if not isinstance(frame, LocalFrame):
         raise TypeError("frame must be a LocalFrame.")
@@ -136,7 +138,9 @@ def generate_continuous_witness_seeds(
 
     obs = tuple(sorted(observations, key=lambda item: item.report_index))
     objects = tuple(sorted(catalog, key=lambda item: item.key))
-    proposals = tuple(sorted(selected_proposals, key=lambda item: item.candidate_id))
+    # The caller supplies proposals in ranking order. Keep that priority for
+    # bounded runs; sort only each witness graph's internal keys below.
+    proposals = tuple(selected_proposals)
     if any(not isinstance(item, WedgeObservation) for item in obs):
         raise TypeError("observations must contain WedgeObservation records.")
     if any(not isinstance(item, GeographicWedgeCatalogObject) for item in objects):
@@ -154,9 +158,10 @@ def generate_continuous_witness_seeds(
 
     observations_by_index = {item.report_index: item for item in obs}
     objects_by_key = {item.key: item for item in objects}
-    pair_records: list[
-        tuple[GeodesicWedgeProposal, WedgeObservation, WedgeObservation, str, str]
+    prepared_proposals: list[
+        tuple[GeodesicWedgeProposal, tuple[tuple[WedgeObservation, tuple[str, ...]], ...]]
     ] = []
+    total_pairs = 0
     for proposal in proposals:
         report_keys: dict[int, tuple[str, ...]] = {}
         for report_index, source_keys in proposal.witness_report_keys:
@@ -167,19 +172,22 @@ def generate_continuous_witness_seeds(
             if any(key not in objects_by_key for key in source_keys):
                 raise ValueError("A proposal witness graph references an unknown catalog key.")
             report_keys[report_index] = tuple(sorted(set(source_keys)))
-        for (report_i, keys_i), (report_j, keys_j) in combinations(sorted(report_keys.items()), 2):
-            for key_i, key_j in product(keys_i, keys_j):
-                pair_records.append(
-                    (
-                        proposal,
-                        observations_by_index[report_i],
-                        observations_by_index[report_j],
-                        key_i,
-                        key_j,
-                    )
-                )
+        report_rows = tuple(
+            (observations_by_index[report_index], keys)
+            for report_index, keys in sorted(report_keys.items())
+        )
+        total_pairs += sum(
+            len(keys_i) * len(keys_j) for (_, keys_i), (_, keys_j) in combinations(report_rows, 2)
+        )
+        prepared_proposals.append((proposal, report_rows))
 
-    total_pairs = len(pair_records)
+    def iter_pair_records():
+        for proposal, report_rows in prepared_proposals:
+            for (observation_i, keys_i), (observation_j, keys_j) in combinations(report_rows, 2):
+                for key_i in keys_i:
+                    for key_j in keys_j:
+                        yield proposal, observation_i, observation_j, key_i, key_j
+
     considered = 0
     rejected = {reason: 0 for reason in _REJECTION_REASONS}
     failed = 0
@@ -187,15 +195,19 @@ def generate_continuous_witness_seeds(
     budget_reason: Literal["none", "pair_evaluations", "candidate_seeds"] = "none"
     minimum_sine = sin(radians(min_crossing_angle_deg))
 
-    for proposal, observation_i, observation_j, key_i, key_j in pair_records:
+    pair_records = iter(iter_pair_records())
+    while considered < total_pairs:
         if considered >= max_pair_evaluations:
             budget_reason = "pair_evaluations"
             break
         if len(seeds) >= max_candidate_seeds:
             budget_reason = "candidate_seeds"
             break
+        try:
+            proposal, observation_i, observation_j, key_i, key_j = next(pair_records)
+        except StopIteration:
+            break
         considered += 1
-
         if key_i == key_j:
             rejected["same_catalog_key"] += 1
             continue

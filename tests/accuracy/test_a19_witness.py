@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tracemalloc
 from dataclasses import replace
 
 import pytest
@@ -329,6 +330,93 @@ def test_candidate_budget_is_explicit_and_does_not_hide_remaining_pairs() -> Non
     assert result.pairs_considered == 1
     assert result.pairs_remaining == 2
     assert result.pairs_considered + result.pairs_remaining == result.pair_combinations_total
+
+
+def test_dense_witness_graph_counts_pairs_without_materializing_cartesian_product() -> None:
+    frame = LocalFrame(_TRUTH)
+    observations = (WedgeObservation(1, 0.0), WedgeObservation(2, 0.0))
+    count_per_report = 400
+    left_keys = tuple(f"left-{index:04d}" for index in range(count_per_report))
+    right_keys = tuple(f"right-{index:04d}" for index in range(count_per_report))
+    catalog = tuple(
+        GeographicWedgeCatalogObject(key, _TRUTH[0], _TRUTH[1]) for key in left_keys + right_keys
+    )
+    proposal = _proposal(((1, left_keys), (2, right_keys)))
+
+    tracemalloc.start()
+    result = generate_continuous_witness_seeds(
+        observations,
+        catalog,
+        (proposal,),
+        frame=frame,
+        cell_size_m=250.0,
+        max_range_m=5_000.0,
+        max_pair_evaluations=1,
+        max_candidate_seeds=10,
+    )
+    _, peak_bytes = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    assert result.pair_combinations_total == count_per_report**2
+    assert result.pairs_considered == 1
+    assert result.pairs_rejected == 1
+    assert result.pairs_remaining == count_per_report**2 - 1
+    assert result.generation_status == "budget_exhausted"
+    assert result.budget_reason == "pair_evaluations"
+    assert peak_bytes < 8 * 1024 * 1024
+
+
+def test_proposal_order_preserves_rank_and_shuffle_stable_seed_ids() -> None:
+    frame, observations, catalog, proposal = _two_report_fixture(bearings=(45.0, 135.0))
+    ranked_first = replace(proposal, candidate_id="z-ranked-first")
+    ranked_second = replace(proposal, candidate_id="a-ranked-second")
+
+    forward = generate_continuous_witness_seeds(
+        observations,
+        catalog,
+        (ranked_first, ranked_second),
+        frame=frame,
+        cell_size_m=250.0,
+        max_range_m=5_000.0,
+        max_pair_evaluations=10,
+        max_candidate_seeds=10,
+    )
+    reverse = generate_continuous_witness_seeds(
+        observations,
+        catalog,
+        (ranked_second, ranked_first),
+        frame=frame,
+        cell_size_m=250.0,
+        max_range_m=5_000.0,
+        max_pair_evaluations=10,
+        max_candidate_seeds=10,
+    )
+
+    assert [seed.cell_candidate_id for seed in forward.seeds] == [
+        "z-ranked-first",
+        "a-ranked-second",
+    ]
+    assert [seed.cell_candidate_id for seed in reverse.seeds] == [
+        "a-ranked-second",
+        "z-ranked-first",
+    ]
+    assert {seed.cell_candidate_id: seed.seed_id for seed in forward.seeds} == {
+        seed.cell_candidate_id: seed.seed_id for seed in reverse.seeds
+    }
+
+    budgeted = generate_continuous_witness_seeds(
+        observations,
+        catalog,
+        (ranked_first, ranked_second),
+        frame=frame,
+        cell_size_m=250.0,
+        max_range_m=5_000.0,
+        max_pair_evaluations=10,
+        max_candidate_seeds=1,
+    )
+    assert budgeted.budget_reason == "candidate_seeds"
+    assert [seed.cell_candidate_id for seed in budgeted.seeds] == ["z-ranked-first"]
+    assert budgeted.pairs_remaining == 1
 
 
 def test_numerical_solver_failure_is_counted_without_losing_pair_accounting(monkeypatch) -> None:
