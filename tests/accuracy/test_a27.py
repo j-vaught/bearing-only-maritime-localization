@@ -133,7 +133,6 @@ def test_lazy_candidate_batches_rerank_close_cases_with_cpu_authority() -> None:
 
 
 @pytest.mark.skipif(importlib.util.find_spec("cupy") is None, reason="CuPy extra required")
-@pytest.mark.skipif(importlib.util.find_spec("cupy") is None, reason="CuPy extra required")
 def test_cpu_verify_all_covers_fixed_candidate_set() -> None:
     cp = importlib.import_module("cupy")
     candidates = (
@@ -159,6 +158,7 @@ def test_cpu_verify_all_covers_fixed_candidate_set() -> None:
     )
 
 
+@pytest.mark.skipif(importlib.util.find_spec("cupy") is None, reason="CuPy extra required")
 def test_cupy_angular_cost_rebases_large_global_coordinates_and_respects_sigma_tolerance() -> None:
     cp = importlib.import_module("cupy")
     origin = 1.0e9
