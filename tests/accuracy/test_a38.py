@@ -8,12 +8,14 @@ import json
 import math
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools import a38_archive
+from tools.a38_calibration_v2 import build_condition_document
 from tools.build_a38_calibration_metrics import (
     build_document,
     build_trial_metrics,
@@ -440,7 +442,7 @@ def _metric_inputs():
                         "ellipse_rank": 2,
                         "radius_95_m": 50.0,
                         "matched_catalog_keys": ["key-0", "key-1", "key-2"],
-                        "stop_reason": "gradient_tolerance",
+                        "stop_reason": "relative_improvement_below_1e-8",
                     },
                     {
                         "east_m": 150.0,
@@ -450,7 +452,7 @@ def _metric_inputs():
                         "ellipse_rank": 2,
                         "radius_95_m": 60.0,
                         "matched_catalog_keys": ["key-0", "key-1", "key-2"],
-                        "stop_reason": "gradient_tolerance",
+                        "stop_reason": "relative_improvement_below_1e-8",
                     },
                 ],
             }
@@ -970,3 +972,226 @@ def test_manifest_builder_validates_hashes_and_uses_transformed_coordinates(
         ),
         abs=1.0,
     )
+
+
+def _v2_fixture(tmp_path: Path):
+    import hashlib
+
+    from bearing_localization.search.calibration import (
+        CalibrationContext,
+        CalibrationOperatingCondition,
+    )
+
+    context = CalibrationContext(
+        catalog_sha256="a" * 64,
+        map_sha256="b" * 64,
+        scope_manifest_sha256="c" * 64,
+        search_execution_sha256="d" * 64,
+        implementation_sha256="e" * 64,
+    )
+    condition = CalibrationOperatingCondition(
+        range_m=1000.0,
+        use_types=True,
+        objective_version="bearing_set_map_v1",
+        algorithm="hierarchy",
+    )
+    plans = []
+    eligibility = []
+    specs = [
+        ("nominal", True, "supported", None),
+        ("nominal", False, "unsupported", None),
+        ("clutter", True, "stress_supported", None),
+        ("map_buffer", None, "unresolved", "failed map placement"),
+    ]
+    for index, (profile, supported, status, reason) in enumerate(specs):
+        trial_id = f"development/port-001/placement-{index + 1:03d}/r0/range1000m/typeson/{profile}"
+        plans.append(
+            {
+                "trial_id": trial_id,
+                "split": "development",
+                "port_id": "port-001",
+                "placement_id": f"placement-{index + 1:03d}",
+                "realization": "0",
+                "range_m": "1000",
+                "report_types": "True",
+                "physical_seed": str(100 + index),
+                "sensor_condition": profile,
+            }
+        )
+        eligibility.append(
+            SimpleNamespace(
+                trial_id=trial_id,
+                supported=supported,
+                status=status,
+                eligibility_status="unresolved"
+                if supported is None
+                else status.removeprefix("stress_")
+                if status.startswith("stress_")
+                else status,
+                eligibility_reason=reason,
+                preparation_status="failed" if supported is None else "completed",
+                preparation_reason=reason,
+                support_sha256=None,
+            )
+        )
+    snapshot = SimpleNamespace(
+        split="development",
+        plan_sha256="f" * 64,
+        config_sha256="1" * 64,
+        trial_table_sha256="2" * 64,
+        all_trials=tuple(eligibility),
+    )
+    eligibility_manifest = tmp_path / "eligibility.json"
+    eligibility_manifest.write_text('{"fixture": true}\n', encoding="utf-8")
+    run_dir = tmp_path / "run-1"
+    run_dir.mkdir()
+    run_manifest_path = run_dir / "run-manifest.json"
+    manifest = {
+        "schema_version": 1,
+        "run_id": "run-1",
+        "split": "development",
+        "calibration_condition": condition.as_dict(),
+        "calibration_context": context.as_dict(),
+        "eligibility_manifest_sha256": hashlib.sha256(
+            eligibility_manifest.read_bytes()
+        ).hexdigest(),
+        "plan_sha256": snapshot.plan_sha256,
+        "config_sha256": snapshot.config_sha256,
+        "trial_table_sha256": snapshot.trial_table_sha256,
+        "trials": [],
+    }
+    run_manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    return plans, snapshot, eligibility_manifest, run_manifest_path, manifest, condition, context
+
+
+def test_v2_condition_document_keeps_full_population_and_failure_rows(tmp_path: Path) -> None:
+    from tools.calibrate_accuracy_decision import _v2_split
+
+    plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
+        tmp_path
+    )
+    document = build_condition_document(
+        trial_rows=plans,
+        run_manifest=manifest,
+        manifest_path=run_path,
+        input_root=tmp_path / "inputs",
+        split="development",
+        eligibility_snapshot=snapshot,
+        eligibility_manifest_path=eligibility_path,
+        condition=condition,
+        context=context,
+    )
+    assert document["schema_version"] == 2
+    assert len(document["all_trials"]) == 4
+    assert len(document["trials"]) == 2
+    assert document["population"]["condition_wide_planned"]["count"] == 4
+    assert document["population"]["nominal_planned"]["count"] == 2
+    assert document["population"]["supported_nominal"]["count"] == 1
+    assert document["population"]["unsupported_nominal"]["count"] == 1
+    missing_stress = document["all_trials"][-1]
+    assert missing_stress["sensor_condition"] == "stress"
+    assert missing_stress["sensor_profile"] == "map_buffer"
+    assert missing_stress["supported"] is None
+    assert missing_stress["preparation_status"] == "failed"
+    assert missing_stress["evidence_status"] == "estimate_missing"
+    included, _, _, _, population = _v2_split(document, "development", metrics_sha256="3" * 64)
+    assert len(included) == 1
+    assert population["excluded_stress"]["count"] == 2
+
+
+def test_v2_condition_document_rejects_run_metadata_mismatch(tmp_path: Path) -> None:
+    plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
+        tmp_path
+    )
+    manifest["trials"] = [
+        {
+            "trial_id": plans[0]["trial_id"],
+            "split": "development",
+            "port_id": "port-999",
+            "placement_id": plans[0]["placement_id"],
+            "realization": "0",
+            "range_m": 1000,
+            "report_types": True,
+            "physical_seed": 100,
+            "sensor_condition": "nominal",
+            "status": "failed",
+        }
+    ]
+    with pytest.raises(ValueError, match="metadata differs from plan"):
+        build_condition_document(
+            trial_rows=plans,
+            run_manifest=manifest,
+            manifest_path=run_path,
+            input_root=tmp_path / "inputs",
+            split="development",
+            eligibility_snapshot=snapshot,
+            eligibility_manifest_path=eligibility_path,
+            condition=condition,
+            context=context,
+        )
+
+
+def test_v2_metrics_cli_writes_parseable_newline_terminated_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools import accuracy_eligibility
+
+    plans, snapshot, eligibility_path, run_path, manifest, condition, _context = _v2_fixture(
+        tmp_path
+    )
+    plan_dir = tmp_path / "plan"
+    plan_dir.mkdir()
+    table_path = plan_dir / "trials.csv"
+    with table_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(plans[0]))
+        writer.writeheader()
+        writer.writerows(plans)
+    (plan_dir / "config.json").write_text(
+        json.dumps({"trial_table": "trials.csv"}), encoding="utf-8"
+    )
+    run_root = tmp_path
+    monkeypatch.setattr(
+        accuracy_eligibility,
+        "verify_eligibility_manifest",
+        lambda *_args: snapshot,
+    )
+    output_path = tmp_path / "metrics.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "build_a38_calibration_metrics.py",
+            "--plan",
+            str(plan_dir / "config.json"),
+            "--input-root",
+            str(tmp_path / "inputs"),
+            "--run-root",
+            str(run_root),
+            "--run-id",
+            "run-1",
+            "--split",
+            "development",
+            "--output",
+            str(output_path),
+            "--schema-version",
+            "2",
+            "--eligibility-manifest",
+            str(eligibility_path),
+            "--range-m",
+            "1000",
+            "--use-types",
+            "--objective-version",
+            condition.objective_version,
+            "--algorithm",
+            condition.algorithm,
+        ],
+    )
+    calibration_metrics_main()
+    raw = output_path.read_bytes()
+    parsed = json.loads(raw)
+    assert raw.endswith(b"\n")
+    assert parsed["schema_version"] == 2
+    assert parsed["operating_condition"] == condition.as_dict()
+    assert parsed["trial_count"] == 4
+    assert parsed["supported_trial_count"] == 2
+    assert run_path.is_file()

@@ -8,6 +8,11 @@ import math
 from pathlib import Path
 from typing import Any
 
+from bearing_localization.search.decision import (
+    competitor_gap_clears_threshold,
+    score_tolerance_for_top,
+)
+from bearing_localization.search.modes import SearchModeEvidence, verified_mode_competitor_gap
 from tools.run_a38_execution import folder, hfile
 from tools.run_accuracy_suite import _read_table
 
@@ -34,8 +39,8 @@ def _public_evidence(telemetry: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def _score_tolerance(*scores: float) -> float:
-    """Match the runtime accuracy-decision tolerance exactly."""
-    return max(1e-12, 1e-10 * max((abs(score) for score in scores), default=0.0))
+    """Delegate to the runtime tolerance helper for parity."""
+    return max((score_tolerance_for_top(score) for score in scores), default=1e-12)
 
 
 def _matches_top(mode: dict[str, Any], top: dict[str, Any]) -> bool:
@@ -370,33 +375,8 @@ def build_trial_metrics(
     ):
         row["evidence_status"] = "final_certificate_evidence_mismatch"
         return row
-    global_exclusion = (
-        row["search_status"] == "completed"
-        and row["distinct_matched_groups"] >= 3
-        and _number(
-            (top.get("uncertainty") or {}).get("major_radius_m")
-            if isinstance(top.get("uncertainty"), dict)
-            else None
-        )
-        is not None
-        and evaluated_candidates >= 2
-        and coverage_complete is True
-        and global_bound is True
-        and unresolved_regions == 0
-        and certificate_scope == "continuous_objective"
-        and bound_gap is not None
-        and bound_gap <= 1e-8
-        and distant_region_bound is not None
-        and distant_region_scope == "all_objective_positions_at_least_100m_from_top"
-        and distant_region_bound is not None
-        and top_score is not None
-        and distant_region_bound > top_score
-        and distant_top_east is not None
-        and distant_top_north is not None
-        and top_east is not None
-        and top_north is not None
-        and math.hypot(distant_top_east - top_east, distant_top_north - top_north) <= 1e-6
-    )
+    # Calibration evaluates threshold-specific global evidence later. Keep the
+    # primitive fields exact and avoid upgrading pre-refinement candidate proof.
     # The margin depends on each calibration grid threshold, so A24 applies its
     # shared runtime predicate to these preserved inputs per candidate row.
     row["global_exclusion_verified"] = False
@@ -415,7 +395,32 @@ def build_trial_metrics(
         {"score_gap": gap, "score_tolerance": score_tolerance} for gap in veto_gaps
     ]
 
-    if global_exclusion:
+    global_margin_evidence_available = (
+        row["search_status"] == "completed"
+        and row["distinct_matched_groups"] >= 3
+        and _number(
+            (top.get("uncertainty") or {}).get("major_radius_m")
+            if isinstance(top.get("uncertainty"), dict)
+            else None
+        )
+        is not None
+        and evaluated_candidates >= 2
+        and coverage_complete is True
+        and global_bound is True
+        and unresolved_regions == 0
+        and certificate_scope == "continuous_objective"
+        and bound_gap is not None
+        and bound_gap <= 1e-8
+        and distant_region_bound is not None
+        and distant_region_scope == "all_objective_positions_at_least_100m_from_top"
+        and top_score is not None
+        and distant_top_east is not None
+        and distant_top_north is not None
+        and top_east is not None
+        and top_north is not None
+        and math.hypot(distant_top_east - top_east, distant_top_north - top_north) <= 1e-6
+    )
+    if global_margin_evidence_available:
         uncertainty = top.get("uncertainty")
         radius = _number(uncertainty.get("major_radius_m"))
         minor = _number(uncertainty.get("minor_radius_m"))
@@ -471,31 +476,39 @@ def build_trial_metrics(
     row["ellipse_rank"] = top_mode["ellipse_rank"]
     row["radius_95_m"] = _number(top_mode.get("radius_95_m"))
 
-    distant_modes = [
-        mode
-        for mode in modes
-        if math.hypot(
-            float(mode["east_m"]) - float(top_mode["east_m"]),
-            float(mode["north_m"]) - float(top_mode["north_m"]),
-        )
-        >= 100.0
-    ]
-    competitor = min(
-        distant_modes,
-        key=lambda mode: (
-            float(mode["score"]),
-            float(mode["east_m"]),
-            float(mode["north_m"]),
-        ),
-        default=None,
+    runtime_modes: list[SearchModeEvidence] = []
+    try:
+        for mode in modes:
+            runtime_modes.append(
+                SearchModeEvidence(
+                    east_m=float(mode["east_m"]),
+                    north_m=float(mode["north_m"]),
+                    score=float(mode["score"]),
+                    matched_catalog_keys=tuple(mode["matched_catalog_keys"]),
+                    radius_95_m=float(mode["radius_95_m"]),
+                    stop_reason=str(mode["stop_reason"]),
+                )
+            )
+    except (KeyError, TypeError, ValueError):
+        row["evidence_status"] = "mode_evidence_malformed"
+        return row
+    top_verified, mode_gap = verified_mode_competitor_gap(
+        top_east_m=top_east,
+        top_north_m=top_north,
+        top_score=top_score,
+        modes=runtime_modes,
     )
-    if competitor is None:
+    if not top_verified:
+        row["evidence_status"] = "top_mode_not_in_converged_evidence"
+        return row
+    row["ellipse_rank"] = top_mode["ellipse_rank"]
+    row["radius_95_m"] = _number(top_mode.get("radius_95_m"))
+    if mode_gap is None:
         row["meaningful_distant_coverage"] = False
         row["evidence_status"] = "no_converged_distant_competitor"
         return row
-    mode_gap = float(competitor["score"]) - float(top_mode["score"])
-    runtime_tolerance = _score_tolerance(top_score)
-    if mode_gap <= runtime_tolerance:
+    runtime_tolerance = score_tolerance_for_top(top_score)
+    if not competitor_gap_clears_threshold(mode_gap, 0.0, runtime_tolerance):
         row["evidence_status"] = "converged_mode_within_score_tolerance"
         return row
     row["meaningful_distant_coverage"] = True
@@ -707,21 +720,71 @@ def main() -> None:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--split", choices=("development", "validation"), required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--schema-version", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--eligibility-manifest", type=Path)
+    parser.add_argument("--range-m", type=int, choices=(1000, 5000, 10000))
+    parser.add_argument("--use-types", action=argparse.BooleanOptionalAction, default=None)
+    parser.add_argument("--objective-version")
+    parser.add_argument("--algorithm")
     args = parser.parse_args()
     plan = json.loads(args.plan.read_text(encoding="utf-8"))
     trials = _read_table(args.plan.parent / plan["trial_table"])
     run_path = args.run_root / args.run_id / "run-manifest.json"
     run_manifest = json.loads(run_path.read_text(encoding="utf-8"))
-    document = build_document(trials, run_manifest, run_path, args.input_root, args.split)
-    document["plan_sha256"] = hfile(args.plan)
-    document["trial_table_sha256"] = plan.get("trial_table_sha256")
-    document["run_root"] = str(args.run_root)
+    if args.schema_version == 1:
+        document = build_document(trials, run_manifest, run_path, args.input_root, args.split)
+        document["plan_sha256"] = hfile(args.plan)
+        document["trial_table_sha256"] = plan.get("trial_table_sha256")
+    else:
+        from bearing_localization.search.calibration import (
+            CalibrationContext,
+            CalibrationOperatingCondition,
+        )
+        from tools.a38_calibration_v2 import build_condition_document
+        from tools.accuracy_eligibility import verify_eligibility_manifest
+
+        if (
+            args.eligibility_manifest is None
+            or args.range_m is None
+            or args.use_types is None
+            or not args.objective_version
+            or not args.algorithm
+        ):
+            parser.error(
+                "schema v2 requires --eligibility-manifest, --range-m, --use-types/--no-use-types, "
+                "--objective-version, and --algorithm"
+            )
+        snapshot = verify_eligibility_manifest(
+            args.eligibility_manifest,
+            args.plan.parent,
+            args.input_root,
+            args.split,
+        )
+        condition = CalibrationOperatingCondition(
+            range_m=float(args.range_m),
+            use_types=args.use_types,
+            objective_version=args.objective_version,
+            algorithm=args.algorithm,
+        )
+        context = CalibrationContext.from_dict(run_manifest.get("calibration_context"))
+        document = build_condition_document(
+            trial_rows=trials,
+            run_manifest=run_manifest,
+            manifest_path=run_path,
+            input_root=args.input_root,
+            split=args.split,
+            eligibility_snapshot=snapshot,
+            eligibility_manifest_path=args.eligibility_manifest,
+            condition=condition,
+            context=context,
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(document, indent=2, sort_keys=True, allow_nan=False) + "\n")
     print(
         json.dumps(
             {
                 "split": args.split,
+                "schema_version": document["schema_version"],
                 "trial_count": document["trial_count"],
                 "supported_trial_count": document["supported_trial_count"],
                 "evidence_status_counts": document["evidence_status_counts"],
