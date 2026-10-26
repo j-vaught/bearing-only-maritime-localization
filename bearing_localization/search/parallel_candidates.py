@@ -8,7 +8,7 @@ import queue
 import threading
 import uuid
 from collections import Counter
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Generator, Iterable, Iterator, Sequence
 from dataclasses import dataclass, replace
 from math import isfinite
 from pathlib import Path
@@ -315,6 +315,7 @@ class PersistentCandidatePool:
         self._worker_rss: dict[int, int] = {}
         self._startup_s = 0.0
         self._closed = False
+        self._failed = False
         self._active = False
         self._last_timings = CandidatePoolTimings(
             0, 0, 0, 0, 0, 0, 0, 0, (), self._static_estimate_bytes
@@ -363,12 +364,17 @@ class PersistentCandidatePool:
         measurements: MeasurementSetV2,
         config: SearchConfig,
         candidates: Iterable[CandidatePositionInput],
-    ) -> Iterator[CandidatePositionResult]:
+    ) -> Generator[CandidatePositionResult, None, None]:
         """Evaluate every record once and yield in stable input order, without deduplication."""
         if not isinstance(measurements, MeasurementSetV2):
             raise TypeError("measurements must be a MeasurementSetV2 instance.")
         if not isinstance(config, SearchConfig):
             raise TypeError("config must be a SearchConfig instance.")
+        if self._failed:
+            raise RuntimeError(
+                "candidate pool is unusable after an interrupted or failed request; "
+                "create a new pool."
+            )
         if self._closed:
             raise RuntimeError("candidate pool is closed.")
         if self._active:
@@ -483,7 +489,7 @@ class PersistentCandidatePool:
         config: SearchConfig,
         candidates: Iterable[CandidatePositionInput],
         memory_estimate: int,
-    ) -> Iterator[CandidatePositionResult]:
+    ) -> Generator[CandidatePositionResult, None, None]:
         if self._active:
             raise RuntimeError("candidate pool does not support overlapping requests.")
         self._active = True
@@ -493,12 +499,14 @@ class PersistentCandidatePool:
         feeder_done = threading.Event()
         stop_feeder = threading.Event()
         input_count = duplicate_count = submitted = completed = failed = 0
+        expected_batch_sizes: dict[int, int] = {}
         feeder_errors: list[BaseException] = []
         pending: dict[int, _Message] = {}
         next_batch = 0
         failed_ids: list[str | int] = []
         scorer_setup_s = evaluation_s = ipc_s = 0.0
         error_messages: list[str] = []
+        request_complete = False
 
         def feed() -> None:
             nonlocal input_count, duplicate_count, submitted, ipc_s
@@ -536,6 +544,9 @@ class PersistentCandidatePool:
                         break
                     task = _Task(request_id, batch_id, sequence, tuple(batch), measurements, config)
                     sequence += len(batch)
+                    expected_batch_sizes[batch_id] = len(batch)
+                    submitted += 1
+                    batch_id += 1
                     started_put = perf_counter()
                     enqueued = False
                     while not stop_feeder.is_set():
@@ -549,8 +560,6 @@ class PersistentCandidatePool:
                     if not enqueued:
                         permits.release()
                         break
-                    submitted += 1
-                    batch_id += 1
             except BaseException as exc:
                 feeder_errors.append(exc)
             finally:
@@ -567,12 +576,11 @@ class PersistentCandidatePool:
                     message = None
                 ipc_s += perf_counter() - started_get
                 if message is None:
-                    dead = [
-                        process for process in self._processes if process.exitcode not in (None, 0)
-                    ]
+                    dead = [process for process in self._processes if process.exitcode is not None]
                     if dead:
                         error_messages.extend(
-                            f"{p.name} exited with code {p.exitcode}" for p in dead
+                            f"worker {p.name} exited unexpectedly with code {p.exitcode}"
+                            for p in dead
                         )
                         stop_feeder.set()
                         break
@@ -581,13 +589,41 @@ class PersistentCandidatePool:
                     error_messages.append(
                         message.error or f"worker {message.worker_id} stopped unexpectedly"
                     )
-                    continue
+                    stop_feeder.set()
+                    break
                 if message.kind == "ready":
                     error_messages.append("unexpected worker-ready message during request")
                     continue
+                if message.batch_id < next_batch or message.batch_id in pending:
+                    error_messages.append(
+                        f"worker returned duplicate candidate batch {message.batch_id}"
+                    )
+                    stop_feeder.set()
+                    break
+                if message.batch_id >= submitted:
+                    error_messages.append(
+                        f"worker returned unsubmitted candidate batch {message.batch_id}"
+                    )
+                    stop_feeder.set()
+                    break
+                expected_count = expected_batch_sizes[message.batch_id]
+                if len(message.entries) != expected_count:
+                    error_messages.append(
+                        f"worker returned {len(message.entries)} outcomes for batch "
+                        f"{message.batch_id}; expected {expected_count}"
+                    )
+                    stop_feeder.set()
+                    break
                 self._worker_rss[message.pid] = message.rss_bytes
                 scorer_setup_s += message.scorer_setup_s
                 evaluation_s += message.evaluation_s
+                for entry in message.entries:
+                    if entry.result is not None:
+                        completed += 1
+                    else:
+                        failed += 1
+                        failed_ids.append(entry.candidate_id)
+                        error_messages.append(entry.error or "candidate evaluation failed")
                 pending[message.batch_id] = message
                 while next_batch in pending:
                     ready = pending.pop(next_batch)
@@ -597,12 +633,7 @@ class PersistentCandidatePool:
                         error_messages.append(ready.error)
                     for entry in ready.entries:
                         if entry.result is not None:
-                            completed += 1
                             yield entry.result
-                        else:
-                            failed += 1
-                            failed_ids.append(entry.candidate_id)
-                            error_messages.append(entry.error or "candidate evaluation failed")
                 try:
                     self._check_live_memory(memory_estimate)
                 except MemoryError as exc:
@@ -629,11 +660,15 @@ class PersistentCandidatePool:
                     outstanding_count=outstanding,
                     failed_candidate_ids=failed_ids,
                 ) from RuntimeError("; ".join(error_messages))
+            request_complete = True
         finally:
             stop_feeder.set()
             if feeder.is_alive():
                 feeder.join(timeout=2)
-            self._active = False
+            if request_complete:
+                self._active = False
+            else:
+                self._abort_workers()
             self._last_timings = CandidatePoolTimings(
                 self._startup_s,
                 scorer_setup_s,
@@ -646,6 +681,28 @@ class PersistentCandidatePool:
                 tuple(sorted(self._worker_rss.items())),
                 memory_estimate,
             )
+
+    def _abort_workers(self) -> None:
+        """Reap every worker and invalidate the pool after partial work."""
+        self._closed = True
+        self._failed = True
+        self._active = False
+        for process in self._processes:
+            if process.is_alive():
+                process.terminate()
+            process.join(timeout=2)
+            if process.is_alive():
+                process.kill()
+                process.join(timeout=2)
+        for ipc_queue in (self._task_queue, self._result_queue):
+            try:
+                ipc_queue.cancel_join_thread()
+            except (AttributeError, OSError, ValueError):
+                pass
+            try:
+                ipc_queue.close()
+            except (OSError, ValueError):
+                pass
 
     def _request_estimate(self, measurements: MeasurementSetV2) -> int:
         reports = max(1, len(measurements.measurements))

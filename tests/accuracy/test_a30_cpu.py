@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import multiprocessing as mp
+import os
+import threading
 from typing import cast
 
 import numpy as np
@@ -9,6 +11,7 @@ from shapely.geometry import box
 
 from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.parallel_candidates import (
+    CandidatePoolError,
     CandidatePositionInput,
     PersistentCandidatePool,
     _MapPayload,
@@ -19,6 +22,43 @@ from bearing_localization.search.scoring import CandidateScorer, score_candidate
 from maritime_localization_shared.contracts.inputs_v2 import CatalogV2
 
 from .test_a37 import _catalog, _map, _measurements, _origin_xy, _record
+
+
+def _exit_after_unpickle(exit_code: int) -> None:
+    os._exit(exit_code)
+
+
+class _ExitOnUnpickle:
+    def __init__(self, exit_code: int) -> None:
+        self.exit_code = exit_code
+
+    def __reduce__(self):
+        return _exit_after_unpickle, (self.exit_code,)
+
+
+def _consume_request(pool, measurements, config, candidates, outcome) -> None:
+    try:
+        list(pool.iter_results(measurements, config, candidates))
+    except BaseException as exc:
+        outcome["error"] = exc
+    else:
+        outcome["error"] = None
+
+
+def _run_bounded_request(pool, measurements, config, candidates, *, timeout_s: float = 6.0):
+    outcome: dict[str, BaseException | None] = {}
+    thread = threading.Thread(
+        target=_consume_request,
+        args=(pool, measurements, config, candidates, outcome),
+        daemon=True,
+    )
+    thread.start()
+    thread.join(timeout_s)
+    if thread.is_alive():
+        pool.close()
+        thread.join(3.0)
+        pytest.fail("candidate pool request exceeded the watchdog deadline")
+    return outcome["error"]
 
 
 def _fixture(use_types: bool = True):
@@ -264,3 +304,75 @@ def test_pool_rejects_memory_estimate_before_request() -> None:
             max_in_flight_batches=1,
             memory_budget_bytes=50_000_000,
         )
+
+
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_unexpected_worker_exit_is_bounded_and_reports_counts(exit_code: int) -> None:
+    measurements, catalog, vector_map, config, _, candidates = _fixture()
+    pool = PersistentCandidatePool(
+        catalog,
+        vector_map,
+        workers=1,
+        batch_size=1,
+        max_in_flight_batches=1,
+        memory_budget_bytes=2_000_000_000,
+    )
+    owned_processes = tuple(pool._processes)
+    pool._task_queue.put(_ExitOnUnpickle(exit_code))
+    error = _run_bounded_request(pool, measurements, config, candidates)
+    assert isinstance(error, CandidatePoolError)
+    assert error.completed_count == 0
+    assert error.failed_count == 0
+    assert error.outstanding_count >= 1
+    assert "exited unexpectedly" in str(error.__cause__)
+    assert all(not process.is_alive() for process in owned_processes)
+    with pytest.raises(RuntimeError, match="unusable"):
+        pool.iter_results(measurements, config, candidates)
+
+
+def test_worker_stopped_message_is_bounded_and_reaps_workers() -> None:
+    measurements, catalog, vector_map, config, _, candidates = _fixture()
+    pool = PersistentCandidatePool(
+        catalog,
+        vector_map,
+        workers=1,
+        batch_size=1,
+        max_in_flight_batches=1,
+        memory_budget_bytes=2_000_000_000,
+    )
+    owned_processes = tuple(pool._processes)
+    pool._task_queue.put(object())
+    error = _run_bounded_request(pool, measurements, config, candidates)
+    assert isinstance(error, CandidatePoolError)
+    assert error.completed_count == 0
+    assert error.failed_count == 0
+    assert error.outstanding_count >= 1
+    assert "invalid task record" in str(error.__cause__)
+    assert all(not process.is_alive() for process in owned_processes)
+    with pytest.raises(RuntimeError, match="unusable"):
+        pool.iter_results(measurements, config, candidates)
+
+
+def test_early_iterator_close_reaps_workers_and_disallows_reuse() -> None:
+    measurements, catalog, vector_map, config, _, _ = _fixture()
+    positions = tuple((float(index * 25), float(index * 13)) for index in range(40))
+    candidates = tuple(
+        CandidatePositionInput(index, point) for index, point in enumerate(positions)
+    )
+    pool = PersistentCandidatePool(
+        catalog,
+        vector_map,
+        workers=2,
+        batch_size=1,
+        max_in_flight_batches=4,
+        memory_budget_bytes=2_000_000_000,
+    )
+    owned_processes = tuple(pool._processes)
+    iterator = pool.iter_results(measurements, config, candidates)
+    first = next(iterator)
+    assert first.sequence == 0
+    iterator.close()
+    assert pool._closed and pool._failed
+    assert all(not process.is_alive() for process in owned_processes)
+    with pytest.raises(RuntimeError, match="unusable"):
+        pool.iter_results(measurements, config, candidates)
