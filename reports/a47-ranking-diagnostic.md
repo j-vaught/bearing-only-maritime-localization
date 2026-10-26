@@ -10,7 +10,7 @@ A04's independent projection audit measured up to 5.232286834 degrees of true-no
 
 ## Metadata interface
 
-WedgeProposal now carries normalized_angular_residual and evidence_score fields with backward-compatible defaults. Complete voting computes the minimum accepted source residual for each observation and accumulates the mean normalized residual across supporting observations. Claims inside the half-diagonal enclosure receive residual 1 and zero evidence because the raster rule accepts every bearing there. Evidence also decreases with the angular quantization width. WedgeProposal.ranking_key exposes an opt-in key of vote count, residual, evidence, and stable cell indices. Existing proposal ordering remains vote count followed by cell indices, so no scoring behavior or candidate is silently changed.
+WedgeProposal carries normalized_angular_residual and evidence_score fields with backward-compatible defaults. Complete voting computes this scalar evidence only when collect_metadata=True, which keeps the default path free of per-source-cell residual work. Claims inside the half-diagonal enclosure receive residual 1 and zero evidence because the raster rule accepts every bearing there. Evidence also decreases with the angular quantization width. WedgeProposal.ranking_key exposes an opt-in key of vote count, residual, evidence, and stable cell indices. Existing proposal ordering remains vote count followed by cell indices, so no scoring behavior or candidate is silently changed.
 
 WedgeProposalResult.vote_histogram exposes deterministic vote-count coverage metadata. The metadata is diagnostic until a corrected true-bearing generator supplies source-specific residuals. It does not exclude cells, alter budgets, or claim global objective optimality.
 

@@ -192,6 +192,7 @@ def test_complete_mode_exposes_neutral_histogram_and_opt_in_priority_metadata():
         max_source_pairs=2,
         max_candidate_cells=100_000,
         source_chunk_size=1,
+        collect_metadata=True,
     )
     assert sum(count for _, count in result.vote_histogram) == result.candidate_cells_total
     assert result.vote_histogram == tuple(sorted(result.vote_histogram, reverse=True))
