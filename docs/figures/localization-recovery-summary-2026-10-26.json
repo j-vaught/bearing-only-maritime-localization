@@ -1,0 +1,55 @@
+{
+  "schema": "a39-localization-recovery-summary-v1",
+  "snapshot_date": "2026-10-26",
+  "scope": "Development diagnostic from a fixed score-selected subset and a single-addition expansion pass.",
+  "truth_usage": "Evaluator truth was used only after each estimate was produced to calculate geodesic error and assignment correctness.",
+  "before_expansion_score_winner": {
+    "stage": "Assigned fit before single-addition expansion",
+    "mode_index": 2,
+    "score": 10.324237291618351,
+    "error_m": 853439.780080993,
+    "correct_assignments": 0,
+    "assignment_count": 4,
+    "score_rank_within_completed_modes": 1
+  },
+  "after_expansion_score_winner": {
+    "stage": "Single-addition expansion",
+    "mode_index": 4,
+    "score": 5.026904167180264,
+    "error_m": 11.127008292425764,
+    "correct_assignments": 5,
+    "assignment_count": 5,
+    "score_rank_within_completed_modes": 1,
+    "error_rank_within_completed_modes": 1
+  },
+  "same_mode_local_trajectory": [
+    {"stage": "Cached source", "error_m": 296.2855067665096},
+    {"stage": "Pattern refinement", "error_m": 266.3778480349997},
+    {"stage": "Assigned fit", "error_m": 181.27936114907126},
+    {"stage": "Single-addition expansion", "error_m": 11.127008292425764}
+  ],
+  "coverage_scope": {
+    "selected_modes": 64,
+    "completed_expansion_modes": 60,
+    "pending_modes": 4,
+    "unknown_source_hypotheses_at_interruption": 1410282,
+    "full_domain_complete": false,
+    "accepted_or_calibrated_fix_claim": false,
+    "overall_accuracy_claim": false
+  },
+  "source_artifacts": [
+    {
+      "path": "reports/experiments/a35-cached-evaluation/refinement-v2-evaluation.json",
+      "sha256": "88290e7ac580c0cd7bd32fb7fd813e0ff7e55ac3a7aefbcca5ee295f0a0a79cd"
+    },
+    {
+      "path": "reports/experiments/a35-cached-evaluation/assigned-refinement-evaluation.json",
+      "sha256": "e0c1b989f82b7a29e3a09dfde541ed0f437edcc82a4a15ab162fd8e01422d3a8"
+    },
+    {
+      "path": "reports/experiments/a35-cached-evaluation/assignment-expansion-full-audit.json",
+      "sha256": "7111b39f72caf0df53e655681cb4460118b781a08bbbafdd396056774523bbf8"
+    }
+  ],
+  "author": "J.C. Vaught"
+}
