@@ -30,6 +30,15 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+# Set BLAS and numerical worker pools before SciPy and NumPy are imported.
+for _thread_env in (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
+    os.environ[_thread_env] = "1"
+
 from bearing_localization.search.assigned_bearing_refinement import (  # noqa: E402
     AssignedBearingRefinementResult,
     refine_assigned_bearing,
