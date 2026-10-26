@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import runpy
@@ -9,9 +10,13 @@ from typing import Literal
 import pytest
 
 from bearing_localization.search.calibration import (
+    CalibrationContext,
+    CalibrationOperatingCondition,
     DecisionCalibration,
     canonical_json,
+    implementation_sha256,
     load_frozen_calibration,
+    search_execution_sha256,
 )
 from bearing_localization.search.decision import (
     CompetitorCoverageEvidence,
@@ -44,6 +49,20 @@ def _calibration(gap: float = 2.0, radius: float | None = 100.0) -> DecisionCali
         accepted_p95_error_m=30.0,
         artifact_sha256=hashlib.sha256(canonical_json(payload)).hexdigest(),
         verified_frozen_artifact=True,
+        schema_version=2,
+        operating_condition=CalibrationOperatingCondition(
+            1000.0, True, "bearing_set_map_v1", "pairwise"
+        ),
+        context=CalibrationContext(
+            catalog_sha256="a" * 64,
+            map_sha256="b" * 64,
+            scope_manifest_sha256="c" * 64,
+            search_execution_sha256="d" * 64,
+            implementation_sha256="e" * 64,
+        ),
+        provenance={"development": {}, "validation": {}},
+        population={"development": {}, "validation": {}},
+        release_eligible=True,
     )
 
 
@@ -114,6 +133,19 @@ def _coverage(
             None if distant_region_bound_anchor is None else distant_region_bound_anchor[1]
         ),
     )
+
+
+def test_runtime_rejects_non_release_eligible_calibration():
+    result = _result(_hypothesis(0, 0), _hypothesis(150, 4))
+    calibration = dataclasses.replace(_calibration(), release_eligible=False)
+    decision = decide_localization(
+        result,
+        calibration,
+        coverage=_coverage(),
+        mode_evidence=(_mode(result.hypotheses[0]), _mode(result.hypotheses[1])),
+    )
+    assert decision.decision_status == "ambiguous"
+    assert decision.reason == "calibration_not_release_eligible"
 
 
 def test_accepts_distant_competitor_when_gap_and_radius_are_at_thresholds():
@@ -259,6 +291,9 @@ def test_calibration_grid_pass_and_split_rejection(tmp_path):
     artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
     frozen = load_frozen_calibration(artifact_path)
     assert frozen.verified_frozen_artifact is True
+    assert frozen.release_eligible is False
+    with pytest.raises(ValueError, match="cannot establish release acceptance"):
+        load_frozen_calibration(artifact_path, release_acceptance=True)
     tampered = artifact | {"status": "FAIL"}
     artifact_path.write_text(json.dumps(tampered), encoding="utf-8")
     with pytest.raises(ValueError, match="SHA-256"):
@@ -427,3 +462,263 @@ def test_calibration_uses_final_result_certificate_not_candidate_proof():
     )
     assert runtime_candidate_only.decision_status == "ambiguous"
     assert runtime_final_proof.decision_status == "accepted"
+
+
+def _v2_calibration_doc(split: str, *, condition=None, context=None):
+    condition = condition or CalibrationOperatingCondition(
+        1000.0, True, "bearing_set_map_v1", "pairwise"
+    )
+    context = context or CalibrationContext(
+        catalog_sha256="a" * 64,
+        map_sha256="b" * 64,
+        scope_manifest_sha256="c" * 64,
+        search_execution_sha256="d" * 64,
+        implementation_sha256="e" * 64,
+    )
+    all_trials = []
+    for index in range(12):
+        label = "nominal" if index < 10 else "stress"
+        all_trials.append(
+            {
+                "split": split,
+                "trial_id": f"{split}-trial-{index:03d}",
+                "range_m": float(condition.range_m),
+                "report_types": condition.use_types,
+                "sensor_condition": label,
+                "supported": True,
+                "search_status": "completed",
+                "distinct_matched_groups": 3,
+                "ellipse_rank": 2,
+                "meaningful_distant_coverage": True,
+                "score_gap": 8.0,
+                "radius_95_m": 25.0,
+                "error_m": 20.0,
+            }
+        )
+    all_trials.append(
+        {
+            "split": split,
+            "trial_id": f"{split}-unsupported-nominal",
+            "range_m": float(condition.range_m),
+            "report_types": condition.use_types,
+            "sensor_condition": "nominal",
+            "supported": False,
+            "search_status": "failed",
+            "distinct_matched_groups": 0,
+            "ellipse_rank": None,
+            "meaningful_distant_coverage": False,
+            "score_gap": None,
+            "radius_95_m": None,
+            "error_m": None,
+        }
+    )
+    return {
+        "schema_version": 2,
+        "split": split,
+        "frozen": False,
+        "operating_condition": condition.as_dict(),
+        "context": context.as_dict(),
+        "provenance": {
+            "plan_sha256": "1" * 64,
+            "trial_table_sha256": "2" * 64,
+            "run_manifest_sha256": ("3" if split == "development" else "4") * 64,
+            "eligibility_manifest_sha256": "7" * 64,
+        },
+        "population": {
+            key: {
+                "count": len(rows),
+                "trial_ids_sha256": hashlib.sha256(
+                    canonical_json(sorted(str(row["trial_id"]) for row in rows))
+                ).hexdigest(),
+            }
+            for key, rows in {
+                "condition_wide_planned": all_trials,
+                "nominal_planned": [
+                    row for row in all_trials if row["sensor_condition"] == "nominal"
+                ],
+                "supported_nominal": [
+                    row
+                    for row in all_trials
+                    if row["sensor_condition"] == "nominal" and row["supported"]
+                ],
+                "unsupported_nominal": [
+                    row
+                    for row in all_trials
+                    if row["sensor_condition"] == "nominal" and not row["supported"]
+                ],
+            }.items()
+        },
+        "trials": [row for row in all_trials if row["supported"]],
+        "all_trials": all_trials,
+        "trial_count": len(all_trials),
+    }
+
+
+def test_v2_calibration_uses_nominal_supported_population_and_binds_context(tmp_path):
+    condition = CalibrationOperatingCondition(1000.0, True, "bearing_set_map_v1", "pairwise")
+    context = CalibrationContext(
+        catalog_sha256="a" * 64,
+        map_sha256="b" * 64,
+        scope_manifest_sha256="c" * 64,
+        search_execution_sha256="d" * 64,
+        implementation_sha256="e" * 64,
+    )
+    dev = _v2_calibration_doc("development", condition=condition, context=context)
+    val = _v2_calibration_doc("validation", condition=condition, context=context)
+    artifact = calibrate(
+        dev,
+        val,
+        development_metrics_sha256="5" * 64,
+        validation_metrics_sha256="6" * 64,
+    )
+    assert artifact["schema_version"] == 2
+    assert artifact["metrics"]["supported_trials"] == 10
+    assert artifact["population"]["development"]["included_nominal_supported"]["count"] == 10
+    assert artifact["population"]["development"]["excluded_stress"]["count"] == 2
+    assert artifact["population"]["development"]["excluded_nominal_unsupported"]["count"] == 1
+    assert artifact["provenance"]["development"]["metrics_sha256"] == "5" * 64
+    assert artifact["provenance"]["validation"]["metrics_sha256"] == "6" * 64
+    assert artifact["provenance"]["development"]["eligibility_manifest_sha256"] == "7" * 64
+
+    path = tmp_path / "v2-calibration.json"
+    path.write_text(json.dumps(artifact), encoding="utf-8")
+    frozen = load_frozen_calibration(
+        path,
+        expected_condition=condition,
+        expected_context=context,
+        release_acceptance=True,
+    )
+    assert frozen.schema_version == 2
+    assert frozen.release_eligible is True
+
+    for field, value in (
+        ("range_m", 2000.0),
+        ("use_types", False),
+        ("objective_version", "legacy_corrected_v0"),
+        ("algorithm", "grid"),
+    ):
+        expected = condition.as_dict() | {field: value}
+        with pytest.raises(ValueError, match="condition or execution context mismatch"):
+            load_frozen_calibration(
+                path,
+                expected_condition=CalibrationOperatingCondition.from_dict(expected),
+                expected_context=context,
+                release_acceptance=True,
+            )
+    context_fields = context.as_dict()
+    for field in context_fields:
+        bad_hash = ("f" if context_fields[field] != "f" * 64 else "0") * 64
+        wrong_context = CalibrationContext(**(context_fields | {field: bad_hash}))
+        with pytest.raises(ValueError, match="condition or execution context mismatch"):
+            load_frozen_calibration(
+                path,
+                expected_condition=condition,
+                expected_context=wrong_context,
+                release_acceptance=True,
+            )
+    with pytest.raises(ValueError, match="expected condition and context"):
+        load_frozen_calibration(path, release_acceptance=True)
+
+
+def test_v2_calibration_rejects_mixed_conditions_and_missing_nominal_labels():
+    condition = CalibrationOperatingCondition(1000.0, True, "bearing_set_map_v1", "pairwise")
+    dev = _v2_calibration_doc("development", condition=condition)
+    val = _v2_calibration_doc("validation", condition=condition)
+    mixed_range = [dict(row) for row in dev["all_trials"]]
+    mixed_range[0]["range_m"] = 2000.0
+    mixed_dev = dev | {
+        "all_trials": mixed_range,
+        "trials": [row for row in mixed_range if row["supported"]],
+    }
+    with pytest.raises(ValueError, match="mixes range or type-use"):
+        calibrate(
+            mixed_dev, val, development_metrics_sha256="5" * 64, validation_metrics_sha256="6" * 64
+        )
+
+    omitted_population = [dict(row) for row in dev["all_trials"][:-1]]
+    omitted_dev = dev | {
+        "all_trials": omitted_population,
+        "trials": [row for row in omitted_population if row["supported"]],
+    }
+    with pytest.raises(ValueError, match="condition_wide_planned rows do not match"):
+        calibrate(
+            omitted_dev,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+    missing_label = [dict(row) for row in dev["all_trials"]]
+    del missing_label[0]["sensor_condition"]
+    missing_dev = dev | {
+        "all_trials": missing_label,
+        "trials": [row for row in missing_label if row["supported"]],
+    }
+    with pytest.raises(ValueError, match="sensor_condition label"):
+        calibrate(
+            missing_dev,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+    mixed_condition = _v2_calibration_doc(
+        "validation",
+        condition=CalibrationOperatingCondition(1000.0, False, "bearing_set_map_v1", "pairwise"),
+    )
+    for field, value in (
+        ("use_types", False),
+        ("objective_version", "legacy_corrected_v0"),
+        ("algorithm", "grid"),
+    ):
+        mismatched_condition = CalibrationOperatingCondition.from_dict(
+            condition.as_dict() | {field: value}
+        )
+        mismatch_doc = _v2_calibration_doc("validation", condition=mismatched_condition)
+        with pytest.raises(ValueError, match="operating conditions differ"):
+            calibrate(
+                dev,
+                mismatch_doc,
+                development_metrics_sha256="5" * 64,
+                validation_metrics_sha256="6" * 64,
+            )
+    with pytest.raises(ValueError, match="operating conditions differ"):
+        calibrate(
+            dev,
+            mixed_condition,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+
+def test_context_fingerprints_bind_seed_policy_sources_and_dependency_lock(tmp_path):
+    settings = {
+        "algorithm": "pairwise",
+        "backend": "cpu",
+        "device_count": 1,
+        "seed": 1,
+        "spacing_m": 50.0,
+    }
+    fixed_one = search_execution_sha256(settings, seed_policy="fixed")
+    fixed_two = search_execution_sha256(settings | {"seed": 2}, seed_policy="fixed")
+    variable_one = search_execution_sha256(settings, seed_policy="per_trial_variable")
+    variable_two = search_execution_sha256(settings | {"seed": 2}, seed_policy="per_trial_variable")
+    assert fixed_one != fixed_two
+    assert variable_one == variable_two
+    with pytest.raises(ValueError, match="Path/output/measurement"):
+        search_execution_sha256(
+            settings | {"measurements_path": "/tmp/input.json"},
+            seed_policy="fixed",
+        )
+
+    for root in (tmp_path / "one", tmp_path / "two"):
+        (root / "bearing_localization/search").mkdir(parents=True)
+        (root / "maritime_localization_shared").mkdir()
+        (root / "bearing_localization/search/core.py").write_text("score = 1\n")
+        (root / "maritime_localization_shared/contracts.py").write_text("item = 1\n")
+        (root / "bearing_localization/accuracy_cli.py").write_text("cli = 1\n")
+        (root / "pyproject.toml").write_text("name='pkg'\n")
+        (root / "uv.lock").write_text("lock-version=1\n")
+    assert implementation_sha256(tmp_path / "one") == implementation_sha256(tmp_path / "two")
+    (tmp_path / "two/uv.lock").write_text("lock-version=2\n")
+    assert implementation_sha256(tmp_path / "one") != implementation_sha256(tmp_path / "two")

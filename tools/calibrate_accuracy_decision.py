@@ -9,7 +9,15 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
-from bearing_localization.search.calibration import RADIUS_LIMITS, SCORE_GAPS, canonical_json
+from bearing_localization.search.calibration import (
+    RADIUS_LIMITS,
+    SCORE_GAPS,
+    CalibrationContext,
+    CalibrationOperatingCondition,
+    _validate_sha256,
+    _validate_v2_provenance,
+    canonical_json,
+)
 from bearing_localization.search.decision import (
     CompetitorCoverageEvidence,
     competitor_gap_clears_threshold,
@@ -239,11 +247,208 @@ def _measure(trials: list[dict[str, Any]], gap: float, radius: float | None) -> 
     }
 
 
+def _trial_id_hash(rows: list[dict[str, Any]]) -> str:
+    identifiers = [row["trial_id"] for row in rows]
+    if any(not isinstance(value, str) or not value.strip() for value in identifiers):
+        raise ValueError("Every v2 trial must have a nonempty trial_id.")
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError("V2 trial IDs must be unique within each split.")
+    return hashlib.sha256(canonical_json(sorted(identifiers))).hexdigest()
+
+
+def _v2_split(
+    document: dict[str, Any],
+    split: str,
+    *,
+    metrics_sha256: str | None,
+) -> tuple[
+    list[dict[str, Any]],
+    CalibrationOperatingCondition,
+    CalibrationContext,
+    dict[str, Any],
+    dict[str, Any],
+]:
+    if document.get("schema_version") != 2:
+        raise ValueError("Development and validation inputs must both use schema v2.")
+    _check_trials(document, split)
+    condition = CalibrationOperatingCondition.from_dict(document.get("operating_condition"))
+    context = CalibrationContext.from_dict(document.get("context"))
+    all_trials = document.get("all_trials")
+    if not isinstance(all_trials, list) or not all_trials:
+        raise ValueError(f"Schema-v2 {split} input requires all_trials.")
+    supported_projection = document.get("trials")
+    if not isinstance(supported_projection, list):
+        raise ValueError(f"Schema-v2 {split} input requires supported trials.")
+    if any(not isinstance(row, dict) for row in all_trials):
+        raise ValueError("all_trials must contain trial records.")
+    if any(not isinstance(row, dict) for row in supported_projection):
+        raise ValueError("trials must contain trial records.")
+
+    all_ids: set[str] = set()
+    supported_ids: set[str] = set()
+    nominal_rows: list[dict[str, Any]] = []
+    stress_rows: list[dict[str, Any]] = []
+    for row in all_trials:
+        trial_id = row.get("trial_id")
+        if not isinstance(trial_id, str) or not trial_id.strip() or trial_id in all_ids:
+            raise ValueError("V2 all_trials must have unique nonempty trial IDs.")
+        all_ids.add(trial_id)
+        if row.get("split", split) != split:
+            raise ValueError(f"Every {split} all_trials row must match its split.")
+        if "sensor_condition" not in row or not isinstance(row["sensor_condition"], str):
+            raise ValueError("Every v2 trial must carry an explicit sensor_condition label.")
+        sensor_condition = row["sensor_condition"].strip()
+        if sensor_condition not in {"nominal", "stress"}:
+            raise ValueError("sensor_condition must be exactly nominal or stress.")
+        range_value = row.get("range_m")
+        report_types = row.get("report_types")
+        if (
+            isinstance(range_value, bool)
+            or not isinstance(range_value, (int, float))
+            or not isfinite(float(range_value))
+            or float(range_value) != float(condition.range_m)
+            or type(report_types) is not bool
+            or report_types is not condition.use_types
+        ):
+            raise ValueError("V2 input mixes range or type-use operating conditions.")
+        for key, expected in (
+            ("objective_version", condition.objective_version),
+            ("algorithm", condition.algorithm),
+        ):
+            if key in row and row[key] != expected:
+                raise ValueError(f"V2 input mixes {key} operating conditions.")
+        if type(row.get("supported")) is not bool:
+            raise ValueError("Every v2 all_trials row must have an explicit supported flag.")
+        if row["supported"]:
+            supported_ids.add(trial_id)
+        if sensor_condition == "nominal":
+            nominal_rows.append(row)
+        else:
+            stress_rows.append(row)
+
+    if not nominal_rows:
+        raise ValueError("V2 input has no explicitly labeled nominal trials.")
+    projected_ids = {
+        row.get("trial_id") for row in supported_projection if isinstance(row.get("trial_id"), str)
+    }
+    if len(projected_ids) != len(supported_projection) or projected_ids != supported_ids:
+        raise ValueError("trials must exactly project supported rows from all_trials.")
+
+    included = [row for row in nominal_rows if row["supported"]]
+    excluded_nominal = [row for row in nominal_rows if not row["supported"]]
+    if not included:
+        raise ValueError("V2 input has no supported nominal trials.")
+    provenance_input = document.get("provenance")
+    if not isinstance(provenance_input, dict):
+        raise ValueError("V2 input requires a provenance object.")
+    metrics_digest = metrics_sha256 or provenance_input.get("metrics_sha256")
+    source_record = {
+        "plan_sha256": provenance_input.get("plan_sha256"),
+        "trial_table_sha256": provenance_input.get("trial_table_sha256"),
+        "run_manifest_sha256": provenance_input.get("run_manifest_sha256"),
+        "eligibility_manifest_sha256": provenance_input.get("eligibility_manifest_sha256"),
+        "metrics_sha256": metrics_digest,
+    }
+    _validate_v2_provenance(
+        {
+            split: source_record,
+            "validation" if split == "development" else "development": source_record,
+        }
+    )
+    expected_population = document.get("population")
+    population_keys = {
+        "condition_wide_planned",
+        "nominal_planned",
+        "supported_nominal",
+        "unsupported_nominal",
+    }
+    if not isinstance(expected_population, dict) or set(expected_population) != population_keys:
+        raise ValueError("V2 input requires complete population counts and ID hashes.")
+    actual_population = {
+        "condition_wide_planned": all_trials,
+        "nominal_planned": nominal_rows,
+        "supported_nominal": included,
+        "unsupported_nominal": excluded_nominal,
+    }
+    for category, rows in actual_population.items():
+        record = expected_population[category]
+        if not isinstance(record, dict) or set(record) != {"count", "trial_ids_sha256"}:
+            raise ValueError(f"{category} population record is malformed.")
+        if type(record["count"]) is not int or record["count"] < 0:
+            raise ValueError(f"{category} population count must be a nonnegative integer.")
+        _validate_sha256(record["trial_ids_sha256"], name=f"{category}.trial_ids_sha256")
+        if record["count"] != len(rows) or record["trial_ids_sha256"] != _trial_id_hash(rows):
+            raise ValueError(f"{category} rows do not match the verified population manifest.")
+    if len(nominal_rows) != len(included) + len(excluded_nominal):
+        raise ValueError("Supported and unsupported nominal rows do not partition nominal trials.")
+    population = {
+        "included_nominal_supported": {
+            "count": len(included),
+            "trial_ids_sha256": _trial_id_hash(included),
+        },
+        "excluded_stress": {
+            "count": len(stress_rows),
+            "trial_ids_sha256": _trial_id_hash(stress_rows),
+        },
+        "excluded_nominal_unsupported": {
+            "count": len(excluded_nominal),
+            "trial_ids_sha256": _trial_id_hash(excluded_nominal),
+        },
+        "all_condition_trials": {
+            "count": len(all_trials),
+            "trial_ids_sha256": _trial_id_hash(all_trials),
+        },
+    }
+    return included, condition, context, source_record, population
+
+
 def calibrate(
-    document: dict[str, Any], validation_document: dict[str, Any] | None = None
+    document: dict[str, Any],
+    validation_document: dict[str, Any] | None = None,
+    *,
+    development_metrics_sha256: str | None = None,
+    validation_metrics_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """Select thresholds only on dev, then optionally confirm without retuning on validation."""
-    trials = _check_trials(document, "development")
+    """Select immutable thresholds from a dev population and confirm on validation."""
+    version = document.get("schema_version", 1)
+    validation_version = (
+        None if validation_document is None else validation_document.get("schema_version", 1)
+    )
+    if version == 2 or validation_version == 2:
+        if version != 2 or validation_version != 2 or validation_document is None:
+            raise ValueError("Schema-v2 calibration requires v2 development and validation inputs.")
+        trials, condition, context, dev_source, dev_population = _v2_split(
+            document, "development", metrics_sha256=development_metrics_sha256
+        )
+        validation_trials, val_condition, val_context, val_source, val_population = _v2_split(
+            validation_document, "validation", metrics_sha256=validation_metrics_sha256
+        )
+        if condition != val_condition:
+            raise ValueError("Development and validation operating conditions differ.")
+        if context != val_context:
+            raise ValueError("Development and validation execution contexts differ.")
+        provenance = {
+            "development": dev_source,
+            "validation": val_source,
+        }
+        population = {
+            "development": dev_population,
+            "validation": val_population,
+        }
+        schema_version = 2
+    else:
+        trials = _check_trials(document, "development")
+        validation_trials = (
+            _check_trials(validation_document, "validation")
+            if validation_document is not None
+            else None
+        )
+        condition = None
+        context = None
+        provenance = None
+        population = None
+        schema_version = 1
+
     candidates: list[dict[str, Any]] = []
     for gap in SCORE_GAPS:
         for radius in RADIUS_LIMITS:
@@ -271,16 +476,15 @@ def calibrate(
     dev_pass = chosen["availability"] >= 0.90 and chosen["conditional_accuracy"] >= 0.95
     validation_metrics = None
     validation_pass = False
-    if validation_document is not None:
-        validation_trials = _check_trials(validation_document, "validation")
+    if validation_trials is not None:
         validation_metrics = _measure(validation_trials, chosen["gap"], chosen["radius"])
         validation_pass = (
             validation_metrics["availability"] >= 0.90
             and validation_metrics["conditional_accuracy"] >= 0.95
         )
     status = "PASS" if dev_pass and validation_pass else "FAIL"
-    payload = {
-        "schema_version": 1,
+    payload: dict[str, Any] = {
+        "schema_version": schema_version,
         "split": "development",
         "status": status,
         "thresholds": {"min_score_gap": chosen["gap"], "max_95_radius_m": chosen["radius"]},
@@ -302,6 +506,15 @@ def calibrate(
         "validation_metrics": validation_metrics,
         "validation_confirmed": validation_pass,
     }
+    if schema_version == 2:
+        assert condition is not None and context is not None
+        assert provenance is not None and population is not None
+        payload.update(
+            operating_condition=condition.as_dict(),
+            context=context.as_dict(),
+            provenance=provenance,
+            population=population,
+        )
     return {
         **payload,
         "frozen": True,
@@ -315,13 +528,18 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--validation-metrics", type=Path)
     args = parser.parse_args()
-    source = json.loads(args.development_metrics.read_text(encoding="utf-8"))
-    validation = (
-        json.loads(args.validation_metrics.read_text(encoding="utf-8"))
-        if args.validation_metrics
-        else None
+    development_bytes = args.development_metrics.read_bytes()
+    source = json.loads(development_bytes)
+    validation_bytes = args.validation_metrics.read_bytes() if args.validation_metrics else None
+    validation = json.loads(validation_bytes) if validation_bytes is not None else None
+    artifact = calibrate(
+        source,
+        validation,
+        development_metrics_sha256=hashlib.sha256(development_bytes).hexdigest(),
+        validation_metrics_sha256=(
+            None if validation_bytes is None else hashlib.sha256(validation_bytes).hexdigest()
+        ),
     )
-    artifact = calibrate(source, validation)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(
