@@ -225,7 +225,7 @@ def test_pilot_executes_truth_free_search_and_separates_counters(
         "search_domain_scope": "full_coast",
         "domain_margin_m": 10000,
         "supported_cases_per_gate": 1,
-        "algorithms": ["grid"],
+        "algorithms": ["grid", "pairwise"],
         "candidate_budgets": [64],
         "grid_spacing_m": 50000,
         "max_grid_bearing_error_deg": 0.5,
@@ -273,18 +273,110 @@ def test_pilot_executes_truth_free_search_and_separates_counters(
         )
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
+    from tools.accuracy_eligibility import EligibilityTrial
+
+    eligibility_records = []
+    for row in rows:
+        support_path = (
+            input_root
+            / "development"
+            / row["port_id"]
+            / row["placement_id"]
+            / f"r{row['realization']}"
+            / f"{row['range_m']}m"
+            / ("types-on" if row["report_types"] == "True" else "types-off")
+            / row["sensor_condition"]
+            / "support.json"
+        )
+        supported = (
+            None
+            if row["sensor_condition"] != "nominal"
+            else (
+                json.loads(support_path.read_text())["supported"] if support_path.exists() else None
+            )
+        )
+        eligibility_records.append(
+            EligibilityTrial(
+                trial_id=row["trial_id"],
+                split="development",
+                port_id=row["port_id"],
+                placement_id=row["placement_id"],
+                realization=row["realization"],
+                range_m=int(row["range_m"]),
+                report_types=row["report_types"] == "True",
+                physical_seed=int(row["physical_seed"]),
+                sensor_condition=row["sensor_condition"],
+                status="supported"
+                if supported is True
+                else "unsupported"
+                if supported is False
+                else "unresolved",
+                supported=supported,
+                support_count=3 if supported is True else 0 if supported is False else None,
+                support_path=str(support_path.relative_to(input_root))
+                if support_path.exists()
+                else None,
+                support_sha256=pilot.sha256_file(support_path) if support_path.exists() else None,
+                preparation_status="failed"
+                if row["sensor_condition"] != "nominal"
+                else "completed",
+                preparation_reason="map" if row["sensor_condition"] != "nominal" else "",
+                eligibility_status="unresolved"
+                if supported is None
+                else "supported"
+                if supported
+                else "unsupported",
+                eligibility_reason="map" if supported is None else None,
+            )
+        )
+    eligibility_path = tmp_path / "eligibility.json"
+    eligibility_path.write_text("{}")
+    monkeypatch.setattr(
+        pilot,
+        "verify_eligibility_manifest",
+        lambda *args: SimpleNamespace(
+            trials=tuple(eligibility_records),
+            plan_sha256="a" * 64,
+            expected_trial_count=len(eligibility_records),
+            expected_nominal_count=7,
+            expected_trial_ids_sha256="b" * 64,
+            supported_denominator=6,
+        ),
+    )
     monkeypatch.setattr(pilot.subprocess, "run", fake_subprocess)
+    output_root = tmp_path / "pilot-output"
     result_path = pilot.run_pilot(
         trial_table_path=plan_path,
         preparation_manifest_path=prep_path,
         input_root=input_root,
         catalog_path=catalog_path,
         map_path=map_path,
-        output_root=tmp_path / "pilot-output",
+        output_root=output_root,
         config_path=config_path,
+        eligibility_manifest_path=eligibility_path,
+        stop_after_searches=2,
     )
     results = json.loads(result_path.read_text())
-    assert len(calls) == 7
+    assert len(calls) == 2
+    assert calls[0][calls[0].index("--algorithm") + 1] == "grid"
+    assert calls[1][calls[1].index("--algorithm") + 1] == "pairwise"
+    assert results["progress_status"] == "paused"
+    progress = json.loads((output_root / "pilot-progress.json").read_text())
+    assert progress["status"] == "paused"
+    result_path = pilot.run_pilot(
+        trial_table_path=plan_path,
+        preparation_manifest_path=prep_path,
+        input_root=input_root,
+        catalog_path=catalog_path,
+        map_path=map_path,
+        output_root=output_root,
+        config_path=config_path,
+        eligibility_manifest_path=eligibility_path,
+        resume=True,
+    )
+    results = json.loads(result_path.read_text())
+    assert len(calls) == 14
+    assert results["progress_status"] == "completed"
     assert results["truth_passed_to_search"] is False
     assert results["evaluator_invoked"] is False
     run_doc = json.loads(Path(results["runs"][0]["run_manifest_path"]).read_text())
@@ -300,3 +392,29 @@ def test_pilot_executes_truth_free_search_and_separates_counters(
     record = next(row for row in run_doc["trials"] if row["selection_role"] == "supported_nominal")
     assert record["proposal_generation_counters"]["candidate_counts"]["total"] == 1000
     assert record["scoring_and_refinement_telemetry"]["counts"]["evaluated"] == 64
+
+    import pytest
+
+    changed_support = (
+        input_root
+        / "development/port-001"
+        / rows[0]["placement_id"]
+        / "r0"
+        / f"{rows[0]['range_m']}m"
+        / ("types-on" if rows[0]["report_types"] == "True" else "types-off")
+        / "nominal"
+        / "support.json"
+    )
+    changed_support.write_text(json.dumps({"supported": True, "support_count": 99}))
+    with pytest.raises(ValueError, match="selection fingerprint"):
+        pilot.run_pilot(
+            trial_table_path=plan_path,
+            preparation_manifest_path=prep_path,
+            input_root=input_root,
+            catalog_path=catalog_path,
+            map_path=map_path,
+            output_root=output_root,
+            config_path=config_path,
+            eligibility_manifest_path=eligibility_path,
+            resume=True,
+        )

@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+from dataclasses import asdict
 from pathlib import Path
 from statistics import median
 from typing import Any, cast
@@ -25,6 +26,7 @@ from maritime_localization_shared.serialization import read_contract
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from tools.accuracy_eligibility import verify_eligibility_manifest  # noqa: E402
 from tools.run_accuracy_suite import sha256_file  # noqa: E402
 
 GATES = tuple((range_m, label) for range_m in (1_000, 5_000, 10_000) for label in ("True", "False"))
@@ -58,6 +60,7 @@ def select_pilot_rows(
     input_root: Path,
     split: str = "development",
     supported_per_gate: int = 1,
+    eligibility_trials: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
     """Select by pre-search preparation and support evidence only."""
     if split != "development":
@@ -68,6 +71,7 @@ def select_pilot_rows(
         row["trial_id"]: row for row in preparation_rows if row["trial_id"].startswith(f"{split}/")
     }
     candidates = [row for row in trial_rows if row["split"] == split]
+    eligibility_by_trial = {row["trial_id"]: row for row in (eligibility_trials or [])}
     selected: dict[str, tuple[dict[str, str], str, dict[str, Any]]] = {}
 
     def trial_dir(row: dict[str, str]) -> Path:
@@ -92,6 +96,11 @@ def select_pilot_rows(
             ):
                 continue
             prep = prep_by_trial.get(row["trial_id"], {})
+            if eligibility_trials is not None:
+                support = eligibility_by_trial.get(row["trial_id"], {})
+                if prep.get("status") == "completed" and support.get("supported") is True:
+                    eligible.append((row, support))
+                continue
             support_path = trial_dir(row) / "support.json"
             if prep.get("status") != "completed" or not support_path.is_file():
                 continue
@@ -109,9 +118,15 @@ def select_pilot_rows(
                 row,
                 "supported_nominal",
                 {
-                    "support_path": str((trial_dir(row) / "support.json").resolve()),
-                    "support_sha256": sha256_file(trial_dir(row) / "support.json"),
+                    "support_path": support.get("support_path")
+                    or str((trial_dir(row) / "support.json").resolve()),
+                    "support_sha256": support.get("support_sha256")
+                    or sha256_file(trial_dir(row) / "support.json"),
                     "supported": support["supported"],
+                    "eligibility_status": support.get("status"),
+                    "eligibility_record_sha256": _sha256_json(support)
+                    if eligibility_trials is not None
+                    else None,
                     "detected_physical_catalog_matched_groups": support.get(
                         "detected_physical_catalog_matched_groups"
                     ),
@@ -132,6 +147,11 @@ def select_pilot_rows(
         if row["sensor_condition"] != "nominal" or row["trial_id"] in selected:
             continue
         prep = prep_by_trial.get(row["trial_id"], {})
+        if eligibility_trials is not None:
+            support = eligibility_by_trial.get(row["trial_id"], {})
+            if prep.get("status") == "completed" and support.get("supported") is False:
+                unsupported.append((row, Path(support.get("support_path") or ""), support))
+            continue
         support_path = trial_dir(row) / "support.json"
         if prep.get("status") != "completed" or not support_path.is_file():
             continue
@@ -144,9 +164,13 @@ def select_pilot_rows(
             row,
             "unsupported_nominal",
             {
-                "support_path": str(support_path.resolve()),
-                "support_sha256": sha256_file(support_path),
+                "support_path": support.get("support_path") or str(support_path.resolve()),
+                "support_sha256": support.get("support_sha256") or sha256_file(support_path),
                 "supported": False,
+                "eligibility_status": support.get("status"),
+                "eligibility_record_sha256": _sha256_json(support)
+                if eligibility_trials is not None
+                else None,
                 "detected_physical_catalog_matched_groups": support.get(
                     "detected_physical_catalog_matched_groups"
                 ),
@@ -333,16 +357,35 @@ def run_pilot(
     config_path: Path = DEFAULT_CONFIG,
     projected_crs: str = "EPSG:32618",
     select_only: bool = False,
+    eligibility_manifest_path: Path | None = None,
+    resume: bool = False,
+    retry_failures: bool = False,
+    pause_file: Path | None = None,
+    stop_after_searches: int | None = None,
 ) -> Path:
     """Run searches only; the evaluator truth and metrics are never opened."""
     config = _load_config(config_path)
+    if not select_only and eligibility_manifest_path is None:
+        raise ValueError("A frozen --eligibility-manifest is required for a pilot run.")
+    eligibility_sha256 = None
+    eligibility_rows = None
+    eligibility_snapshot = None
+    if eligibility_manifest_path is not None:
+        eligibility_snapshot = verify_eligibility_manifest(
+            eligibility_manifest_path, trial_table_path.parent, input_root, "development"
+        )
+        eligibility_sha256 = sha256_file(eligibility_manifest_path)
+        eligibility_rows = [asdict(record) for record in eligibility_snapshot.trials]
     trials, selection = select_pilot_rows(
         _read_rows(trial_table_path),
         _read_rows(preparation_manifest_path),
         input_root=input_root,
         split="development",
         supported_per_gate=int(config["supported_cases_per_gate"]),
+        eligibility_trials=eligibility_rows,
     )
+    if output_root.exists() and any(output_root.iterdir()) and not resume and not select_only:
+        raise FileExistsError("Output root already contains data; pass --resume to continue it.")
     output_root.mkdir(parents=True, exist_ok=True)
     plan_dir = output_root / "plan"
     _write_rows(plan_dir / "trials.csv", trials)
@@ -362,13 +405,41 @@ def run_pilot(
         "trial_table_sha256": sha256_file(trial_table_path),
         "preparation_manifest_sha256": sha256_file(preparation_manifest_path),
         "pilot_config_sha256": sha256_file(config_path),
+        "eligibility_manifest_sha256": eligibility_sha256,
+        "eligibility_plan_sha256": (
+            eligibility_snapshot.plan_sha256 if eligibility_snapshot is not None else None
+        ),
+        "eligibility_expected_trial_count": (
+            eligibility_snapshot.expected_trial_count if eligibility_snapshot is not None else None
+        ),
+        "eligibility_expected_nominal_count": (
+            eligibility_snapshot.expected_nominal_count
+            if eligibility_snapshot is not None
+            else None
+        ),
+        "eligibility_supported_nominal_count": (
+            eligibility_snapshot.supported_denominator if eligibility_snapshot is not None else None
+        ),
+        "eligibility_expected_trial_ids_sha256": (
+            eligibility_snapshot.expected_trial_ids_sha256
+            if eligibility_snapshot is not None
+            else None
+        ),
         "selected_trial_count": len(selection),
         "trials": selection,
     }
     selection_path = output_root / "selection-manifest.json"
-    _write_json(selection_path, selection_doc)
+    if selection_path.exists():
+        prior_selection = json.loads(selection_path.read_text(encoding="utf-8"))
+        if prior_selection != selection_doc:
+            raise ValueError("Resume selection fingerprint differs from the frozen selection.")
+    else:
+        _write_json(selection_path, selection_doc)
     copied_config = output_root / "pilot-config.json"
-    shutil.copyfile(config_path, copied_config)
+    if copied_config.exists() and sha256_file(copied_config) != sha256_file(config_path):
+        raise ValueError("Resume config hash differs from the frozen pilot config.")
+    if not copied_config.exists():
+        shutil.copyfile(config_path, copied_config)
     if select_only:
         return selection_path
 
@@ -379,8 +450,44 @@ def run_pilot(
         raise FileNotFoundError("Full-coast CatalogV2 and MapV2 are required for the pilot.")
     catalog_hash = sha256_file(catalog_path)
     map_hash = sha256_file(map_path)
+    if config.get("expected_catalog_sha256") not in (None, catalog_hash):
+        raise ValueError("Catalog hash differs from the version pinned by pilot config.")
+    if config.get("expected_map_sha256") not in (None, map_hash):
+        raise ValueError("Map hash differs from the version pinned by pilot config.")
+    static_root = output_root / "static-inputs"
+    static_root.mkdir(parents=True, exist_ok=True)
+    frozen_catalog = static_root / f"catalog-{catalog_hash}.json"
+    frozen_map = static_root / f"map-{map_hash}.json"
+    for source, frozen, expected in (
+        (catalog_path, frozen_catalog, catalog_hash),
+        (map_path, frozen_map, map_hash),
+    ):
+        if not frozen.exists():
+            shutil.copyfile(source, frozen)
+        if sha256_file(frozen) != expected:
+            raise ValueError(f"Frozen static input hash mismatch: {frozen.name}")
+    if eligibility_manifest_path is not None:
+        frozen_eligibility = static_root / f"eligibility-{eligibility_sha256}.json"
+        if not frozen_eligibility.exists():
+            shutil.copyfile(eligibility_manifest_path, frozen_eligibility)
+        if sha256_file(frozen_eligibility) != eligibility_sha256:
+            raise ValueError("Frozen eligibility manifest hash mismatch.")
     projected_crs = CRS.from_user_input(projected_crs).to_string()
+    frozen_measurements: dict[str, Path] = {}
+    for row in trials:
+        source = _trial_directory(input_root, row) / "measurements.json"
+        if source.is_file():
+            digest = sha256_file(source)
+            target = static_root / "measurements" / f"{_sha256_json(row)[:20]}-{digest}.json"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.exists():
+                shutil.copyfile(source, target)
+            if sha256_file(target) != digest:
+                raise ValueError(f"Frozen measurement hash mismatch for {row['trial_id']}")
+            frozen_measurements[row["trial_id"]] = target
     results: list[dict[str, Any]] = []
+    searches_started = 0
+    pause_reason: str | None = None
     python = sys.executable
     command_base = [
         python,
@@ -389,6 +496,31 @@ def run_pilot(
         "--schema-version",
         "2",
     ]
+    controller_source_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    run_identity = _sha256_json(
+        {
+            "selection_sha256": selection_doc["selection_sha256"],
+            "catalog_sha256": catalog_hash,
+            "map_sha256": map_hash,
+            "pilot_config_sha256": sha256_file(copied_config),
+            "controller_source_sha": controller_source_sha,
+        }
+    )
+    progress_path = output_root / "pilot-progress.json"
+    if resume:
+        if progress_path.is_file():
+            previous_progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            if previous_progress.get("run_identity_sha256") != run_identity:
+                raise ValueError(
+                    "Resume controller or static-input identity changed; use a new output root."
+                )
+        for previous_manifest in (output_root / "runs").glob("*/*/*/run-manifest.json"):
+            previous = json.loads(previous_manifest.read_text(encoding="utf-8"))
+            if previous.get("controller_source_sha") != controller_source_sha:
+                raise ValueError("Resume controller source differs from an archived attempt.")
+    contexts: dict[tuple[str, int], dict[str, Any]] = {}
     for algorithm in config["algorithms"]:
         for budget in config["candidate_budgets"]:
             grid_total = None
@@ -400,13 +532,7 @@ def run_pilot(
                 "declared_grid_points_total": grid_total,
                 "selection_sha256": selection_doc["selection_sha256"],
                 "pilot_config_sha256": sha256_file(copied_config),
-                "controller_source_sha": subprocess.run(
-                    ["git", "rev-parse", "HEAD"],
-                    cwd=ROOT,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                ).stdout.strip(),
+                "controller_source_sha": controller_source_sha,
                 "accuracy_cli_sha256": sha256_file(ROOT / "bearing_localization/accuracy_cli.py"),
                 "catalog_sha256": catalog_hash,
                 "map_sha256": map_hash,
@@ -436,14 +562,64 @@ def run_pilot(
             records: dict[str, dict[str, Any]] = {}
             manifest_path = run_dir / "run-manifest.json"
             if manifest_path.is_file():
+                if not resume:
+                    raise FileExistsError("Existing run manifest requires --resume.")
                 prior = json.loads(manifest_path.read_text(encoding="utf-8"))
+                if prior.get("eligibility_manifest_sha256") != eligibility_sha256:
+                    raise ValueError("Resume eligibility manifest hash differs.")
                 records = {item["trial_id"]: item for item in prior.get("trials", [])}
-            for row in trials:
+            if not manifest_path.is_file():
+                _write_json(
+                    manifest_path,
+                    {
+                        "schema": "accuracy-feasibility-run-v1",
+                        "run_id": run_id,
+                        **run_config,
+                        "scope_manifest_path": "scope-manifest.json",
+                        "scope_sha256": sha256_file(scope_path),
+                        "eligibility_manifest_sha256": eligibility_sha256,
+                        "truth_passed_to_search": False,
+                        "evaluator_invoked": False,
+                        "trials": [records[key] for key in sorted(records)],
+                    },
+                )
+            contexts[(str(algorithm), int(budget))] = {
+                "algorithm": algorithm,
+                "budget": budget,
+                "grid_total": grid_total,
+                "run_config": run_config,
+                "run_id": run_id,
+                "run_dir": run_dir,
+                "scope_path": scope_path,
+                "records": records,
+                "manifest_path": manifest_path,
+            }
+    # Round-robin each budget across all methods before moving to the next trial.
+    for budget in config["candidate_budgets"]:
+        for row in trials:
+            for algorithm in config["algorithms"]:
+                context = contexts[(str(algorithm), int(budget))]
+                grid_total = context["grid_total"]
+                run_config = context["run_config"]
+                run_id = context["run_id"]
+                run_dir = context["run_dir"]
+                scope_path = context["scope_path"]
+                records = context["records"]
+                manifest_path = context["manifest_path"]
+                if pause_reason is not None:
+                    break
+                if pause_file is not None and pause_file.exists():
+                    pause_reason = "pause_file"
+                    break
+                if stop_after_searches is not None and searches_started >= stop_after_searches:
+                    pause_reason = "stop_after_searches"
+                    break
                 trial_id = row["trial_id"]
                 directory = _trial_directory(input_root, row)
-                measurements_path = directory / "measurements.json"
+                source_measurements_path = directory / "measurements.json"
+                measurements_path = frozen_measurements.get(trial_id, source_measurements_path)
                 required = (
-                    measurements_path,
+                    source_measurements_path,
                     directory / "support.json",
                     directory / "physical-identity-audit.json",
                 )
@@ -493,7 +669,14 @@ def run_pilot(
                     and sha256_file(telemetry_path) == prior.get("telemetry_sha256")
                 ):
                     continue
-                if not measurements_path.is_file():
+                if (
+                    prior
+                    and prior.get("fingerprint_sha256") == fingerprint
+                    and prior.get("status") not in {"completed", "missing_inputs"}
+                    and not retry_failures
+                ):
+                    continue
+                if not source_measurements_path.is_file():
                     records[trial_id] = {
                         "trial_id": trial_id,
                         "selection_role": next(
@@ -514,6 +697,7 @@ def run_pilot(
                             **run_config,
                             "scope_manifest_path": "scope-manifest.json",
                             "scope_sha256": sha256_file(scope_path),
+                            "eligibility_manifest_sha256": eligibility_sha256,
                             "truth_passed_to_search": False,
                             "evaluator_invoked": False,
                             "trials": [records[key] for key in sorted(records)],
@@ -525,9 +709,9 @@ def run_pilot(
                     "--measurements",
                     str(measurements_path),
                     "--catalog",
-                    str(catalog_path.resolve()),
+                    str(frozen_catalog.resolve()),
                     "--map",
-                    str(map_path.resolve()),
+                    str(frozen_map.resolve()),
                     "--config",
                     str(search_config_path),
                     "--projected-crs",
@@ -552,6 +736,7 @@ def run_pilot(
                 failure = ""
                 returncode: int | None = None
                 try:
+                    searches_started += 1
                     completed = subprocess.run(
                         argv,
                         cwd=ROOT,
@@ -593,6 +778,17 @@ def run_pilot(
                     "selection_role": next(
                         item["selection_role"] for item in selection if item["trial_id"] == trial_id
                     ),
+                    "eligibility_status": next(
+                        item["support_evidence"].get("eligibility_status")
+                        for item in selection
+                        if item["trial_id"] == trial_id
+                    ),
+                    "eligibility_record_sha256": next(
+                        item["support_evidence"].get("eligibility_record_sha256")
+                        for item in selection
+                        if item["trial_id"] == trial_id
+                    ),
+                    "eligibility_manifest_sha256": eligibility_sha256,
                     "port_id": row["port_id"],
                     "placement_id": row["placement_id"],
                     "range_m": int(row["range_m"]),
@@ -637,6 +833,7 @@ def run_pilot(
                         **run_config,
                         "scope_manifest_path": "scope-manifest.json",
                         "scope_sha256": sha256_file(scope_path),
+                        "eligibility_manifest_sha256": eligibility_sha256,
                         "truth_passed_to_search": False,
                         "evaluator_invoked": False,
                         "counter_notes": {
@@ -652,6 +849,22 @@ def run_pilot(
                         "trials": [records[key] for key in sorted(records)],
                     },
                 )
+                if pause_reason is not None:
+                    break
+            if pause_reason is not None:
+                break
+        if pause_reason is not None:
+            break
+    for algorithm in config["algorithms"]:
+        for budget in config["candidate_budgets"]:
+            context = contexts[(str(algorithm), int(budget))]
+            grid_total = context["grid_total"]
+            run_config = context["run_config"]
+            run_id = context["run_id"]
+            run_dir = context["run_dir"]
+            scope_path = context["scope_path"]
+            records = context["records"]
+            manifest_path = context["manifest_path"]
             results.append(
                 {
                     "algorithm": algorithm,
@@ -673,6 +886,19 @@ def run_pilot(
                     **_runtime_projection(records, grid_total),
                 }
             )
+    progress_path = output_root / "pilot-progress.json"
+    _write_json(
+        progress_path,
+        {
+            "schema": "accuracy-feasibility-progress-v1",
+            "status": "paused" if pause_reason else "completed",
+            "pause_reason": pause_reason,
+            "searches_started_this_invocation": searches_started,
+            "selection_manifest_sha256": sha256_file(selection_path),
+            "eligibility_manifest_sha256": eligibility_sha256,
+            "run_identity_sha256": run_identity,
+        },
+    )
     result_path = output_root / "pilot-results.json"
     _write_json(
         result_path,
@@ -682,6 +908,7 @@ def run_pilot(
             "selection_manifest_sha256": sha256_file(selection_path),
             "truth_passed_to_search": False,
             "evaluator_invoked": False,
+            "progress_status": "paused" if pause_reason else "completed",
             "runs": results,
         },
     )
@@ -699,6 +926,11 @@ def main() -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--projected-crs", default="EPSG:32618")
     parser.add_argument("--select-only", action="store_true")
+    parser.add_argument("--eligibility-manifest", type=Path)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--retry-failures", action="store_true")
+    parser.add_argument("--pause-file", type=Path)
+    parser.add_argument("--stop-after-searches", type=int)
     args = parser.parse_args()
     result = run_pilot(
         trial_table_path=args.trial_table,
@@ -710,6 +942,11 @@ def main() -> int:
         config_path=args.config,
         projected_crs=args.projected_crs,
         select_only=args.select_only,
+        eligibility_manifest_path=args.eligibility_manifest,
+        resume=args.resume,
+        retry_failures=args.retry_failures,
+        pause_file=args.pause_file,
+        stop_after_searches=args.stop_after_searches,
     )
     print(result)
     return 0
