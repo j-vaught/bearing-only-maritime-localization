@@ -6,6 +6,9 @@ import pytest
 
 pytest.importorskip("bearing_localization.search.visibility_screen")
 
+from pyproj import CRS, Geod, Transformer  # noqa: E402
+from shapely.geometry import box  # noqa: E402
+
 from bearing_localization.search.prediction import (  # noqa: E402
     predict_visible_groups,
     prepare_prediction_context,
@@ -15,8 +18,6 @@ from bearing_localization.search.visibility_screen import (  # noqa: E402
 )
 from maritime_localization_shared.contracts.inputs_v2 import CatalogRecordV2, CatalogV2  # noqa: E402
 from maritime_localization_shared.geospatial.vector_map import VectorMap  # noqa: E402
-from pyproj import CRS, Geod, Transformer  # noqa: E402
-from shapely.geometry import box  # noqa: E402
 
 
 def test_calibrated_feature_offset_uses_same_range_bearing_and_los_target():
