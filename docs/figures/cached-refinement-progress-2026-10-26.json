@@ -1,0 +1,15 @@
+{
+  "schema": "a39-cached-refinement-figure-v1",
+  "status": "awaiting verified evaluator artifact",
+  "author": "J.C. Vaught",
+  "mode_count": 64,
+  "candidate_scope": "partial-cache exact-scored subset only; no full-domain ranking",
+  "source_artifact_path": null,
+  "source_artifact_sha256": null,
+  "source_commit": null,
+  "source_exact_hypothesis_count": null,
+  "source_unknown_fraction": null,
+  "plot_error_max_m": null,
+  "top_refined_mode": null,
+  "mode_comparisons": []
+}
