@@ -215,6 +215,145 @@ def test_prepared_measurements_use_catalog_timestamp(tmp_path: Path, monkeypatch
     assert {measurement.timestamp_utc for measurement in measurements.measurements} == {stamp}
 
 
+def test_extension_reads_support_files_written_by_initial_preparation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    origin_lon, origin_lat = -76.3, 37.0
+    geod = Geod(ellps="WGS84")
+    records = []
+    for index, bearing in enumerate((10.0, 130.0, 250.0)):
+        lon, lat, _ = geod.fwd(origin_lon, origin_lat, bearing, 500.0)
+        records.append(
+            CatalogRecordV2(
+                key=f"mmsi:{index + 1}",
+                latitude_deg=lat,
+                longitude_deg=lon,
+                raw_type="vessel",
+                normalized_type="vessel",
+                metadata=(("physical_entity_id", f"vessel-{index + 1}"),),
+            )
+        )
+    catalog = CatalogV2(
+        records=tuple(records),
+        timestamp_utc="2023-07-15T12:00:30Z",
+        source="support-path-regression",
+        catalog_version="1",
+        catalog_id="support-path-regression",
+    )
+    catalog_path = tmp_path / "catalog.json"
+    write_contract(catalog_path, catalog)
+    origin_xy = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True).transform(
+        origin_lon, origin_lat
+    )
+    vector_map = VectorMap(
+        None,
+        crs=CRS.from_epsg(32618),
+        coverage_geometry=box(
+            origin_xy[0] - 20_000,
+            origin_xy[1] - 20_000,
+            origin_xy[0] + 20_000,
+            origin_xy[1] + 20_000,
+        ),
+    )
+    forward = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True)
+    inverse = Transformer.from_crs("EPSG:32618", "EPSG:4326", always_xy=True)
+    monkeypatch.setattr(
+        "tools.run_accuracy_suite._water_sampler",
+        lambda _port, _path: (vector_map, forward, inverse),
+    )
+    monkeypatch.setattr(
+        "tools.run_accuracy_suite._sample_placements",
+        lambda _port, _path, *, count, port_split: [
+            {
+                "placement_id": f"placement-{index + 1:03d}",
+                "longitude_deg": origin_lon,
+                "latitude_deg": origin_lat,
+            }
+            for index in range(count)
+        ],
+    )
+    monkeypatch.setitem(
+        __import__("tools.run_accuracy_suite", fromlist=["STRESS_PROFILES"]).STRESS_PROFILES,
+        "nominal",
+        {"detection_probability": 1.0, "expected_clutter_reports": 0.0},
+    )
+
+    plan_dir = tmp_path / "plan"
+    plan_dir.mkdir()
+    manifest = build_split_manifest()
+    manifest["ports"] = [port for port in manifest["ports"] if port["port_id"] == "port-001"]
+    manifest["split_port_ids"] = {"development": ["port-001"]}
+    (plan_dir / "splits.json").write_text(json.dumps(manifest))
+    (plan_dir / "config.json").write_text(
+        json.dumps({"trial_table": "trials.csv", "split_manifest": "splits.json"})
+    )
+    fieldnames = [
+        "trial_id",
+        "split",
+        "port_id",
+        "placement_id",
+        "realization",
+        "range_m",
+        "report_types",
+        "physical_seed",
+        "sensor_condition",
+        "profile_parameters",
+    ]
+    rows = []
+    for placement in range(1, 26):
+        placement_id = f"placement-{placement:03d}"
+        for realization in range(2):
+            for range_m in (1000, 5000, 10000):
+                for report_types in (True, False):
+                    trial_id = (
+                        f"development/port-001/{placement_id}/r{realization}/"
+                        f"range{range_m}m/types{'on' if report_types else 'off'}/nominal"
+                    )
+                    rows.append(
+                        {
+                            "trial_id": trial_id,
+                            "split": "development",
+                            "port_id": "port-001",
+                            "placement_id": placement_id,
+                            "realization": str(realization),
+                            "range_m": str(range_m),
+                            "report_types": str(report_types),
+                            "physical_seed": str(1000 + placement * 10 + realization),
+                            "sensor_condition": "nominal",
+                            "profile_parameters": "{}",
+                        }
+                    )
+    with (plan_dir / "trials.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    map_cache = tmp_path / "maps"
+    map_cache.mkdir()
+    (map_cache / "noaa-enc-port-B1-15km.map-v2.json").write_text("reference-map")
+    input_root = tmp_path / "inputs"
+
+    prepare_inputs(
+        plan_dir / "config.json",
+        catalog_path=catalog_path,
+        map_cache=map_cache,
+        input_root=input_root,
+        split="development",
+        _allow_extension=False,
+    )
+
+    support_files = list(
+        (input_root / "development/port-001").glob("placement-*/r*/**/support.json")
+    )
+    assert len(support_files) == 25 * 2 * 3 * 2
+    assert all(path.is_file() for path in support_files)
+    # This must inspect the exact preparation layout. A duplicated split component
+    # in the reader path would make initial support appear incomplete and return [].
+    added = _extend_nominal_plan_if_needed(
+        plan_dir / "config.json", input_root=input_root, split="development"
+    )
+    assert len(added) == 25 * 2 * 3 * 2
+
+
 def test_runner_retains_failure_attempt_then_resumes(tmp_path: Path, monkeypatch) -> None:
     plan_dir = tmp_path / "plan"
     run_root = tmp_path / "runs"
