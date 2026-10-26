@@ -112,6 +112,14 @@ def _exact(scorer: CandidateScorer, position: tuple[float, float]):
     return scorer.evaluate(position)
 
 
+def _isclose_tie_margin(best_score: float, *, abs_tol: float, rel_tol: float) -> float:
+    """Return a strict score gap outside math.isclose's tie band."""
+    if not 0.0 <= rel_tol < 1.0 or abs_tol < 0.0:
+        raise ValueError("score tolerances must be nonnegative and relative tolerance below one")
+    boundary = max(abs_tol, rel_tol * abs(best_score) / (1.0 - rel_tol))
+    return boundary + 2.0 * math.ulp(best_score)
+
+
 def pre_los_screen(
     scorer: CandidateScorer,
     candidates: Sequence[CandidatePoint],
@@ -167,9 +175,16 @@ def pre_los_screen(
             )
             continue
         margin = max(
-            scorer.config.absolute_score_tolerance
-            + scorer.config.relative_score_tolerance * abs(incumbent_score),
-            ABS_TOL + REL_TOL * abs(incumbent_score),
+            _isclose_tie_margin(
+                incumbent_score,
+                abs_tol=scorer.config.absolute_score_tolerance,
+                rel_tol=scorer.config.relative_score_tolerance,
+            ),
+            _isclose_tie_margin(
+                incumbent_score,
+                abs_tol=ABS_TOL,
+                rel_tol=REL_TOL,
+            ),
         )
         margins.append(margin)
         incumbent_score_before = incumbent_score
