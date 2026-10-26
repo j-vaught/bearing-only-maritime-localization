@@ -249,8 +249,12 @@ def run_grid_search_v2(
             raise ValueError("V2 grid search requires config.bounds_xy.")
         positions = _grid_positions_v2(bounds, grid_spacing_m)
     else:
-        positions = candidate_positions
-        bounds = scorer.config.bounds_xy
+        return score_candidate_positions(
+            scorer,
+            candidate_positions,
+            candidate_limit=scorer.config.candidate_budget,
+            certificate_scope="finite_candidate_set",
+        )
     positions = order_candidate_positions(
         positions,
         water_status=scorer.vector_map.point_water_status,

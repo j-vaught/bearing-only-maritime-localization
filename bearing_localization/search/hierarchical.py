@@ -279,15 +279,9 @@ def run_hierarchical_search_v2(
     parity mode.
     """
     if candidate_positions is not None:
-        bounds = scorer.config.bounds_xy
-        positions = order_candidate_positions(
-            candidate_positions,
-            water_status=scorer.vector_map.point_water_status,
-            bounds=bounds,
-        )
         return score_candidate_positions(
             scorer,
-            positions,
+            candidate_positions,
             candidate_limit=scorer.config.candidate_budget,
         )
     bounds = scorer.config.bounds_xy
@@ -306,6 +300,9 @@ def run_hierarchical_search_v2(
     budget = scorer.config.candidate_budget
     accumulator = CandidateSearchAccumulator(scorer)
     budget_exhausted = False
+    any_stage_truncated = False
+    pending_truncated: list[tuple[float, float]] = []
+    pending_keys: set[tuple[float, float]] = set()
     total_stages = refinement_levels + 1
 
     def axis(low: float, high: float, step: float) -> Iterable[float]:
@@ -327,20 +324,27 @@ def run_hierarchical_search_v2(
                 yield east_m, north_m
 
     def evaluate_stage(positions: Iterable[tuple[float, float]], quota: int) -> None:
-        nonlocal budget_exhausted
+        nonlocal any_stage_truncated, budget_exhausted
         ordered = order_candidate_positions(
             positions,
             water_status=scorer.vector_map.point_water_status,
             bounds=bounds,
         )
         used = 0
-        for position in ordered:
+        for position_index, position in enumerate(ordered):
             if not accumulator.is_new(position):
                 continue
             if accumulator.candidate_count >= budget:
                 budget_exhausted = True
                 return
             if used >= quota:
+                any_stage_truncated = True
+                for pending in ordered[position_index:]:
+                    if accumulator.is_new(pending):
+                        key = accumulator.position_key(pending)
+                        if key not in pending_keys:
+                            pending_keys.add(key)
+                            pending_truncated.append(pending)
                 return
             accumulator.add(position)
             used += 1
@@ -392,6 +396,15 @@ def run_hierarchical_search_v2(
             if xmin <= x + dx <= xmax and ymin <= y + dy <= ymax
         }
         evaluate_stage(next_positions, quota)
+
+    # A stage quota is an internal reservation.  Continue all planned
+    # refinement stages first, then consume the omitted unique positions in
+    # their deterministic order so the declared candidate budget and outcome
+    # counts remain aligned with the budget-exhausted contract.
+    if any_stage_truncated and not budget_exhausted:
+        evaluate_stage(pending_truncated, budget - accumulator.candidate_count)
+        if accumulator.candidate_count == budget:
+            budget_exhausted = True
 
     if budget_exhausted:
         return accumulator.finish(
