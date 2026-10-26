@@ -129,8 +129,9 @@ def validate_coarse_artifact(
     )
     require(manifest.get("seed_stage") == "coarse", "artifact is not the coarse seed stage")
     require(
-        manifest.get("seed_source") == "A20.cached_hypothesis",
-        "manifest coarse source does not identify original A20 hypotheses",
+        manifest.get("seed_selection_rule")
+        == "original A20 cached_hypothesis for the matching assigned mode",
+        "manifest coarse selection rule does not identify the original A20 source",
     )
     require(manifest.get("full_domain_complete") is False, "diagnostic claims full-domain coverage")
     require(manifest.get("decision_status") == "ambiguous", "diagnostic claims a decision")
