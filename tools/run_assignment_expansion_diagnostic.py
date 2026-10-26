@@ -65,11 +65,12 @@ def _output_bytes(path: Path) -> int:
     return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
 
-def check_resources(path: Path) -> int:
+def check_resources(path: Path, output_path: Path | None = None) -> int:
     free = shutil.disk_usage(path).free
     if free < FLOOR_BYTES + MAX_OUTPUT_BYTES:
         raise OSError("40 GiB disk reserve leaves less than the output cap")
-    if _output_bytes(path) > MAX_OUTPUT_BYTES:
+    measured = path if output_path is None else output_path
+    if measured.exists() and _output_bytes(measured) > MAX_OUTPUT_BYTES:
         raise OSError(f"diagnostic output exceeded {MAX_OUTPUT_BYTES // 1024**2} MiB")
     return free
 
@@ -254,7 +255,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise FileExistsError(
             f"output already exists; resume is explicitly unsupported: {args.output}"
         )
-    check_resources(args.output.parent)
+    check_resources(args.output.parent, args.output)
     args.output.mkdir(parents=False)
     rows_path = args.output / "assignment-expansion-rows.jsonl"
     events_path = args.output / "branch-events.jsonl"
