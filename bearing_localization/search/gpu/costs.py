@@ -201,6 +201,7 @@ def iter_candidate_likelihood_costs_cupy(
                 observation_types=observation_types,
                 observation_sigmas_deg=observation_sigmas_deg,
                 max_pairs_per_chunk=max_pairs_per_chunk,
+                telemetry=telemetry,
                 cupy_module=cupy_module,
             )
             scored.append((candidate, costs, assign_likelihood_costs(costs).cost))
