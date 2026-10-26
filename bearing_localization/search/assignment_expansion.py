@@ -74,6 +74,7 @@ class ExpansionResult:
     counters: dict[str, Any]
     branch_events: tuple[dict[str, Any], ...]
     elapsed_s: float
+    stage_timings: dict[str, Any] | None = None
 
     @property
     def improved(self) -> bool:
@@ -124,6 +125,7 @@ def _result(
     budget_exhausted: bool = False,
     counters: dict[str, Any] | None = None,
     branch_events: list[dict[str, Any]] | None = None,
+    stage_timings: dict[str, Any] | None = None,
     started: float,
 ) -> ExpansionResult:
     return ExpansionResult(
@@ -135,7 +137,29 @@ def _result(
         counters={} if counters is None else dict(counters),
         branch_events=() if branch_events is None else tuple(branch_events),
         elapsed_s=perf_counter() - started,
+        stage_timings=None if stage_timings is None else dict(stage_timings),
     )
+
+
+def _new_stage_timings() -> dict[str, Any]:
+    """Create opt-in aggregate timing metadata for one expansion mode."""
+    return {
+        "pool_preparation_wall_s": 0.0,
+        "frozen_target_preparation_wall_s": 0.0,
+        "solver_fit_wall_s": 0.0,
+        "residual_call_count": 0,
+        "residual_wall_s": 0.0,
+        "canonical_scorer_wall_s": 0.0,
+    }
+
+
+def _add_timing(
+    stage_timings: dict[str, Any] | None,
+    key: str,
+    value: float | int,
+) -> None:
+    if stage_timings is not None:
+        stage_timings[key] += value
 
 
 def _status_for_evaluation(evaluation: CandidateEvaluation) -> ExpansionStatus:
@@ -251,6 +275,8 @@ def _fit_branch(
     seed_context: _PreparedSeed,
     candidate: _Candidate,
     config: ExpansionConfig,
+    *,
+    stage_timings: dict[str, Any] | None = None,
 ) -> tuple[
     str, tuple[float, float] | None, int | None, int, Hypothesis | None, CandidateEvaluation | None
 ]:
@@ -259,10 +285,18 @@ def _fit_branch(
         return "invalid_bounds", None, None, 0, None, None
     if len(seed.assignments) < 2:
         return "insufficient_assignments", None, None, 0, None, None
+    frozen_started = perf_counter() if stage_timings is not None else None
     try:
         frozen = _frozen_for_candidate(scorer, seed_context, candidate)
     except ValueError:
         return "invalid_assignment", None, None, 0, None, None
+    finally:
+        if frozen_started is not None:
+            _add_timing(
+                stage_timings,
+                "frozen_target_preparation_wall_s",
+                perf_counter() - frozen_started,
+            )
     inverse = seed_context.inverse
     observed = np.asarray(
         [scorer.measurements.measurements[item.report_index].bearing_deg for item in frozen],
@@ -274,16 +308,26 @@ def _fit_branch(
     def residuals(position: np.ndarray) -> np.ndarray:
         nonlocal evaluations
         evaluations += 1
-        lon, lat = inverse.transform(float(position[0]), float(position[1]))
-        predicted = np.asarray(
-            [
-                _GEOD.inv(lon, lat, item.target_lonlat[0], item.target_lonlat[1])[0] % 360.0
-                for item in frozen
-            ],
-            dtype=float,
-        )
-        wrapped = (predicted - observed + 180.0) % 360.0 - 180.0
-        return wrapped / sigmas
+        residual_started = perf_counter() if stage_timings is not None else None
+        try:
+            lon, lat = inverse.transform(float(position[0]), float(position[1]))
+            predicted = np.asarray(
+                [
+                    _GEOD.inv(lon, lat, item.target_lonlat[0], item.target_lonlat[1])[0] % 360.0
+                    for item in frozen
+                ],
+                dtype=float,
+            )
+            wrapped = (predicted - observed + 180.0) % 360.0 - 180.0
+            return wrapped / sigmas
+        finally:
+            if residual_started is not None:
+                _add_timing(stage_timings, "residual_call_count", 1)
+                _add_timing(
+                    stage_timings,
+                    "residual_wall_s",
+                    perf_counter() - residual_started,
+                )
 
     xmin, xmax, ymin, ymax = bounds
     lower = np.maximum(
@@ -294,6 +338,7 @@ def _fit_branch(
     )
     if np.any(lower >= upper):
         return "invalid_bounds", None, None, evaluations, None, None
+    fit_started = perf_counter() if stage_timings is not None else None
     try:
         solve = least_squares(
             residuals,
@@ -304,6 +349,9 @@ def _fit_branch(
         )
     except (TypeError, ValueError, RuntimeError):
         return "solver_failed", None, None, evaluations, None, None
+    finally:
+        if fit_started is not None:
+            _add_timing(stage_timings, "solver_fit_wall_s", perf_counter() - fit_started)
     proposal = (float(solve.x[0]), float(solve.x[1])) if np.isfinite(solve.x).all() else None
     if proposal is None:
         return "solver_failed", None, int(solve.status), evaluations, None, None
@@ -316,10 +364,18 @@ def _fit_branch(
             None,
             None,
         )
+    canonical_started = perf_counter() if stage_timings is not None else None
     try:
         evaluation = scorer.evaluate(proposal)
     except (TypeError, ValueError):
         return "solver_failed", proposal, int(solve.status), evaluations, None, None
+    finally:
+        if canonical_started is not None:
+            _add_timing(
+                stage_timings,
+                "canonical_scorer_wall_s",
+                perf_counter() - canonical_started,
+            )
     if evaluation.status != "scored" or evaluation.hypothesis is None:
         return (
             _status_for_evaluation(evaluation),
@@ -394,14 +450,37 @@ def expand_assignments(
     config: ExpansionConfig,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     result_callback: Callable[[dict[str, Any]], None] | None = None,
+    collect_timing: bool = False,
 ) -> ExpansionResult:
     """Explore one unmatched report plus one unused physical catalog record.
 
     Branches are a local single-addition heuristic. The canonical scorer decides
     whether water, visibility, merging, types, and complete reassignment make a
     proposal an exact objective improvement.
+
+    When collect_timing is true, stage_timings contains aggregate CPU wall times
+    for this mode. Residual time is nested within solver_fit_wall_s.
     """
     started = perf_counter()
+    if type(collect_timing) is not bool:
+        raise TypeError("collect_timing must be bool.")
+    stage_timings = _new_stage_timings() if collect_timing else None
+
+    def early_result(
+        status: ExpansionStatus,
+        *,
+        completed: bool,
+        budget_exhausted: bool = False,
+    ) -> ExpansionResult:
+        return _result(
+            seed,
+            status=status,
+            completed=completed,
+            budget_exhausted=budget_exhausted,
+            stage_timings=stage_timings,
+            started=started,
+        )
+
     if not isinstance(scorer, CandidateScorer):
         raise TypeError("scorer must be a CandidateScorer instance.")
     if not isinstance(seed, Hypothesis):
@@ -410,53 +489,66 @@ def expand_assignments(
         raise TypeError("config must be an ExpansionConfig instance.")
     bounds = scorer.config.bounds_xy
     if bounds is None:
-        return _result(seed, status="invalid_bounds", completed=False, started=started)
+        return early_result("invalid_bounds", completed=False)
     xmin, xmax, ymin, ymax = bounds
     if not (xmin <= seed.east_m <= xmax and ymin <= seed.north_m <= ymax):
-        return _result(seed, status="invalid_seed", completed=False, started=started)
+        return early_result("invalid_seed", completed=False)
     measurements = scorer.measurements
     if (
         scorer.config.common_bearing_bias_prior_deg is not None
         or measurements.calibrated_common_bias_mean_deg not in (None, 0.0)
         or measurements.calibrated_common_bias_sigma_deg not in (None, 0.0)
     ):
-        return _result(seed, status="unsupported_calibration", completed=False, started=started)
+        return early_result("unsupported_calibration", completed=False)
     if measurements.covariance_deg2 is not None:
-        return _result(seed, status="unsupported_covariance", completed=False, started=started)
+        return early_result("unsupported_covariance", completed=False)
     report_count = len(measurements.measurements)
     assigned_reports = [item.report_index for item in seed.assignments]
     if any(index < 0 or index >= report_count for index in assigned_reports):
-        return _result(seed, status="invalid_assignment", completed=False, started=started)
+        return early_result("invalid_assignment", completed=False)
     if len(set(assigned_reports)) != len(assigned_reports):
-        return _result(seed, status="invalid_assignment", completed=False, started=started)
+        return early_result("invalid_assignment", completed=False)
     if len(seed.assignments) < 2:
-        return _result(seed, status="insufficient_assignments", completed=True, started=started)
+        return early_result("insufficient_assignments", completed=True)
     validation_status, seed_evaluation = _seed_validation(scorer, seed)
     if validation_status is not None or seed_evaluation is None:
-        return _result(
-            seed, status=validation_status or "stale_hypothesis", completed=False, started=started
-        )
+        return early_result(validation_status or "stale_hypothesis", completed=False)
     report_count = len(measurements.measurements)
     assigned_reports = {item.report_index for item in seed.assignments}
     unmatched = [index for index in range(report_count) if index not in assigned_reports]
     if not unmatched:
-        return _result(seed, status="no_unmatched_reports", completed=True, started=started)
+        return early_result("no_unmatched_reports", completed=True)
     if not seed.assignments:
-        return _result(seed, status="insufficient_assignments", completed=True, started=started)
+        return early_result("insufficient_assignments", completed=True)
+    preparation_started = perf_counter() if stage_timings is not None else None
     try:
         seed_context = _prepare_seed(scorer, seed_evaluation, seed)
     except ValueError:
-        return _result(seed, status="invalid_assignment", completed=False, started=started)
-    eligible, counters, pool_digest = _candidate_pool(scorer, seed, config)
-    counters["pool_digest"] = pool_digest
-    branches = [
-        (report_index, candidate.record.key, candidate)
-        for report_index in unmatched
-        for candidate in eligible
-    ]
-    branches.sort(key=lambda item: (item[0], item[1]))
-    counters["candidate_branches"] = len(branches)
-    counters["unvisited_branches"] = len(branches)
+        if preparation_started is not None:
+            _add_timing(
+                stage_timings,
+                "pool_preparation_wall_s",
+                perf_counter() - preparation_started,
+            )
+        return early_result("invalid_assignment", completed=False)
+    try:
+        eligible, counters, pool_digest = _candidate_pool(scorer, seed, config)
+        counters["pool_digest"] = pool_digest
+        branches = [
+            (report_index, candidate.record.key, candidate)
+            for report_index in unmatched
+            for candidate in eligible
+        ]
+        branches.sort(key=lambda item: (item[0], item[1]))
+        counters["candidate_branches"] = len(branches)
+        counters["unvisited_branches"] = len(branches)
+    finally:
+        if preparation_started is not None:
+            _add_timing(
+                stage_timings,
+                "pool_preparation_wall_s",
+                perf_counter() - preparation_started,
+            )
     events: list[dict[str, Any]] = []
     best = seed
     for branch_id, (report_index, _key, candidate_base) in enumerate(branches):
@@ -471,6 +563,7 @@ def expand_assignments(
                 counters,
                 tuple(events),
                 perf_counter() - started,
+                None if stage_timings is None else dict(stage_timings),
             )
         candidate = _Candidate(
             report_index,
@@ -495,7 +588,12 @@ def expand_assignments(
         counters["visited_branches"] += 1
         counters["unvisited_branches"] = len(branches) - counters["visited_branches"]
         status, proposal, solver_status, nfev, exact, evaluation = _fit_branch(
-            scorer, seed, seed_context, candidate, config
+            scorer,
+            seed,
+            seed_context,
+            candidate,
+            config,
+            stage_timings=stage_timings,
         )
         event["status"] = status
         event["proposed_pose"] = proposal
@@ -527,7 +625,15 @@ def expand_assignments(
             result_callback(dict(event))
     counters["unvisited_branches"] = 0
     return ExpansionResult(
-        seed, best, "completed", True, False, counters, tuple(events), perf_counter() - started
+        seed,
+        best,
+        "completed",
+        True,
+        False,
+        counters,
+        tuple(events),
+        perf_counter() - started,
+        None if stage_timings is None else dict(stage_timings),
     )
 
 
