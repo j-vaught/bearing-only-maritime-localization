@@ -199,6 +199,8 @@ def decide_localization(
         return AccuracyDecision("ambiguous", None, "missing_frozen_calibration")
     if not calibration.verified_frozen_artifact or calibration.status != "PASS":
         return AccuracyDecision("ambiguous", None, "calibration_unverified_or_failed")
+    if not calibration.release_eligible:
+        return AccuracyDecision("ambiguous", None, "calibration_not_release_eligible")
     if result.search_status == "failed":
         return AccuracyDecision("no_fix", None, "search_failed")
     if result.search_status == "budget_exhausted":
