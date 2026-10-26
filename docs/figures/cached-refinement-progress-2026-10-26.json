@@ -1017,5 +1017,6 @@
       "refined_assignment_count": 3,
       "stop_reason": "relative_improvement_below_1e-8"
     }
-  ]
+  ],
+  "selection_rule": "64 modes selected by source search score before evaluator-only truth access"
 }

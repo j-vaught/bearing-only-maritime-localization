@@ -14,28 +14,27 @@
 #align(center)[
   #text(size: 14pt, weight: "bold")[Cached-candidate refinement diagnostic]
   #linebreak()
-  #text(size: 9pt)[64 evaluator-selected modes from an incomplete, partial-cache source run. Snapshot dated 2026-10-26.]
+  #text(size: 9pt)[64 score-selected modes from an incomplete, partial-cache source run. Snapshot dated 2026-10-26.]
 ]
 #v(2mm)
 #align(center)[#text(size: 8pt, weight: "bold")[The refined score winner remains wrong by 853.4 km. This diagnostic does not establish a localization fix or any release gate.]]
 #v(3mm)
 
 #text(size: 10pt, weight: "bold")[Top result by refined score]
-#text(size: 7.5pt)[The selected estimate is the score winner. The lowest-error alternative is shown separately and is not substituted for that estimate.]
+#text(size: 7.5pt)[The two bars track the refined score winner from its source seed to its refined result; this seed was not the source run global winner. The lowest-error alternative is tabulated separately and is not the estimate.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
-    title: [Geodesic error of score winner before and after refinement, plus lowest-error alternative],
+    title: [Error at refined winner source seed and after refinement],
     xlabel: [Geodesic location error (m)],
     xlim: (0, 1050000),
-    ylim: (0.4, 3.6),
+    ylim: (0.4, 2.6),
     xaxis: (ticks: ((0, [0]), (200000, [200k]), (400000, [400k]), (600000, [600k]), (800000, [800k]), (1000000, [1,000k])), subticks: none),
-    yaxis: (ticks: ((1, [Score winner before]), (2, [Score winner after]), (3, [Alt. lowest error])), subticks: none),
+    yaxis: (ticks: ((1, [Refined winner source seed]), (2, [Refined winner])), subticks: none),
     width: 260mm,
     height: 52mm,
     lq.hbar((top.at("source_error_m"),), (1,)),
     lq.hbar((top.at("refined_error_m"),), (2,)),
-    lq.hbar((alt.at("refined_error_m"),), (3,)),
   )
 ]
 #v(1mm)
@@ -64,7 +63,7 @@
 
 #v(3mm)
 #text(size: 10pt, weight: "bold")[Score-ranked alternatives in the selected subset]
-#text(size: 7.5pt)[The horizontal axis is source objective rank among 47,182 exact-scored hypotheses. The 64 displayed modes are selected basins from that incomplete run, not a complete search ranking. Paired markers show each mode before and after refinement.]
+#text(size: 7.5pt)[The horizontal axis is source objective rank among 47,182 exact-scored hypotheses. The 64 displayed modes were selected by search score from that incomplete run, not a complete search ranking. Paired markers show each mode before and after refinement.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
