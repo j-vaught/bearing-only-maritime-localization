@@ -102,6 +102,35 @@ def validate_objective_progress(
     )
 
 
+def validate_no_unmatched_mode(
+    row: dict[str, Any],
+    seed: Any,
+    best: Any,
+    *,
+    measurement_count: int,
+    result_event_count: int,
+) -> None:
+    assigned_reports = {item.report_index for item in seed.assignments}
+    require(
+        assigned_reports == set(range(measurement_count)),
+        "no-unmatched status is false; seed does not cover every report",
+    )
+    require(
+        row.get("counters") == {}
+        and result_event_count == 0
+        and row.get("branch_event_count") == 0,
+        "no-unmatched mode has unexpected counters or branch events",
+    )
+    require(
+        _same_hypothesis(best, seed),
+        "no-unmatched mode changed its exact seed",
+    )
+    require(
+        row.get("completed") is True and row.get("budget_exhausted") is False,
+        "no-unmatched mode has inconsistent completion flags",
+    )
+
+
 def verify_event_chain(events: list[dict[str, Any]]) -> str:
     previous = ""
     for index, record in enumerate(events):
@@ -151,6 +180,14 @@ def verify_mode_event_correspondence(
         counters_raw = row.get("counters")
         require(type(counters_raw) is dict, "row counters must be an object")
         counters = cast(dict[str, Any], counters_raw)
+        if row.get("status") == "no_unmatched_reports":
+            require(counters == {}, "no-unmatched mode should preserve its empty counters")
+            require(
+                not started and not finished and row.get("branch_event_count") == 0,
+                "no-unmatched mode must have zero branch events",
+            )
+            result[index] = {"started": 0, "result": 0, "failure": 0}
+            continue
         require(
             counters.get("visited_branches") == len(finished),
             "visited branch count differs from durable result events",
@@ -399,6 +436,15 @@ def validate_expansion_bundle(
         counts_raw = row.get("counters")
         require(type(counts_raw) is dict, "mode counters are missing")
         counts = cast(dict[str, Any], counts_raw)
+        if row.get("status") == "no_unmatched_reports":
+            validate_no_unmatched_mode(
+                row,
+                seed,
+                best,
+                measurement_count=len(scorer.measurements.measurements),
+                result_event_count=event_counts[index]["result"],
+            )
+            continue
         require(
             type(counts.get("candidate_branches")) is int
             and type(counts.get("visited_branches")) is int
