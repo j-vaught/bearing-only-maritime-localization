@@ -74,6 +74,25 @@ def test_truth_compaction_is_lossless_and_idempotent(tmp_path: Path) -> None:
     assert rows[0]["gzip_roundtrip_sha256_verified"] == "True"
 
 
+def test_orphan_compact_truth_recovers_manifest_from_verified_archive(tmp_path: Path) -> None:
+    path = tmp_path / "development/port-001/placement-001/r0/1000m/types-on/nominal/truth.json"
+    path.parent.mkdir(parents=True)
+    original = _truth_doc()
+    path.write_bytes(original)
+    manifest = tmp_path / "truth-compaction.csv"
+    first = compact_truth(path, manifest, "development")
+    assert first is not None
+    compact_bytes = path.read_bytes()
+    manifest.unlink()
+
+    recovered = compact_truth(path, manifest, "development")
+
+    assert recovered is not None
+    assert path.read_bytes() == compact_bytes
+    assert gzip.decompress(Path(recovered["full_truth_archive_path"]).read_bytes()) == original
+    assert recovered["full_truth_sha256"] == a38_archive.sha256_bytes(original)
+
+
 def test_interrupted_archive_write_keeps_final_archive_atomic(tmp_path: Path, monkeypatch) -> None:
     raw = _truth_doc()
     archive = tmp_path / "truth.json.gz"
@@ -146,6 +165,32 @@ def test_audit_compaction_is_lossless_and_idempotent(tmp_path: Path) -> None:
     assert len(rows) == 1
     assert rows[0]["entity_map_entry_count"] == "2"
     assert rows[0]["unresolved_key_count"] == "1"
+
+
+def test_orphan_compact_audit_recovers_manifest_from_verified_archive(tmp_path: Path) -> None:
+    trial = tmp_path / "development/port-001/placement-001/r0/1000m/types-on/nominal"
+    trial.mkdir(parents=True)
+    audit = trial / "physical-identity-audit.json"
+    full = {
+        "catalog_sha256": "catalog-hash",
+        "physical_entity_by_catalog_key": {"chart:1": "physical:1"},
+        "unresolved_catalog_keys": [],
+    }
+    original = (json.dumps(full, indent=2, sort_keys=True) + "\n").encode()
+    audit.write_bytes(original)
+    manifest = tmp_path / "identity-audit-compaction.csv"
+    assert compact_audits(tmp_path, manifest, "development") == 1
+    compact_bytes = audit.read_bytes()
+    manifest.unlink()
+
+    assert compact_audits(tmp_path, manifest, "development") == 1
+
+    assert audit.read_bytes() == compact_bytes
+    archive = audit.with_name("physical-identity-audit.full.json.gz")
+    assert gzip.decompress(archive.read_bytes()) == original
+    recovered = list(csv.DictReader(manifest.open(newline="")))
+    assert len(recovered) == 1
+    assert recovered[0]["gzip_roundtrip_sha256_verified"] == "True"
 
 
 def test_parallel_row_validation_rejects_missing_and_duplicate_ids() -> None:
