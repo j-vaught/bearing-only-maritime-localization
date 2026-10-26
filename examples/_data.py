@@ -48,17 +48,17 @@ def unpack(archive: Path, output: Path, archive_hash: str, raw_hash: str) -> Non
 
 def catalog_spec(mode: CatalogMode) -> dict[str, Any]:
     """Read the checked-in definition of a catalog selection."""
-    manifest = json.loads((DATA / "objects.manifest.json").read_text())
+    sources = json.loads((DATA / "sources.json").read_text())
     if mode == "both":
-        return manifest["combined"]
+        return sources["combined"]
     if mode not in ("ais", "chart_aids"):
         raise ValueError("catalog_mode must be 'ais', 'chart_aids', or 'both'.")
-    return manifest["catalogs"][mode]
+    return sources["catalogs"][mode]
 
 
-def _combine(manifest: dict[str, Any], output: Path) -> None:
+def _combine(sources: dict[str, Any], output: Path) -> None:
     """Create an ignored combined file in deterministic original record order."""
-    spec = manifest["combined"]
+    spec = sources["combined"]
     if output.exists():
         if digest(output) != spec["raw_sha256"]:
             raise FileExistsError(f"Different generated catalog already exists: {output}")
@@ -66,7 +66,7 @@ def _combine(manifest: dict[str, Any], output: Path) -> None:
     payload = dict(spec["header"])
     records = []
     for mode in spec["merge_order"]:
-        part = manifest["catalogs"][mode]
+        part = sources["catalogs"][mode]
         records.extend(json.loads((DATA / part["raw_filename"]).read_text())["records"])
     if len(records) != spec["record_count"] or len({r["key"] for r in records}) != len(records):
         raise ValueError("Catalog combination changed record count or introduced duplicate keys.")
@@ -85,7 +85,7 @@ def _combine(manifest: dict[str, Any], output: Path) -> None:
             )
             stream.write("\n")
         if digest(temporary) != spec["raw_sha256"]:
-            raise ValueError("Combined catalog checksum differs from its manifest.")
+            raise ValueError("Combined catalog checksum differs from sources.json.")
         temporary.replace(output)
     finally:
         temporary.unlink(missing_ok=True)
@@ -93,11 +93,11 @@ def _combine(manifest: dict[str, Any], output: Path) -> None:
 
 def prepare_data(mode: CatalogMode = "both") -> tuple[Path, Path]:
     """Unpack selected sources. Only compressed independent catalogs are committed."""
-    manifest = json.loads((DATA / "objects.manifest.json").read_text())
+    sources = json.loads((DATA / "sources.json").read_text())
     spec = catalog_spec(mode)
-    selected = manifest["combined"]["merge_order"] if mode == "both" else (mode,)
+    selected = sources["combined"]["merge_order"] if mode == "both" else (mode,)
     for selection in selected:
-        part = manifest["catalogs"][selection]
+        part = sources["catalogs"][selection]
         unpack(
             DATA / part["archive_filename"],
             DATA / part["raw_filename"],
@@ -106,13 +106,13 @@ def prepare_data(mode: CatalogMode = "both") -> tuple[Path, Path]:
         )
     objects_path = DATA / spec["raw_filename"]
     if mode == "both":
-        _combine(manifest, objects_path)
-    map_payload = json.loads((DATA / "map.manifest.json").read_text())["map_payload"]
-    map_path = DATA / map_payload["filename"]
+        _combine(sources, objects_path)
+    map_payload = sources["map"]
+    map_path = DATA / map_payload["raw_filename"]
     unpack(
         DATA / map_payload["archive_filename"],
         map_path,
         map_payload["archive_sha256"],
-        map_payload["original_sha256"],
+        map_payload["raw_sha256"],
     )
     return objects_path, map_path

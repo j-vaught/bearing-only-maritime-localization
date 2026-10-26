@@ -12,17 +12,17 @@ from maritime_localization_shared.geospatial.vector_los import line_of_sight_cle
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 
 
-def test_approved_candidate_map_bytes_match_manifest() -> None:
+def test_map_bytes_match_sources() -> None:
     root = Path(__file__).resolve().parents[2]
-    manifest = json.loads((root / "data/map.manifest.json").read_text())
-    payload = manifest["map_payload"]
+    sources = json.loads((root / "data/sources.json").read_text())
+    payload = sources["map"]
     archive = root / "data" / payload["archive_filename"]
     archive_bytes = archive.read_bytes()
     raw_bytes = gzip.decompress(archive_bytes)
 
     assert hashlib.sha256(archive_bytes).hexdigest() == payload["archive_sha256"]
-    assert len(raw_bytes) == payload["original_bytes"]
-    assert hashlib.sha256(raw_bytes).hexdigest() == payload["original_sha256"]
+    assert len(raw_bytes) == payload["raw_bytes"]
+    assert hashlib.sha256(raw_bytes).hexdigest() == payload["raw_sha256"]
 
 
 def test_vector_map_indexed_and_unindexed_los_preserve_exact_geometry() -> None:

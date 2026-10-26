@@ -52,7 +52,7 @@ These are editable manual experiments. Default budgets do not complete a coast-w
 
 ## Data and software
 
-All data files are directly under [data/](data/README.md). `objects-ais.json.gz`, `objects-chart-aids.json.gz`, and `map.json.gz` are the shared runtime inputs. Source descriptions and checksums retain provenance. `observer_locations.csv` is simulator/evaluator truth; search receives only bearings, catalog, map, and configuration.
+All data files are directly under [data/](data/README.md). `objects-ais.json.gz`, `objects-chart-aids.json.gz`, and `map.json.gz` are the shared runtime inputs. `data/sources.json` provides loading metadata, source descriptions, and checksums for these inputs. `observer_locations.csv` is simulator/evaluator truth; search receives only bearings, catalog, map, and configuration.
 
 Production code is in `bearing_localization/`, `maritime_localization_shared/`, and `maritime_localization_ingest/`. Tests are named by the behavior they check.
 
