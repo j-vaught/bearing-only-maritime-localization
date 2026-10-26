@@ -6,7 +6,7 @@ import csv
 import json
 import math
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -609,6 +609,258 @@ def compose_partial_map_v2(
     )
 
 
+def compose_fallback_map_v2(
+    fallback_map: MapV2,
+    detailed_maps: Iterable[MapV2],
+    *,
+    domain: BaseGeometry,
+    map_version: str,
+    source: str,
+) -> MapV2:
+    """Overlay validated detailed chart coverage on a coarser fallback.
+
+    A detailed map is authoritative only inside its own reported known
+    coverage. Its unknown or out-of-chart geometry does not erase available
+    fallback coverage. Areas outside every source's known coverage remain
+    explicitly unknown, and land is always intersected with known coverage.
+    """
+    if not isinstance(fallback_map, MapV2):
+        raise TypeError("fallback_map must be a MapV2 value.")
+    domain = _valid_polygon(domain, "fallback map composition domain")
+    detailed_inputs = tuple(detailed_maps)
+    target_crs = CRS.from_user_input(fallback_map.crs)
+
+    def known_coverage(source_map: MapV2) -> BaseGeometry:
+        if not isinstance(source_map, MapV2):
+            raise TypeError("All map inputs must be MapV2 values.")
+        if not target_crs.equals(CRS.from_user_input(source_map.crs)):
+            raise ValueError("All input maps must use the same declared CRS.")
+        if source_map.coverage_geometry_geojson is None:
+            return GeometryCollection()
+        coverage = shape(json.loads(source_map.coverage_geometry_geojson))
+        if source_map.unknown_geometry_geojson is not None:
+            coverage = coverage.difference(shape(json.loads(source_map.unknown_geometry_geojson)))
+        return _polygonal_only(coverage.intersection(domain))
+
+    fallback_coverage = known_coverage(fallback_map)
+    coverage_parts = [fallback_coverage] if not fallback_coverage.is_empty else []
+    fallback_land = GeometryCollection()
+    if not fallback_coverage.is_empty and fallback_map.land_geometry_geojson is not None:
+        fallback_land = shape(json.loads(fallback_map.land_geometry_geojson)).intersection(
+            fallback_coverage
+        )
+
+    detailed_coverage_parts: list[BaseGeometry] = []
+    detailed_land_parts: list[BaseGeometry] = []
+    for source_map in detailed_inputs:
+        detailed_coverage = known_coverage(source_map)
+        if detailed_coverage.is_empty:
+            continue
+        detailed_coverage_parts.append(detailed_coverage)
+        coverage_parts.append(detailed_coverage)
+        if source_map.land_geometry_geojson is not None:
+            detailed_land_parts.append(
+                shape(json.loads(source_map.land_geometry_geojson)).intersection(detailed_coverage)
+            )
+
+    detailed_coverage_union = (
+        unary_union(detailed_coverage_parts) if detailed_coverage_parts else GeometryCollection()
+    )
+    coverage = _polygonal_only(
+        (unary_union(coverage_parts) if coverage_parts else GeometryCollection()).intersection(
+            domain
+        )
+    )
+    # Remove coarse land wherever detailed coverage is authoritative, then
+    # add detailed land. Detailed chart water therefore overrides coarse land.
+    detailed_land = (
+        unary_union(detailed_land_parts) if detailed_land_parts else GeometryCollection()
+    )
+    land = _polygonal_only(
+        unary_union(
+            [fallback_land.difference(detailed_coverage_union), detailed_land]
+        ).intersection(coverage)
+    )
+    unknown = _polygonal_only(domain.difference(coverage))
+
+    status: Literal["known", "partial", "unknown"]
+    if coverage.is_empty:
+        status = "unknown"
+    elif unknown.is_empty:
+        status = "known"
+    else:
+        status = "partial"
+    return MapV2(
+        crs=fallback_map.crs,
+        source=source,
+        map_version=map_version,
+        coverage_status=status,
+        coverage_geometry_geojson=(_geojson_geometry(coverage) if status != "unknown" else None),
+        unknown_geometry_geojson=(_geojson_geometry(unknown) if status == "partial" else None),
+        land_geometry_geojson=(_geojson_geometry(land) if not land.is_empty else None),
+    )
+
+
+def compose_scale_fallback_map_v2(
+    fallback_map: MapV2,
+    detailed_maps_by_scale: Mapping[str, Iterable[MapV2]],
+    *,
+    domain: BaseGeometry,
+    map_version: str,
+    source: str,
+    densify_geographic_edges: bool = True,
+    geographic_segment_length_deg: float | None = None,
+) -> tuple[MapV2, dict[str, float]]:
+    """Compose per-area detailed scales over a complete coarse fallback.
+
+    Higher-ranked ENC scales claim known coverage before lower scales. For
+    overlapping inputs at the same scale, contradictory land/water labels are
+    excluded from known coverage and reserve that area from all lower scales.
+    This avoids choosing an arbitrary source while preserving genuine unknown
+    seams. The returned audit maps each scale to its conflicting degree-squared
+    area; callers should report geodesic areas for geographic maps.
+    """
+    if geographic_segment_length_deg is not None and (
+        not math.isfinite(geographic_segment_length_deg) or geographic_segment_length_deg <= 0
+    ):
+        raise ValueError("geographic_segment_length_deg must be finite and positive.")
+    if not isinstance(fallback_map, MapV2):
+        raise TypeError("fallback_map must be a MapV2 value.")
+    domain = _valid_polygon(domain, "scale fallback composition domain")
+    target_crs = CRS.from_user_input(fallback_map.crs)
+
+    def known_parts(source_map: MapV2) -> tuple[BaseGeometry, BaseGeometry]:
+        if not isinstance(source_map, MapV2):
+            raise TypeError("All map inputs must be MapV2 values.")
+        if not target_crs.equals(CRS.from_user_input(source_map.crs)):
+            raise ValueError("All input maps must use the same declared CRS.")
+        if source_map.coverage_geometry_geojson is None:
+            return GeometryCollection(), GeometryCollection()
+        coverage = shape(json.loads(source_map.coverage_geometry_geojson))
+        if source_map.unknown_geometry_geojson is not None:
+            coverage = coverage.difference(shape(json.loads(source_map.unknown_geometry_geojson)))
+        coverage = _polygonal_only(coverage.intersection(domain))
+        land = (
+            shape(json.loads(source_map.land_geometry_geojson))
+            if source_map.land_geometry_geojson is not None
+            else GeometryCollection()
+        )
+        land = _polygonal_only(land.intersection(coverage))
+        return coverage, land
+
+    scale_maps: dict[str, tuple[MapV2, ...]] = {}
+    for band, maps in detailed_maps_by_scale.items():
+        if band not in _SCALE_RANK:
+            raise ValueError(f"Unsupported ENC scale band {band!r}.")
+        scale_maps[band] = tuple(maps)
+
+    reserved = GeometryCollection()
+    output_coverages: list[BaseGeometry] = []
+    output_lands: list[BaseGeometry] = []
+    conflict_area_by_scale: dict[str, float] = {}
+    for band in SCALE_PRIORITY:
+        maps = scale_maps.get(band, ())
+        parts = [known_parts(source_map) for source_map in maps]
+        parts = [(coverage, land) for coverage, land in parts if not coverage.is_empty]
+        if not parts:
+            conflict_area_by_scale[band] = 0.0
+            continue
+        band_coverage = unary_union([coverage for coverage, _ in parts])
+        band_land = unary_union([land for _, land in parts])
+        conflict_parts: list[BaseGeometry] = []
+        water_parts = [_polygonal_only(coverage.difference(land)) for coverage, land in parts]
+        for index, (first_coverage, first_land) in enumerate(parts):
+            first_water = water_parts[index]
+            for second_index, (second_coverage, second_land) in enumerate(
+                parts[index + 1 :], start=index + 1
+            ):
+                overlap = first_coverage.intersection(second_coverage)
+                if overlap.is_empty:
+                    continue
+                second_water = water_parts[second_index]
+                disagreement = unary_union(
+                    [
+                        first_land.intersection(second_water),
+                        first_water.intersection(second_land),
+                    ]
+                ).intersection(overlap)
+                if not disagreement.is_empty:
+                    conflict_parts.append(disagreement)
+        conflict = (
+            _polygonal_only(unary_union(conflict_parts)) if conflict_parts else GeometryCollection()
+        )
+        conflict_area_by_scale[band] = float(conflict.area)
+        effective = _polygonal_only(band_coverage.difference(reserved).difference(conflict))
+        if not effective.is_empty:
+            output_coverages.append(effective)
+            output_lands.append(_polygonal_only(band_land.intersection(effective)))
+        # Any source coverage at this scale owns the area even if contradictory.
+        reserved = _polygonal_only(unary_union([reserved, band_coverage, conflict]))
+
+    fallback_coverage, fallback_land = known_parts(fallback_map)
+    fallback_effective = _polygonal_only(fallback_coverage.difference(reserved))
+    if not fallback_effective.is_empty:
+        output_coverages.append(fallback_effective)
+        output_lands.append(_polygonal_only(fallback_land.intersection(fallback_effective)))
+
+    coverage = _polygonal_only(
+        (unary_union(output_coverages) if output_coverages else GeometryCollection()).intersection(
+            domain
+        )
+    )
+    land = _polygonal_only(
+        (unary_union(output_lands) if output_lands else GeometryCollection()).intersection(coverage)
+    )
+    unknown = _polygonal_only(domain.difference(coverage))
+    status: Literal["known", "partial", "unknown"]
+    if coverage.is_empty:
+        status = "unknown"
+    elif unknown.is_empty:
+        status = "known"
+    else:
+        status = "partial"
+    result = MapV2(
+        crs=fallback_map.crs,
+        source=source,
+        map_version=map_version,
+        coverage_status=status,
+        coverage_geometry_geojson=(
+            _geojson_geometry(
+                coverage,
+                densify_geographic_edges=(
+                    densify_geographic_edges or geographic_segment_length_deg is not None
+                ),
+                max_segment_length_degrees=geographic_segment_length_deg or 0.0001,
+            )
+            if status != "unknown"
+            else None
+        ),
+        unknown_geometry_geojson=(
+            _geojson_geometry(
+                unknown,
+                densify_geographic_edges=(
+                    densify_geographic_edges or geographic_segment_length_deg is not None
+                ),
+                max_segment_length_degrees=geographic_segment_length_deg or 0.0001,
+            )
+            if status == "partial"
+            else None
+        ),
+        land_geometry_geojson=(
+            _geojson_geometry(
+                land,
+                densify_geographic_edges=(
+                    densify_geographic_edges or geographic_segment_length_deg is not None
+                ),
+                max_segment_length_degrees=geographic_segment_length_deg or 0.0001,
+            )
+            if not land.is_empty
+            else None
+        ),
+    )
+    return result, conflict_area_by_scale
+
+
 def _valid_polygon(geometry: BaseGeometry, label: str) -> BaseGeometry:
     if geometry.is_empty or geometry.geom_type not in {"Polygon", "MultiPolygon"}:
         raise ValueError(f"{label} must be a nonempty polygon or multipolygon.")
@@ -645,14 +897,24 @@ def _polygonal_only(geometry: BaseGeometry) -> BaseGeometry:
     return result
 
 
-def _geojson_geometry(geometry: BaseGeometry) -> str:
+def _geojson_geometry(
+    geometry: BaseGeometry,
+    *,
+    densify_geographic_edges: bool = True,
+    max_segment_length_degrees: float = 0.0001,
+) -> str:
     if geometry.is_empty:
         geometry = GeometryCollection()
     else:
         geometry = _polygonal_only(geometry)
-        # Densify geographic chords so nonlinear projected CRS transforms retain
-        # valid shoreline topology when MapV2 is explicitly reprojected.
-        geometry = _polygonal_only(segmentize(geometry, max_segment_length=0.0001))
+        if densify_geographic_edges:
+            if not math.isfinite(max_segment_length_degrees) or max_segment_length_degrees <= 0:
+                raise ValueError("max_segment_length_degrees must be finite and positive.")
+            # Densify geographic chords so nonlinear projected CRS transforms
+            # retain valid shoreline topology when MapV2 is explicitly reprojected.
+            geometry = _polygonal_only(
+                segmentize(geometry, max_segment_length=max_segment_length_degrees)
+            )
     return json.dumps(mapping(geometry), sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
@@ -829,21 +1091,25 @@ def mosaic_by_scale(
             for feature in coverage_features
             if _coverage_category(feature) == 2
         ]
-        raw_coverage = (unary_union(available) if available else GeometryCollection()).difference(
-            unary_union(excluded) if excluded else GeometryCollection()
+        raw_coverage = _polygonal_only(
+            (unary_union(available) if available else GeometryCollection()).difference(
+                unary_union(excluded) if excluded else GeometryCollection()
+            )
         )
-        effective = (
-            raw_coverage.difference(unary_union(detailed_coverage))
-            if detailed_coverage
-            else raw_coverage
-        ).intersection(domain)
+        effective = _polygonal_only(
+            (
+                raw_coverage.difference(unary_union(detailed_coverage))
+                if detailed_coverage
+                else raw_coverage
+            ).intersection(domain)
+        )
         if not effective.is_empty:
             lands = [
                 feature.geometry.intersection(effective)
                 for feature in features
                 if feature.layer.rsplit(".", 1)[-1].casefold() in land_names
             ]
-            land = unary_union(lands) if lands else GeometryCollection()
+            land = _polygonal_only(unary_union(lands) if lands else GeometryCollection())
             ids = tuple(
                 sorted(
                     feature.feature_id
