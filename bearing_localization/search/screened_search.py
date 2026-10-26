@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from itertools import chain
 from math import isfinite
 from time import perf_counter
 from typing import Literal
@@ -43,14 +44,27 @@ class CandidatePosition:
             raise ValueError("position_xy_m must contain two finite coordinates.")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class FeasibleIncumbent:
     """A feasible upper bound produced by an exact call to the same scorer."""
 
     candidate_id: str
     position_xy_m: tuple[float, float]
     evaluation: CandidateEvaluation
-    _scorer_token: object = field(repr=False, compare=False)
+
+    @classmethod
+    def _from_exact_evaluation(
+        cls,
+        candidate_id: str,
+        position_xy_m: tuple[float, float],
+        evaluation: CandidateEvaluation,
+    ) -> FeasibleIncumbent:
+        incumbent = object.__new__(cls)
+        object.__setattr__(incumbent, "candidate_id", candidate_id)
+        object.__setattr__(incumbent, "position_xy_m", position_xy_m)
+        object.__setattr__(incumbent, "evaluation", evaluation)
+        incumbent.__post_init__()
+        return incumbent
 
     def __post_init__(self) -> None:
         if not isinstance(self.candidate_id, str) or not self.candidate_id.strip():
@@ -107,6 +121,9 @@ class ScreenedSearchResult:
     visibility_elapsed_s: float
     bound_elapsed_s: float
     exact_score_elapsed_s: float
+    incumbent_validation_count: int
+    incumbent_validation_elapsed_s: float
+    remaining_candidates: Iterable[CandidatePosition]
 
     @property
     def hypotheses(self) -> tuple[Hypothesis, ...]:
@@ -145,11 +162,8 @@ def screened_candidate_search(
         type(complete_candidate_count) is not int or complete_candidate_count < 0
     ):
         raise ValueError("complete_candidate_count must be a nonnegative integer or None.")
-    if feasible_incumbent is not None:
-        if not isinstance(feasible_incumbent, FeasibleIncumbent):
-            raise TypeError("feasible_incumbent must be a FeasibleIncumbent from exact scoring.")
-        if feasible_incumbent._scorer_token is not scorer:
-            raise ValueError("feasible_incumbent must come from this CandidateScorer instance.")
+    if feasible_incumbent is not None and not isinstance(feasible_incumbent, FeasibleIncumbent):
+        raise TypeError("feasible_incumbent must be a FeasibleIncumbent from exact scoring.")
     if isinstance(candidates, Sequence):
         if complete_candidate_count is None:
             complete_candidate_count = len(candidates)
@@ -162,6 +176,7 @@ def screened_candidate_search(
         if not isfinite(requested_margin) or requested_margin < 0.0:
             raise ValueError("comparison_margin must be finite and nonnegative.")
 
+    run_started = perf_counter()
     prediction_context = scorer._prediction_context
     max_group_count = len(prediction_context.records)
     iterator = iter(candidates)
@@ -170,13 +185,29 @@ def screened_candidate_search(
     hypotheses: list[Hypothesis] = []
     counts: Counter[CandidateStatus] = Counter()
     seen_ids: set[str] = set()
-    best = feasible_incumbent
-    if best is not None:
+    best: FeasibleIncumbent | None = None
+    incumbent_validation_count = 0
+    incumbent_validation_elapsed = 0.0
+    if feasible_incumbent is not None:
+        validation_start = perf_counter()
+        seed_evaluation = scorer.evaluate(feasible_incumbent.position_xy_m)
+        incumbent_validation_elapsed = perf_counter() - validation_start
+        incumbent_validation_count = 1
+        if (
+            seed_evaluation.status != "scored"
+            or seed_evaluation.hypothesis is None
+            or not isfinite(seed_evaluation.hypothesis.score)
+        ):
+            raise ValueError("feasible_incumbent position is not exactly scoreable by this scorer.")
+        best = FeasibleIncumbent._from_exact_evaluation(
+            feasible_incumbent.candidate_id,
+            feasible_incumbent.position_xy_m,
+            seed_evaluation,
+        )
         hypotheses.append(best.hypothesis)
 
     visibility_elapsed = score_elapsed = 0.0
     preparation_start = perf_counter()
-    run_started = perf_counter()
     prepared_bound = prepare_candidate_objective_bound(
         scorer.measurements,
         scorer.config,
@@ -232,32 +263,59 @@ def screened_candidate_search(
                 )
                 bound_elapsed += perf_counter() - bound_start
                 if should_prune_candidate(lower, best.score, comparison_margin=candidate_margin):
-                    visits.append(
-                        CandidateVisit(
-                            point.candidate_id,
+                    if not visibility.complete:
+                        full_scan_start = perf_counter()
+                        visibility = screen_candidate_visibility(
                             position,
-                            "pruned",
-                            visibility,
-                            lower,
-                            None,
-                            None,
-                            "supported objective lower bound exceeds exact feasible incumbent",
+                            prediction_context,
+                            scan_all_members=True,
                         )
-                    )
-                    continue
+                        visibility_elapsed += perf_counter() - full_scan_start
+                        bound_start = perf_counter()
+                        lower = prepared_bound.bound(
+                            visibility.minimum_visible_group_count,
+                            visibility.certified and visibility.complete,
+                        )
+                        bound_elapsed += perf_counter() - bound_start
+                    if (
+                        visibility.certified
+                        and visibility.complete
+                        and visibility.observer_status == "water"
+                        and should_prune_candidate(
+                            lower,
+                            best.score,
+                            comparison_margin=candidate_margin,
+                        )
+                    ):
+                        visits.append(
+                            CandidateVisit(
+                                point.candidate_id,
+                                position,
+                                "pruned",
+                                visibility,
+                                lower,
+                                None,
+                                None,
+                                "supported objective lower bound exceeds exact feasible incumbent",
+                            )
+                        )
+                        continue
 
         score_start = perf_counter()
         evaluation = scorer.evaluate(position)
         score_elapsed += perf_counter() - score_start
         counts[evaluation.status] += 1
-        if evaluation.status == "scored" and evaluation.hypothesis is not None:
+        if (
+            evaluation.status == "scored"
+            and evaluation.hypothesis is not None
+            and isfinite(evaluation.hypothesis.score)
+        ):
             hypothesis = evaluation.hypothesis
             hypotheses.append(hypothesis)
-            candidate_incumbent = FeasibleIncumbent(
+            candidate_incumbent = FeasibleIncumbent._from_exact_evaluation(
                 point.candidate_id,
                 position,
                 evaluation,
-                scorer,
             )
             if best is None or hypothesis.score < best.score:
                 best = candidate_incumbent
@@ -279,41 +337,34 @@ def screened_candidate_search(
             )
         )
 
+    remaining_candidates: Iterable[CandidatePosition] = ()
     if not exhausted:
-        if complete_candidate_count is not None and len(visits) < complete_candidate_count:
-            unvisited_count = complete_candidate_count - len(visits)
-            if sequence_candidates is not None:
-                unvisited_candidate_ids = tuple(
-                    item.candidate_id for item in sequence_candidates[len(visits) :]
-                )
-                first_unvisited_id = unvisited_candidate_ids[0] if unvisited_candidate_ids else None
-            else:
-                unvisited_candidate_ids = ()
-                try:
-                    first_unvisited_id = next(iterator).candidate_id
-                except StopIteration:
-                    unvisited_count = 0
-                    exhausted = True
+        if sequence_candidates is not None:
+            remaining_candidates = tuple(sequence_candidates[len(visits) :])
+            unvisited_candidate_ids = tuple(item.candidate_id for item in remaining_candidates)
+            first_unvisited_id = unvisited_candidate_ids[0] if unvisited_candidate_ids else None
+            unvisited_count = len(unvisited_candidate_ids)
+            exhausted = unvisited_count == 0
         else:
-            unvisited_count = 0
-            unvisited_candidate_ids = ()
             try:
                 next_point = next(iterator)
             except StopIteration:
+                unvisited_count = 0
+                unvisited_candidate_ids = ()
                 exhausted = True
             else:
+                if not isinstance(next_point, CandidatePosition):
+                    raise TypeError("candidates must yield CandidatePosition instances.")
                 first_unvisited_id = next_point.candidate_id
-                if complete_candidate_count is None:
-                    unvisited_count = None
-                else:
-                    unvisited_count = max(0, complete_candidate_count - len(visits))
-                    if unvisited_count == 0:
-                        raise ValueError("candidate stream exceeded complete_candidate_count.")
-                unvisited_candidate_ids = (
-                    tuple(item.candidate_id for item in sequence_candidates[len(visits) :])
-                    if sequence_candidates is not None
-                    else (first_unvisited_id,)
+                unvisited_candidate_ids = (first_unvisited_id,)
+                remaining_candidates = chain((next_point,), iterator)
+                unvisited_count = (
+                    None
+                    if complete_candidate_count is None
+                    else max(0, complete_candidate_count - len(visits))
                 )
+                if unvisited_count == 0:
+                    raise ValueError("candidate stream exceeded complete_candidate_count.")
     else:
         unvisited_count = 0
         unvisited_candidate_ids = ()
@@ -370,6 +421,9 @@ def screened_candidate_search(
         visibility_elapsed_s=visibility_elapsed,
         bound_elapsed_s=bound_elapsed,
         exact_score_elapsed_s=score_elapsed,
+        incumbent_validation_count=incumbent_validation_count,
+        incumbent_validation_elapsed_s=incumbent_validation_elapsed,
+        remaining_candidates=remaining_candidates,
     )
 
 
