@@ -238,6 +238,22 @@ def _exact(scorer: CandidateScorer, position: tuple[float, float]):
     return scorer.evaluate(position)
 
 
+def _best_and_ties(
+    scores: dict[str, float], ordered_ids: Sequence[str]
+) -> tuple[float | None, list[str]]:
+    """Return the best finite score and its tied IDs, or an empty result."""
+    if not scores:
+        return None, []
+    best = min(scores.values())
+    tied = [
+        candidate_id
+        for candidate_id in ordered_ids
+        if candidate_id in scores
+        and math.isclose(scores[candidate_id], best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
+    ]
+    return best, tied
+
+
 def _isclose_tie_margin(best_score: float, *, abs_tol: float, rel_tol: float) -> float:
     """Return a strict score gap outside math.isclose's tie band."""
     if not 0.0 <= rel_tol < 1.0 or abs_tol < 0.0:
@@ -760,22 +776,18 @@ def main() -> int:
                 exact_scores[candidate.candidate_id], exact_best, abs_tol=ABS_TOL, rel_tol=REL_TOL
             )
         ]
-        screened_best = min(screened_scores.values())
-        screened_ties = [
-            candidate.candidate_id
-            for candidate in candidates
-            if candidate.candidate_id in screened_scores
-            and math.isclose(
-                screened_scores[candidate.candidate_id],
-                screened_best,
-                abs_tol=ABS_TOL,
-                rel_tol=REL_TOL,
-            )
-        ]
+        screened_best, screened_ties = _best_and_ties(
+            screened_scores, [candidate.candidate_id for candidate in candidates]
+        )
         sample_parity = (
-            math.isclose(exact_best, screened_best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
-            and exact_ties == screened_ties
-            and screened_ties == exact_ties_from_a22
+            None
+            if external_incumbent is not None
+            else bool(
+                screened_best is not None
+                and math.isclose(exact_best, screened_best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
+                and exact_ties == screened_ties
+                and screened_ties == exact_ties_from_a22
+            )
         )
         exact_union_id_score = dict(exact_scores)
         if external_incumbent_evaluation is not None:
@@ -787,20 +799,20 @@ def main() -> int:
         screened_union_id_score = dict(screened_all_scores)
         exact_union_best = min(exact_union_id_score.values())
         screened_union_best = min(screened_union_id_score.values())
-        exact_union_ties = [
+        exact_union_ties = sorted(
             candidate_id
             for candidate_id, score in exact_union_id_score.items()
             if math.isclose(score, exact_union_best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
-        ]
-        screened_union_ties = [
+        )
+        screened_union_ties = sorted(
             candidate_id
             for candidate_id, score in screened_union_id_score.items()
             if math.isclose(score, screened_union_best, abs_tol=ABS_TOL, rel_tol=REL_TOL)
-        ]
+        )
         union_parity = math.isclose(
             exact_union_best, screened_union_best, abs_tol=ABS_TOL, rel_tol=REL_TOL
         ) and set(exact_union_ties) == set(screened_union_ties)
-        parity = sample_parity and union_parity
+        parity = (sample_parity is not False) and union_parity
         if not parity:
             raise AssertionError(
                 {
@@ -845,6 +857,7 @@ def main() -> int:
                 "best_score": screened_union_best,
                 "tie_candidate_ids": screened_union_ties,
                 "candidate_sample_best_score": screened_best,
+                "candidate_sample_best_preserved": sample_parity,
                 "candidate_sample_tie_candidate_ids": screened_ties,
                 "saved_a22_exact_best_score": a22_best_score,
                 "saved_a22_exact_tie_ids": exact_ties_from_a22,
