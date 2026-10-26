@@ -195,6 +195,31 @@ def test_expansion_settings_change_fingerprint_only_when_enabled(tmp_path: Path)
     assert baseline[1].as_dict() != changed_enabled[1].as_dict()
 
 
+def test_coarse_seed_stage_changes_expansion_fingerprint(tmp_path: Path) -> None:
+    refined = _binding(
+        tmp_path,
+        {
+            "expand_assignments_enabled": True,
+            "expansion_local_radius_m": 1000.0,
+            "expansion_max_nfev": 100,
+            "expansion_max_branches": 5000,
+            "expansion_request_timeout_s": 1800.0,
+        },
+    )
+    coarse = _binding(
+        tmp_path,
+        {
+            "expand_assignments_enabled": True,
+            "expand_assignments_from_coarse": True,
+            "expansion_local_radius_m": 1000.0,
+            "expansion_max_nfev": 100,
+            "expansion_max_branches": 5000,
+            "expansion_request_timeout_s": 1800.0,
+        },
+    )
+    assert refined[1].as_dict() != coarse[1].as_dict()
+
+
 def _write_tiny_search_inputs(root: Path) -> tuple[Path, Path, Path, Path]:
     timestamp = "2026-10-26T12:00:00Z"
     lon, lat = -76.0, 37.0
@@ -334,3 +359,79 @@ def test_suite_timeout_overrides_template_internal_deadline_and_is_opt_in_only()
         timeout_s=123.0,
     )
     assert "--request-timeout-s" not in disabled
+
+
+def test_coarse_seed_stage_is_opt_in_and_old_and_new_flags_conflict() -> None:
+    options = _search_execution_options(
+        [
+            "--expand-assignments-from-coarse",
+            "--expansion-local-radius-m",
+            "700",
+        ],
+        algorithm="grid",
+    )
+    assert options["expand_assignments_enabled"] is True
+    assert options["expand_assignments_from_coarse"] is True
+    assert options["expansion_local_radius_m"] == 700.0
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        _search_execution_options(
+            ["--expand-assignments", "--expand-assignments-from-coarse"],
+            algorithm="grid",
+        )
+
+
+def test_coarse_expansion_flag_does_not_add_pattern_refinement() -> None:
+    argv = _format_search_argv(
+        [
+            "search",
+            "--expand-assignments-from-coarse",
+            "--no-refine",
+        ],
+        {},
+        algorithm="grid",
+        timeout_s=45.0,
+    )
+    assert "--no-refine" in argv
+    assert argv[-2:] == ["--request-timeout-s", "45.0"]
+
+
+def test_standalone_coarse_expansion_runs_without_pattern_refinement(tmp_path: Path) -> None:
+    measurement, catalog, coast_map, config = _write_tiny_search_inputs(tmp_path)
+    output = tmp_path / "coarse-estimate.json"
+    command = [
+        "bearing-localization-search",
+        "--schema-version",
+        "2",
+        "--measurements",
+        str(measurement),
+        "--catalog",
+        str(catalog),
+        "--map",
+        str(coast_map),
+        "--config",
+        str(config),
+        "--projected-crs",
+        "EPSG:32618",
+        "--output",
+        str(output),
+        "--spacing-m",
+        "100",
+        "--no-refine",
+        "--expand-assignments-from-coarse",
+        "--expansion-local-radius-m",
+        "800",
+        "--expansion-max-nfev",
+        "9",
+        "--expansion-max-branches",
+        "7",
+        "--request-timeout-s",
+        "30",
+    ]
+    process = subprocess.run(command, capture_output=True, text=True)
+    assert process.returncode == 0, process.stderr
+    telemetry = json.loads(output.with_suffix(".json.telemetry.json").read_text(encoding="utf-8"))
+    expansion = telemetry["diagnostics"]["assignment_expansion"]
+    assert expansion["enabled"] is True
+    assert expansion["seed_stage"] == "coarse"
+    assert expansion["request_timeout_s"] == 30.0

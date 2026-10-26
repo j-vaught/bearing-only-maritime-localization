@@ -1179,6 +1179,7 @@ def _search_execution_options(search_argv: list[str], *, algorithm: str) -> dict
         "refine_initial_step_m": 100.0,
         "refine_iterations": 50,
         "expand_assignments_enabled": False,
+        "expand_assignments_from_coarse": False,
         "expansion_local_radius_m": 1000.0,
         "expansion_max_nfev": 100,
         "expansion_max_branches": 5000,
@@ -1214,8 +1215,14 @@ def _search_execution_options(search_argv: list[str], *, algorithm: str) -> dict
             values[key] = converter(raw)
             index += 2
             continue
-        if token == "--expand-assignments":
+        if token in {"--expand-assignments", "--expand-assignments-from-coarse"}:
+            if values["expand_assignments_enabled"]:
+                raise ValueError(
+                    "--expand-assignments and --expand-assignments-from-coarse "
+                    "are mutually exclusive."
+                )
             values["expand_assignments_enabled"] = True
+            values["expand_assignments_from_coarse"] = token == "--expand-assignments-from-coarse"
             index += 1
             continue
         if token == "--device-id":
