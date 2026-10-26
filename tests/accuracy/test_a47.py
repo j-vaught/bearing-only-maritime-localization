@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from bearing_localization.search.proposals.wedge import (
+    GeographicWedgeCatalogObject,
     WedgeCatalogObject,
     WedgeObservation,
+    generate_geographic_reverse_wedge_proposals_complete,
     generate_reverse_wedge_proposals,
+    generate_reverse_wedge_proposals_complete,
 )
+from maritime_localization_shared.geospatial.coordinates import LocalFrame
 
 
 def test_reversed_inputs_preserve_stable_ids_votes_and_source_accounting():
@@ -84,3 +88,95 @@ def test_source_and_candidate_budgets_are_explicit_and_not_silent():
     assert candidate_limited.generation_status == "budget_exhausted"
     assert candidate_limited.budget_reason == "candidate_cells"
     assert candidate_limited.candidate_cells_total == 3
+
+
+def test_complete_mode_matches_scalar_reference_after_all_votes():
+    observations = [
+        WedgeObservation(9, 359.9),
+        WedgeObservation(2, 0.1),
+        WedgeObservation(7, 180.0),
+    ]
+    catalog = [
+        WedgeCatalogObject(f"key-{index}", float(index * 175 - 500), float(index * 90 - 250))
+        for index in range(12)
+    ]
+    expected = generate_reverse_wedge_proposals(
+        observations,
+        catalog,
+        max_range_m=2_000.0,
+        cell_size_m=250.0,
+        angular_tolerance_deg=0.5,
+        max_source_pairs=36,
+        max_candidate_cells=100_000,
+    )
+    actual = generate_reverse_wedge_proposals_complete(
+        observations,
+        catalog,
+        max_range_m=2_000.0,
+        cell_size_m=250.0,
+        angular_tolerance_deg=0.5,
+        max_source_pairs=36,
+        max_candidate_cells=100_000,
+        source_chunk_size=5,
+    )
+    assert [(item.candidate_id, item.vote_count) for item in actual.proposals] == [
+        (item.candidate_id, item.vote_count) for item in expected.proposals
+    ]
+    assert actual.source_pairs_total == actual.source_pairs_processed == 36
+    assert actual.candidate_cells_total == len(actual.proposals)
+    assert actual.generation_status == "completed"
+
+
+def test_complete_mode_keeps_source_and_storage_budgets_separate():
+    observations = [WedgeObservation(0, 90.0), WedgeObservation(1, 180.0)]
+    catalog = [
+        WedgeCatalogObject("a", 1_000.0, 0.0),
+        WedgeCatalogObject("b", 0.0, 1_000.0),
+    ]
+    source_limited = generate_reverse_wedge_proposals_complete(
+        observations,
+        catalog,
+        max_range_m=1_000.0,
+        max_source_pairs=1,
+        max_candidate_cells=100_000,
+        source_chunk_size=2,
+    )
+    candidate_limited = generate_reverse_wedge_proposals_complete(
+        observations,
+        catalog,
+        max_range_m=1_000.0,
+        max_source_pairs=4,
+        max_candidate_cells=3,
+        source_chunk_size=2,
+    )
+    assert source_limited.source_pairs_processed == 1
+    assert source_limited.generation_status == "budget_exhausted"
+    assert source_limited.budget_reason == "source_pairs"
+    assert candidate_limited.candidate_cells_total == 3
+    assert candidate_limited.generation_status == "budget_exhausted"
+    assert candidate_limited.budget_reason == "candidate_cells"
+
+
+def test_geographic_complete_mode_retains_tile_metadata_and_votes():
+    observations = [WedgeObservation(2, 90.0), WedgeObservation(1, 180.0)]
+    catalog = [
+        GeographicWedgeCatalogObject("b", -80.01, 32.0),
+        GeographicWedgeCatalogObject("a", -80.00, 32.0),
+    ]
+    result = generate_geographic_reverse_wedge_proposals_complete(
+        observations,
+        catalog,
+        frame=LocalFrame((-80.0, 32.0)),
+        max_range_m=2_000.0,
+        cell_size_m=250.0,
+        angular_tolerance_deg=0.5,
+        max_grid_bearing_error_deg=0.0,
+        max_source_pairs=4,
+        max_candidate_cells=100_000,
+        source_chunk_size=1,
+    )
+    assert result.generation_status == "completed"
+    assert result.source_pairs_processed == result.source_pairs_total == 4
+    assert result.coordinate_model == "local_projected_tile"
+    assert result.catalog_lonlat_deg is not None
+    assert result.catalog_lonlat_deg.tolist() == [[-80.0, 32.0], [-80.01, 32.0]]

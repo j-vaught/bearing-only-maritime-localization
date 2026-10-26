@@ -256,6 +256,127 @@ def _candidate_cells_for_source(
     return samples
 
 
+def _candidate_cells_for_sources_batch(
+    source_east_m: NDArray[np.float64],
+    source_north_m: NDArray[np.float64],
+    bearing_deg: float,
+    *,
+    cell_size_m: float,
+    max_range_m: float,
+    angular_tolerance_deg: float,
+    max_cells: int,
+) -> tuple[set[tuple[int, int]], ...]:
+    """Rasterize a source chunk with scalar fallback at numerical boundaries."""
+    east = np.asarray(source_east_m, dtype=np.float64).reshape(-1)
+    north = np.asarray(source_north_m, dtype=np.float64).reshape(-1)
+    if east.shape != north.shape:
+        raise ValueError("source coordinate arrays must have the same shape.")
+    if east.size == 0:
+        return ()
+    half_diagonal = cell_size_m * 2.0**0.5 / 2.0
+    step_m = cell_size_m / 2.0
+    if step_m <= 0.0:
+        raise ValueError("cell_size_m is too small to rasterize safely.")
+    reverse = radians((bearing_deg + 180.0) % 360.0)
+    direction_east, direction_north = sin(reverse), cos(reverse)
+    final_distance_m = max_range_m + half_diagonal
+    sample_distances: list[float] = []
+    sample_distance_m = 0.0
+    max_samples = max(4, max_cells * 4)
+    while sample_distance_m <= final_distance_m:
+        if len(sample_distances) >= max_samples:
+            raise _CandidateRasterBudgetExceeded
+        sample_distances.append(sample_distance_m)
+        sample_distance_m += step_m
+    distances = np.asarray(sample_distances, dtype=np.float64)
+    sample_east = east[:, None] + distances[None, :] * direction_east
+    sample_north = north[:, None] + distances[None, :] * direction_north
+    base_i_float = np.floor(sample_east / cell_size_m)
+    base_j_float = np.floor(sample_north / cell_size_m)
+    int_info = np.iinfo(np.int64)
+    safe_rows = (
+        np.all(base_i_float >= int_info.min, axis=1)
+        & np.all(base_i_float <= int_info.max, axis=1)
+        & np.all(base_j_float >= int_info.min, axis=1)
+        & np.all(base_j_float <= int_info.max, axis=1)
+    )
+    results: list[set[tuple[int, int]]] = [set() for _ in range(east.size)]
+    if np.any(~safe_rows):
+        for row in np.flatnonzero(~safe_rows):
+            results[int(row)] = _candidate_cells_for_source(
+                float(east[row]),
+                float(north[row]),
+                bearing_deg,
+                cell_size_m=cell_size_m,
+                max_range_m=max_range_m,
+                angular_tolerance_deg=angular_tolerance_deg,
+                max_cells=max_cells,
+            )
+    if not np.any(safe_rows):
+        return tuple(results)
+    safe_indices = np.flatnonzero(safe_rows)
+    base_i = base_i_float[safe_rows].astype(np.int64, copy=False)
+    base_j = base_j_float[safe_rows].astype(np.int64, copy=False)
+    offsets = np.asarray(
+        [(cell_i, cell_j) for cell_i in (-1, 0, 1) for cell_j in (-1, 0, 1)],
+        dtype=np.int64,
+    )
+    cell_i = base_i[:, :, None] + offsets[None, None, :, 0]
+    cell_j = base_j[:, :, None] + offsets[None, None, :, 1]
+    center_east = (cell_i.astype(np.float64) + 0.5) * cell_size_m
+    center_north = (cell_j.astype(np.float64) + 0.5) * cell_size_m
+    delta_east = east[safe_rows, None, None] - center_east
+    delta_north = north[safe_rows, None, None] - center_north
+    distance_m = np.hypot(delta_east, delta_north)
+    accepted = distance_m <= final_distance_m
+    outside_halo = distance_m > half_diagonal
+    center_bearing = np.degrees(np.arctan2(delta_east, delta_north)) % 360.0
+    quantization_deg = np.zeros_like(distance_m)
+    ratio = np.minimum(
+        1.0, half_diagonal / distance_m, where=outside_halo, out=np.ones_like(distance_m)
+    )
+    quantization_deg[outside_halo] = np.degrees(np.arcsin(ratio[outside_halo]))
+    angle_error = np.abs((center_bearing - bearing_deg + 180.0) % 360.0 - 180.0)
+    threshold = angular_tolerance_deg + quantization_deg
+    accepted &= (~outside_halo) | (angle_error <= threshold)
+    scale = max(
+        1.0,
+        abs(float(np.max(east[safe_rows]))),
+        abs(float(np.min(east[safe_rows]))),
+        abs(float(np.max(north[safe_rows]))),
+        abs(float(np.min(north[safe_rows]))),
+        final_distance_m,
+        cell_size_m,
+    )
+    distance_epsilon = 64.0 * np.finfo(np.float64).eps * scale
+    boundary_rows = np.any(np.abs(distance_m - final_distance_m) <= distance_epsilon, axis=(1, 2))
+    boundary_rows |= np.any(outside_halo & (np.abs(angle_error - threshold) <= 1e-12), axis=(1, 2))
+    fractional_i = np.abs(base_i_float[safe_rows] - np.rint(base_i_float[safe_rows]))
+    fractional_j = np.abs(base_j_float[safe_rows] - np.rint(base_j_float[safe_rows]))
+    boundary_rows |= np.any(fractional_i <= 1e-13, axis=1)
+    boundary_rows |= np.any(fractional_j <= 1e-13, axis=1)
+    for local_row, global_row in enumerate(safe_indices):
+        if boundary_rows[local_row]:
+            results[int(global_row)] = _candidate_cells_for_source(
+                float(east[global_row]),
+                float(north[global_row]),
+                bearing_deg,
+                cell_size_m=cell_size_m,
+                max_range_m=max_range_m,
+                angular_tolerance_deg=angular_tolerance_deg,
+                max_cells=max_cells,
+            )
+            continue
+        selected = accepted[local_row]
+        results[int(global_row)] = {
+            (int(item_i), int(item_j))
+            for item_i, item_j in zip(cell_i[local_row][selected], cell_j[local_row][selected])
+        }
+        if len(results[int(global_row)]) > max_cells:
+            raise _CandidateRasterBudgetExceeded
+    return tuple(results)
+
+
 def generate_reverse_wedge_proposals(
     observations: tuple[WedgeObservation, ...] | list[WedgeObservation],
     catalog: tuple[WedgeCatalogObject, ...] | list[WedgeCatalogObject],
@@ -383,6 +504,133 @@ def generate_reverse_wedge_proposals(
     )
 
 
+def generate_reverse_wedge_proposals_complete(
+    observations: tuple[WedgeObservation, ...] | list[WedgeObservation],
+    catalog: tuple[WedgeCatalogObject, ...] | list[WedgeCatalogObject],
+    *,
+    max_range_m: float,
+    cell_size_m: float = 250.0,
+    angular_tolerance_deg: float = 0.5,
+    max_source_pairs: int = 100_000,
+    max_candidate_cells: int = 100_000,
+    source_chunk_size: int = 4_096,
+) -> WedgeProposalResult:
+    """Accumulate all permitted source-pair votes before deterministic ranking.
+
+    This explicit mode preserves the legacy function's budget semantics while
+    batching source geometry. max_candidate_cells remains a hard
+    accumulator budget; it is never a final proposal top-K.
+    """
+    for name, value in (("max_range_m", max_range_m), ("cell_size_m", cell_size_m)):
+        if not isfinite(value) or value <= 0.0:
+            raise ValueError(f"{name} must be finite and positive.")
+    if not isfinite(angular_tolerance_deg) or not 0.0 <= angular_tolerance_deg < 90.0:
+        raise ValueError("angular_tolerance_deg must be finite and in [0, 90).")
+    if type(max_source_pairs) is not int or max_source_pairs < 1:
+        raise ValueError("max_source_pairs must be a positive integer.")
+    if type(max_candidate_cells) is not int or max_candidate_cells < 1:
+        raise ValueError("max_candidate_cells must be a positive integer.")
+    if type(source_chunk_size) is not int or source_chunk_size < 1:
+        raise ValueError("source_chunk_size must be a positive integer.")
+
+    obs = tuple(sorted(observations, key=lambda item: item.report_index))
+    objects = tuple(sorted(catalog, key=lambda item: item.key))
+    if any(not isinstance(item, WedgeObservation) for item in obs):
+        raise TypeError("observations must contain WedgeObservation records.")
+    if any(not isinstance(item, WedgeCatalogObject) for item in objects):
+        raise TypeError("catalog must contain WedgeCatalogObject records.")
+    if len({item.report_index for item in obs}) != len(obs):
+        raise ValueError("report_index values must be unique.")
+    if len({item.key for item in objects}) != len(objects):
+        raise ValueError("catalog keys must be unique.")
+    if not obs:
+        raise ValueError("At least one bearing observation is required.")
+
+    catalog_xy = np.asarray([(item.east_m, item.north_m) for item in objects], dtype=np.float64)
+    catalog_xy = catalog_xy.reshape((-1, 2))
+    catalog_xy.setflags(write=False)
+    source_total = len(obs) * len(objects)
+    votes: dict[tuple[int, int], int] = {}
+    processed_pairs = 0
+    budget_reason: Literal["none", "source_pairs", "candidate_cells"] = "none"
+    max_source_cells = max(1_024, max_candidate_cells)
+
+    for observation in obs:
+        observation_cells: set[tuple[int, int]] = set()
+        chunk_start = 0
+        while chunk_start < len(objects):
+            remaining_pairs = max_source_pairs - processed_pairs
+            if remaining_pairs <= 0:
+                budget_reason = "source_pairs"
+                break
+            chunk = objects[chunk_start : chunk_start + min(source_chunk_size, remaining_pairs)]
+            try:
+                source_cells_batch = _candidate_cells_for_sources_batch(
+                    np.asarray([item.east_m for item in chunk], dtype=np.float64),
+                    np.asarray([item.north_m for item in chunk], dtype=np.float64),
+                    observation.bearing_deg,
+                    cell_size_m=cell_size_m,
+                    max_range_m=max_range_m,
+                    angular_tolerance_deg=angular_tolerance_deg,
+                    max_cells=max_source_cells,
+                )
+            except _CandidateRasterBudgetExceeded:
+                budget_reason = "candidate_cells"
+                break
+            for source_cells in source_cells_batch:
+                for cell in sorted(source_cells):
+                    if cell in observation_cells:
+                        continue
+                    if cell not in votes and len(votes) >= max_candidate_cells:
+                        budget_reason = "candidate_cells"
+                        break
+                    observation_cells.add(cell)
+                    votes.setdefault(cell, 0)
+                if budget_reason == "candidate_cells":
+                    break
+                processed_pairs += 1
+            if budget_reason != "none":
+                break
+            chunk_start += len(chunk)
+        for cell in observation_cells:
+            votes[cell] += 1
+        if budget_reason != "none":
+            break
+
+    if budget_reason == "none" and processed_pairs < source_total:
+        budget_reason = "source_pairs"
+    proposals = [
+        WedgeProposal(
+            candidate_id=f"cell:{cell_i}:{cell_j}",
+            cell_i=cell_i,
+            cell_j=cell_j,
+            east_m=(cell_i + 0.5) * cell_size_m,
+            north_m=(cell_j + 0.5) * cell_size_m,
+            vote_count=vote_count,
+        )
+        for (cell_i, cell_j), vote_count in votes.items()
+    ]
+    proposals.sort(key=lambda item: (-item.vote_count, item.cell_i, item.cell_j))
+    status: Literal["completed", "budget_exhausted"] = (
+        "completed" if budget_reason == "none" else "budget_exhausted"
+    )
+    return WedgeProposalResult(
+        proposals=tuple(proposals),
+        observations=obs,
+        catalog_keys=tuple(item.key for item in objects),
+        catalog_types=tuple(item.normalized_type for item in objects),
+        catalog_xy_m=catalog_xy,
+        cell_size_m=float(cell_size_m),
+        max_range_m=float(max_range_m),
+        angular_tolerance_deg=float(angular_tolerance_deg),
+        source_pairs_total=source_total,
+        source_pairs_processed=processed_pairs,
+        candidate_cells_total=len(votes),
+        generation_status=status,
+        budget_reason=budget_reason,
+    )
+
+
 def generate_geographic_reverse_wedge_proposals(
     observations: tuple[WedgeObservation, ...] | list[WedgeObservation],
     catalog: tuple[GeographicWedgeCatalogObject, ...] | list[GeographicWedgeCatalogObject],
@@ -446,6 +694,64 @@ def generate_geographic_reverse_wedge_proposals(
     )
 
 
+def generate_geographic_reverse_wedge_proposals_complete(
+    observations: tuple[WedgeObservation, ...] | list[WedgeObservation],
+    catalog: tuple[GeographicWedgeCatalogObject, ...] | list[GeographicWedgeCatalogObject],
+    *,
+    frame: LocalFrame,
+    max_range_m: float,
+    cell_size_m: float = 250.0,
+    angular_tolerance_deg: float = 0.5,
+    max_grid_bearing_error_deg: float,
+    max_source_pairs: int = 100_000,
+    max_candidate_cells: int = 100_000,
+    source_chunk_size: int = 4_096,
+) -> WedgeProposalResult:
+    """Generate complete local-tile votes while retaining geographic metadata."""
+    if not isinstance(frame, LocalFrame):
+        raise TypeError("frame must be a LocalFrame.")
+    if not isfinite(max_grid_bearing_error_deg) or not 0.0 <= max_grid_bearing_error_deg < 90.0:
+        raise ValueError("max_grid_bearing_error_deg must be finite and in [0, 90).")
+    effective_tolerance_deg = angular_tolerance_deg + max_grid_bearing_error_deg
+    if effective_tolerance_deg >= 90.0:
+        raise ValueError("angular tolerance plus grid-bearing bound must be below 90 degrees.")
+    geographic = tuple(sorted(catalog, key=lambda item: item.key))
+    if any(not isinstance(item, GeographicWedgeCatalogObject) for item in geographic):
+        raise TypeError("catalog must contain GeographicWedgeCatalogObject records.")
+    if len({item.key for item in geographic}) != len(geographic):
+        raise ValueError("catalog keys must be unique.")
+    local_catalog = tuple(
+        WedgeCatalogObject(
+            item.key,
+            *frame.to_local((item.longitude_deg, item.latitude_deg)),
+            normalized_type=item.normalized_type,
+        )
+        for item in geographic
+    )
+    result = generate_reverse_wedge_proposals_complete(
+        observations,
+        local_catalog,
+        max_range_m=max_range_m,
+        cell_size_m=cell_size_m,
+        angular_tolerance_deg=effective_tolerance_deg,
+        max_source_pairs=max_source_pairs,
+        max_candidate_cells=max_candidate_cells,
+        source_chunk_size=source_chunk_size,
+    )
+    lonlat = np.asarray(
+        [(item.longitude_deg, item.latitude_deg) for item in geographic], dtype=np.float64
+    ).reshape((-1, 2))
+    lonlat.setflags(write=False)
+    return replace(
+        result,
+        coordinate_model="local_projected_tile",
+        frame_origin_lonlat=frame.origin_lonlat,
+        frame_crs=frame.projected_crs.to_string(),
+        catalog_lonlat_deg=lonlat,
+        grid_bearing_error_bound_deg=float(max_grid_bearing_error_deg),
+    )
+
+
 __all__ = [
     "WedgeObservation",
     "WedgeCatalogObject",
@@ -453,5 +759,7 @@ __all__ = [
     "WedgeProposal",
     "WedgeProposalResult",
     "generate_reverse_wedge_proposals",
+    "generate_reverse_wedge_proposals_complete",
     "generate_geographic_reverse_wedge_proposals",
+    "generate_geographic_reverse_wedge_proposals_complete",
 ]
