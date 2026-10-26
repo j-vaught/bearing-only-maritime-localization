@@ -568,6 +568,7 @@ def generate_reverse_wedge_proposals_complete(
     max_source_pairs: int = 100_000,
     max_candidate_cells: int = 100_000,
     source_chunk_size: int = 4_096,
+    collect_metadata: bool = False,
 ) -> WedgeProposalResult:
     """Accumulate all permitted source-pair votes before deterministic ranking.
 
@@ -586,6 +587,8 @@ def generate_reverse_wedge_proposals_complete(
         raise ValueError("max_candidate_cells must be a positive integer.")
     if type(source_chunk_size) is not int or source_chunk_size < 1:
         raise ValueError("source_chunk_size must be a positive integer.")
+    if type(collect_metadata) is not bool:
+        raise TypeError("collect_metadata must be a boolean.")
 
     obs = tuple(sorted(observations, key=lambda item: item.report_index))
     objects = tuple(sorted(catalog, key=lambda item: item.key))
@@ -636,25 +639,29 @@ def generate_reverse_wedge_proposals_complete(
                 break
             for source, source_cells in zip(chunk, source_cells_batch):
                 for cell in sorted(source_cells):
-                    residual, evidence = _normalized_cell_angular_evidence(
-                        source.east_m,
-                        source.north_m,
-                        cell[0],
-                        cell[1],
-                        observation.bearing_deg,
-                        cell_size_m=cell_size_m,
-                        angular_tolerance_deg=angular_tolerance_deg,
-                    )
-                    previous_residual = observation_residuals.get(cell)
-                    if previous_residual is not None:
-                        if residual < previous_residual[0]:
-                            observation_residuals[cell] = (residual, evidence)
+                    if collect_metadata:
+                        residual, evidence = _normalized_cell_angular_evidence(
+                            source.east_m,
+                            source.north_m,
+                            cell[0],
+                            cell[1],
+                            observation.bearing_deg,
+                            cell_size_m=cell_size_m,
+                            angular_tolerance_deg=angular_tolerance_deg,
+                        )
+                        previous_residual = observation_residuals.get(cell)
+                        if previous_residual is not None:
+                            if residual < previous_residual[0]:
+                                observation_residuals[cell] = (residual, evidence)
+                            continue
+                    elif cell in observation_cells:
                         continue
                     if cell not in votes and len(votes) >= max_candidate_cells:
                         budget_reason = "candidate_cells"
                         break
                     observation_cells.add(cell)
-                    observation_residuals[cell] = (residual, evidence)
+                    if collect_metadata:
+                        observation_residuals[cell] = (residual, evidence)
                     votes.setdefault(cell, 0)
                 if budget_reason == "candidate_cells":
                     break
@@ -664,9 +671,10 @@ def generate_reverse_wedge_proposals_complete(
             chunk_start += len(chunk)
         for cell in observation_cells:
             votes[cell] += 1
-            residual, evidence = observation_residuals[cell]
-            residual_sums[cell] = residual_sums.get(cell, 0.0) + residual
-            evidence_sums[cell] = evidence_sums.get(cell, 0.0) + evidence
+            if collect_metadata:
+                residual, evidence = observation_residuals[cell]
+                residual_sums[cell] = residual_sums.get(cell, 0.0) + residual
+                evidence_sums[cell] = evidence_sums.get(cell, 0.0) + evidence
         if budget_reason != "none":
             break
 
@@ -680,8 +688,10 @@ def generate_reverse_wedge_proposals_complete(
             east_m=(cell_i + 0.5) * cell_size_m,
             north_m=(cell_j + 0.5) * cell_size_m,
             vote_count=vote_count,
-            normalized_angular_residual=residual_sums[(cell_i, cell_j)] / vote_count,
-            evidence_score=evidence_sums[(cell_i, cell_j)],
+            normalized_angular_residual=(
+                residual_sums[(cell_i, cell_j)] / vote_count if collect_metadata else float("inf")
+            ),
+            evidence_score=evidence_sums[(cell_i, cell_j)] if collect_metadata else 0.0,
         )
         for (cell_i, cell_j), vote_count in votes.items()
     ]
@@ -781,6 +791,7 @@ def generate_geographic_reverse_wedge_proposals_complete(
     max_source_pairs: int = 100_000,
     max_candidate_cells: int = 100_000,
     source_chunk_size: int = 4_096,
+    collect_metadata: bool = False,
 ) -> WedgeProposalResult:
     """Generate complete local-tile votes while retaining geographic metadata."""
     if not isinstance(frame, LocalFrame):
@@ -812,6 +823,7 @@ def generate_geographic_reverse_wedge_proposals_complete(
         max_source_pairs=max_source_pairs,
         max_candidate_cells=max_candidate_cells,
         source_chunk_size=source_chunk_size,
+        collect_metadata=collect_metadata,
     )
     lonlat = np.asarray(
         [(item.longitude_deg, item.latitude_deg) for item in geographic], dtype=np.float64
