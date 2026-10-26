@@ -143,3 +143,30 @@ def test_nonbroadcastable_inputs_and_iteration_options_are_rejected() -> None:
         solve_reverse_bearing_observer((0.0, 0.0), 0.0, 1.0, max_iterations=13)
     with pytest.raises(ValueError, match="tolerance_deg"):
         solve_reverse_bearing_observer((0.0, 0.0), 0.0, 1.0, tolerance_deg=0.0)
+
+
+def test_generator_tolerance_can_accept_sub_nanodegree_inverse_roundoff() -> None:
+    catalog = (-75.3929250000001, 39.18361940000068)
+    desired_bearing = 205.725571474809
+    range_m = 2_875.0
+
+    strict = solve_reverse_bearing_observer(catalog, desired_bearing, range_m)
+    explicit = solve_reverse_bearing_observer(
+        catalog,
+        desired_bearing,
+        range_m,
+        tolerance_deg=1e-7,
+    )
+
+    assert not bool(strict.converged)
+    assert abs(float(strict.angular_residual_deg)) == pytest.approx(1.0149961e-9, abs=1e-15)
+    assert bool(explicit.converged)
+    inverse_bearing, _, distance = _GEOD.inv(
+        float(explicit.observer_lonlat_deg[0]),
+        float(explicit.observer_lonlat_deg[1]),
+        catalog[0],
+        catalog[1],
+    )
+    angular_error = (inverse_bearing - desired_bearing + 180.0) % 360.0 - 180.0
+    assert abs(angular_error) <= 1e-7
+    assert distance == pytest.approx(range_m, abs=1e-8)
