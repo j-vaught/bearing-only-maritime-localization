@@ -80,6 +80,9 @@ def contract_to_dict(value: object) -> dict[str, Any]:
     if not isinstance(value, _SUPPORTED):
         raise TypeError(f"Unsupported contract type: {type(value).__name__}.")
     result = asdict(value)
+    # Preserve existing result payloads when the additive interruption reason is unused.
+    if isinstance(value, LocalizationResult) and value.budget_exhaustion_reason is None:
+        result.pop("budget_exhaustion_reason")
     result["contract_type"] = type(value).__name__
     return result
 
