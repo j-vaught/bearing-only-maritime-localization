@@ -184,8 +184,14 @@ def test_calibration_grid_pass_and_split_rejection(tmp_path):
                 "error_m": 20.0 if index < 96 else 300.0,
             }
         )
-    artifact = calibrate({"split": "development", "trials": trials})
+    development = {"split": "development", "trials": trials}
+    validation = {
+        "split": "validation",
+        "trials": [row | {"split": "validation"} for row in trials],
+    }
+    artifact = calibrate(development, validation)
     assert artifact["status"] == "PASS"
+    assert artifact["validation_confirmed"] is True
     assert artifact["metrics"]["availability"] >= 0.90
     assert artifact["metrics"]["conditional_accuracy"] >= 0.95
     artifact_path = tmp_path / "frozen-calibration.json"
@@ -196,8 +202,10 @@ def test_calibration_grid_pass_and_split_rejection(tmp_path):
     artifact_path.write_text(json.dumps(tampered), encoding="utf-8")
     with pytest.raises(ValueError, match="SHA-256"):
         load_frozen_calibration(artifact_path)
-    with pytest.raises(ValueError, match="development split"):
+    with pytest.raises(ValueError, match="development data"):
         calibrate({"split": "heldout", "trials": trials})
+    with pytest.raises(ValueError, match="validation data"):
+        calibrate(development, {"split": "heldout", "trials": trials})
     with pytest.raises(ValueError, match="development-only"):
         calibrate({"split": "development", "trials": [trials[0] | {"split": "test"}]})
 
