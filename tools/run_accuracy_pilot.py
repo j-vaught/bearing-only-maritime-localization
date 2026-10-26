@@ -837,6 +837,7 @@ def run_pilot(
                     "failure": failure,
                     "returncode": returncode,
                     "wall_elapsed_s": elapsed,
+                    "process_group_terminated": bool(outcome["process_group_terminated"]),
                     "search_status": result_status,
                     "budget_limit": result_contract.get("budget_limit"),
                     "budget_used": result_contract.get("budget_used"),

@@ -1832,6 +1832,9 @@ def run_trials(
                     "status": outcome["status"],
                     "returncode": outcome["returncode"],
                     "elapsed_s": outcome["elapsed_s"],
+                    "process_group_terminated": bool(
+                        outcome.get("process_group_terminated", False)
+                    ),
                     "log_directory": str(log_dir.relative_to(run_dir)),
                 }
             )
