@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
-from tools.run_a26_screened_diagnostic import (
+# Standalone focused runs must resolve repository tooling without another test's imports.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from tools.run_a26_screened_diagnostic import (  # noqa: E402
     CATALOG_SHA256,
     MAP_SHA256,
     MEASUREMENTS_SHA256,

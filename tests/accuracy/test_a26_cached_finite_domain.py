@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from tools.run_a26_cached_finite_domain import (
+# Standalone focused runs must resolve repository tooling without another test's imports.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from tools.run_a26_cached_finite_domain import (  # noqa: E402
     append_jsonl,
     resolve_project_root,
     sha256_file,
