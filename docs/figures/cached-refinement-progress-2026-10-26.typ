@@ -1,69 +1,93 @@
 #import "@preview/lilaq:0.6.0" as lq
 
-#set page(width: 300mm, height: 270mm, margin: 9mm, fill: white)
+#set page(width: 300mm, height: 340mm, margin: 9mm, fill: white)
 #set text(size: 8pt)
 #let data = json("cached-refinement-progress-2026-10-26.json")
 #let modes = data.at("mode_comparisons")
-#let top = data.at("top_refined_mode")
+#let top = data.at("top_score_winner")
 #let alt = data.at("lowest_error_selected_alternative")
 #let ranks = modes.map(row => row.at("source_score_rank"))
 #let source-errors = modes.map(row => row.at("source_error_m"))
-#let refined-errors = modes.map(row => row.at("refined_error_m"))
+#let continuous-errors = modes.map(row => row.at("continuous_error_m"))
+#let assigned-errors = modes.map(row => row.at("assigned_error_m"))
 #let rounded(value, digits) = calc.round(value * calc.pow(10, digits)) / calc.pow(10, digits)
+#let top-stages = top.at("stages")
+#let alt-stages = alt.at("stages")
 
 #align(center)[
-  #text(size: 14pt, weight: "bold")[Cached-candidate refinement diagnostic]
+  #text(size: 14pt, weight: "bold")[Cached-candidate refinement and assigned-fit diagnostic]
   #linebreak()
   #text(size: 9pt)[64 score-selected modes from an incomplete, partial-cache source run. Snapshot dated 2026-10-26.]
 ]
 #v(2mm)
-#align(center)[#text(size: 8pt, weight: "bold")[The refined score winner remains wrong by 853.4 km. This diagnostic does not establish a localization fix or any release gate.]]
+#align(center)[#text(size: 8pt, weight: "bold")[Assigned fitting improved one nearby alternative, while the selected score winner remained wrong by 853.440 km. This is not a localization fix or release-gate result.]]
 #v(3mm)
 
-#text(size: 10pt, weight: "bold")[Top result by refined score]
-#text(size: 7.5pt)[The two bars track the refined score winner from its source seed to its refined result; this seed was not the source run global winner. The lowest-error alternative is tabulated separately and is not the estimate.]
+#text(size: 10pt, weight: "bold")[Selected score winner]
+#text(size: 7.5pt)[The source-score-rank-3 seed became the continuous-refinement score winner. Assigned fitting retained that same score winner and its wrong four-object association.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
-    title: [Error at refined winner source seed and after refinement],
+    title: [Error at the selected score winner across stages],
     xlabel: [Geodesic location error (m)],
     xlim: (0, 1050000),
-    ylim: (0.4, 2.6),
+    ylim: (0.4, 3.6),
     xaxis: (ticks: ((0, [0]), (200000, [200k]), (400000, [400k]), (600000, [600k]), (800000, [800k]), (1000000, [1,000k])), subticks: none),
-    yaxis: (ticks: ((1, [Refined winner source seed]), (2, [Refined winner])), subticks: none),
+    yaxis: (ticks: ((1, [Cached source]), (2, [Continuous refinement]), (3, [Assigned fit])), subticks: none),
     width: 260mm,
-    height: 52mm,
-    lq.hbar((top.at("source_error_m"),), (1,)),
-    lq.hbar((top.at("refined_error_m"),), (2,)),
+    height: 48mm,
+    lq.hbar((top-stages.at("source").at("error_m"),), (1,)),
+    lq.hbar((top-stages.at("continuous").at("error_m"),), (2,)),
+    lq.hbar((top-stages.at("assigned").at("error_m"),), (3,)),
+  )
+]
+#v(1mm)
+
+#text(size: 10pt, weight: "bold")[Lowest-error selected alternative. Not the estimate.]
+#text(size: 7.5pt)[This separate mode improved from 296.286 m to 266.378 m, then to 181.279 m after assigned fitting. Its assigned objective rank is 16 of 64.]
+#v(1mm)
+#align(center)[
+  #lq.diagram(
+    title: [Error progression for the lowest-error selected alternative],
+    xlabel: [Geodesic location error (m)],
+    xlim: (0, 350),
+    ylim: (0.4, 3.6),
+    xaxis: (ticks: ((0, [0]), (100, [100]), (200, [200]), (300, [300])), subticks: none),
+    yaxis: (ticks: ((1, [Cached source]), (2, [Continuous refinement]), (3, [Assigned fit])), subticks: none),
+    width: 260mm,
+    height: 42mm,
+    lq.hbar((alt-stages.at("source").at("error_m"),), (1,)),
+    lq.hbar((alt-stages.at("continuous").at("error_m"),), (2,)),
+    lq.hbar((alt-stages.at("assigned").at("error_m"),), (3,)),
   )
 ]
 #v(1mm)
 #align(center)[
   #table(
-    columns: (1.35fr, 0.7fr, 0.8fr, 1fr, 1fr, 1.2fr, 0.9fr),
-    inset: 2.5pt,
+    columns: (1.25fr, 1fr, 1fr, 1fr, 1.5fr, 1fr, 1fr),
+    inset: 2.2pt,
     stroke: 0.5pt + black,
-    [Mode role], [Source rank], [Refined rank], [Source score], [Refined score], [Source to refined error (m)], [True assignments],
-    [Score winner],
+    [Mode], [Source rank], [Errors source → continuous → assigned (m)], [Scores source → continuous → assigned], [True-key assignments source → continuous → assigned], [Assigned score rank], [Assigned error rank],
+    [Selected score winner],
     [#str(top.at("source_score_rank"))],
-    [#str(top.at("refined_score_rank_within_selected"))],
-    [#str(rounded(top.at("source_score"), 3))],
-    [#str(rounded(top.at("refined_score"), 3))],
-    [#str(rounded(top.at("source_error_m"), 1)) → #str(rounded(top.at("refined_error_m"), 1))],
-    [#str(top.at("refined_correct_assignments")) / #str(top.at("refined_assignment_count"))],
+    [#str(rounded(top-stages.at("source").at("error_m"), 1)) → #str(rounded(top-stages.at("continuous").at("error_m"), 1)) → #str(rounded(top-stages.at("assigned").at("error_m"), 1))],
+    [#str(rounded(top-stages.at("source").at("score"), 3)) → #str(rounded(top-stages.at("continuous").at("score"), 3)) → #str(rounded(top-stages.at("assigned").at("score"), 3))],
+    [#str(top-stages.at("source").at("true_assignments")) / #str(top-stages.at("source").at("assignments")) → #str(top-stages.at("continuous").at("true_assignments")) / #str(top-stages.at("continuous").at("assignments")) → #str(top-stages.at("assigned").at("true_assignments")) / #str(top-stages.at("assigned").at("assignments"))],
+    [#str(top.at("assigned_score_rank")) / 64],
+    [#str(top.at("assigned_error_rank")) / 64],
     [Lowest-error alternative. Not estimate.],
     [#str(alt.at("source_score_rank"))],
-    [#str(alt.at("refined_score_rank_within_selected"))],
-    [#str(rounded(alt.at("source_score"), 3))],
-    [#str(rounded(alt.at("refined_score"), 3))],
-    [#str(rounded(alt.at("source_error_m"), 1)) → #str(rounded(alt.at("refined_error_m"), 1))],
-    [#str(alt.at("refined_correct_assignments")) / #str(alt.at("refined_assignment_count"))],
+    [#str(rounded(alt-stages.at("source").at("error_m"), 1)) → #str(rounded(alt-stages.at("continuous").at("error_m"), 1)) → #str(rounded(alt-stages.at("assigned").at("error_m"), 1))],
+    [#str(rounded(alt-stages.at("source").at("score"), 3)) → #str(rounded(alt-stages.at("continuous").at("score"), 3)) → #str(rounded(alt-stages.at("assigned").at("score"), 3))],
+    [#str(alt-stages.at("source").at("true_assignments")) / #str(alt-stages.at("source").at("assignments")) → #str(alt-stages.at("continuous").at("true_assignments")) / #str(alt-stages.at("continuous").at("assignments")) → #str(alt-stages.at("assigned").at("true_assignments")) / #str(alt-stages.at("assigned").at("assignments"))],
+    [#str(alt.at("assigned_score_rank")) / 64],
+    [#str(alt.at("assigned_error_rank")) / 64],
   )
 ]
 
-#v(3mm)
-#text(size: 10pt, weight: "bold")[Score-ranked alternatives in the selected subset]
-#text(size: 7.5pt)[The horizontal axis is source objective rank among 47,182 exact-scored hypotheses. The 64 displayed modes were selected by search score from that incomplete run, not a complete search ranking. Paired markers show each mode before and after refinement.]
+#v(2mm)
+#text(size: 10pt, weight: "bold")[Errors across the selected subset]
+#text(size: 7.5pt)[Each marker is one of 64 score-selected modes. The horizontal axis shows the original score rank among 47,182 exact-scored hypotheses. These ranks come from an incomplete source search and are not a complete-domain ranking.]
 #v(1mm)
 #align(center)[
   #lq.diagram(
@@ -74,16 +98,16 @@
     ylim: (0, data.at("plot_error_max_m")),
     xaxis: (ticks: ((1, [1]), (16, [16]), (32, [32]), (48, [48]), (64, [64]), (80, [80])), subticks: none),
     width: 260mm,
-    height: 66mm,
+    height: 54mm,
     lq.scatter(ranks, source-errors, mark: "s"),
-    lq.scatter(ranks, refined-errors, mark: "^"),
-    lq.scatter((alt.at("source_score_rank"),), (alt.at("refined_error_m"),), mark: "d"),
+    lq.scatter(ranks, continuous-errors, mark: "^"),
+    lq.scatter(ranks, assigned-errors, mark: "d"),
   )
 ]
 #v(1mm)
-#align(center)[#text(size: 7pt)[Default series order and marker key. First square is source, second triangle is refined, third diamond is the lowest-error alternative, which is not the score-selected estimate.]]
+#align(center)[#text(size: 7pt)[Series order. Square is cached source, triangle is continuous refinement, diamond is assigned fit. No legend box is used.]]
 
-#v(2mm)
+#v(1mm)
 #text(size: 6.5pt)[
-  Refinement lowered objective score in #str(data.at("summary").at("score_improved_count")) / #str(data.at("selected_count")) modes; location error improved in #str(data.at("summary").at("error_improved_count")) and worsened in #str(data.at("summary").at("error_worsened_count")). Median geodesic error changed from #str(rounded(data.at("summary").at("median_source_error_m"), 1)) m to #str(rounded(data.at("summary").at("median_refined_error_m"), 1)) m. The source run had #str(data.at("source_exact_hypothesis_count")) exact-scored hypotheses, #str(data.at("source_exact_unresolved_count")) unresolved hypotheses, and #str(rounded(data.at("source_unknown_fraction") * 100, 1)) percent of its candidate population in an unknown state at interruption. Evaluator artifact SHA-256: #data.at("source_artifact_sha256"). Input manifest SHA-256: #data.at("source_manifest_sha256"). Evaluator source commit: #data.at("source_artifact_commit"). Truth was used only for independent evaluation. Authorship J.C. Vaught.
+  Assigned fitting completed 64 modes from 128 starts in #str(rounded(data.at("assigned_run").at("runtime_s"), 4)) s, accepting #str(data.at("assigned_run").at("accepted_exact_steps")) of #str(data.at("assigned_run").at("attempted_exact_steps")) exact steps. This is a selected-mode diagnostic, not full-frame or coast-wide timing. Across the 64 rows, objective score improved in #str(data.at("summary").at("score_improved_count")) modes; final error improved in #str(data.at("summary").at("error_improved_count")) and worsened in #str(data.at("summary").at("error_worsened_count")). Median error was #str(rounded(data.at("summary").at("median_source_error_m"), 1)) m at source, #str(rounded(data.at("summary").at("median_refined_error_m"), 1)) m after continuous refinement, and #str(rounded(data.at("summary").at("median_assigned_error_m"), 1)) m after assigned fitting. The source run left #str(data.at("source_exact_hypothesis_count")) hypotheses exact-scored, #str(data.at("source_exact_unresolved_count")) unresolved, and #str(data.at("source_unknown_count")) in an unknown state at interruption. Evaluator artifact SHA-256: #data.at("source_artifact_sha256"). A20 manifest SHA-256: #data.at("a20_manifest_sha256"). Assigned manifest SHA-256: #data.at("assigned_manifest_sha256"). Evaluator source commit: #data.at("source_artifact_commit"). Truth was used only for independent evaluation. Authorship J.C. Vaught.
 ]
