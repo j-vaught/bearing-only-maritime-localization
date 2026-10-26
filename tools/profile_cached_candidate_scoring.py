@@ -21,6 +21,7 @@ from bearing_localization.search.config_serialization import read_search_config
 from bearing_localization.search.parallel_screened import (
     CandidateAudit,
     ParallelScreenedCandidatePool,
+    ParallelScreenedError,
 )
 from bearing_localization.search.proposals.cache import ProposalCacheContext, load_proposal_cache
 from bearing_localization.search.proposals.geodesic_wedge import GeodesicWedgeProposal
@@ -84,6 +85,16 @@ def fixed_sample_indices(
             selected.append(value)
             seen.add(value)
     return tuple(selected)
+
+
+def evenly_spaced_indices(total: int, count: int = 2048) -> tuple[int, ...]:
+    """Return a fixed cache-index sample without a prefix stratum."""
+    if type(total) is not int or total < 1:
+        raise ValueError("total must be a positive integer")
+    if type(count) is not int or count < 1:
+        raise ValueError("count must be a positive integer")
+    values = np.linspace(0, total - 1, min(total, count), dtype=np.int64)
+    return tuple(dict.fromkeys(int(value) for value in values))
 
 
 def best_score_and_ties(audits: Sequence[CandidateAudit]) -> tuple[float | None, tuple[str, ...]]:
@@ -287,6 +298,112 @@ def run_case(
     return case_results
 
 
+def run_exact_scaling_case(
+    *,
+    measurements: MeasurementSetV2,
+    config: Any,
+    catalog: CatalogV2,
+    vector_map: VectorMap,
+    candidates: Sequence[CandidatePosition],
+    workers: int,
+) -> dict[str, Any]:
+    """Run one exact request and retain disposition details on timeout."""
+    started = time.perf_counter()
+    audits: list[CandidateAudit] = []
+    chunks: list[dict[str, Any]] = []
+    pool: ParallelScreenedCandidatePool | None = None
+    try:
+        with ParallelScreenedCandidatePool(
+            catalog,
+            vector_map,
+            workers=workers,
+            memory_budget_bytes=32 * 1024**3,
+            chunk_size=32,
+            max_in_flight_chunks=2 * workers,
+            request_timeout_s=540.0,
+        ) as pool:
+            for chunk in pool.iter_chunks(
+                measurements,
+                config,
+                candidates,
+                mode="exact",
+                complete_candidate_count=len(candidates),
+            ):
+                audits.extend(chunk.candidates)
+                chunks.append(
+                    {
+                        "chunk_index": chunk.chunk_index,
+                        "candidate_count": chunk.candidate_count,
+                        "exact_scored_count": chunk.exact_scored_count,
+                        "exact_evaluation_count": chunk.exact_evaluation_count,
+                        "invalid_water_count": chunk.invalid_water_count,
+                        "unresolved_count": chunk.unresolved_count,
+                        "worker_evaluation_s": chunk.worker_evaluation_s,
+                        "exact_elapsed_s": chunk.exact_elapsed_s,
+                        "worker_rss_bytes": [list(item) for item in chunk.worker_rss_bytes],
+                    }
+                )
+        timings = pool.last_timings
+        if [audit.candidate_id for audit in audits] != [
+            candidate.candidate_id for candidate in candidates
+        ]:
+            raise AssertionError("exact scaling candidate order changed")
+        best_score, tie_ids = best_score_and_ties(audits)
+        return {
+            "status": "completed",
+            "workers": workers,
+            "mode": "exact",
+            "candidate_count": len(audits),
+            "elapsed_s": time.perf_counter() - started,
+            "best_score": best_score,
+            "tie_candidate_ids": list(tie_ids),
+            "exact_scored_count": sum(item["exact_scored_count"] for item in chunks),
+            "exact_evaluation_count": sum(item["exact_evaluation_count"] for item in chunks),
+            "invalid_water_count": sum(item["invalid_water_count"] for item in chunks),
+            "unresolved_count": sum(item["unresolved_count"] for item in chunks),
+            "pool_startup_s": timings.pool_startup_s,
+            "scorer_setup_s": timings.scorer_setup_s,
+            "ipc_s": timings.ipc_s,
+            "pool_elapsed_s": timings.elapsed_s,
+            "worker_evaluation_s": timings.worker_evaluation_s,
+            "estimated_memory_bytes": timings.estimated_memory_bytes,
+            "worker_rss_bytes": [list(item) for item in timings.worker_rss_bytes],
+            "audits": [_audit_json(audit) for audit in audits],
+            "chunks": chunks,
+        }
+    except ParallelScreenedError as exc:
+        timings = pool.last_timings if pool is not None else None
+        disposition = exc.disposition
+        return {
+            "status": "timeout_or_failure",
+            "workers": workers,
+            "mode": "exact",
+            "candidate_count": len(audits),
+            "elapsed_s": time.perf_counter() - started,
+            "error": f"{type(exc).__name__}: {exc}",
+            "disposition": {
+                "consumed_count": len(disposition.consumed_candidate_ids),
+                "submitted_count": len(disposition.submitted_candidate_ids),
+                "committed_count": len(disposition.committed_candidate_ids),
+                "pending_count": len(disposition.pending_candidate_ids),
+                "failed_count": len(disposition.failed_candidate_ids),
+                "outstanding_count": len(disposition.outstanding_candidate_ids),
+                "not_dispatched_count": len(disposition.not_dispatched_candidate_ids),
+            },
+            "pool_startup_s": timings.pool_startup_s if timings else None,
+            "scorer_setup_s": timings.scorer_setup_s if timings else None,
+            "ipc_s": timings.ipc_s if timings else None,
+            "pool_elapsed_s": timings.elapsed_s if timings else None,
+            "worker_evaluation_s": timings.worker_evaluation_s if timings else None,
+            "estimated_memory_bytes": timings.estimated_memory_bytes if timings else None,
+            "worker_rss_bytes": [list(item) for item in timings.worker_rss_bytes]
+            if timings
+            else [],
+            "audits": [_audit_json(audit) for audit in audits],
+            "chunks": chunks,
+        }
+
+
 def validate_inputs(
     cache_path: Path, static_dir: Path, config_path: Path
 ) -> tuple[MeasurementSetV2, CatalogV2, Any, Any, dict[str, str]]:
@@ -413,16 +530,172 @@ def profile(
     return result
 
 
+def profile_evenly_spaced_scaling(
+    *,
+    cache_path: Path,
+    static_dir: Path,
+    config_path: Path,
+    output_dir: Path,
+    lock_path: Path,
+    baseline_result: Path,
+    scoring_source_sha: str,
+) -> dict[str, Any]:
+    """Profile exact scoring for 2,048 evenly spaced cache indices."""
+    measurements, catalog, config, (proposals, vector_map), input_hashes = validate_inputs(
+        cache_path, static_dir, config_path
+    )
+    indices = evenly_spaced_indices(len(proposals.proposals), 2048)
+    selected = [proposals.proposals[index] for index in indices]
+    frame = LocalFrame(proposals.frame_origin_lonlat, proposals.frame_crs)
+    to_map = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True)
+    candidates = tuple(
+        CandidatePosition(proposal.candidate_id, _proposal_position(proposal, frame, to_map))
+        for proposal in selected
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    selection = {
+        "schema": "cached-candidate-scaling-selection-v1",
+        "sampling": "2,048 evenly spaced cache indices across the full cache",
+        "cache_order_sampling": True,
+        "cache_tree_sha256": EXPECTED_TREE_SHA256,
+        "cache_context_sha256": EXPECTED_CONTEXT_SHA256,
+        "cache_candidate_count": len(proposals.proposals),
+        "selected_count": len(selected),
+        "selected_indices": list(indices),
+        "selected_ids": [proposal.candidate_id for proposal in selected],
+        "selected_positions_map_epsg32618": [
+            list(candidate.position_xy_m) for candidate in candidates
+        ],
+        "input_sha256": input_hashes,
+    }
+    selection_path = output_dir / "scaling-2048-selection.json"
+    if selection_path.exists():
+        if json.loads(selection_path.read_text()) != selection:
+            raise FileExistsError(
+                f"refusing to overwrite changed selection manifest: {selection_path}"
+            )
+    else:
+        selection_path.write_text(
+            json.dumps(selection, indent=2, sort_keys=True) + chr(10), encoding="utf-8"
+        )
+    activity_before = _activity_snapshot()
+    profile_started = datetime.now(UTC).isoformat()
+    cases: dict[str, Any] = {}
+    with benchmark_lock(lock_path):
+        activity_locked = _activity_snapshot()
+        for workers in (1, 4, 8, 16):
+            cases[str(workers)] = run_exact_scaling_case(
+                measurements=measurements,
+                config=config,
+                catalog=catalog,
+                vector_map=vector_map,
+                candidates=candidates,
+                workers=workers,
+            )
+    completed = [case for case in cases.values() if case["status"] == "completed"]
+    for left_index, left in enumerate(completed):
+        for right in completed[left_index + 1 :]:
+            compare_best(left, right)
+    baseline = json.loads(baseline_result.read_text(encoding="utf-8"))
+    baseline_exact = baseline["cases"]["1"]["exact"]
+    baseline_ties = tuple(baseline_exact["tie_candidate_ids"])
+    selected_ids = set(selection["selected_ids"])
+    result = {
+        "schema": "cached-candidate-scaling-profile-v1",
+        "created_utc": datetime.now(UTC).isoformat(),
+        "profile_started_utc": profile_started,
+        "sampling": selection["sampling"],
+        "cache_order_sampling": True,
+        "cache_tree_sha256": EXPECTED_TREE_SHA256,
+        "cache_context_sha256": EXPECTED_CONTEXT_SHA256,
+        "cache_candidate_count": len(proposals.proposals),
+        "selected_count": len(selected),
+        "selected_manifest": str(selection_path),
+        "selected_ids_recorded_before_measurements": True,
+        "input_sha256": input_hashes,
+        "catalog_record_count": len(catalog.records),
+        "measurement_count": len(measurements.measurements),
+        "map_target_crs": "EPSG:32618",
+        "proposal_frame_crs": proposals.frame_crs,
+        "proposal_frame_origin_lonlat": list(proposals.frame_origin_lonlat),
+        "config_path": str(config_path.resolve()),
+        "config": {
+            "algorithm": config.algorithm,
+            "objective_version": config.objective_version,
+            "max_range_m": config.max_range_m,
+            "use_types": config.use_types,
+            "candidate_budget": config.candidate_budget,
+        },
+        "scoring_source_sha": scoring_source_sha,
+        "harness_sha": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=Path.cwd(), text=True
+        ).strip(),
+        "baseline_result_sha256": sha256_file(baseline_result),
+        "comparison_to_previous_profile": {
+            "baseline_best_score": baseline_exact["best_score"],
+            "baseline_best_tie_ids": list(baseline_ties),
+            "baseline_tie_ids_in_even_sample": sorted(set(baseline_ties) & selected_ids),
+            "sample_best_scores_are_not_full_domain_objectives": True,
+        },
+        "benchmark_lock": str(lock_path.resolve()),
+        "activity_before_lock": activity_before,
+        "activity_at_lock": activity_locked,
+        "activity_classification": (
+            "Shared-host CPU/GPU activity was sampled for diagnostics; timings are "
+            "diagnostic if other work was active."
+        ),
+        "cases": cases,
+        "no_truth_or_held_out_data": True,
+        "watchdog_limit_s": 600,
+    }
+    (output_dir / "scaling-2048-results.json").write_text(
+        json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + chr(10), encoding="utf-8"
+    )
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--static-input-dir", type=Path, default=DEFAULT_STATIC)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--scaling-2048", action="store_true")
+    parser.add_argument(
+        "--scaling-output-dir",
+        type=Path,
+        default=Path("reports/experiments/cached-candidate-scaling"),
+    )
+    parser.add_argument("--baseline-result", type=Path)
+    parser.add_argument("--scoring-source-sha", default="0d34a17")
     parser.add_argument("--lock", type=Path)
     args = parser.parse_args()
     cache = args.cache.resolve()
     lock = args.lock or cache.parents[3] / ".agent-work/benchmark.lock"
+    if args.scaling_2048:
+        baseline = args.baseline_result or (args.output_dir / "profile-results.json")
+        result = profile_evenly_spaced_scaling(
+            cache_path=cache,
+            static_dir=args.static_input_dir.resolve(),
+            config_path=args.config.resolve(),
+            output_dir=args.scaling_output_dir.resolve(),
+            lock_path=lock.resolve(),
+            baseline_result=baseline.resolve(),
+            scoring_source_sha=args.scoring_source_sha,
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "output": str(
+                        (args.scaling_output_dir / "scaling-2048-results.json").resolve()
+                    ),
+                    "selected_count": result["selected_count"],
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
     result = profile(
         cache_path=cache,
         static_dir=args.static_input_dir.resolve(),
