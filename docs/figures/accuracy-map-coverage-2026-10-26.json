@@ -1,0 +1,30 @@
+{
+  "snapshot_date": "2026-10-26",
+  "classification": "validated candidate approved as a new benchmark input; current default remains MapV2",
+  "domain_area_km2": 3383691.3309591026,
+  "previous_port_only": {
+    "map_version": "noaa-enc-east-coast-partial-mosaic:2026-10-26T01:28:24.869483+00:00",
+    "known_area_km2": 16300.289231428238,
+    "known_fraction_percent": 0.48173097475791166,
+    "unknown_fraction_percent": 99.51826902524209
+  },
+  "map_v3_candidate": {
+    "known_area_km2": 2580408.063055927,
+    "known_fraction_percent": 76.26014936547165,
+    "unknown_area_km2": 803283.267903166,
+    "unknown_fraction_percent": 23.739850634528075,
+    "fine_port_union_km2": 10500.268427320732,
+    "fine_port_union_fraction_percent": 0.3103199257937173,
+    "harbour_map_count": 20,
+    "port_map_count_verified": 24,
+    "port_union_nested_in_known_area": true,
+    "approach_map_count": 0,
+    "berthing_map_count": 0
+  },
+  "source_hashes": {
+    "previous_map_v2_archive_sha256": "bc46fb4a86edfa96979d566d72afae639655629eddee73b508c4928641eedc90",
+    "map_v3_original_sha256": "cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93",
+    "map_v3_archive_sha256": "fda522364582a20d74a643e7e854844b2ce2490a45e469cb210fd9a8babd13de",
+    "map_v3_manifest_sha256": "4aab0541ae44bdc1f455db1669bf8d8519c976e7ab534114339bba3e4558392a"
+  }
+}
