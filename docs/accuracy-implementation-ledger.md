@@ -1,6 +1,6 @@
 # Accuracy implementation ledger
 
-The implementation uses the original 40 bounded workstreams and five additional specialist workstreams. All computation and environments remain on the server. The integration branch is accuracy/integration, starting from 32456174d6f7baea2c25bdfca6490f940b4214bf.
+The implementation uses the original 40 bounded workstreams and seven additional specialist workstreams. All computation and environments remain on the server. The integration branch is accuracy/integration, starting from 32456174d6f7baea2c25bdfca6490f940b4214bf.
 
 ## Release gates
 
@@ -99,3 +99,13 @@ The approved map package is stored under data/maps/accuracy-inputs-v3. On a comm
 The first diagnostic pairwise pilot recorded two 300-second timeouts and one interrupted attempt. The first attempt may overlap a map-file rewrite and is retained with that qualification. Future runs use immutable, hash-named inputs. A separate watchdog-limited 30-second profile found approximately 10.5 seconds in input loading, 10.5 seconds in map construction, and 5.8 seconds in proposal generation. It stopped before completion, so its partial counters and times are not a completed-search benchmark. It motivates profiling and exact caching, not weakening the search domain or score.
 
 Verified hardlink deduplication reclaimed 15.29 GiB while preserving every archived path. Further preparation remains subject to the 40 GiB free-space reserve. Formal calibration, validation, held-out accuracy, final latency, and measured-bearing field accuracy remain unvalidated.
+
+## Full-coast search repair checkpoint at 07d8036
+
+A46 owns deterministic water-prioritized candidate ordering and hierarchy budget accounting. Its three accepted milestones preserve all generated candidates, retain deferred coarse candidates, and distinguish exact budget fits from unresolved work. The GPU grid dispatcher uses the same ordering. A47 owns complete chunked wedge voting, separating source coverage from accumulator storage and final exact scoring. Independent scalar parity passed, and the frozen five-observation catalog run covered all 333,340 source pairs at coarse resolution. A33 integrated the explicit wedge_complete program path; 54 combined tests, lint, and type checks passed.
+
+A43's exact batched line-of-sight implementation preserves all 909 frozen classifications and reduced that component median from 10.6785 to 0.1697 seconds. The repaired pairwise run completes in 48 seconds, but the best score-ranked hypothesis remains 391,446.9 m from truth. This result remains ambiguous and budget_exhausted. A26 is executing the next independent complete-voting diagnostic, while A35 compares simulator prediction and objective decomposition after search to locate any remaining model disagreement. Truth is restricted to that evaluator-only diagnosis.
+
+A17 reproduced the existing version-one local and full-coast B1 controls at main and integration. Both commits return identical estimates, with errors 10.3346 m locally and 89.091 m coast-wide. The newer sparse five-observation pilot is a different problem instance and objective. Its failure remains recorded independently.
+
+A38 has prepared 570 of 2,040 validation rows and is paused for the timing window. A41 verified lossless deduplication after each bounded wave; available space is approximately 63.94 GiB. No held-out search has been opened. Empirical calibration, six release gates, final timing, publication results, and independent final review remain unfinished.
