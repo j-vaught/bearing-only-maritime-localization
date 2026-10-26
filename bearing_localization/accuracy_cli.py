@@ -39,6 +39,11 @@ from bearing_localization.search.grid import run_grid_search_v2
 from bearing_localization.search.hierarchical import run_hierarchical_search_v2
 from bearing_localization.search.modes import SearchModeEvidence, converged_mode_evidence
 from bearing_localization.search.pairwise import run_pairwise_search_v2
+from bearing_localization.search.parallel_candidates import (
+    CandidatePoolError,
+    CandidatePositionInput,
+    PersistentCandidatePool,
+)
 from bearing_localization.search.proposals.geodesic_wedge import (
     GeodesicWedgeProposal,
     generate_geographic_reverse_wedge_proposals_geodesic,
@@ -48,6 +53,10 @@ from bearing_localization.search.proposals.wedge import (
     WedgeObservation,
     generate_geographic_reverse_wedge_proposals,
     generate_geographic_reverse_wedge_proposals_complete,
+)
+from bearing_localization.search.proposals.witness_seeds import (
+    WitnessSeedResult,
+    generate_continuous_witness_seeds,
 )
 from bearing_localization.search.randomized import run_randomized_search_v2
 from bearing_localization.search.reference_grid import search_reference_grid
@@ -65,6 +74,9 @@ from bearing_localization.simulator.runner import run_simulator_v2
 from maritime_localization_shared.contracts import EvaluationTruth
 from maritime_localization_shared.contracts.inputs_v2 import CatalogV2, MapV2, MeasurementSetV2
 from maritime_localization_shared.contracts.localization import LocalizationResult
+from maritime_localization_shared.contracts.localization import (
+    LocalizationResult as _LocalizationResult,
+)
 from maritime_localization_shared.geospatial.coordinates import LocalFrame
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 from maritime_localization_shared.serialization import (
@@ -698,7 +710,10 @@ def _search_dispatch(
             },
         }
         return result, diagnostics, scoring_run.candidate_count, False
-    if algorithm == "wedge_geodesic":
+    if algorithm in ("wedge_geodesic", "wedge_geodesic_seeded"):
+        seeded = algorithm == "wedge_geodesic_seeded"
+        if seeded and config.backend != "cpu":
+            raise ValueError("wedge_geodesic_seeded requires the CPU backend.")
         bounds = config.bounds_xy
         if bounds is None:
             raise ValueError("Geodesic wedge search requires finite config.bounds_xy.")
@@ -768,18 +783,215 @@ def _search_dispatch(
             )
             ordered_positions = [positions[index] for index in proposal_order]
 
-        scoring_stage = telemetry.stage("exact_scoring") if telemetry is not None else nullcontext()
-        with scoring_stage:
-            scoring_run = score_candidate_positions(
-                scorer, ordered_positions, candidate_limit=config.candidate_budget
+        seed_result = WitnessSeedResult(
+            seeds=(),
+            pair_combinations_total=0,
+            pairs_considered=0,
+            pairs_accepted=0,
+            pairs_rejected=0,
+            pairs_failed=0,
+            pairs_remaining=0,
+            candidate_seeds_generated=0,
+            generation_status="completed",
+            budget_reason="none",
+            rejection_counts=(),
+            range_tolerance_m=1e-9,
+        )
+        selected_seed_proposals = ()
+        candidate_pool_timings = None
+        candidate_pool_failure: dict[str, int | str] | None = None
+        candidate_inputs: list[CandidatePositionInput] = []
+        evaluated_candidate_ids: list[str] = []
+        pool_startup_wall_s = 0.0
+        if seeded:
+            selected_seed_indexes = proposal_order[: config.seed_cell_budget]
+            selected_seed_proposals = tuple(
+                proposals.proposals[index] for index in selected_seed_indexes
+            )
+            seed_stage = (
+                telemetry.stage("seed_generation") if telemetry is not None else nullcontext()
+            )
+            with seed_stage:
+                if observations:
+                    seed_result = generate_continuous_witness_seeds(
+                        observations,
+                        geographic_catalog,
+                        selected_seed_proposals,
+                        frame=frame,
+                        cell_size_m=wedge_cell_size_m,
+                        max_range_m=config.max_range_m,
+                        max_pair_evaluations=config.seed_pair_budget,
+                        max_candidate_seeds=config.seed_candidate_budget,
+                    )
+                else:
+                    seed_result = WitnessSeedResult(
+                        seeds=(),
+                        pair_combinations_total=0,
+                        pairs_considered=0,
+                        pairs_accepted=0,
+                        pairs_rejected=0,
+                        pairs_failed=0,
+                        pairs_remaining=0,
+                        candidate_seeds_generated=0,
+                        generation_status="completed",
+                        budget_reason="none",
+                        rejection_counts=(),
+                        range_tolerance_m=1e-9,
+                    )
+            assert seed_result is not None
+            for index in proposal_order:
+                candidate_inputs.append(
+                    CandidatePositionInput(
+                        f"cell:{proposals.proposals[index].candidate_id}",
+                        ordered_positions[len(candidate_inputs)],
+                    )
+                )
+            to_map = Transformer.from_crs("EPSG:4326", scorer.vector_map.crs, always_xy=True)
+            for witness_seed in seed_result.seeds:
+                longitude, latitude = frame.to_geographic(witness_seed.east_m, witness_seed.north_m)
+                east_m, north_m = to_map.transform(longitude, latitude)
+                candidate_inputs.append(
+                    CandidatePositionInput(
+                        f"seed:{witness_seed.seed_id}", (float(east_m), float(north_m))
+                    )
+                )
+            seen_positions: set[tuple[float, float]] = set()
+            for candidate in candidate_inputs:
+                key = (round(candidate.position_xy[0], 9), round(candidate.position_xy[1], 9))
+                if key not in seen_positions:
+                    seen_positions.add(key)
+                    evaluated_candidate_ids.append(str(candidate.candidate_id))
+            if config.candidate_workers == 1:
+                startup_stage = (
+                    telemetry.stage("candidate_pool_startup")
+                    if telemetry is not None
+                    else nullcontext()
+                )
+                with startup_stage:
+                    pool_startup_wall_s = 0.0
+                scoring_stage = (
+                    telemetry.stage("exact_scoring") if telemetry is not None else nullcontext()
+                )
+                with scoring_stage:
+                    scoring_run = score_candidate_positions(
+                        scorer,
+                        [candidate.position_xy for candidate in candidate_inputs],
+                        candidate_limit=config.candidate_budget,
+                    )
+            else:
+                pool: PersistentCandidatePool | None = None
+                startup_stage = (
+                    telemetry.stage("candidate_pool_startup")
+                    if telemetry is not None
+                    else nullcontext()
+                )
+                startup_started = perf_counter()
+                try:
+                    with startup_stage:
+                        pool = PersistentCandidatePool(
+                            scorer.catalog,
+                            scorer.vector_map,
+                            workers=config.candidate_workers,
+                            memory_budget_bytes=config.candidate_pool_memory_budget_bytes,
+                        )
+                    assert pool is not None
+                    pool_startup_wall_s = perf_counter() - startup_started
+                    try:
+                        scoring_stage = (
+                            telemetry.stage("exact_scoring")
+                            if telemetry is not None
+                            else nullcontext()
+                        )
+                        with scoring_stage:
+                            with pool:
+                                scoring_run = pool.score(
+                                    scorer.measurements,
+                                    config,
+                                    candidate_inputs,
+                                    candidate_limit=config.candidate_budget,
+                                )
+                    except CandidatePoolError as exc:
+                        candidate_pool_failure = {
+                            "failure_kind": "worker_evaluation_failed",
+                            "completed_count": exc.completed_count,
+                            "failed_count": exc.failed_count,
+                            "outstanding_count": exc.outstanding_count,
+                        }
+                        scoring_run = None
+                    candidate_pool_timings = asdict(pool.last_timings)
+                except MemoryError:
+                    candidate_pool_failure = {
+                        "failure_kind": "memory_budget_exceeded",
+                        "completed_count": 0,
+                        "failed_count": 0,
+                        "outstanding_count": len(candidate_inputs),
+                    }
+                    scoring_run = None
+                    if pool is not None:
+                        candidate_pool_timings = asdict(pool.last_timings)
+                        pool.close()
+                except Exception as exc:
+                    pool_startup_wall_s = perf_counter() - startup_started
+                    candidate_pool_failure = {
+                        "failure_kind": "worker_startup_failed",
+                        "completed_count": 0,
+                        "failed_count": 0,
+                        "outstanding_count": len(candidate_inputs),
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                    scoring_run = None
+                finally:
+                    if pool is not None:
+                        pool.close()
+        else:
+            scoring_stage = (
+                telemetry.stage("exact_scoring") if telemetry is not None else nullcontext()
+            )
+            with scoring_stage:
+                scoring_run = score_candidate_positions(
+                    scorer, ordered_positions, candidate_limit=config.candidate_budget
+                )
+
+        if scoring_run is not None:
+            candidate_count = scoring_run.candidate_count
+            outcome_counts = dict(scoring_run.outcome_counts)
+            scoring_status = scoring_run.localization.search_status
+            scoring_incomplete = scoring_status == "budget_exhausted"
+            evaluated_candidate_ids = evaluated_candidate_ids[:candidate_count]
+            result = scoring_run.localization
+        else:
+            candidate_count = (
+                int(candidate_pool_failure["completed_count"])
+                if candidate_pool_failure is not None
+                else 0
+            )
+            outcome_counts = None
+            evaluated_candidate_ids = []
+            scoring_status = "failed"
+            scoring_incomplete = False
+            result = _LocalizationResult(
+                hypotheses=(),
+                elapsed_s=0.0,
+                decision_status="no_fix",
+                search_status="failed",
+                report_count=len(scorer.measurements.measurements),
+                objective_version=config.objective_version,
             )
 
         failed_samples = proposals.geodesic_samples_failed
         failed_source_pairs = proposals.source_pairs_failed
-        model_incomplete = failed_samples > 0 or failed_source_pairs > 0
+        failed_seed_pairs = seed_result.pairs_failed if seed_result is not None else 0
+        model_incomplete = (
+            failed_samples > 0
+            or failed_source_pairs > 0
+            or failed_seed_pairs > 0
+            or candidate_pool_failure is not None
+        )
         generation_incomplete = proposals.generation_status != "completed"
-        scoring_incomplete = scoring_run.localization.search_status == "budget_exhausted"
-        result = scoring_run.localization
+        seed_generation_incomplete = (
+            seed_result is not None and seed_result.generation_status != "completed"
+        )
+        unresolved_seed_cells = seeded and len(selected_seed_proposals) < len(proposals.proposals)
         if model_incomplete:
             result = replace(
                 result,
@@ -787,24 +999,59 @@ def _search_dispatch(
                 search_status="failed",
                 accepted_index=None,
             )
-        elif generation_incomplete and not scoring_incomplete:
-            if proposals.budget_reason == "source_pairs":
-                exhausted_limit = effective_source_pair_budget
-                exhausted_used = proposals.source_pairs_processed
-            elif proposals.budget_reason == "candidate_cells":
-                exhausted_limit = config.proposal_cell_budget
-                exhausted_used = proposals.candidate_cells_total
-            else:
-                raise RuntimeError("Incomplete geodesic generation must identify its budget.")
+        elif scoring_incomplete:
             result = replace(
                 result,
+                decision_status="ambiguous" if result.hypotheses else "no_fix",
+                accepted_index=None,
+            )
+        elif generation_incomplete or seed_generation_incomplete or unresolved_seed_cells:
+            if generation_incomplete:
+                if proposals.budget_reason == "source_pairs":
+                    exhausted_limit = effective_source_pair_budget
+                    exhausted_used = proposals.source_pairs_processed
+                elif proposals.budget_reason == "candidate_cells":
+                    exhausted_limit = config.proposal_cell_budget
+                    exhausted_used = proposals.candidate_cells_total
+                else:
+                    raise RuntimeError("Incomplete geodesic generation must identify its budget.")
+            elif seed_generation_incomplete and seed_result is not None:
+                if seed_result.budget_reason == "pair_evaluations":
+                    exhausted_limit = config.seed_pair_budget
+                    exhausted_used = seed_result.pairs_considered
+                elif seed_result.budget_reason == "candidate_seeds":
+                    exhausted_limit = config.seed_candidate_budget
+                    exhausted_used = seed_result.candidate_seeds_generated
+                else:
+                    raise RuntimeError(
+                        "Incomplete witness-seed generation must identify its budget."
+                    )
+            else:
+                exhausted_limit = config.seed_cell_budget
+                exhausted_used = len(selected_seed_proposals)
+            result = replace(
+                result,
+                decision_status="ambiguous" if result.hypotheses else "no_fix",
                 search_status="budget_exhausted",
+                accepted_index=None,
                 budget_limit=exhausted_limit,
                 budget_used=exhausted_used,
             )
 
-        evaluated_indexes = proposal_order[: scoring_run.candidate_count]
+        evaluated_cell_count = (
+            sum(candidate_id.startswith("cell:") for candidate_id in evaluated_candidate_ids)
+            if seeded
+            else candidate_count
+        )
+        evaluated_indexes = proposal_order[: min(evaluated_cell_count, len(proposal_order))]
         evaluated_proposals = [proposals.proposals[index] for index in evaluated_indexes]
+        scoring_candidate_count = (
+            scoring_run.candidate_count if scoring_run is not None else candidate_count
+        )
+        scoring_outcomes = dict(scoring_run.outcome_counts) if scoring_run is not None else None
+        scoring_run_status = (
+            scoring_run.localization.search_status if scoring_run is not None else "failed"
+        )
         witness_edge_count = sum(
             len(keys)
             for proposal in proposals.proposals
@@ -836,8 +1083,8 @@ def _search_dispatch(
             for proposal in evaluated_proposals
         ]
         diagnostics = {
-            "candidate_count": scoring_run.candidate_count,
-            "outcome_counts": dict(scoring_run.outcome_counts),
+            "candidate_count": scoring_candidate_count,
+            "outcome_counts": scoring_outcomes,
             "proposal_generation": {
                 "generation_status": proposals.generation_status,
                 "generation_budget_reason": proposals.budget_reason,
@@ -878,19 +1125,61 @@ def _search_dispatch(
                     "within_tier_then_residual_evidence_cell_order"
                 ),
                 "proposal_count": len(proposals.proposals),
-                "evaluated_proposal_count": scoring_run.candidate_count,
+                "evaluated_proposal_count": evaluated_cell_count,
+            },
+            "seed_generation": None
+            if not seeded
+            else {
+                "generation_status": seed_result.generation_status,
+                "budget_reason": seed_result.budget_reason,
+                "pair_combinations_total": seed_result.pair_combinations_total,
+                "pairs_considered": seed_result.pairs_considered,
+                "pairs_accepted": seed_result.pairs_accepted,
+                "pairs_rejected": seed_result.pairs_rejected,
+                "pairs_failed": seed_result.pairs_failed,
+                "pairs_remaining": seed_result.pairs_remaining,
+                "candidate_seeds_generated": seed_result.candidate_seeds_generated,
+                "candidate_seed_budget": config.seed_candidate_budget,
+                "pair_evaluation_budget": config.seed_pair_budget,
+                "selected_cells": len(selected_seed_proposals),
+                "unselected_cells": len(proposals.proposals) - len(selected_seed_proposals),
+                "range_tolerance_m": seed_result.range_tolerance_m,
+                "rejection_counts": [list(item) for item in seed_result.rejection_counts],
+                "seeds": [
+                    {
+                        "seed_id": seed.seed_id,
+                        "east_m": seed.east_m,
+                        "north_m": seed.north_m,
+                        "cell_candidate_id": seed.cell_candidate_id,
+                        "observation_indices": list(seed.observation_indices),
+                        "catalog_keys": list(seed.catalog_keys),
+                        "ranges_m": list(seed.ranges_m),
+                        "bearing_residuals_deg": list(seed.bearing_residuals_deg),
+                    }
+                    for seed in seed_result.seeds
+                ],
+            },
+            "candidate_pool": {
+                "workers": config.candidate_workers if seeded else 1,
+                "memory_budget_bytes": config.candidate_pool_memory_budget_bytes
+                if seeded
+                else None,
+                "startup_wall_s": pool_startup_wall_s,
+                "timings": candidate_pool_timings,
+                "failure": candidate_pool_failure,
             },
             "exact_scoring": {
-                "status": scoring_run.localization.search_status,
-                "complete": not scoring_incomplete,
+                "status": scoring_run_status,
+                "complete": not scoring_incomplete and candidate_pool_failure is None,
                 "candidate_budget": config.candidate_budget,
-                "candidate_count": scoring_run.candidate_count,
-                "outcome_counts": dict(scoring_run.outcome_counts),
+                "candidate_count": scoring_candidate_count,
+                "outcome_counts": scoring_outcomes,
+                "evaluated_candidate_ids": evaluated_candidate_ids if seeded else [],
                 "evaluated_proposal_witnesses": evaluated_witness_records,
             },
             "result_elapsed_s_scope": (
                 "exact_scoring_plus_continuous_refinement; excludes "
-                "proposal_generation_and_ordering"
+                "proposal_generation_ordering_and_seed_generation"
             ),
             "request_timing_authority": (
                 "telemetry.request_timing.request_elapsed_s through serialized estimate output"
@@ -910,7 +1199,7 @@ def _search_dispatch(
                 "angular_sample_count": proposals.angular_sample_count,
             },
         }
-        return result, diagnostics, scoring_run.candidate_count, False
+        return result, diagnostics, scoring_candidate_count, False
     raise ValueError(f"Unsupported v2 search algorithm {algorithm!r}.")
 
 
@@ -1205,7 +1494,7 @@ def _search_v2_request(
             telemetry=telemetry,
         )
     diagnostics["algorithm"] = selected_algorithm
-    if selected_algorithm == "wedge_geodesic":
+    if selected_algorithm in ("wedge_geodesic", "wedge_geodesic_seeded"):
         diagnostics["elapsed_time_semantics"] = {
             "localization_result_elapsed_s": (
                 "exact_scoring_plus_continuous_refinement; excludes "
@@ -1215,7 +1504,7 @@ def _search_v2_request(
                 "request_timing.request_elapsed_s; request entry through estimate serialization"
             ),
         }
-    if selected_algorithm == "wedge_geodesic":
+    if selected_algorithm in ("wedge_geodesic", "wedge_geodesic_seeded"):
         stage_records = telemetry.as_dict()["stages"]
         for stage_name in ("proposal_generation", "proposal_ordering", "exact_scoring"):
             elapsed_wall_s = sum(
@@ -1736,6 +2025,7 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             "wedge",
             "wedge_complete",
             "wedge_geodesic",
+            "wedge_geodesic_seeded",
         ),
     )
     parser.add_argument("--spacing-m", type=float, default=250.0)

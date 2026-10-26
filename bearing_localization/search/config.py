@@ -43,6 +43,11 @@ class SearchConfig:
     use_types: bool = True
     common_bearing_bias_prior_deg: tuple[float, float] | None = None
     uniform_eligible_water_prior: bool = True
+    seed_cell_budget: int = 256
+    seed_pair_budget: int = 100_000
+    seed_candidate_budget: int = 4_096
+    candidate_workers: int = 1
+    candidate_pool_memory_budget_bytes: int = 8 * 1024**3
 
     def __post_init__(self) -> None:
         if self.objective_version not in ("bearing_set_map_v1", "legacy_corrected_v0"):
@@ -76,6 +81,15 @@ class SearchConfig:
             raise ValueError("proposal_cell_budget must be a positive integer.")
         if type(self.proposal_chunk_size) is not int or self.proposal_chunk_size < 1:
             raise ValueError("proposal_chunk_size must be a positive integer.")
+        for name, value in (
+            ("seed_cell_budget", self.seed_cell_budget),
+            ("seed_pair_budget", self.seed_pair_budget),
+            ("seed_candidate_budget", self.seed_candidate_budget),
+            ("candidate_workers", self.candidate_workers),
+            ("candidate_pool_memory_budget_bytes", self.candidate_pool_memory_budget_bytes),
+        ):
+            if type(value) is not int or value < 1:
+                raise ValueError(f"{name} must be a positive integer.")
         for name, value in (
             ("absolute_score_tolerance", self.absolute_score_tolerance),
             ("relative_score_tolerance", self.relative_score_tolerance),
