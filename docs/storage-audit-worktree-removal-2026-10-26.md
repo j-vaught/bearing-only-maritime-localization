@@ -156,3 +156,21 @@ The next four concrete candidates pass the same initial checks. Each is clean, i
 The four candidates have a combined unique allocation estimate of 765,390,848 bytes. Their apparent allocated total is 1,900,494,848 bytes, but shared package files were excluded from the unique estimate. Removing all four would still leave approximately 999 MiB of additional reserve shortfall at the latest reading, so further candidates would be needed to reach 44 GB. No further removal was performed pending parent review.
 
 The following paths were not proposed. a04-wedge-projection, a11-coverage-certificate, a33-calibration-binding, a33-static-session, a33-support-compat, and a36-session-3185116 have external report or shared-cache editable-path references. a08-coast-base has immutable map-manifest source paths. The A32, A35, A37, A39, A26, assignment-expansion, parallel-expansion, root, shared-cache, root-environment, and frozen-output paths remain protected.
+
+## Additional approved cleanup and stopping point
+
+The parent authorized continuation under the same duplicate-checkout rule. A final pre-removal check at 2026-10-26T13:41:55Z reported 42,754,174,976 free bytes. The following three checkouts were clean, fully pushed, inactive, had no absolute path references in reports, outputs, archives, caches, or diagnostics, and had zero active process map, current-directory, executable, or descriptor references. Their only ignored content was regenerable test or bytecode cache, virtual-environment content, and one empty zero-byte .agent-work/report.tmp file in a33-static-session.
+
+| Removed checkout | Branch and commit retained | Free bytes before | Free bytes after | Measured physical reclaim |
+| --- | --- | ---: | ---: | ---: |
+| a33-acceptance | accuracy/a33-acceptance at 14abb98db36847b2f99e85dce1e6e27f0811ecd8 | 42,754,166,784 | 42,891,722,752 | 137,555,968 |
+| a33-static-session | accuracy/a33-static-session at 041abeb8e6426d898a7de29ac65cd1262f092d50 | 42,891,722,752 | 43,075,112,960 | 183,390,208 |
+| a33-support-compat | accuracy/a33-support-compat at 6a68fda995380e632aedeaee64619c173d21c0c1 | 43,075,112,960 | 43,265,105,920 | 189,992,960 |
+
+The measured total reclaim was 510,939,136 bytes. The net reading change across the three commands was 510,930,944 bytes; the 8,192-byte difference is concurrent filesystem activity. The later reading at 2026-10-26T13:42:08Z was 43,265,101,824 bytes. The three branch refs remain present, and no common-repository source was modified.
+
+The cumulative measured reclaim in this cleanup sequence is 1,882,649,664 bytes. The current free reading is 1,234,898,176 bytes below the 44.5 GB target and 315,428,864 bytes above the 40 GiB floor.
+
+No additional checkout met the same strict rule after this pass. The remaining large inactive candidates a04-wedge-projection, a11-coverage-certificate, a33-calibration-binding, and a36-session-3185116 have shared UV cache editable-finder files containing absolute source paths into those checkouts. Removing their directories would leave persistent shared-cache path mappings, so they were retained. a08-coast-base has immutable map-manifest source paths and was retained. The A37 integration and parallel-review checkouts have shared-cache path mappings and remain protected. The A32, A35, A39, A26, assignment-expansion, reviewer, parallel-expansion, root-environment, shared-cache, frozen scorer configuration, output, dataset, and evidence paths remain protected. The small older checkouts were not removed because each has shared UV cache editable-finder path mappings.
+
+No further safe reclaimable duplicate checkout was identified. No cache, dataset, output, source, evidence, manifest, branch, or remote ref was deleted or modified. The cleanup stopped below the 44.5 GB target because the remaining candidates violate the path-dependency or protection rules.
