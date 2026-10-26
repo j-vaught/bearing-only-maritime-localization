@@ -5,7 +5,7 @@ import hashlib
 import json
 import runpy
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
 
@@ -14,6 +14,7 @@ from bearing_localization.search.calibration import (
     CalibrationOperatingCondition,
     DecisionCalibration,
     canonical_json,
+    execution_protocol_sha256,
     implementation_sha256,
     load_frozen_calibration,
     search_execution_sha256,
@@ -35,6 +36,23 @@ calibration_tool = runpy.run_path(
 )
 calibrate = calibration_tool["calibrate"]
 measure = calibration_tool["_measure"]
+
+
+def _execution_protocol(timeout_s: float = 300.0) -> dict[str, Any]:
+    return {
+        "schema": "accuracy-execution-protocol-v1",
+        "timeout_s": timeout_s,
+        "timeout_scope": "per_command_subprocess",
+        "deadline_clock": "monotonic_wall_clock_from_spawn",
+        "timeout_status": "search_timeout",
+        "termination_policy": {
+            "start_new_session": True,
+            "timeout_signal": "SIGTERM",
+            "grace_s": 1.0,
+            "escalation_signal": "SIGKILL",
+            "reap_process_group": True,
+        },
+    }
 
 
 def _calibration(gap: float = 2.0, radius: float | None = 100.0) -> DecisionCalibration:
@@ -63,6 +81,7 @@ def _calibration(gap: float = 2.0, radius: float | None = 100.0) -> DecisionCali
         provenance={"development": {}, "validation": {}},
         population={"development": {}, "validation": {}},
         release_eligible=True,
+        execution_protocol=_execution_protocol(),
     )
 
 
@@ -486,6 +505,7 @@ def _v2_calibration_doc(split: str, *, condition=None, context=None):
                 "report_types": condition.use_types,
                 "sensor_condition": label,
                 "supported": True,
+                "execution_protocol_sha256": execution_protocol_sha256(_execution_protocol()),
                 "search_status": "completed",
                 "distinct_matched_groups": 3,
                 "ellipse_rank": 2,
@@ -503,6 +523,7 @@ def _v2_calibration_doc(split: str, *, condition=None, context=None):
             "report_types": condition.use_types,
             "sensor_condition": "nominal",
             "supported": False,
+            "execution_protocol_sha256": execution_protocol_sha256(_execution_protocol()),
             "search_status": "failed",
             "distinct_matched_groups": 0,
             "ellipse_rank": None,
@@ -523,7 +544,9 @@ def _v2_calibration_doc(split: str, *, condition=None, context=None):
             "trial_table_sha256": "2" * 64,
             "run_manifest_sha256": ("3" if split == "development" else "4") * 64,
             "eligibility_manifest_sha256": "7" * 64,
+            "execution_protocol_sha256": execution_protocol_sha256(_execution_protocol()),
         },
+        "execution_protocol": _execution_protocol(),
         "population": {
             key: {
                 "count": len(rows),
@@ -579,6 +602,10 @@ def test_v2_calibration_uses_nominal_supported_population_and_binds_context(tmp_
     assert artifact["provenance"]["development"]["metrics_sha256"] == "5" * 64
     assert artifact["provenance"]["validation"]["metrics_sha256"] == "6" * 64
     assert artifact["provenance"]["development"]["eligibility_manifest_sha256"] == "7" * 64
+    assert artifact["execution_protocol"] == _execution_protocol()
+    assert artifact["provenance"]["development"][
+        "execution_protocol_sha256"
+    ] == execution_protocol_sha256(_execution_protocol())
 
     path = tmp_path / "v2-calibration.json"
     path.write_text(json.dumps(artifact), encoding="utf-8")
@@ -739,6 +766,193 @@ def test_v2_population_allows_only_explicit_unresolved_stress_rows():
             val,
             development_metrics_sha256="5" * 64,
             validation_metrics_sha256="6" * 64,
+        )
+
+
+def test_v2_calibration_binds_and_validates_formal_execution_protocol():
+    condition = CalibrationOperatingCondition(1000.0, True, "bearing_set_map_v1", "pairwise")
+    dev = _v2_calibration_doc("development", condition=condition)
+    val = _v2_calibration_doc("validation", condition=condition)
+    artifact = calibrate(
+        dev,
+        val,
+        development_metrics_sha256="5" * 64,
+        validation_metrics_sha256="6" * 64,
+    )
+    assert artifact["execution_protocol"] == _execution_protocol()
+    assert (
+        artifact["provenance"]["development"]["execution_protocol_sha256"]
+        == (artifact["provenance"]["validation"]["execution_protocol_sha256"])
+    )
+
+    val["execution_protocol"] = _execution_protocol(timeout_s=301.0)
+    val["provenance"]["execution_protocol_sha256"] = execution_protocol_sha256(
+        val["execution_protocol"]
+    )
+    for row in val["all_trials"]:
+        row["execution_protocol_sha256"] = val["provenance"]["execution_protocol_sha256"]
+    with pytest.raises(ValueError, match="execution protocols differ"):
+        calibrate(
+            dev,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+    for bad_timeout in (True, 0.0, -1.0, float("nan"), float("inf")):
+        val = _v2_calibration_doc("validation", condition=condition)
+        val["execution_protocol"]["timeout_s"] = bad_timeout
+        with pytest.raises(ValueError, match="timeout_s must be finite and positive"):
+            calibrate(
+                dev,
+                val,
+                development_metrics_sha256="5" * 64,
+                validation_metrics_sha256="6" * 64,
+            )
+
+    val = _v2_calibration_doc("validation", condition=condition)
+    del val["execution_protocol"]["timeout_s"]
+    with pytest.raises(ValueError, match="exactly the v1 protocol fields"):
+        calibrate(
+            dev,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+    val = _v2_calibration_doc("validation", condition=condition)
+    val["execution_protocol"]["timeout_s"] = 0.0
+    val["provenance"]["execution_protocol_sha256"] = (
+        execution_protocol_sha256(val["execution_protocol"])
+        if val["execution_protocol"]["timeout_s"] > 0
+        else "0" * 64
+    )
+    for row in val["all_trials"]:
+        row["execution_protocol_sha256"] = val["provenance"]["execution_protocol_sha256"]
+    with pytest.raises(ValueError, match="finite and positive"):
+        calibrate(
+            dev,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+    for field, invalid in (
+        ("timeout_scope", "whole_pipeline"),
+        ("deadline_clock", "process_cpu_time"),
+        ("timeout_status", "completed"),
+    ):
+        val = _v2_calibration_doc("validation", condition=condition)
+        val["execution_protocol"][field] = invalid
+        with pytest.raises(ValueError, match="Unsupported execution_protocol"):
+            calibrate(
+                dev,
+                val,
+                development_metrics_sha256="5" * 64,
+                validation_metrics_sha256="6" * 64,
+            )
+
+    val = _v2_calibration_doc("validation", condition=condition)
+    val["execution_protocol"]["termination_policy"]["reap_process_group"] = False
+    with pytest.raises(ValueError, match="process-group termination policy"):
+        calibrate(
+            dev,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+    val = _v2_calibration_doc("validation", condition=condition)
+    val["provenance"]["execution_protocol_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="provenance execution protocol hash"):
+        calibrate(
+            dev,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+    val = _v2_calibration_doc("validation", condition=condition)
+    val["all_trials"][0]["execution_protocol_sha256"] = "0" * 64
+    val["trials"] = [row for row in val["all_trials"] if row["supported"]]
+    with pytest.raises(ValueError, match="trial row execution protocol hash"):
+        calibrate(
+            dev,
+            val,
+            development_metrics_sha256="5" * 64,
+            validation_metrics_sha256="6" * 64,
+        )
+
+
+def test_legacy_v2_without_execution_protocol_is_readable_but_not_release_eligible(tmp_path):
+    condition = CalibrationOperatingCondition(1000.0, True, "bearing_set_map_v1", "pairwise")
+    context = CalibrationContext(
+        catalog_sha256="a" * 64,
+        map_sha256="b" * 64,
+        scope_manifest_sha256="c" * 64,
+        search_execution_sha256="d" * 64,
+        implementation_sha256="e" * 64,
+    )
+    artifact = calibrate(
+        _v2_calibration_doc("development", condition=condition),
+        _v2_calibration_doc("validation", condition=condition),
+        development_metrics_sha256="5" * 64,
+        validation_metrics_sha256="6" * 64,
+    )
+    artifact.pop("execution_protocol")
+    for record in artifact["provenance"].values():
+        record.pop("execution_protocol_sha256")
+    payload = {key: value for key, value in artifact.items() if key not in {"frozen", "sha256"}}
+    artifact["sha256"] = hashlib.sha256(canonical_json(payload)).hexdigest()
+    path = tmp_path / "legacy-v2.json"
+    path.write_text(json.dumps(artifact), encoding="utf-8")
+    frozen = load_frozen_calibration(path, expected_condition=condition, expected_context=context)
+    assert frozen.verified_frozen_artifact is True
+    assert frozen.release_eligible is False
+    with pytest.raises(ValueError, match="formal execution protocol"):
+        load_frozen_calibration(
+            path,
+            expected_condition=condition,
+            expected_context=context,
+            release_acceptance=True,
+        )
+
+
+def test_frozen_protocol_tampering_fails_outer_and_inner_hash_checks(tmp_path):
+    condition = CalibrationOperatingCondition(1000.0, True, "bearing_set_map_v1", "pairwise")
+    context = CalibrationContext(
+        catalog_sha256="a" * 64,
+        map_sha256="b" * 64,
+        scope_manifest_sha256="c" * 64,
+        search_execution_sha256="d" * 64,
+        implementation_sha256="e" * 64,
+    )
+    artifact = calibrate(
+        _v2_calibration_doc("development", condition=condition, context=context),
+        _v2_calibration_doc("validation", condition=condition, context=context),
+        development_metrics_sha256="5" * 64,
+        validation_metrics_sha256="6" * 64,
+    )
+    path = tmp_path / "frozen-protocol.json"
+    artifact["execution_protocol"]["timeout_s"] = 301.0
+    path.write_text(json.dumps(artifact), encoding="utf-8")
+    with pytest.raises(ValueError, match="SHA-256 verification"):
+        load_frozen_calibration(
+            path,
+            expected_condition=condition,
+            expected_context=context,
+            release_acceptance=True,
+        )
+
+    payload = {key: value for key, value in artifact.items() if key not in {"frozen", "sha256"}}
+    artifact["sha256"] = hashlib.sha256(canonical_json(payload)).hexdigest()
+    path.write_text(json.dumps(artifact), encoding="utf-8")
+    with pytest.raises(ValueError, match="protocol hash does not match"):
+        load_frozen_calibration(
+            path,
+            expected_condition=condition,
+            expected_context=context,
+            release_acceptance=True,
         )
 
 
