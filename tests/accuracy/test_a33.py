@@ -8,6 +8,11 @@ import sys
 
 import pytest
 
+from bearing_localization.accuracy_cli import (
+    _candidate_outcome_evidence,
+    _distant_region_bound_evidence,
+    evaluate_v2_main,
+)
 from bearing_localization.search.config import SearchConfig
 from bearing_localization.search.config_serialization import (
     loads_search_config,
@@ -29,7 +34,120 @@ from maritime_localization_shared.serialization import (
     contract_to_dict,
     loads_contract,
     read_contract,
+    write_contract,
 )
+
+
+def test_evaluated_unresolved_outcomes_are_counted_without_branch_sentinels() -> None:
+    counts, unresolved = _candidate_outcome_evidence(
+        {
+            "candidate_count": 10,
+            "outcome_counts": {
+                "scored": 4,
+                "invalid_water": 2,
+                "unresolved_coverage": 1,
+                "unresolved_model": 3,
+            },
+            "unresolved_regions": 999,
+        }
+    )
+    assert counts == {
+        "scored": 4,
+        "invalid_water": 2,
+        "unresolved_coverage": 1,
+        "unresolved_model": 3,
+    }
+    assert unresolved == 4
+    assert _candidate_outcome_evidence(
+        {
+            "candidate_count": 11,
+            "outcome_counts": {
+                "scored": 4,
+                "invalid_water": 2,
+                "unresolved_coverage": 1,
+                "unresolved_model": 3,
+            },
+        }
+    ) == (None, None)
+    assert _candidate_outcome_evidence({"unresolved_regions": 999}) == (None, None)
+
+
+def test_distant_bound_requires_explicit_margin_aware_scope() -> None:
+    valid = {
+        "distant_region_score_lower_bound": 8.0,
+        "distant_region_bound_scope": "all_objective_positions_at_least_100m_from_top",
+        "distant_region_bound_top_east_m": 1.0,
+        "distant_region_bound_top_north_m": 2.0,
+    }
+    assert _distant_region_bound_evidence(valid) == (
+        8.0,
+        "all_objective_positions_at_least_100m_from_top",
+        1.0,
+        2.0,
+    )
+    assert _distant_region_bound_evidence({"distant_region_score_lower_bound": 8.0}) == (
+        None,
+        None,
+        None,
+        None,
+    )
+    assert _distant_region_bound_evidence(
+        {
+            "candidate_count": 10,
+            "distant_region_score_lower_bound": float("nan"),
+            "distant_region_bound_scope": "all_objective_positions_at_least_100m_from_top",
+        }
+    ) == (None, None, None, None)
+
+
+def test_v2_evaluator_cli_passes_explicit_crs_for_geodesic_error(tmp_path) -> None:
+    estimate = tmp_path / "estimate.json"
+    truth = tmp_path / "truth.json"
+    support = tmp_path / "support.json"
+    output = tmp_path / "metrics.json"
+    write_contract(
+        estimate,
+        LocalizationResult(
+            hypotheses=(Hypothesis(0.0, 0.0, 0.0),),
+            elapsed_s=0.1,
+            decision_status="accepted",
+            search_status="completed",
+            accepted_index=0,
+        ),
+    )
+    write_contract(
+        truth,
+        EvaluationTruth(1.0, 0.0, 0.0, ()),
+    )
+    support.write_text(
+        json.dumps(
+            {
+                "valid_reference_water": True,
+                "detected_physical_catalog_matched_groups": 3,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        evaluate_v2_main(
+            [
+                "--estimate",
+                str(estimate),
+                "--truth",
+                str(truth),
+                "--support",
+                str(support),
+                "--output",
+                str(output),
+                "--coordinate-crs",
+                "EPSG:4326",
+            ]
+        )
+        == 0
+    )
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["position_error_m"] == pytest.approx(111319.490793, abs=0.01)
 
 
 def test_completed_result_can_use_final_budget_unit_but_exhaustion_cannot_be_accepted() -> None:

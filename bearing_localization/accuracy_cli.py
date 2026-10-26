@@ -7,6 +7,7 @@ import hashlib
 import json
 from collections.abc import Sequence
 from dataclasses import asdict, fields
+from math import hypot, isfinite
 from pathlib import Path
 from typing import Any, cast
 
@@ -24,6 +25,7 @@ from bearing_localization.search.config_serialization import read_search_config
 from bearing_localization.search.decision import CompetitorCoverageEvidence, apply_accuracy_decision
 from bearing_localization.search.grid import run_grid_search_v2
 from bearing_localization.search.hierarchical import run_hierarchical_search_v2
+from bearing_localization.search.modes import SearchModeEvidence, converged_mode_evidence
 from bearing_localization.search.pairwise import run_pairwise_search_v2
 from bearing_localization.search.proposals.wedge import (
     GeographicWedgeCatalogObject,
@@ -53,6 +55,104 @@ from maritime_localization_shared.serialization import (
     read_contract,
     write_contract,
 )
+
+
+def _candidate_outcome_evidence(
+    diagnostics: dict[str, Any],
+) -> tuple[dict[str, int] | None, int | None]:
+    """Return evaluated outcome counts; absence is unknown and must fail closed."""
+    raw = diagnostics.get("outcome_counts")
+    if raw is None:
+        raw = diagnostics.get("candidate_counts")
+    if not isinstance(raw, dict):
+        return None, None
+    names = ("scored", "invalid_water", "unresolved_coverage", "unresolved_model")
+    if any(type(raw.get(name)) is not int or raw[name] < 0 for name in names):
+        return None, None
+    normalized = {name: raw[name] for name in names}
+    expected_count = diagnostics.get("candidate_count", raw.get("evaluated"))
+    if type(expected_count) is not int or expected_count < 0:
+        return None, None
+    if sum(normalized.values()) != expected_count:
+        return None, None
+    unresolved = normalized["unresolved_coverage"] + normalized["unresolved_model"]
+    return normalized, unresolved
+
+
+def _top_mode_evidence_index(
+    result: LocalizationResult, modes: Sequence[SearchModeEvidence]
+) -> int | None:
+    """Find the evidence record that exactly supports the ranked result top."""
+    if not result.hypotheses:
+        return None
+    top = result.hypotheses[0]
+    top_keys = tuple(sorted(assignment.catalog_key for assignment in top.assignments))
+    for index, mode in enumerate(modes):
+        if hypot(top.east_m - mode.east_m, top.north_m - mode.north_m) > 1e-6:
+            continue
+        score_tolerance = max(1e-12, 1e-10 * max(abs(top.score), abs(mode.score)))
+        if abs(top.score - mode.score) > score_tolerance or top_keys != mode.matched_catalog_keys:
+            continue
+        if top.uncertainty is None:
+            continue
+        radius_tolerance = max(
+            1e-8,
+            1e-10 * max(top.uncertainty.major_radius_m, mode.radius_95_m),
+        )
+        if abs(top.uncertainty.major_radius_m - mode.radius_95_m) <= radius_tolerance:
+            return index
+    return None
+
+
+def _distant_region_bound_evidence(
+    diagnostics: dict[str, Any],
+) -> tuple[float | None, str | None, float | None, float | None]:
+    """Read only explicitly scoped, anchored margin-bound evidence; never infer it."""
+    lower_bound = diagnostics.get("distant_region_score_lower_bound")
+    bound_scope = diagnostics.get("distant_region_bound_scope")
+    top_east_m = diagnostics.get("distant_region_bound_top_east_m")
+    top_north_m = diagnostics.get("distant_region_bound_top_north_m")
+    if (
+        isinstance(lower_bound, bool)
+        or not isinstance(lower_bound, (int, float))
+        or not isfinite(lower_bound)
+        or bound_scope != "all_objective_positions_at_least_100m_from_top"
+        or isinstance(top_east_m, bool)
+        or not isinstance(top_east_m, (int, float))
+        or not isfinite(top_east_m)
+        or isinstance(top_north_m, bool)
+        or not isinstance(top_north_m, (int, float))
+        or not isfinite(top_north_m)
+    ):
+        return None, None, None, None
+    return float(lower_bound), bound_scope, float(top_east_m), float(top_north_m)
+
+
+def _raw_distant_hypothesis_evidence(result: LocalizationResult) -> dict[str, Any]:
+    """Serialize raw distant candidates as veto-only evidence, never competitors."""
+    if not result.hypotheses:
+        return {"top_score": None, "score_tolerance": None, "alternatives": []}
+    top = result.hypotheses[0]
+    score_tolerance = max(1e-12, 1e-10 * abs(top.score))
+    alternatives = []
+    for hypothesis in result.hypotheses[1:]:
+        distance = hypot(hypothesis.east_m - top.east_m, hypothesis.north_m - top.north_m)
+        if distance < 100.0:
+            continue
+        alternatives.append(
+            {
+                "east_m": hypothesis.east_m,
+                "north_m": hypothesis.north_m,
+                "score": hypothesis.score,
+                "score_gap": hypothesis.score - top.score,
+                "distance_from_top_m": distance,
+            }
+        )
+    return {
+        "top_score": top.score,
+        "score_tolerance": score_tolerance,
+        "alternatives": alternatives,
+    }
 
 
 def _write_json(path: str | Path, value: object) -> None:
@@ -119,7 +219,7 @@ def _search_dispatch(
             run.localization,
             {"candidate_count": run.candidate_count, "outcome_counts": dict(run.outcome_counts)},
             run.candidate_count,
-            run.localization.certificate_scope == "finite_candidate_set",
+            run.localization.search_status == "completed",
         )
     if algorithm == "hierarchical":
         run = run_hierarchical_search_v2(scorer, coarse_spacing_m=spacing_m)
@@ -215,7 +315,7 @@ def _search_dispatch(
                 report_count=run.localization.report_count,
                 objective_version=run.localization.objective_version,
             )
-            complete = localization.certificate_scope == "finite_candidate_set"
+            complete = counts.unevaluated == 0
             return (
                 localization,
                 {
@@ -229,7 +329,7 @@ def _search_dispatch(
         run = search_reference_grid(
             scorer.measurements, scorer.catalog, scorer.vector_map, config, spacing_m=spacing_m
         )
-        complete = run.localization_result.certificate_scope == "finite_candidate_set"
+        complete = run.candidate_counts.unevaluated == 0
         return (
             run.localization_result,
             {
@@ -253,7 +353,15 @@ def _search_dispatch(
             max_candidates=config.candidate_budget,
             max_regions=branch_max_regions,
         )
-        return run.localization, run.diagnostic_dict(), run.candidates_evaluated, False
+        diagnostics = run.diagnostic_dict()
+        diagnostics["outcome_counts"] = None
+        diagnostics["unresolved_region_count"] = len(run.unresolved_regions)
+        complete = (
+            run.localization.certificate_scope == "continuous_objective"
+            and run.localization.bound_gap is not None
+            and run.localization.bound_gap <= 1e-8
+        )
+        return run.localization, diagnostics, run.candidates_evaluated, complete
     if algorithm == "wedge":
         if wedge_error_deg is None:
             raise ValueError("algorithm wedge requires --max-grid-bearing-error-deg.")
@@ -309,6 +417,8 @@ def _search_dispatch(
             "candidate_cells_total": proposals.candidate_cells_total,
             "generation_status": proposals.generation_status,
             "grid_bearing_error_bound_deg": wedge_error_deg,
+            "candidate_count": run.candidate_count,
+            "outcome_counts": dict(run.outcome_counts),
         }
         return run.localization, diagnostics, run.candidate_count, False
     raise ValueError(f"Unsupported v2 search algorithm {algorithm!r}.")
@@ -463,6 +573,8 @@ def search_v2_files(
     telemetry.record_candidates(
         generated=candidate_count, evaluated=candidate_count, retained=len(result.hypotheses)
     )
+    candidate_result = result
+    mode_evidence: tuple[SearchModeEvidence, ...] = ()
     if refine and result.hypotheses:
         with telemetry.stage("continuous_refinement"):
             seeds = []
@@ -492,6 +604,7 @@ def search_v2_files(
             refined_hypotheses = tuple(
                 mode.hypothesis for mode in refined.modes if mode.hypothesis is not None
             )
+            mode_evidence = converged_mode_evidence(refined)
             merged = {
                 (round(item.east_m, 8), round(item.north_m, 8)): item for item in result.hypotheses
             }
@@ -518,22 +631,70 @@ def search_v2_files(
                 "mode_count": len(refined.modes),
                 "stop_reasons": [mode.stop_reason for mode in refined.modes],
             }
+    outcome_counts, unresolved_count = _candidate_outcome_evidence(diagnostics)
+    unresolved_region_count = diagnostics.get("unresolved_region_count", 0)
+    global_bound_excludes_outside = diagnostics.get("global_bound_excludes_outside", False)
+    if type(global_bound_excludes_outside) is not bool:
+        global_bound_excludes_outside = False
+    (
+        distant_region_score_lower_bound,
+        distant_region_bound_scope,
+        distant_region_bound_top_east_m,
+        distant_region_bound_top_north_m,
+    ) = _distant_region_bound_evidence(diagnostics)
+    if type(unresolved_region_count) is not int or unresolved_region_count < 0:
+        unresolved_region_count = 1
+    # Unknown evaluator outcomes fail closed by suppressing positive mode evidence.
+    decision_modes = mode_evidence if outcome_counts is not None else ()
+    top_mode_index = _top_mode_evidence_index(result, decision_modes)
+    public_modes = [
+        {**mode.as_dict(), "converged": True, "ellipse_rank": 2} for mode in decision_modes
+    ]
+    diagnostics["public_evidence"] = {
+        "schema": "search-mode-evidence-v1",
+        "search_status": candidate_result.search_status,
+        "scope_manifest_verified": scope_verified,
+        "mode_source": "refined_local_modes" if decision_modes else "none",
+        "top_mode_converged": top_mode_index is not None,
+        "top_mode_index": top_mode_index,
+        "mode_evidence": public_modes,
+        "candidate_outcome_counts_available": outcome_counts is not None,
+        "evaluated_candidate_count": candidate_count,
+        "unresolved_candidate_count": unresolved_count,
+        "candidate_outcome_counts": outcome_counts,
+        "unresolved_region_count": unresolved_region_count,
+        "coverage_complete": coverage_complete,
+        "global_bound_excludes_outside": global_bound_excludes_outside,
+        "distant_region_score_lower_bound": distant_region_score_lower_bound,
+        "distant_region_bound_scope": distant_region_bound_scope,
+        "distant_region_bound_top_east_m": distant_region_bound_top_east_m,
+        "distant_region_bound_top_north_m": distant_region_bound_top_north_m,
+        "certificate_scope": result.certificate_scope,
+        "bound_gap": result.bound_gap,
+        "candidate_certificate_scope": candidate_result.certificate_scope,
+        "candidate_bound_gap": candidate_result.bound_gap,
+        "raw_distant_hypothesis_veto_evidence": _raw_distant_hypothesis_evidence(result),
+    }
     if calibration_path is not None and scope_verified:
         with telemetry.stage("calibrated_decision"):
             calibration = load_frozen_calibration(calibration_path)
-            bounds = config.bounds_xy
-            assert bounds is not None
-            extent = float(np.hypot(bounds[1] - bounds[0], bounds[3] - bounds[2]))
-            unresolved = int(diagnostics.get("unresolved_coverage", 0)) + int(
-                diagnostics.get("unresolved_model", 0)
-            )
             coverage = CompetitorCoverageEvidence(
                 evaluated_candidate_count=candidate_count,
-                search_extent_m=extent,
-                coverage_complete=coverage_complete and unresolved == 0,
-                global_bound_excludes_outside=result.certificate_scope == "continuous_objective",
+                search_extent_m=0.0,
+                coverage_complete=coverage_complete,
+                global_bound_excludes_outside=global_bound_excludes_outside,
+                unresolved_candidate_count=unresolved_count,
+                candidate_outcome_counts_available=outcome_counts is not None,
+                unresolved_region_count=unresolved_region_count,
+                distant_region_score_lower_bound=distant_region_score_lower_bound,
+                distant_region_bound_scope=distant_region_bound_scope,
+                distant_region_bound_top_east_m=distant_region_bound_top_east_m,
+                distant_region_bound_top_north_m=distant_region_bound_top_north_m,
             )
-            result, _decision = apply_accuracy_decision(result, calibration, coverage=coverage)
+            result, decision = apply_accuracy_decision(
+                result, calibration, coverage=coverage, mode_evidence=decision_modes
+            )
+            diagnostics["decision_reason"] = decision.reason
     else:
         with telemetry.stage("decision"):
             if result.decision_status == "accepted":
