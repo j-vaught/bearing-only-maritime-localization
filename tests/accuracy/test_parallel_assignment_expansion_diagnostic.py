@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 import types
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -160,11 +160,18 @@ def test_coarse_seed_uses_original_a20_cached_pose_despite_better_saved_refined_
     assert assigned_refined.score < original_cached.score
 
     mode_identity = {"candidate_id": "production-fixture-cell", "input_index": 17}
-    a20_row = {
-        **mode_identity,
-        "cached_hypothesis": asdict(original_cached),
-        "refined_mode": {"hypothesis": asdict(pattern_refined)},
-    }
+    from tools.run_assigned_refinement_diagnostic import ModeRow
+
+    a20_row = ModeRow(
+        mode_index=0,
+        input_index=mode_identity["input_index"],
+        candidate_id=mode_identity["candidate_id"],
+        chunk_name="fixture-chunk.json",
+        chunk_sha256="a" * 64,
+        sidecar_sha256="b" * 64,
+        cached_hypothesis=original_cached,
+        refined_hypothesis=pattern_refined,
+    )
     assigned_row = {
         "mode_index": 0,
         **mode_identity,
@@ -217,7 +224,7 @@ def test_coarse_seed_uses_original_a20_cached_pose_despite_better_saved_refined_
             config,
             scorer,
             seed_stage="coarse",
-            a20_rows=[{**a20_row, "candidate_id": "mismatched-cell"}],
+            a20_rows=[replace(a20_row, candidate_id="mismatched-cell")],
         )
 
 

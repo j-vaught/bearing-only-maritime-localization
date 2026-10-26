@@ -27,6 +27,7 @@ for _name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUM
 
 from maritime_localization_shared.contracts.localization import Hypothesis
 from tools import run_assignment_expansion_diagnostic as serial
+from tools.run_assigned_refinement_diagnostic import ModeRow
 
 MODE_COUNT = serial.MODE_COUNT
 FLOOR_BYTES = serial.FLOOR_BYTES
@@ -241,7 +242,7 @@ def prepare_mode_tasks(
     scorer: Any,
     *,
     seed_stage: str = DEFAULT_SEED_STAGE,
-    a20_rows: Sequence[Any] | None = None,
+    a20_rows: Sequence[ModeRow] | None = None,
 ) -> tuple[list[Any], dict[int, dict[str, Any]]]:
     """Revalidate both saved starts and select the configured seed stage."""
     if seed_stage not in SEED_STAGES:
@@ -257,14 +258,12 @@ def prepare_mode_tasks(
             if a20_rows is None or len(a20_rows) != len(rows):
                 raise serial.DiagnosticInputError("coarse seed requires the matching A20 mode rows")
             a20_row = a20_rows[mode_index]
-            if a20_row.get("candidate_id") != row.get("candidate_id") or a20_row.get(
+            if a20_row.candidate_id != row.get("candidate_id") or a20_row.input_index != row.get(
                 "input_index"
-            ) != row.get("input_index"):
+            ):
                 raise serial.DiagnosticInputError("assigned mode does not match its A20 origin")
             label = "a20.cached_hypothesis"
-            a20_coarse_source = serial._hypothesis(
-                a20_row.get("cached_hypothesis"), "A20 cached_hypothesis"
-            )
+            a20_coarse_source = a20_row.cached_hypothesis
         else:
             label, _saved_seed = serial.choose_best_start(row)
         exact_by_label, alternatives = {}, []
