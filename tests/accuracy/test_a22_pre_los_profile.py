@@ -148,3 +148,14 @@ def test_post_pass_rejects_forged_overlarge_bound():
             (replace(pruned, lower_bound=1.0e12),),
             exact_best_score=seed.hypothesis.score,
         )
+
+
+def test_isclose_tie_margin_covers_relative_tolerance_for_negative_best():
+    from tools.profile_pre_los_bound import _isclose_tie_margin
+
+    best = -10_000.0
+    margin = _isclose_tie_margin(best, abs_tol=1e-8, rel_tol=1e-3)
+    candidate_at_edge = best + margin * 0.99
+    candidate_beyond_edge = best + margin * 1.01
+    assert math.isclose(candidate_at_edge, best, abs_tol=1e-8, rel_tol=1e-3)
+    assert not math.isclose(candidate_beyond_edge, best, abs_tol=1e-8, rel_tol=1e-3)
