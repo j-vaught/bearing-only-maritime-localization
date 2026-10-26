@@ -28,9 +28,13 @@
       "expanded_best_score_rank_row": 4,
       "expanded_modes_within_100m": 1,
       "branch_result_reconciliation": {
-        "exact_rescored_poses": 12204,
-        "invalid_water": 8225,
-        "max_nfev_without_exact_score": 6
+        "fully_replayed_branch_results": 20381,
+        "replayed_exact_scored_results": 12150,
+        "invalid_water_outcomes": 8225,
+        "max_nfev_without_exact_score": 6,
+        "partial_tail_mode_scored_results_structurally_checked_only": 54,
+        "all_branch_results": 20435,
+        "note": "Mode rows 0-59 are fully replayed. Partial mode 60 contributes 54 scored results that were structurally checked but not replayed. Counts reconcile 20381 + 54 = 20435; 12150 + 8225 + 6 = 20381."
       }
     },
     "prior_wrong_mode_after_expansion": {
@@ -162,9 +166,13 @@
     "expanded_best_score_rank_row": 4,
     "expanded_modes_within_100m": 1,
     "branch_result_reconciliation": {
-      "exact_rescored_poses": 12204,
-      "invalid_water": 8225,
-      "max_nfev_without_exact_score": 6
+      "fully_replayed_branch_results": 20381,
+      "replayed_exact_scored_results": 12150,
+      "invalid_water_outcomes": 8225,
+      "max_nfev_without_exact_score": 6,
+      "partial_tail_mode_scored_results_structurally_checked_only": 54,
+      "all_branch_results": 20435,
+      "note": "Mode rows 0-59 are fully replayed. Partial mode 60 contributes 54 scored results that were structurally checked but not replayed. Counts reconcile 20381 + 54 = 20435; 12150 + 8225 + 6 = 20381."
     },
     "timing_scope": "single-addition branch expansion over the fixed selected-mode prefix; 60 of 64 mode rows completed; diagnostic runner time, not end-to-end or per-frame latency",
     "serial_runtime_s": 1800.016071
@@ -178,9 +186,13 @@
     "branch_rescore_complete": true,
     "durable_branch_result_event_count": 20435,
     "branch_result_reconciliation": {
-      "exact_rescored_poses": 12204,
-      "invalid_water": 8225,
-      "max_nfev_without_exact_score": 6
+      "fully_replayed_branch_results": 20381,
+      "replayed_exact_scored_results": 12150,
+      "invalid_water_outcomes": 8225,
+      "max_nfev_without_exact_score": 6,
+      "partial_tail_mode_scored_results_structurally_checked_only": 54,
+      "all_branch_results": 20435,
+      "note": "Mode rows 0-59 are fully replayed. Partial mode 60 contributes 54 scored results that were structurally checked but not replayed. Counts reconcile 20381 + 54 = 20435; 12150 + 8225 + 6 = 20381."
     },
     "full_domain_complete": false,
     "accepted_fix_claim": false,
@@ -1771,5 +1783,11 @@
     },
     "summary": "The selected-set score winner remains the wrong association mode after assigned fitting."
   },
-  "truth_used_for_refinement": false
+  "truth_used_for_refinement": false,
+  "audit_annotation_erratum": {
+    "kind": "scope correction to branch-result count presentation",
+    "immutable_a35_audit_artifact_sha256": "7111b39f72caf0df53e655681cb4460118b781a08bbbafdd396056774523bbf8",
+    "correction": "The frozen JSON has 20,435 total branch results. Rows 0-59 account for 20,381 fully replayed results (12,150 scored, 8,225 invalid water, 6 max_nfev without exact score). Partial mode 60 adds 54 scored results that were structurally checked only, not replayed.",
+    "winning_expansion_estimate_unchanged": true
+  }
 }
