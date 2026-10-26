@@ -528,6 +528,16 @@ def _search_dispatch(
                 positions,
                 candidate_limit=config.candidate_budget,
                 certificate_scope="finite_candidate_set",
+                progress_callback=(
+                    (
+                        lambda completed, progress_total: progress_callback(
+                            "gpu_reference_grid", completed, progress_total
+                        )
+                    )
+                    if progress_callback is not None
+                    else None
+                ),
+                progress_total=min(total, config.candidate_budget),
             )
         else:
             run = run_grid_search_v2(scorer, grid_spacing_m=spacing_m)
