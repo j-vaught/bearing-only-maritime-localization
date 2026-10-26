@@ -51,6 +51,36 @@ class SearchModeEvidence:
         }
 
 
+def verified_mode_competitor_gap(
+    *,
+    top_east_m: float,
+    top_north_m: float,
+    top_score: float,
+    modes: tuple[SearchModeEvidence, ...] | list[SearchModeEvidence],
+) -> tuple[bool, float | None]:
+    """Return top-mode verification and its best distinct distant-mode score gap."""
+    if not all(isfinite(value) for value in (top_east_m, top_north_m, top_score)):
+        return False, None
+    matching = [
+        mode
+        for mode in modes
+        if hypot(mode.east_m - top_east_m, mode.north_m - top_north_m) <= 1e-6
+        and abs(mode.score - top_score) <= max(1e-12, 1e-10 * max(abs(mode.score), abs(top_score)))
+    ]
+    if not matching:
+        return False, None
+    top_mode = min(matching, key=lambda mode: (mode.score, mode.east_m, mode.north_m))
+    distant = [
+        mode
+        for mode in modes
+        if hypot(mode.east_m - top_mode.east_m, mode.north_m - top_mode.north_m) >= 100.0
+    ]
+    if not distant:
+        return True, None
+    competitor = min(distant, key=lambda mode: (mode.score, mode.east_m, mode.north_m))
+    return True, competitor.score - top_mode.score
+
+
 def converged_mode_evidence(
     refinement: RefinementResult,
     *,
@@ -101,4 +131,4 @@ def converged_mode_evidence(
     return tuple(retained)
 
 
-__all__ = ["SearchModeEvidence", "converged_mode_evidence"]
+__all__ = ["SearchModeEvidence", "converged_mode_evidence", "verified_mode_competitor_gap"]

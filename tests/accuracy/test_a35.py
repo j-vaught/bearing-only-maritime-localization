@@ -210,21 +210,48 @@ def _mode(hypothesis: Hypothesis, stop_reason: str = "displacement_below_0_01m")
 def _result(
     *hypotheses: Hypothesis,
     status: Literal["completed", "budget_exhausted", "failed"] = "completed",
+    certificate: Literal["none", "finite_candidate_set", "continuous_objective"] = "none",
+    gap: float | None = None,
 ) -> LocalizationResult:
     return LocalizationResult(
         hypotheses=tuple(hypotheses),
         elapsed_s=0.1,
         decision_status="ambiguous",
         search_status=status,
+        certificate_scope=certificate,
+        bound_gap=gap,
+        budget_limit=10 if status == "budget_exhausted" else None,
+        budget_used=10 if status == "budget_exhausted" else None,
     )
 
 
-def _coverage(*, unresolved: int = 0, complete: bool = False):
+def _coverage(
+    *,
+    unresolved: int | None = 0,
+    complete: bool = False,
+    global_exclusion: bool = False,
+    outcome_counts_available: bool = True,
+    unresolved_regions: int = 0,
+    distant_lower_bound: float | None = None,
+    distant_bound_scope: str | None = None,
+    distant_bound_anchor: tuple[float, float] | None = None,
+):
     return CompetitorCoverageEvidence(
         evaluated_candidate_count=10,
         search_extent_m=0.0,
         coverage_complete=complete,
+        global_bound_excludes_outside=global_exclusion,
         unresolved_candidate_count=unresolved,
+        candidate_outcome_counts_available=outcome_counts_available,
+        unresolved_region_count=unresolved_regions,
+        distant_region_score_lower_bound=distant_lower_bound,
+        distant_region_bound_scope=distant_bound_scope,
+        distant_region_bound_top_east_m=(
+            None if distant_bound_anchor is None else distant_bound_anchor[0]
+        ),
+        distant_region_bound_top_north_m=(
+            None if distant_bound_anchor is None else distant_bound_anchor[1]
+        ),
     )
 
 
@@ -327,3 +354,126 @@ def test_mode_extractor_excludes_iteration_limit_and_deduplicates_nearest_first(
         "radius_95_m": 20.0,
         "stop_reason": "displacement_below_0_01m",
     }
+
+
+def test_strict_continuous_global_proof_accepts_without_converged_mode_evidence():
+    top = _hypothesis(0.0, 0.0)
+    result = _result(top, certificate="continuous_objective", gap=0.0)
+    decision = decide_localization(
+        result,
+        _calibration(),
+        coverage=_coverage(
+            complete=True,
+            global_exclusion=True,
+            distant_lower_bound=3.0,
+            distant_bound_scope="all_objective_positions_at_least_100m_from_top",
+            distant_bound_anchor=(0.0, 0.0),
+        ),
+        mode_evidence=None,
+    )
+    assert decision.decision_status == "accepted"
+    assert decision.reason == "calibrated_unique_fix_with_global_exclusion"
+
+
+def test_strict_proof_can_cover_unavailable_candidate_counters_only_with_closed_queue():
+    top = _hypothesis(0.0, 0.0)
+    result = _result(top, certificate="continuous_objective", gap=0.0)
+    coverage = _coverage(
+        unresolved=None,
+        complete=True,
+        global_exclusion=True,
+        outcome_counts_available=False,
+        distant_lower_bound=3.0,
+        distant_bound_scope="all_objective_positions_at_least_100m_from_top",
+        distant_bound_anchor=(0.0, 0.0),
+    )
+    decision = decide_localization(result, _calibration(), coverage=coverage)
+    assert decision.decision_status == "accepted"
+
+
+def test_global_proof_rejects_unresolved_candidate_or_region_evidence():
+    top = _hypothesis(0.0, 0.0)
+    result = _result(top, certificate="continuous_objective", gap=0.0)
+    unresolved_candidate = decide_localization(
+        result,
+        _calibration(),
+        coverage=_coverage(
+            unresolved=1,
+            complete=True,
+            global_exclusion=True,
+        ),
+    )
+    unresolved_region = decide_localization(
+        result,
+        _calibration(),
+        coverage=_coverage(
+            unresolved=None,
+            complete=True,
+            global_exclusion=True,
+            outcome_counts_available=False,
+            unresolved_regions=1,
+            distant_lower_bound=3.0,
+            distant_bound_scope="all_objective_positions_at_least_100m_from_top",
+            distant_bound_anchor=(0.0, 0.0),
+        ),
+    )
+    assert unresolved_candidate.decision_status == "ambiguous"
+    assert unresolved_candidate.reason == "unresolved_evaluated_geometry"
+    assert unresolved_region.decision_status == "ambiguous"
+    assert unresolved_region.reason == "candidate_outcome_counts_unavailable"
+
+
+def test_uncertified_or_contradictory_global_claims_do_not_accept():
+    top = _hypothesis(0.0, 0.0)
+    cases = (
+        (
+            _result(top, certificate="finite_candidate_set", gap=0.0),
+            _coverage(complete=True, global_exclusion=True),
+        ),
+        (
+            _result(top, certificate="continuous_objective", gap=0.0),
+            _coverage(
+                complete=True,
+                global_exclusion=True,
+                distant_lower_bound=1.0,
+                distant_bound_scope="all_objective_positions_at_least_100m_from_top",
+                distant_bound_anchor=(0.0, 0.0),
+            ),
+        ),
+        (
+            _result(top, certificate="continuous_objective", gap=0.1),
+            _coverage(complete=True, global_exclusion=True),
+        ),
+        (
+            _result(top, certificate="continuous_objective", gap=0.0),
+            _coverage(complete=False, global_exclusion=True),
+        ),
+        (
+            _result(top, certificate="continuous_objective", gap=0.0),
+            _coverage(complete=True, global_exclusion=False),
+        ),
+        (
+            _result(top, certificate="continuous_objective", gap=0.0, status="budget_exhausted"),
+            _coverage(complete=True, global_exclusion=True),
+        ),
+    )
+    for result, coverage in cases:
+        decision = decide_localization(result, _calibration(), coverage=coverage)
+        assert decision.decision_status == "ambiguous"
+
+
+def test_global_distance_bound_must_match_final_top_anchor():
+    top = _hypothesis(0.0, 0.0)
+    result = _result(top, certificate="continuous_objective", gap=0.0)
+    decision = decide_localization(
+        result,
+        _calibration(),
+        coverage=_coverage(
+            complete=True,
+            global_exclusion=True,
+            distant_lower_bound=3.0,
+            distant_bound_scope="all_objective_positions_at_least_100m_from_top",
+            distant_bound_anchor=(10.0, 0.0),
+        ),
+    )
+    assert decision.decision_status == "ambiguous"

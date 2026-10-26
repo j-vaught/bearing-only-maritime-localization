@@ -5,22 +5,208 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
 from bearing_localization.search.calibration import RADIUS_LIMITS, SCORE_GAPS, canonical_json
+from bearing_localization.search.decision import (
+    CompetitorCoverageEvidence,
+    competitor_gap_clears_threshold,
+    global_exclusion_evidence_is_valid,
+    raw_candidate_vetoes_margin,
+    score_tolerance_for_top,
+)
+from bearing_localization.search.modes import SearchModeEvidence, verified_mode_competitor_gap
+
+
+def _value(trial: dict[str, Any], key: str, default: Any = None) -> Any:
+    public_evidence = trial.get("public_evidence")
+    if isinstance(public_evidence, dict) and key in public_evidence:
+        return public_evidence[key]
+    return trial.get(key, default)
+
+
+def _score_tolerance(trial: dict[str, Any]) -> float:
+    supplied = _value(trial, "score_tolerance")
+    if isinstance(supplied, (int, float)) and isfinite(float(supplied)) and supplied >= 0.0:
+        return float(supplied)
+    top_score = _value(trial, "top_score")
+    if isinstance(top_score, (int, float)) and isfinite(float(top_score)):
+        return score_tolerance_for_top(float(top_score))
+    # Legacy metric inputs did not carry top-score/tolerance telemetry.
+    return 1e-12
+
+
+def _coverage(trial: dict[str, Any]) -> CompetitorCoverageEvidence | None:
+    available = _value(trial, "candidate_outcome_counts_available", True)
+    if not isinstance(available, bool):
+        return None
+    unresolved = _value(trial, "unresolved_candidate_count", 0 if available else None)
+    candidate_count = _value(trial, "evaluated_candidate_count", 0)
+    unresolved_regions = _value(trial, "unresolved_region_count", 0)
+    extent = _value(trial, "search_extent_m", 0.0)
+    try:
+        return CompetitorCoverageEvidence(
+            evaluated_candidate_count=candidate_count,
+            search_extent_m=extent,
+            coverage_complete=_value(trial, "coverage_complete") is True,
+            global_bound_excludes_outside=(_value(trial, "global_bound_excludes_outside") is True),
+            unresolved_candidate_count=unresolved,
+            candidate_outcome_counts_available=available,
+            unresolved_region_count=unresolved_regions,
+            distant_region_score_lower_bound=_value(trial, "distant_region_score_lower_bound"),
+            distant_region_bound_scope=_value(trial, "distant_region_bound_scope"),
+            distant_region_bound_top_east_m=_value(trial, "distant_region_bound_top_east_m"),
+            distant_region_bound_top_north_m=_value(trial, "distant_region_bound_top_north_m"),
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def _global_proof_at_gap(trial: dict[str, Any], min_score_gap: float) -> bool:
+    coverage = _coverage(trial)
+    top_score = _value(trial, "top_score")
+    tolerance = _score_tolerance(trial)
+    if (
+        coverage is None
+        or not isinstance(top_score, (int, float))
+        or not isfinite(float(top_score))
+    ):
+        return False
+    certificate_scope = _value(
+        trial, "candidate_certificate_scope", _value(trial, "certificate_scope")
+    )
+    bound_gap = _value(trial, "candidate_bound_gap", _value(trial, "bound_gap"))
+    return global_exclusion_evidence_is_valid(
+        search_status=_value(trial, "search_status", ""),
+        coverage=coverage,
+        certificate_scope=certificate_scope,
+        bound_gap=bound_gap,
+        top_score=float(top_score),
+        min_score_gap=min_score_gap,
+        score_tolerance=tolerance,
+        top_east_m=_value(trial, "top_east_m", float("nan")),
+        top_north_m=_value(trial, "top_north_m", float("nan")),
+    )
+
+
+def _mode_gap(trial: dict[str, Any]) -> tuple[bool, float | None]:
+    """Read serialized converged modes using the runtime competitor predicate."""
+    public_evidence = trial.get("public_evidence")
+    has_modes = "mode_evidence" in trial or (
+        isinstance(public_evidence, dict) and "mode_evidence" in public_evidence
+    )
+    if has_modes:
+        records = _value(trial, "mode_evidence")
+        if not isinstance(records, list):
+            return True, None
+        try:
+            modes = tuple(
+                SearchModeEvidence(
+                    east_m=record["east_m"],
+                    north_m=record["north_m"],
+                    score=record["score"],
+                    matched_catalog_keys=tuple(record["matched_catalog_keys"]),
+                    radius_95_m=record["radius_95_m"],
+                    stop_reason=record["stop_reason"],
+                )
+                for record in records
+                if isinstance(record, dict)
+            )
+        except (KeyError, TypeError, ValueError):
+            return True, None
+        if len(modes) != len(records):
+            return True, None
+        top_east_m = _value(trial, "top_east_m")
+        top_north_m = _value(trial, "top_north_m")
+        top_score = _value(trial, "top_score")
+        if not all(
+            isinstance(value, (int, float)) and isfinite(float(value))
+            for value in (top_east_m, top_north_m, top_score)
+        ):
+            return True, None
+        _, gap = verified_mode_competitor_gap(
+            top_east_m=float(top_east_m),
+            top_north_m=float(top_north_m),
+            top_score=float(top_score),
+            modes=modes,
+        )
+        return True, gap
+    meaningful = _value(trial, "meaningful_distant_coverage")
+    gap = _value(trial, "score_gap")
+    if meaningful is not True or not isinstance(gap, (int, float)) or not isfinite(float(gap)):
+        return False, None
+    # Backward-compatible metric rows predate serialized mode evidence.
+    return True, float(gap)
+
+
+def _has_mode_competitor(trial: dict[str, Any]) -> bool:
+    available = _value(trial, "candidate_outcome_counts_available", True)
+    unresolved = _value(trial, "unresolved_candidate_count", 0 if available else None)
+    has_gap, score_gap = _mode_gap(trial)
+    return available is True and unresolved == 0 and has_gap and score_gap is not None
 
 
 def _eligible(trial: dict[str, Any]) -> bool:
-    return (
-        trial.get("search_status") == "completed"
-        and trial.get("distinct_matched_groups", 0) >= 3
-        and trial.get("ellipse_rank") == 2
-        and trial.get("meaningful_distant_coverage") is True
-        and isinstance(trial.get("score_gap"), (int, float))
-        and isinstance(trial.get("radius_95_m"), (int, float))
-        and isinstance(trial.get("error_m"), (int, float))
+    if (
+        _value(trial, "search_status") != "completed"
+        or _value(trial, "distinct_matched_groups", 0) < 3
+        or _value(trial, "ellipse_rank") != 2
+        or not isinstance(_value(trial, "radius_95_m"), (int, float))
+        or not isfinite(float(_value(trial, "radius_95_m")))
+        or not isinstance(_value(trial, "error_m"), (int, float))
+        or not isfinite(float(_value(trial, "error_m")))
+    ):
+        return False
+    if _has_mode_competitor(trial):
+        return True
+    return _global_proof_at_gap(trial, 0.0)
+
+
+def _raw_candidate_vetoes(trial: dict[str, Any], min_score_gap: float) -> bool:
+    public_evidence = trial.get("public_evidence")
+    has_nested = isinstance(public_evidence, dict) and (
+        "raw_distant_hypothesis_veto_evidence" in public_evidence
     )
+    if "raw_distant_hypothesis_veto_evidence" not in trial and not has_nested:
+        return False
+    evidence = _value(trial, "raw_distant_hypothesis_veto_evidence")
+    if not isinstance(evidence, list):
+        return True
+    for candidate in evidence:
+        if not isinstance(candidate, dict):
+            return True
+        score_gap = candidate.get("score_gap")
+        tolerance = candidate.get("score_tolerance")
+        if (
+            not isinstance(score_gap, (int, float))
+            or not isfinite(float(score_gap))
+            or not isinstance(tolerance, (int, float))
+            or not isfinite(float(tolerance))
+            or tolerance < 0.0
+        ):
+            return True
+        if raw_candidate_vetoes_margin(float(score_gap), min_score_gap, float(tolerance)):
+            return True
+    return False
+
+
+def _accepted_at_threshold(trial: dict[str, Any], gap: float, radius: float | None) -> bool:
+    if not _eligible(trial):
+        return False
+    radius_95_m = float(_value(trial, "radius_95_m"))
+    if radius is not None and radius_95_m > radius:
+        return False
+    if _raw_candidate_vetoes(trial, gap):
+        return False
+    if _global_proof_at_gap(trial, gap):
+        return True
+    if not _has_mode_competitor(trial):
+        return False
+    tolerance = _score_tolerance(trial)
+    _, mode_gap = _mode_gap(trial)
+    return mode_gap is not None and competitor_gap_clears_threshold(mode_gap, gap, tolerance)
 
 
 def _check_trials(document: dict[str, Any], split: str) -> list[dict[str, Any]]:
@@ -36,11 +222,7 @@ def _check_trials(document: dict[str, Any], split: str) -> list[dict[str, Any]]:
 
 def _measure(trials: list[dict[str, Any]], gap: float, radius: float | None) -> dict[str, Any]:
     eligible = [row for row in trials if _eligible(row)]
-    accepted = [
-        row
-        for row in eligible
-        if row["score_gap"] >= gap and (radius is None or row["radius_95_m"] <= radius)
-    ]
+    accepted = [row for row in eligible if _accepted_at_threshold(row, gap, radius)]
     errors = sorted(float(row["error_m"]) for row in accepted)
     count = len(accepted)
     return {
