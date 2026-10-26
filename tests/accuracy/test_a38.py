@@ -155,6 +155,56 @@ def test_parallel_row_validation_rejects_missing_and_duplicate_ids() -> None:
         validate_worker_ids(["a", "b"], ["a"])
 
 
+def test_parallel_merge_accounts_for_explicit_failures_without_outputs(tmp_path: Path) -> None:
+    worker = tmp_path / "worker"
+    canonical = tmp_path / "canonical"
+    prep = worker / "development/preparation.csv"
+    prep.parent.mkdir(parents=True)
+    trial_id = "development/port-001/placement-001/r0/range1000m/typeson/map_buffer"
+    with prep.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=["trial_id", "status", "failure"])
+        writer.writeheader()
+        writer.writerow(
+            {
+                "trial_id": trial_id,
+                "status": "failed",
+                "failure": "Observer must lie in known water on the observation map.",
+            }
+        )
+
+    merged = _merge_worker(worker, canonical, tmp_path / "truth.csv", tmp_path / "audit.csv")
+
+    assert merged == 1
+    rows = list(csv.DictReader((canonical / "development/preparation.csv").open()))
+    assert rows == [
+        {
+            "trial_id": trial_id,
+            "status": "failed",
+            "failure": "Observer must lie in known water on the observation map.",
+        }
+    ]
+    assert not (canonical / "development/port-001/placement-001").exists()
+
+
+def test_parallel_merge_rejects_completed_row_without_output(tmp_path: Path) -> None:
+    worker = tmp_path / "worker"
+    prep = worker / "development/preparation.csv"
+    prep.parent.mkdir(parents=True)
+    with prep.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=["trial_id", "status"])
+        writer.writeheader()
+        writer.writerow(
+            {
+                "trial_id": "development/port-001/placement-001/r0/range1000m/typeson/nominal",
+                "status": "completed",
+            }
+        )
+    with pytest.raises(RuntimeError, match="missing completed"):
+        _merge_worker(
+            worker, tmp_path / "canonical", tmp_path / "truth.csv", tmp_path / "audit.csv"
+        )
+
+
 def test_parallel_merge_refuses_duplicate_trial_directory(tmp_path: Path) -> None:
     source = tmp_path / "worker/development/port-001/placement-001/r0/1000m/types-on/nominal"
     destination = (
