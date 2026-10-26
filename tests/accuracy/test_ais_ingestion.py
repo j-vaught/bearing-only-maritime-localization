@@ -112,10 +112,14 @@ def test_observer_is_excluded_and_mmsi_keys_are_stable() -> None:
     assert [record.key for record in catalog.records] == ["mmsi:999"]
 
 
-def test_legacy_csv_uses_source_key_without_inventing_mmsi() -> None:
-    root = Path(__file__).parents[2]
+def test_legacy_csv_uses_source_key_without_inventing_mmsi(tmp_path: Path) -> None:
+    source = tmp_path / "ais.csv"
+    source.write_text(
+        "object_id,timestamp_utc,latitude_deg,longitude_deg,sog_kn,cog_deg,vessel_type_code\n"
+        "0,2023-07-15T12:00:43,39.32071,-76.42902,0.0,130.5,36\n"
+    )
     catalog = read_ais_csv(
-        root / "data/eastern-seaboard_2023-07-15T1200Z.csv",
+        source,
         target_time_utc="2023-07-15T12:00:30Z",
     )
     record = catalog.records[0]

@@ -12,9 +12,9 @@ uv run python examples/simulate.py
 uv run python examples/wedge.py
 ```
 
-Every example loads the same complete East Coast catalog and vector map from `data/`. The compressed files unpack automatically into that same folder after checksum verification. No additional dataset download is required.
+Every example uses the full East Coast map and selects AIS, chart aids, or both from `data/`. The compressed files unpack automatically into that same folder after checksum verification. No additional dataset download is required.
 
-Edit the settings at the top of an example to choose an observer, visibility range, candidate budget, or method. Observer IDs refer to `data/observer_locations.csv`. The table records each location's current map status. B1 is in known water. Simulation rejects positions on land or outside known coverage.
+Edit the settings at the top of an example to choose an observer, visibility range, candidate budget, or method. Set `CATALOG_MODE` to `"ais"`, `"chart_aids"`, or `"both"`. Observer IDs refer to `data/observer_locations.csv`. The table records each location's current map status. B1 is in known water. Simulation rejects positions on land or outside known coverage.
 
 ## Examples
 
@@ -32,7 +32,13 @@ Edit the settings at the top of an example to choose an observer, visibility ran
 | [compare_types.py](examples/compare_types.py) | Compare type labels enabled and disabled on identical bearings. |
 | [compare_ranges.py](examples/compare_ranges.py) | Compare 1, 5 and 10 km visibility. |
 | [compare_backends.py](examples/compare_backends.py) | Compare CPU and GPU requests sequentially. |
-| [replay.py](examples/replay.py) | Search using saved bearings without running the simulator. |
+| [compare_catalogs.py](examples/compare_catalogs.py) | Compare AIS only, chart aids only, and both on identical observations. |
+
+The catalog comparison simulates one scene containing both vessels and chart aids, then changes only the catalog supplied to search. Every run sees the same bearings, noise, clutter and angular merges. Evaluation adjusts the available catalog associations and support count for each mode before search starts.
+
+```text
+uv run python examples/compare_catalogs.py
+```
 
 The scripts share `examples/_data.py` for verified data loading and `examples/_common.py` for simulation, process handoff, and result reporting. They do not contain separate copies of the dataset. Small synthetic fixtures live under `tests/`.
 
@@ -42,11 +48,11 @@ Each search invocation writes a new timestamped folder under `runs/`. It contain
 
 The summary reports the best hypothesis's geodesic position error separately from accepted-fix error. Ambiguity, failure, and budget exhaustion remain explicit. `search_process_ms` includes interpreter startup, full input loading, search, and output writing; data unpacking and simulation happen before that interval.
 
-These are editable manual experiments. Default budgets do not complete a coast-wide search, and the 25 km grid is a coarse demonstration. The full catalog and declared search domain remain unchanged across examples. Range and land visibility limit detections, not the search domain. Dynamic-map branch-and-bound does not currently have a certified exclusion bound. An uncalibrated result may remain ambiguous.
+These are editable manual experiments. Default budgets do not complete a coast-wide search, and the 25 km grid is a coarse demonstration. Catalog selection changes which objects search knows. The full geographic search domain stays unchanged and is defined in `examples/_common.py`. Range and land visibility limit detections, not the search domain. Dynamic-map branch-and-bound does not currently have a certified exclusion bound. An uncalibrated result may remain ambiguous.
 
 ## Data and software
 
-All data files are directly under [data/](data/README.md). `objects.json.gz` and `map.json.gz` are the shared runtime inputs. Source CSVs and manifests retain provenance. `observer_locations.csv` is simulator/evaluator truth; search receives only bearings, catalog, map, and configuration.
+All data files are directly under [data/](data/README.md). `objects-ais.json.gz`, `objects-chart-aids.json.gz`, and `map.json.gz` are the shared runtime inputs. Source descriptions and checksums retain provenance. `observer_locations.csv` is simulator/evaluator truth; search receives only bearings, catalog, map, and configuration.
 
 Production code is in `bearing_localization/`, `maritime_localization_shared/`, and `maritime_localization_ingest/`. Tests are named by the behavior they check.
 

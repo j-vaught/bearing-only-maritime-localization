@@ -13,7 +13,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal, cast
 
-from _data import ROOT, prepare_data
+from _data import ROOT, CatalogMode, catalog_spec, digest, prepare_data
 from pyproj import Geod, Transformer
 
 from bearing_localization.accuracy_cli import evaluate_v2_files
@@ -33,8 +33,15 @@ from maritime_localization_shared.geospatial.vector_map import VectorMap
 from maritime_localization_shared.serialization import read_contract, write_contract
 
 DATA = ROOT / "data"
-SCOPE = DATA / "search-domain.json"
 PROJECTED_CRS = "EPSG:32618"
+# Full coast search bounds in projected meters: xmin, xmax, ymin, ymax.
+# These settings never depend on the simulated observer or chosen catalog source.
+SEARCH_BOUNDS_M = (
+    -220366.49772326474,
+    1424309.6784374337,
+    2699585.3102704627,
+    5088044.413143414,
+)
 
 
 @dataclass(frozen=True)
@@ -140,12 +147,43 @@ def simulate(
     return Frame(directory, measurements, truth, support, range_m, sigma_deg, seed)
 
 
-def replay(directory: Path, *, range_m: float = 10_000.0) -> Frame:
-    """Use the saved synthetic bearings; their old truth is not in the checkout."""
-    prepare_data()
-    measurements = directory / "measurements.json"
-    write_contract(measurements, read_contract(DATA / "example-bearings.json", MeasurementSetV2))
-    return Frame(directory, measurements, None, None, range_m, 0.5, 11)
+def evaluation_inputs(
+    frame: Frame,
+    directory: Path,
+    catalog_path: Path,
+) -> tuple[Path | None, Path | None, int | None]:
+    """Bind evaluator associations and support to the selected catalog before search."""
+    if frame.truth is None or frame.support is None:
+        return None, None, None
+    selected_keys = {record.key for record in read_contract(catalog_path, CatalogV2).records}
+    truth = read_contract(frame.truth, EvaluationTruth)
+    allowed_ids = {f"catalog:{key}" for key in selected_keys}
+    # Keep every physical target and all observations. Only its catalog availability changes.
+    selected_truth = replace(
+        truth,
+        objects=tuple(
+            replace(
+                item,
+                ais_record_id=(item.ais_record_id if item.ais_record_id in allowed_ids else None),
+            )
+            for item in truth.objects
+        ),
+    )
+    diagnostics = json.loads((frame.directory / "simulation.json").read_text())
+    matched_groups = {
+        group["observation_index"]
+        for group in diagnostics["groups"]
+        if group["detected"]
+        and group["observation_index"] is not None
+        and group["representative_catalog_key"] in selected_keys
+    }
+    support = json.loads(frame.support.read_text())
+    support["detected_physical_catalog_matched_groups"] = len(matched_groups)
+    truth_path = directory / "evaluation-truth.json"
+    support_path = directory / "evaluation-support.json"
+    write_contract(truth_path, selected_truth)
+    save_json(support_path, support)
+    return truth_path, support_path, len(matched_groups)
 
 
 def search(
@@ -153,6 +191,7 @@ def search(
     *,
     name: str,
     algorithm: str,
+    catalog_mode: CatalogMode = "both",
     backend: Literal["cpu", "gpu"] = "cpu",
     use_types: bool = True,
     candidate_budget: int = 256,
@@ -173,12 +212,29 @@ def search(
         )
     measurements_path = directory / "measurements.json"
     write_contract(measurements_path, measurements)
-    scope = json.loads(SCOPE.read_text())
-    bounds = cast(tuple[float, float, float, float], tuple(scope["bounds_xy_m"]))
+    catalog_path, map_path = prepare_data(catalog_mode)
+    spec = catalog_spec(catalog_mode)
+    scope_path = directory / "search-scope.json"
+    save_json(
+        scope_path,
+        {
+            "schema_version": 1,
+            "geographic_scope": "full_coast",
+            "catalog_sha256": spec["raw_sha256"],
+            "map_sha256": digest(map_path),
+            "projected_crs": PROJECTED_CRS,
+            "bounds_xy_m": SEARCH_BOUNDS_M,
+        },
+    )
+    evaluation_truth, evaluation_support, matched_groups = evaluation_inputs(
+        frame,
+        directory,
+        catalog_path,
+    )
     config = SearchConfig(
         algorithm=algorithm,
         backend=backend,
-        bounds_xy=bounds,
+        bounds_xy=SEARCH_BOUNDS_M,
         max_range_m=frame.range_m,
         use_types=use_types,
         generated_sigma_deg=frame.sigma_deg,
@@ -198,13 +254,13 @@ def search(
         "--measurements",
         str(measurements_path),
         "--catalog",
-        str(DATA / "objects.json"),
+        str(catalog_path),
         "--map",
-        str(DATA / "map.json"),
+        str(map_path),
         "--config",
         str(config_path),
         "--scope-manifest",
-        str(SCOPE),
+        str(scope_path),
         "--projected-crs",
         PROJECTED_CRS,
         "--algorithm",
@@ -233,6 +289,9 @@ def search(
     process_ms = (perf_counter() - started) * 1000
     summary: dict[str, Any] = {
         "algorithm": algorithm,
+        "catalog_mode": catalog_mode,
+        "catalog_records": spec["record_count"],
+        "detected_catalog_matched_groups": matched_groups,
         "backend": backend,
         "types_enabled": use_types,
         "range_m": frame.range_m,
@@ -282,11 +341,11 @@ def search(
                         Geod(ellps="WGS84").inv(true_lon, true_lat, longitude, latitude)[2]
                     ),
                 )
-        if frame.truth is not None and frame.support is not None:
+        if evaluation_truth is not None and evaluation_support is not None:
             evaluation = evaluate_v2_files(
                 result_path,
-                frame.truth,
-                frame.support,
+                evaluation_truth,
+                evaluation_support,
                 directory / "evaluation.json",
                 coordinate_crs=PROJECTED_CRS,
             )

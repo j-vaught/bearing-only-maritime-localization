@@ -1,7 +1,9 @@
 """Run CPU and GPU grid requests sequentially on the same observations."""
 
 from _common import comparison, output_directory, search, simulate
+from _data import CatalogMode
 
+CATALOG_MODE: CatalogMode = "both"  # "ais", "chart_aids", or "both".
 OBSERVER_ID = "B1"
 RANGE_M = 10_000.0
 SEED = 11
@@ -15,6 +17,7 @@ if __name__ == "__main__":
     frame = simulate(output, observer_id=OBSERVER_ID, range_m=RANGE_M, seed=SEED)
     cpu = search(
         frame,
+        catalog_mode=CATALOG_MODE,
         name="cpu",
         algorithm="grid",
         backend="cpu",
@@ -24,6 +27,7 @@ if __name__ == "__main__":
     )
     gpu = search(
         frame,
+        catalog_mode=CATALOG_MODE,
         name="gpu",
         algorithm="grid",
         backend="gpu",

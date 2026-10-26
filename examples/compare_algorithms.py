@@ -1,7 +1,9 @@
 """Compare algorithms on exactly the same detections and full search domain."""
 
 from _common import comparison, output_directory, search, simulate
+from _data import CatalogMode
 
+CATALOG_MODE: CatalogMode = "both"  # "ais", "chart_aids", or "both".
 OBSERVER_ID = "B1"
 RANGE_M = 10_000.0
 SEED = 11
@@ -17,6 +19,7 @@ if __name__ == "__main__":
     rows = [
         search(
             frame,
+            catalog_mode=CATALOG_MODE,
             name=algorithm,
             algorithm=algorithm,
             candidate_budget=CANDIDATE_BUDGET,

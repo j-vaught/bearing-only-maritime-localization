@@ -12,7 +12,9 @@ build/
 *.egg-info/
 
 # Recreated from the committed compressed data.
-/data/objects.json
+/data/objects-ais.json
+/data/objects-chart-aids.json
+/data/objects-combined.json
 /data/map.json
 # Generated example records; figures remain trackable.
 /runs/**/*.json

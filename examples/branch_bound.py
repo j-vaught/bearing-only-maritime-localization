@@ -1,8 +1,10 @@
 """Full-domain subdivision; dynamic-map bounds remain unresolved."""
 
 from _common import comparison, output_directory, search, simulate
+from _data import CatalogMode
 
 # Edit these settings, then run uv run python examples/branch_bound.py.
+CATALOG_MODE: CatalogMode = "both"  # "ais", "chart_aids", or "both".
 OBSERVER_ID = "B1"  # data/observer_locations.csv.
 RANGE_M = 10_000.0
 BEARING_SIGMA_DEG = 0.5
@@ -25,6 +27,7 @@ if __name__ == "__main__":
     )
     result = search(
         frame,
+        catalog_mode=CATALOG_MODE,
         name="branch_bound",
         algorithm="branch_bound",
         backend="cpu",
