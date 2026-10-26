@@ -71,6 +71,9 @@ def test_evaluator_records_source_revalidated_and_refined_metrics() -> None:
     assert result["refined"]["score"] == 1.5
     assert result["mode_uncertainty"]["uncertainty_rank"] == 2
     assert result["improved_hypothesis"] is True
+    assert result["seed_order"] == 0
+    assert result["source_score_rank"] == 1
+    assert result["refined_score_rank_within_selected"] == 1
 
 
 def test_evaluator_keeps_null_refined_hypothesis_unavailable() -> None:
