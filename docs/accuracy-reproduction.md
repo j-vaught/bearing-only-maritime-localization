@@ -35,3 +35,22 @@ The field replay interface accepts a version 2 measurement set through the searc
 For each field sequence, retain the original image or video timestamps and the independently measured observer position, observer heading, and sensor calibration records. Generate a timestamped bearing measurement for each detected feature with its angular uncertainty and any optional type label or angular extent supported by the input contract. Record observer pose and truth on a separate evaluator-only channel. Preserve acquisition time, sensor calibration version, feature-selection procedure, map/catalog hashes, and the full command configuration with every replay. Use independent position truth, such as surveyed or RTK-backed ground truth, to evaluate the resulting estimate. Do not substitute AIS positions for observer truth or report synthetic bearings as field measurements.
 
 The current evidence is a synthetic spatial evaluation using one AIS snapshot, mixed chart vintages, and incomplete coast coverage. Field trials using measured bearings and independent truth, including correct-port and wrong-port examples, remain unvalidated until those observations are collected and evaluated. Benchmark outcome tables, ambiguity examples, difficulty strata, scaling plots, and error summaries are added only after the finalized trial outputs and independent review are available.
+
+## Versioned MapV3 benchmark input
+
+The exact MapV3 candidate payload is preserved at `data/maps/accuracy-inputs-v3/noaa-enc-east-coast-fullcoast-map-v3-candidate.json.gz`. Its descriptor at `data/maps/accuracy-inputs-v3/benchmark-input.json` identifies the artifact as revision 3 of the MapV2 contract for new benchmark configurations. Existing MapV2 inputs and defaults remain available as the historical comparison. The source validation manifest is preserved beside the archive, and the package manifest records the original payload hash, compressed archive hash, source manifests, and NOAA ENC Direct attribution. The source manifests do not provide a separate license field.
+
+Restore and verify the exact 56,326,616-byte payload with the following commands. The extracted map hash is `cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93`, and the compressed archive hash is `fda522364582a20d74a643e7e854844b2ce2490a45e469cb210fd9a8babd13de`.
+
+```sh
+CACHE_DIR=/path/to/map-cache
+mkdir -p "$CACHE_DIR"
+gzip -dc data/maps/accuracy-inputs-v3/noaa-enc-east-coast-fullcoast-map-v3-candidate.json.gz > "$CACHE_DIR/noaa-enc-east-coast-fullcoast-map-v3-candidate.json"
+test "$(wc -c < "$CACHE_DIR/noaa-enc-east-coast-fullcoast-map-v3-candidate.json")" -eq 56326616
+printf '%s  %s\n' cce049c5911b39072d30f26c09947782a78e350e65a3f69c6923312fba3f9d93 "$CACHE_DIR/noaa-enc-east-coast-fullcoast-map-v3-candidate.json" | sha256sum -c -
+sha256sum data/maps/accuracy-inputs-v3/noaa-enc-east-coast-fullcoast-map-v3-candidate.json.gz
+```
+
+The MapV3 coverage comparison measures both versions over the same 3,383,691.331 km² bounding box using EPSG:6933 equal-area projection. The previous port-only MapV2 has 0.482% known area. The validated MapV3 candidate has 76.260149% known area and 23.739851% explicitly unknown area. The 20-map Harbour detail union covers 10,500.268 km², or 0.310320% of the domain, wholly within the coarse known region. It is a higher-resolution overlay and does not add to the known-area total. All 24 port maps were byte-verified; no Approach or Berthing maps contribute detail. This chart-derived map remains partial and does not establish navigable depth or field accuracy.
+
+The equal-area coverage comparison is rendered in `docs/figures/accuracy-map-coverage-2026-10-26.pdf` and `docs/figures/accuracy-map-coverage-2026-10-26.png`. Its source data and Typst/CeTZ/Lilaq source are adjacent to those outputs.
