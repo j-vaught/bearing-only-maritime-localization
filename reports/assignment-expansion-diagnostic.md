@@ -26,6 +26,14 @@ tools/run_assignment_expansion_diagnostic.py \
 The first approved launch was rejected before creating an output directory because the
 startup check measured the shared output parent against the per-run cap. Its captured
 failure was `OSError: diagnostic output exceeded 50 MiB`; it produced no branch records.
+The initial launch trace is retained here because the retry reused the launch log.
+
+```text
+Traceback (most recent call last):
+  ...
+OSError: diagnostic output exceeded 50 MiB
+```
+
 The corrected run used harness commit
 6f7cdf4354fddbc7237625bde2d82763362068c8, with the expansion module unchanged from
 the approved source, and completed 60 of 64 modes before the 1,800 s whole-run
