@@ -1,6 +1,6 @@
 # Accuracy implementation ledger
 
-The implementation uses 40 bounded workstreams. All computation and environments remain on the server. The integration branch is accuracy/integration, starting from 32456174d6f7baea2c25bdfca6490f940b4214bf.
+The implementation uses the original 40 bounded workstreams and five additional specialist workstreams. All computation and environments remain on the server. The integration branch is accuracy/integration, starting from 32456174d6f7baea2c25bdfca6490f940b4214bf.
 
 ## Release gates
 
@@ -82,3 +82,20 @@ The search decision now separates verified competing local modes from global opt
 The program handoff review also identified different projected coordinate systems between simulator truth and search output, static settings across range/type conditions, and shared output paths between algorithm runs. Corrections preserve raw inputs and estimates, record coordinate provenance, create condition-specific configurations, and isolate hashed run artifacts. Explicit-coordinate evaluation computes physical error geodesically.
 
 The map archives are committed under data/maps/accuracy-inputs with streaming checksum verification. They preserve the exact partial source collection, coast mosaic, and twenty-four port maps. Unknown coverage remains unknown. Seven hundred prepared rows using the superseded catalog remain archived as provisional evidence; no held-out search has run. Formal accuracy, latency, and measured-bearing field validation remain unvalidated.
+
+
+## Integration update on 26 October 2026
+
+Forty-five specialist roles have been dispatched, with the coordinator separate. A41 completed verified archive deduplication, A42 completed population freezing, and A43 added bounded profiling and is optimizing proposal geometry reuse. A44 investigates catalog loading, while A45 investigates exact map construction. Their optimizations must preserve input validation, candidate ordering, geometry, and the complete objective.
+
+The latest completed broad CPU gate at commit 2792c75 passed 578 tests, with 25 optional hardware tests skipped and seven subtests passed. Separate subsequent one-, two-, and four-device checks passed 82 hardware tests without skips. The calibration integration at 4085d73 passed 72 focused tests. These checkpoints precede the remaining performance changes and require a renewed final gate.
+
+Calibration artifacts now bind the range, type mode, objective, algorithm, input hashes, execution settings, implementation, and planned population. Version-one artifacts remain readable but cannot establish release acceptance. Nominal scenes alone select thresholds. Failed stress preparations remain explicit unresolved rows. Missing nominal eligibility prevents freezing.
+
+The corrected development manifest includes every one of 6,120 planned rows. Its 3,600 nominal rows have no unresolved eligibility. Each range/type condition has 600 nominal rows. Supported counts are 269 at 1 km, 438 at 5 km, and 448 at 10 km, separately for each type mode. The twelve failed stress preparations remain recorded. These are eligibility counts established before localization outcomes, not successful fixes. The manifest digest is 2330090802952093bab1d5ec6cb97c6298cce27ee2050804f6eab91d66e8d050.
+
+The approved map package is stored under data/maps/accuracy-inputs-v3. On a common equal-area basis, known coverage is 76.260149 percent of the declared bounding box and unknown coverage is 23.739851 percent. Fine port geometry is retained. Coverage is independent of localization accuracy.
+
+The first diagnostic pairwise pilot recorded two 300-second timeouts and one interrupted attempt. The first attempt may overlap a map-file rewrite and is retained with that qualification. Future runs use immutable, hash-named inputs. A separate watchdog-limited 30-second profile found approximately 10.5 seconds in input loading, 10.5 seconds in map construction, and 5.8 seconds in proposal generation. It stopped before completion, so its partial counters and times are not a completed-search benchmark. It motivates profiling and exact caching, not weakening the search domain or score.
+
+Verified hardlink deduplication reclaimed 15.29 GiB while preserving every archived path. Further preparation remains subject to the 40 GiB free-space reserve. Formal calibration, validation, held-out accuracy, final latency, and measured-bearing field accuracy remain unvalidated.
