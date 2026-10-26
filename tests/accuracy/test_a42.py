@@ -50,24 +50,39 @@ def _support_rel(row: dict[str, str]) -> Path:
 @pytest.fixture(scope="module")
 def complete_support(tmp_path_factory: pytest.TempPathFactory) -> Path:
     root = tmp_path_factory.mktemp("complete-support")
-    with (PLAN_DIR / "trials.csv").open(newline="", encoding="utf-8") as stream:
-        rows = list(csv.DictReader(stream))
-    for index, row in enumerate(
-        row
-        for row in rows
-        if row["split"] == "development" and row["sensor_condition"] == "nominal"
-    ):
-        count = 3 + index % 8
-        payload = {
-            "detected_physical_catalog_matched_groups": count,
-            "placement_id": row["placement_id"],
-            "port_id": row["port_id"],
-            "supported": index % 4 != 0,
-            "valid_reference_water": index % 4 != 0,
-        }
-        path = root / _support_rel(row)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    rows = [row for row in _all_rows() if row["split"] == "development"]
+    fields = ["trial_id", "status", "failure", "physical_seed", "sensor_condition"]
+    ledger = root / "development" / "preparation.csv"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    with ledger.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        nominal_index = 0
+        for index, row in enumerate(rows):
+            is_nominal = row["sensor_condition"] == "nominal"
+            supported = nominal_index % 4 != 0 if is_nominal else True
+            if is_nominal:
+                nominal_index += 1
+            count = 3 + index % 8
+            payload = {
+                "detected_physical_catalog_matched_groups": count,
+                "placement_id": row["placement_id"],
+                "port_id": row["port_id"],
+                "supported": supported,
+                "valid_reference_water": supported,
+            }
+            path = root / _support_rel(row)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            writer.writerow(
+                {
+                    "trial_id": row["trial_id"],
+                    "status": "completed",
+                    "failure": "",
+                    "physical_seed": row["physical_seed"],
+                    "sensor_condition": row["sensor_condition"],
+                }
+            )
     return root
 
 
@@ -78,13 +93,38 @@ def copied_support(tmp_path: Path, complete_support: Path) -> Path:
     return target
 
 
-def _nominal_rows() -> list[dict[str, str]]:
+def _all_rows() -> list[dict[str, str]]:
     with (PLAN_DIR / "trials.csv").open(newline="", encoding="utf-8") as stream:
-        return [
-            row
-            for row in csv.DictReader(stream)
-            if row["split"] == "development" and row["sensor_condition"] == "nominal"
-        ]
+        return list(csv.DictReader(stream))
+
+
+def _split_rows(condition: str | None = None) -> list[dict[str, str]]:
+    return [
+        row
+        for row in _all_rows()
+        if row["split"] == "development"
+        and (condition is None or row["sensor_condition"] == condition)
+    ]
+
+
+def _set_preparation(support_root: Path, trial_id: str, *, status: str, failure: str = "") -> None:
+    ledger = support_root / "development" / "preparation.csv"
+    with ledger.open(newline="", encoding="utf-8") as stream:
+        reader = csv.DictReader(stream)
+        fields = list(reader.fieldnames or [])
+        rows = list(reader)
+    for row in rows:
+        if row["trial_id"] == trial_id:
+            row["status"] = status
+            row["failure"] = failure
+            break
+    else:
+        raise AssertionError(f"Missing test ledger row for {trial_id}")
+    ledger.unlink()
+    with ledger.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def test_complete_population_freezes_exact_denominator_and_condition_projections(
@@ -111,7 +151,7 @@ def test_complete_population_freezes_exact_denominator_and_condition_projections
 
 
 def test_partial_pilot_missing_support_cannot_freeze(copied_support: Path, tmp_path: Path) -> None:
-    row = _nominal_rows()[0]
+    row = _split_rows("nominal")[0]
     (_support := copied_support / _support_rel(row)).unlink()
 
     with pytest.raises(EligibilityError, match="Missing support"):
@@ -125,7 +165,7 @@ def test_edited_support_evidence_invalidates_frozen_manifest(
 ) -> None:
     manifest = tmp_path / "eligibility.json"
     freeze_eligibility_manifest(PLAN_DIR, copied_support, manifest, "development")
-    row = _nominal_rows()[0]
+    row = _split_rows("nominal")[0]
     support_file = copied_support / _support_rel(row)
     support_file.unlink()
     support_file.write_text(
@@ -184,34 +224,55 @@ def test_duplicate_ids_and_changed_condition_metadata_fail(tmp_path: Path, mutat
         )
 
 
-def test_explicit_failed_prep_is_unresolved_not_unsupported(
+def test_explicit_failed_stress_is_retained_as_unresolved(
     copied_support: Path, tmp_path: Path
 ) -> None:
-    row = _nominal_rows()[1]
+    row = next(row for row in _split_rows() if row["sensor_condition"] != "nominal")
     (copied_support / _support_rel(row)).unlink()
-    ledger = copied_support / "development" / "preparation.csv"
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    fields = [
-        "trial_id",
-        "split",
-        "port_id",
-        "placement_id",
-        "realization",
-        "range_m",
-        "report_types",
-        "physical_seed",
-        "sensor_condition",
-        "status",
-    ]
-    with ledger.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerow({**{key: row[key] for key in fields[:-1]}, "status": "failed"})
+    failure = "ValueError: Observer must lie in known water."
+    _set_preparation(copied_support, row["trial_id"], status="failed", failure=failure)
 
     snapshot = freeze_eligibility_manifest(
         PLAN_DIR, copied_support, tmp_path / "eligibility.json", "development"
     )
-    unresolved = next(item for item in snapshot.nominal_trials if item.trial_id == row["trial_id"])
+    unresolved = next(item for item in snapshot.trials if item.trial_id == row["trial_id"])
+    assert len(snapshot.trials) == snapshot.expected_trial_count == 6120
     assert unresolved.status == "unresolved"
     assert unresolved.supported is None
-    assert snapshot.supported_denominator == 2699
+    assert unresolved.support_count is None
+    assert unresolved.support_path is None
+    assert unresolved.support_sha256 is None
+    assert unresolved.preparation_status == "failed"
+    assert unresolved.preparation_reason == failure
+    assert unresolved.eligibility_status == "unresolved"
+    assert unresolved.eligibility_reason == failure
+    assert snapshot.supported_denominator == 2700
+
+
+def test_unresolved_nominal_support_blocks_freeze(copied_support: Path, tmp_path: Path) -> None:
+    row = _split_rows("nominal")[1]
+    (copied_support / _support_rel(row)).unlink()
+    _set_preparation(copied_support, row["trial_id"], status="failed", failure="prep failed")
+    with pytest.raises(EligibilityError, match="Unresolved nominal"):
+        freeze_eligibility_manifest(
+            PLAN_DIR, copied_support, tmp_path / "eligibility.json", "development"
+        )
+
+
+def test_missing_preparation_ledger_trial_blocks_freeze(
+    copied_support: Path, tmp_path: Path
+) -> None:
+    ledger = copied_support / "development" / "preparation.csv"
+    with ledger.open(newline="", encoding="utf-8") as stream:
+        reader = csv.DictReader(stream)
+        fields = list(reader.fieldnames or [])
+        rows = list(reader)
+    ledger.unlink()
+    with ledger.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows[:-1])
+    with pytest.raises(EligibilityError, match="ledger population mismatch"):
+        freeze_eligibility_manifest(
+            PLAN_DIR, copied_support, tmp_path / "eligibility.json", "development"
+        )
