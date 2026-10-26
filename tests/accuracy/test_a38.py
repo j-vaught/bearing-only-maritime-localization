@@ -1099,6 +1099,66 @@ def test_v2_condition_document_keeps_full_population_and_failure_rows(tmp_path: 
     assert population["excluded_stress"]["count"] == 2
 
 
+def test_v2_condition_projection_accepts_other_conditions_in_split_manifest(
+    tmp_path: Path,
+) -> None:
+    plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
+        tmp_path
+    )
+    other = dict(plans[0])
+    other.update(
+        {
+            "trial_id": "development/port-001/placement-099/r0/range5000m/typeson/nominal",
+            "placement_id": "placement-099",
+            "range_m": "5000",
+            "physical_seed": "909",
+        }
+    )
+    plans.append(other)
+    snapshot.all_trials = (
+        *snapshot.all_trials,
+        SimpleNamespace(
+            trial_id=other["trial_id"],
+            supported=False,
+            status="unsupported",
+            eligibility_status="unsupported",
+            eligibility_reason=None,
+            preparation_status="completed",
+            preparation_reason=None,
+            support_sha256="9" * 64,
+            support_count=2,
+        ),
+    )
+    manifest["trials"] = [
+        {
+            "trial_id": other["trial_id"],
+            "split": "development",
+            "port_id": other["port_id"],
+            "placement_id": other["placement_id"],
+            "realization": "0",
+            "range_m": 5000,
+            "report_types": True,
+            "physical_seed": 909,
+            "sensor_condition": "nominal",
+            "status": "failed",
+            "failure": "controlled fixture",
+        }
+    ]
+    document = build_condition_document(
+        trial_rows=plans,
+        run_manifest=manifest,
+        manifest_path=run_path,
+        input_root=tmp_path / "inputs",
+        split="development",
+        eligibility_snapshot=snapshot,
+        eligibility_manifest_path=eligibility_path,
+        condition=condition,
+        context=context,
+    )
+    assert document["trial_count"] == 4
+    assert other["trial_id"] not in {row["trial_id"] for row in document["all_trials"]}
+
+
 def test_v2_condition_document_rejects_run_metadata_mismatch(tmp_path: Path) -> None:
     plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
         tmp_path

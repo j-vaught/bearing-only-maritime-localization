@@ -133,9 +133,11 @@ def build_condition_document(
     ]
     if not selected:
         raise ValueError("No frozen plan rows match this operating condition.")
+    plan_rows = [row for row in trial_rows if row["split"] == split]
+    plan_by_id = {row["trial_id"]: row for row in plan_rows}
+    if len(plan_by_id) != len(plan_rows):
+        raise ValueError("Frozen split plan has duplicate trial IDs.")
     planned_by_id = {row["trial_id"]: row for row in selected}
-    if len(planned_by_id) != len(selected):
-        raise ValueError("Frozen plan has duplicate IDs for this condition.")
     eligibility_by_id = {item.trial_id: item for item in eligibility_snapshot.all_trials}
     if set(planned_by_id) - set(eligibility_by_id):
         raise ValueError("Frozen eligibility does not cover all plan rows for this condition.")
@@ -150,9 +152,9 @@ def build_condition_document(
         trial_id = row["trial_id"]
         if trial_id in run_by_id:
             raise ValueError(f"Run manifest has duplicate trial ID {trial_id}.")
-        if trial_id not in planned_by_id:
-            raise ValueError(f"Run manifest includes a row outside this condition: {trial_id}.")
-        _run_row_matches(row, planned_by_id[trial_id])
+        if trial_id not in plan_by_id:
+            raise ValueError(f"Run manifest includes a row outside this split plan: {trial_id}.")
+        _run_row_matches(row, plan_by_id[trial_id])
         run_by_id[trial_id] = row
 
     all_trials: list[dict[str, Any]] = []
