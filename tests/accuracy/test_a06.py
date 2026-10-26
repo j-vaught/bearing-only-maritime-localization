@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from reference_assignment import (
+
+from .reference_assignment import (
     Assignment,
     enumerate_partial_assignments,
     optimal_assignments,
