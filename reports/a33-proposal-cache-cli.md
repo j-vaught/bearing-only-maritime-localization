@@ -27,7 +27,14 @@ Scoped command results on branch `accuracy/a33-proposal-cache` from base `25747d
 - `uv run ruff format bearing_localization/accuracy_cli.py bearing_localization/search/config.py tests/accuracy/test_a33_proposal_cache_cli.py` passed.
 - `uv run ruff check bearing_localization/accuracy_cli.py bearing_localization/search/config.py tests/accuracy/test_a33_proposal_cache_cli.py --fix` passed.
 - `uv run ty check bearing_localization/accuracy_cli.py bearing_localization/search/config.py tests/accuracy/test_a33_proposal_cache_cli.py` passed.
-- `uv run pytest -q tests/accuracy/test_a03.py tests/accuracy/test_a13_proposal_cache.py tests/accuracy/test_a33.py tests/accuracy/test_a43_geodesic.py tests/accuracy/test_a30.py tests/accuracy/test_a33_proposal_cache_cli.py` passed with 91 passed and 11 expected hardware skips.
+- `uv run pytest -q tests/accuracy/test_a03.py tests/accuracy/test_a13_proposal_cache.py tests/accuracy/test_a33.py tests/accuracy/test_a43_geodesic.py tests/accuracy/test_a30.py tests/accuracy/test_a33_proposal_cache_cli.py` passed with 94 passed and 11 expected hardware skips, including destination-preflight repair.
 - `git diff --check` passed.
 
 The new tests cover fresh generation and exact same-budget warm-pool output parity, changed downstream candidate budget reuse, measurement/config/implementation context mismatches, corrupt-cache rejection without output or regeneration, absent sigma with generated default and sigma floor, source-budget exhaustion roundtrip, and numerical-failure counter roundtrip. No large or frozen-input generation was run.
+
+
+## Cache destination preflight repair
+
+The CLI now creates missing cache parent directories and probes create/delete access before proposal generation. Existing paths remain strict-load targets and are never overwritten. A file in the parent chain, directory creation error, or failed writable-directory probe stops before the generator runs. The CLI also verifies that a generator exception leaves no claimed cache and that cache publication errors are reported distinctly after generation. The tests also verify that a generator exception can leave the prepared parent directory without producing a cache or estimate, and that a later cache publication failure is reported as a cache-save failure after generation rather than as an incomplete-generation status.
+
+The cache destination preflight repair is committed separately after the initial wiring milestone. It does not change the proposal-generation implementation digest or hash inputs.
