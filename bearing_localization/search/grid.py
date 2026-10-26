@@ -19,6 +19,7 @@ import numpy as np
 from bearing_localization.algorithms import associate, grid_search
 from maritime_localization_shared.contracts import AISSnapshot, MeasurementSet, PositionEstimate
 
+from .candidate_order import order_candidate_positions
 from .scoring import CandidateScorer, CandidateSearchRun, score_candidate_positions
 
 
@@ -249,6 +250,12 @@ def run_grid_search_v2(
         positions = _grid_positions_v2(bounds, grid_spacing_m)
     else:
         positions = candidate_positions
+        bounds = scorer.config.bounds_xy
+    positions = order_candidate_positions(
+        positions,
+        water_status=scorer.vector_map.point_water_status,
+        bounds=bounds,
+    )
     return score_candidate_positions(
         scorer,
         positions,
