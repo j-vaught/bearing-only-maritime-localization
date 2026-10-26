@@ -1320,6 +1320,29 @@ def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
     assert Path(row["support_path"]) == support_path
     run_manifest_path = state_path.parent / "run-manifest.json"
     run_manifest = json.loads(run_manifest_path.read_text())
+    expected_protocol = {
+        "schema": "accuracy-execution-protocol-v1",
+        "timeout_s": 60.0,
+        "timeout_scope": "per_command_subprocess",
+        "deadline_clock": "monotonic_wall_clock_from_spawn",
+        "timeout_status": "search_timeout",
+        "termination_policy": {
+            "start_new_session": True,
+            "timeout_signal": "SIGTERM",
+            "grace_s": 1.0,
+            "escalation_signal": "SIGKILL",
+            "reap_process_group": True,
+        },
+    }
+    protocol_sha256 = hashlib.sha256(
+        json.dumps(expected_protocol, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    assert run_manifest["execution_protocol"] == expected_protocol
+    assert run_manifest["execution_protocol_sha256"] == protocol_sha256
+    assert len(run_manifest["trials"]) == 6_120
+    assert all(
+        item["execution_protocol_sha256"] == protocol_sha256 for item in run_manifest["trials"]
+    )
     completed_manifest_row = next(
         item for item in run_manifest["trials"] if item["trial_id"] == trial_id
     )
@@ -1365,3 +1388,14 @@ def test_run_trials_executes_standalone_search_and_geodesic_evaluator(
     assert document["population"]["nominal_planned"]["count"] == 600
     assert document["population"]["supported_nominal"]["count"] == 1
     assert any(item["trial_id"] == trial_id for item in document["trials"])
+
+    with pytest.raises(ValueError, match="different or unbound execution protocol"):
+        run_trials(
+            plan_path,
+            command_config_path=commands_path,
+            input_root=input_root,
+            run_root=tmp_path / "runs",
+            split="development",
+            timeout_s=61.0,
+            eligibility_manifest_path=eligibility_path,
+        )
