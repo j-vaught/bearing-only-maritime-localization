@@ -2,7 +2,7 @@
 
 ## Scope and verification
 
-This pass examined only the remote project at /home/jvaught2/projects/bearing-only-maritime-localization. The active refinement process was preserved. Its current working directory is .agent-work/worktrees/a20-cached-refinement and its command uses the protected root environment, the A26 scoring worktree, and the A26 cached output. No active process, lock, source file, dataset, result directory, branch ref, or common Git object was modified.
+This pass examined only the remote project at /home/jvaught2/projects/bearing-only-maritime-localization. The active refinement process was preserved. Its current working directory is .agent-work/worktrees/a20-cached-refinement and its command uses the protected root environment, the A26 scoring worktree, and the A26 cached output. No production source file was modified. The removed paths were duplicate source checkouts whose source remains in the recorded Git commits and branch refs. No active process, lock, dataset, result directory, branch ref, or common Git object was modified.
 
 Each removed checkout was verified immediately before removal. The tracked and untracked status was empty. The local branch tip matched the corresponding remote branch tip. The ignored inventory contained only the environment directory, Python bytecode directories, test caches, and package metadata. A recursive open-file check with lsof returned no reference to the checkout. Each removal used normal git worktree remove without force. The branch ref still resolves to the recorded commit after removal.
 
@@ -18,19 +18,19 @@ The starting free-space reading for this operation was 44,581,888,000 bytes at 2
 | .agent-work/worktrees/a46 | accuracy/a46 at db760b6a767ee79ab17a0ffd298bad3866740cfe | db760b6a767ee79ab17a0ffd298bad3866740cfe | 453,209,738 | 45,121,925,120 | 45,305,282,560 | 183,357,440 |
 | .agent-work/worktrees/cached-profile | accuracy/cached-profile at 03ee598eb8cdb90a49b1e90177e90f4a4f77cdc8 | 03ee598eb8cdb90a49b1e90177e90f4a4f77cdc8 | 480,294,978 | 45,305,282,560 | 45,516,111,872 | 210,829,312 |
 
-The sum of individual measured reclaims is 934,232,064 bytes. The net free-space increase from the first to the last reading is 934,223,872 bytes. The 8,192 byte difference is concurrent filesystem activity. The latest reading after the pass was 45,321,539,584 bytes at 2026-10-26T11:52:50Z. The active refinement consumed 194,572,288 bytes after the last removal reading.
+The sum of individual measured reclaims is 934,232,064 bytes. The net free-space increase from the first to the last reading is 934,223,872 bytes. The 8,192 byte difference is concurrent filesystem activity. The latest reading after the pass was 45,321,539,584 bytes at 2026-10-26T11:52:50Z. Available free space declined by 194,572,288 bytes between the last removal reading and this latest reading. The decline is an observed shared-filesystem change of unknown origin. The final df -T reading reported an ext4 filesystem. The active output grew by only approximately 200 KiB in the same interval, so the decline is not attributed to that output.
 
 The exact removal command for each row was the following command with the recorded checkout path substituted.
 
-\`\`\`
+```
 git -C /home/jvaught2/projects/bearing-only-maritime-localization worktree remove /home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/<checkout>
-\`\`\`
+```
 
 The exact recreation form for each preserved branch is the following command with the recorded branch substituted.
 
-\`\`\`
+```
 git -C /home/jvaught2/projects/bearing-only-maritime-localization worktree add /home/jvaught2/projects/bearing-only-maritime-localization/.agent-work/worktrees/<checkout> <branch>
-\`\`\`
+```
 
 ## Exact ignored inventories
 
@@ -50,7 +50,7 @@ The same cleanup sequence previously removed .agent-work/worktrees/a28-geodesic.
 
 It also removed .agent-work/worktrees/a36-rerun. Its branch was accuracy/a36-rerun-2792 at 0fb2d4a43f63feb254027f27a2acd8e38c94a2a9, with the same remote tip. Its apparent size was 3,385,421,824 bytes. Free space changed from 44,411,518,976 to 44,582,277,120 bytes, a measured reclaim of 170,758,144 bytes.
 
-The combined measured reclaim from these two earlier removals was 371,335,168 bytes. Their apparent environment sizes were much larger than the filesystem deltas because the package files use shared extents.
+The combined measured reclaim from these two earlier removals was 371,335,168 bytes. Across all seven removed worktrees, the measured reclaim was 1,305,567,232 bytes. The apparent environment sizes were larger than the filesystem deltas; this report does not attribute that difference to a specific filesystem mechanism.
 
 ## Candidates retained
 
