@@ -266,14 +266,19 @@ def test_candidate_stream_deduplicates_positions_but_accounts_for_every_unique_o
     assert full_run.localization.certificate_scope == "none"
 
 
-def test_ambiguous_identity_and_unknown_coverage_never_become_finite_candidates() -> None:
+def test_identity_limited_geometry_is_scoreable_but_unknown_coverage_is_not() -> None:
     east, north = _origin_xy()
     ambiguous = _record(
         "uncertain-aid",
         0.0,
         1000.0,
         kind="physical_aid",
-        metadata=(("identity_ambiguous", True),),
+        metadata=(
+            ("identity_ambiguous", True),
+            ("source_record_identity_status", "qualified_source_key"),
+            ("physical_linkage_status", "unresolved"),
+            ("observation_association_status", "candidate_geometry_only"),
+        ),
     )
     scorer = CandidateScorer(
         _measurements((0.0, 0.5, "physical_aid")),
