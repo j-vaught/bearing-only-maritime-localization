@@ -62,6 +62,10 @@ def test_candidate_dispositions_keep_dispatched_work_unknown(tmp_path: Path) -> 
             {
                 "chunk_index": 0,
                 "candidate_count": 1,
+                "exact_scored_count": 1,
+                "invalid_water_count": 0,
+                "unresolved_count": 0,
+                "pruned_count": 0,
                 "hypotheses_sha256": sha256_file(hypothesis_path),
                 "candidates": [
                     {
@@ -359,6 +363,10 @@ def test_prefix_profile_marks_unselected_candidates_without_certifying_domain(
             {
                 "chunk_index": 0,
                 "candidate_count": 1,
+                "exact_scored_count": 1,
+                "invalid_water_count": 0,
+                "unresolved_count": 0,
+                "pruned_count": 0,
                 "hypotheses_sha256": sha256_file(hypothesis_path),
                 "candidates": [
                     {
@@ -461,6 +469,10 @@ def test_resume_reuses_only_identity_matched_durable_chunks(tmp_path: Path) -> N
             {
                 "chunk_index": 0,
                 "candidate_count": 1,
+                "exact_scored_count": 1,
+                "invalid_water_count": 0,
+                "unresolved_count": 0,
+                "pruned_count": 0,
                 "candidates": [
                     {
                         "candidate_id": "cell:a",
@@ -490,6 +502,7 @@ def test_resume_reuses_only_identity_matched_durable_chunks(tmp_path: Path) -> N
     (source / "run-manifest.json").write_text(
         json.dumps(
             {
+                "run_identity_sha256": envelope["identity_sha256"],
                 "chunk_results_sha256": sha256_tree(source / "chunk-results"),
                 "hypotheses_sha256": sha256_tree(source / "hypotheses"),
             }
@@ -507,6 +520,10 @@ def test_resume_reuses_only_identity_matched_durable_chunks(tmp_path: Path) -> N
         candidate_ids={"cell:a"},
     )
     assert result["lineage_candidate_count"] == 1
+    assert result["source_identity_sha256"] == envelope["identity_sha256"]
+    assert result["source_run_manifest_sha256"] == sha256_file(source / "run-manifest.json")
+    assert result["source_chunk_results_sha256"] == sha256_tree(source / "chunk-results")
+    assert result["source_hypotheses_sha256"] == sha256_tree(source / "hypotheses")
     assert os.stat(output / "chunk-results/chunk-00000000.json").st_ino == os.stat(chunk).st_ino
     assert os.stat(output / "hypotheses/chunk-00000000.json").st_ino == os.stat(hypothesis).st_ino
     assert [
@@ -543,6 +560,10 @@ def test_durable_chunks_are_checked_against_global_candidate_plan(tmp_path: Path
     chunk = {
         "chunk_index": 0,
         "candidate_count": 1,
+        "exact_scored_count": 1,
+        "invalid_water_count": 0,
+        "unresolved_count": 0,
+        "pruned_count": 0,
         "candidates": [candidate],
     }
     hypothesis_path = output / "hypotheses/chunk-00000000.json"
@@ -560,6 +581,17 @@ def test_durable_chunks_are_checked_against_global_candidate_plan(tmp_path: Path
     assert validate_durable_chunk_history(records=records, chunks=[chunk], output_root=output) == {
         "cell:b"
     }
+
+    unknown_action = json.loads(json.dumps(chunk))
+    unknown_action["candidates"][0]["action"] = "invented_action"
+    with pytest.raises(ValueError, match="unknown candidate action"):
+        validate_durable_chunk_history(records=records, chunks=[unknown_action], output_root=output)
+    wrong_aggregate = json.loads(json.dumps(chunk))
+    wrong_aggregate["exact_scored_count"] = 99
+    with pytest.raises(ValueError, match="aggregate exact_scored_count"):
+        validate_durable_chunk_history(
+            records=records, chunks=[wrong_aggregate], output_root=output
+        )
 
     bad_chunk = json.loads(json.dumps(chunk))
     bad_chunk["candidates"][0]["input_index"] = 0
@@ -606,6 +638,10 @@ def test_durable_chunks_are_checked_against_global_candidate_plan(tmp_path: Path
     chunk_a = {
         "chunk_index": 1,
         "candidate_count": 1,
+        "exact_scored_count": 1,
+        "invalid_water_count": 0,
+        "unresolved_count": 0,
+        "pruned_count": 0,
         "hypotheses_sha256": sha256_file(hypothesis_a),
         "candidates": [
             {
