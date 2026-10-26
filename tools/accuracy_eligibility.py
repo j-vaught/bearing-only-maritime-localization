@@ -10,6 +10,7 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 SCHEMA = "accuracy-eligibility-manifest-v1"
@@ -47,6 +48,7 @@ class EligibilitySnapshot:
     config_sha256: str
     splits_sha256: str
     trial_table_sha256: str
+    preparation_sha256: str | None
     expected_nominal_count: int
     expected_nominal_ids_sha256: str
     trials: tuple[EligibilityTrial, ...]
@@ -275,6 +277,7 @@ def _build_snapshot(
     expected_ids = hashes["expected_nominal_ids"]
     prep_path = support_root / chosen / "preparation.csv"
     prep_rows = _read_csv(prep_path) if prep_path.is_file() else []
+    preparation_sha256 = _sha256(prep_path) if prep_path.is_file() else None
     prep_by_id: dict[str, dict[str, str]] = {}
     for item in prep_rows:
         trial_id = item.get("trial_id", "")
@@ -292,7 +295,7 @@ def _build_snapshot(
             "physical_seed",
             "sensor_condition",
         ):
-            if item.get(name) != planned.get(name):
+            if name in item and item[name] != planned.get(name):
                 raise EligibilityError(f"Preparation metadata mismatch for {trial_id}: {name}.")
         prep_by_id[trial_id] = item
 
@@ -398,10 +401,11 @@ def _build_snapshot(
         config_sha256=hashes["config_sha256"],
         splits_sha256=hashes["splits_sha256"],
         trial_table_sha256=hashes["trial_table_sha256"],
+        preparation_sha256=preparation_sha256,
         expected_nominal_count=hashes["expected_nominal_count"],
         expected_nominal_ids_sha256=hashes["expected_nominal_ids_sha256"],
         trials=tuple(records),
-        nominal_projections=projections,
+        nominal_projections=MappingProxyType(projections),
     )
 
 
@@ -414,6 +418,7 @@ def _manifest_doc(snapshot: EligibilitySnapshot) -> dict[str, Any]:
         "config_sha256": snapshot.config_sha256,
         "splits_sha256": snapshot.splits_sha256,
         "trial_table_sha256": snapshot.trial_table_sha256,
+        "preparation_sha256": snapshot.preparation_sha256,
         "expected_nominal_count": snapshot.expected_nominal_count,
         "expected_nominal_ids_sha256": snapshot.expected_nominal_ids_sha256,
         "supported_nominal_count": snapshot.supported_denominator,
