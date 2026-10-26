@@ -4,18 +4,19 @@ import hashlib
 import json
 import subprocess
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import pytest
 from pyproj import Geod, Transformer
 
+import bearing_localization.accuracy_cli as accuracy_cli
 import bearing_localization.search as search_api
 from bearing_localization.accuracy_cli import _validate_scope_manifest
 from bearing_localization.algorithms import SearchResult
 from bearing_localization.evaluation.metrics import SupportManifest
 from bearing_localization.search.config import SearchConfig
-from bearing_localization.search.config_serialization import write_search_config
+from bearing_localization.search.config_serialization import read_search_config, write_search_config
 from maritime_localization_shared.contracts import (
     AISRecord,
     AISSnapshot,
@@ -372,3 +373,244 @@ def test_scope_manifest_binds_full_coast_inputs_and_projected_bounds(tmp_path: P
             projected_crs="EPSG:32618",
             bounds_xy=search_config.bounds_xy,
         )
+
+
+def test_truth_free_standalone_expansion_preserves_search_budget_and_calibration_gate(
+    tmp_path: Path,
+) -> None:
+    measurement_path, catalog_path, map_path, config_path, truth_path = _v2_fixture(tmp_path)
+    config = read_search_config(config_path)
+    write_search_config(config_path, replace(config, algorithm="reference_grid"))
+    result_path = tmp_path / "expanded-result.json"
+    truth_path.unlink()
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bearing_localization.search_cli",
+            "--schema-version",
+            "2",
+            "--measurements",
+            str(measurement_path),
+            "--catalog",
+            str(catalog_path),
+            "--map",
+            str(map_path),
+            "--config",
+            str(config_path),
+            "--projected-crs",
+            "EPSG:32618",
+            "--output",
+            str(result_path),
+            "--algorithm",
+            "reference_grid",
+            "--spacing-m",
+            "100",
+            "--refine-modes",
+            "4",
+            "--expand-assignments",
+            "--expansion-local-radius-m",
+            "800",
+            "--expansion-max-nfev",
+            "9",
+            "--expansion-max-branches",
+            "7",
+        ],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    result = read_contract(result_path, LocalizationResult)
+    telemetry = json.loads(
+        result_path.with_suffix(".json.telemetry.json").read_text(encoding="utf-8")
+    )
+    diagnostics = telemetry["diagnostics"]
+    expansion = diagnostics["assignment_expansion"]
+    assert not truth_path.exists()
+    assert result.search_status == "completed"
+    assert result.decision_status == "ambiguous"
+    assert result.certificate_scope == "none"
+    assert result.budget_used == 9
+    assert diagnostics["candidate_counts"]["total"] == 9
+    assert diagnostics["candidate_counts"]["evaluated"] == 9
+    assert expansion["enabled"] is True
+    assert expansion["config"] == {
+        "local_radius_m": 800.0,
+        "max_nfev": 9,
+        "max_branches": 7,
+    }
+    assert expansion["mode_results"]
+    assert expansion["selected_mode_count"] == len(expansion["mode_results"])
+    assert expansion["pending_mode_count"] == sum(
+        bool(mode.get("pending_mode", False)) for mode in expansion["mode_results"]
+    )
+    assert all(
+        isinstance(mode["status"], str)
+        and isinstance(mode["counters"], dict)
+        and isinstance(mode["elapsed_s"], (int, float))
+        for mode in expansion["mode_results"]
+    )
+    assert diagnostics["public_evidence"]["assignment_expansion_enabled"] is True
+    assert (
+        diagnostics["public_evidence"]["calibration_binding_status"]
+        == "assignment_expansion_not_calibrated"
+    )
+    assert diagnostics["decision_reason"] == "assignment_expansion_not_calibrated"
+    stage_names = [item["name"] for item in telemetry["telemetry"]["stages"]]
+    assert "continuous_refinement" in stage_names
+    assert "assignment_expansion" in stage_names
+
+
+def test_assignment_expansion_request_deadline_reports_budget_exhaustion(
+    tmp_path: Path,
+) -> None:
+    measurement_path, catalog_path, map_path, config_path, truth_path = _v2_fixture(tmp_path)
+    config = read_search_config(config_path)
+    write_search_config(config_path, replace(config, algorithm="reference_grid"))
+    truth_path.unlink()
+    result_path = tmp_path / "deadline-result.json"
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bearing_localization.search_cli",
+            "--schema-version",
+            "2",
+            "--measurements",
+            str(measurement_path),
+            "--catalog",
+            str(catalog_path),
+            "--map",
+            str(map_path),
+            "--config",
+            str(config_path),
+            "--projected-crs",
+            "EPSG:32618",
+            "--output",
+            str(result_path),
+            "--algorithm",
+            "reference_grid",
+            "--expand-assignments",
+            "--request-timeout-s",
+            "0.000000001",
+        ],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    result = read_contract(result_path, LocalizationResult)
+    telemetry = json.loads(
+        result_path.with_suffix(".json.telemetry.json").read_text(encoding="utf-8")
+    )
+    expansion = telemetry["diagnostics"]["assignment_expansion"]
+    assert not truth_path.exists()
+    assert result.search_status == "budget_exhausted"
+    assert result.budget_exhaustion_reason == "request_deadline"
+    assert result.budget_limit is None
+    assert result.budget_used is None
+    assert result.decision_status == "ambiguous"
+    assert result.certificate_scope == "none"
+    assert expansion["status"] == "request_deadline_before_candidate_search"
+    assert expansion["pending_candidate_search"] is True
+    assert expansion["pending_mode_count"] is None
+    assert telemetry["diagnostics"]["decision_reason"] == ("assignment_expansion_not_calibrated")
+
+
+def test_branch_deadline_preserves_candidate_budget_and_pending_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    measurement_path, catalog_path, map_path, config_path, truth_path = _v2_fixture(tmp_path)
+    config = read_search_config(config_path)
+    write_search_config(config_path, replace(config, algorithm="reference_grid"))
+    truth_path.unlink()
+    result_path = tmp_path / "branch-deadline-result.json"
+
+    class MutableClock:
+        now = 0.0
+
+        def __call__(self) -> float:
+            return self.now
+
+    clock = MutableClock()
+    monkeypatch.setattr(accuracy_cli, "perf_counter", clock)
+
+    def stop_at_branch(_scorer, _seed, *, config, progress_callback, result_callback):
+        del config, result_callback
+        clock.now = 2.0
+        progress_callback({"branch_id": 0})
+        raise AssertionError("deadline callback should stop expansion")
+
+    monkeypatch.setattr(accuracy_cli, "expand_assignments", stop_at_branch)
+    result = accuracy_cli.search_v2_files(
+        measurement_path,
+        catalog_path,
+        map_path,
+        config_path,
+        "EPSG:32618",
+        result_path,
+        algorithm="reference_grid",
+        spacing_m=100.0,
+        refine_modes_count=4,
+        expand_assignments_enabled=True,
+        expansion_request_timeout_s=1.0,
+    )
+
+    telemetry = json.loads(
+        result_path.with_suffix(".json.telemetry.json").read_text(encoding="utf-8")
+    )
+    expansion = telemetry["diagnostics"]["assignment_expansion"]
+    assert result.search_status == "budget_exhausted"
+    assert result.budget_exhaustion_reason == "request_deadline"
+    assert result.decision_status == "ambiguous"
+    assert result.certificate_scope == "none"
+    assert result.budget_used == 9
+    assert result.budget_limit == 100
+    assert expansion["status"] == "request_deadline_exhausted"
+    assert expansion["pending_mode_count"] == 1
+    assert expansion["completed_mode_count"] == 0
+    assert expansion["mode_results"][0]["status"] == "request_deadline_exhausted"
+    assert expansion["mode_results"][0]["counters"]["pending_branch_count"] is None
+    assert not truth_path.exists()
+
+
+def test_assignment_expansion_gpu_backend_fails_explicitly(tmp_path: Path) -> None:
+    measurement_path, catalog_path, map_path, config_path, _truth_path = _v2_fixture(tmp_path)
+    config = read_search_config(config_path)
+    write_search_config(config_path, replace(config, backend="gpu"))
+    result_path = tmp_path / "unsupported-gpu-result.json"
+    process = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bearing_localization.search_cli",
+            "--schema-version",
+            "2",
+            "--measurements",
+            str(measurement_path),
+            "--catalog",
+            str(catalog_path),
+            "--map",
+            str(map_path),
+            "--config",
+            str(config_path),
+            "--projected-crs",
+            "EPSG:32618",
+            "--output",
+            str(result_path),
+            "--device-id",
+            "0",
+            "--expand-assignments",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert process.returncode != 0
+    assert "Assignment expansion currently supports only the CPU backend" in process.stderr
+    assert not result_path.exists()
