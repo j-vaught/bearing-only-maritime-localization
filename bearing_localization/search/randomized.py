@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Protocol
 
 import numpy as np
 
@@ -141,24 +141,34 @@ def randomized_search(
 
 def run_randomized_search_v2(
     scorer: CandidateScorer,
-    candidate_positions: Iterable[tuple[float, float]],
     *,
-    search_status: Literal["completed", "budget_exhausted"] = "completed",
-    budget_limit: int | None = None,
-    budget_used: int | None = None,
+    seed: int | None = 0,
+    candidate_positions: Iterable[tuple[float, float]] | None = None,
 ) -> CandidateSearchRun:
-    """Dispatch caller-generated version-two candidates through the common scorer.
+    """Score seeded uniform candidates across all declared bounds.
 
-    This adapter never converts a finite candidate minimum into a global
-    optimality certificate or an accepted fix. Candidate generation remains
-    owned by the associated grid, hierarchical, or randomized driver.
+    The candidate budget is the number of independent bounded samples. Water
+    validity is decided by CandidateScorer, and the result carries no global
+    certificate. An explicit position iterable supports fixed-candidate parity.
     """
+    if candidate_positions is None:
+        bounds = scorer.config.bounds_xy
+        if bounds is None:
+            raise ValueError("V2 randomized search requires config.bounds_xy.")
+        xmin, xmax, ymin, ymax = bounds
+        rng = np.random.default_rng(seed)
+
+        def sampled_positions() -> Iterable[tuple[float, float]]:
+            for _ in range(scorer.config.candidate_budget):
+                yield float(rng.uniform(xmin, xmax)), float(rng.uniform(ymin, ymax))
+
+        positions = sampled_positions()
+    else:
+        positions = candidate_positions
     return score_candidate_positions(
         scorer,
-        candidate_positions,
-        search_status=search_status,
-        budget_limit=budget_limit,
-        budget_used=budget_used,
+        positions,
+        candidate_limit=scorer.config.candidate_budget,
     )
 
 

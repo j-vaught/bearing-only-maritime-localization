@@ -180,6 +180,87 @@ class CandidateScorer:
     __call__ = evaluate
 
 
+class CandidateSearchAccumulator:
+    """Evaluate unique fixed positions once and assemble their honest result."""
+
+    def __init__(self, scorer: CandidateScorer) -> None:
+        if not isinstance(scorer, CandidateScorer):
+            raise TypeError("scorer must be a CandidateScorer instance.")
+        self.scorer = scorer
+        self.started = perf_counter()
+        self.seen: set[tuple[float, float]] = set()
+        self.hypotheses: list[Hypothesis] = []
+        self.scored_by_position: dict[tuple[float, float], Hypothesis] = {}
+        self.counts: Counter[CandidateStatus] = Counter()
+        self.candidate_count = 0
+
+    @staticmethod
+    def position_key(position_xy: tuple[float, float]) -> tuple[float, float]:
+        east_m, north_m = position_xy
+        if not isfinite(east_m) or not isfinite(north_m):
+            raise ValueError("candidate positions must contain two finite coordinates.")
+        return round(float(east_m), 9), round(float(north_m), 9)
+
+    def add(self, position_xy: tuple[float, float]) -> CandidateEvaluation | None:
+        key = self.position_key(position_xy)
+        if key in self.seen:
+            return None
+        self.seen.add(key)
+        evaluation = self.scorer.evaluate(key)
+        self.candidate_count += 1
+        self.counts[evaluation.status] += 1
+        if evaluation.hypothesis is not None:
+            self.hypotheses.append(evaluation.hypothesis)
+            self.scored_by_position[key] = evaluation.hypothesis
+        return evaluation
+
+    def is_new(self, position_xy: tuple[float, float]) -> bool:
+        return self.position_key(position_xy) not in self.seen
+
+    def finish(
+        self,
+        *,
+        search_status: Literal["completed", "budget_exhausted"] = "completed",
+        budget_limit: int | None = None,
+        budget_used: int | None = None,
+        certificate_scope: Literal["none", "finite_candidate_set"] = "none",
+    ) -> CandidateSearchRun:
+        if search_status == "budget_exhausted":
+            if budget_limit is None or budget_used != budget_limit:
+                raise ValueError("budget_exhausted requires budget_used equal to budget_limit.")
+        elif (budget_limit is None) != (budget_used is None):
+            raise ValueError("budget_limit and budget_used must be provided together.")
+        ranked = tuple(sorted(self.hypotheses, key=lambda item: item.score))
+        supported_set = self.candidate_count > 0 and (
+            self.counts["scored"] + self.counts["invalid_water"] == self.candidate_count
+        )
+        effective_certificate = (
+            certificate_scope
+            if (
+                certificate_scope == "finite_candidate_set"
+                and supported_set
+                and search_status == "completed"
+            )
+            else "none"
+        )
+        result = LocalizationResult(
+            hypotheses=ranked,
+            elapsed_s=perf_counter() - self.started,
+            decision_status="ambiguous" if ranked else "no_fix",
+            search_status=search_status,
+            certificate_scope=effective_certificate,
+            budget_limit=budget_limit,
+            budget_used=budget_used,
+            report_count=len(self.scorer.measurements.measurements),
+            objective_version=self.scorer.config.objective_version,
+        )
+        return CandidateSearchRun(
+            localization=result,
+            candidate_count=self.candidate_count,
+            outcome_counts=tuple((status, self.counts[status]) for status in _STATUS_ORDER),
+        )
+
+
 def score_candidate_positions(
     scorer: CandidateScorer,
     positions_xy: Iterable[tuple[float, float]],
@@ -187,46 +268,39 @@ def score_candidate_positions(
     search_status: Literal["completed", "budget_exhausted"] = "completed",
     budget_limit: int | None = None,
     budget_used: int | None = None,
+    candidate_limit: int | None = None,
+    certificate_scope: Literal["none", "finite_candidate_set"] = "none",
 ) -> CandidateSearchRun:
     """Score a candidate stream and report no global-optimality certificate.
 
     The caller owns candidate generation and declares whether it exhausted its
-    stream or stopped at budget. Heuristic methods return ambiguous when they
-    have scored candidates; this routine never accepts a heuristic minimum.
+    stream or stopped at budget. A candidate_limit bounds consumption and turns
+    a longer stream into an explicit budget_exhausted result. Heuristic methods
+    never accept a finite candidate minimum.
     """
-    if not isinstance(scorer, CandidateScorer):
-        raise TypeError("scorer must be a CandidateScorer instance.")
-    if search_status == "budget_exhausted":
-        if budget_limit is None or budget_used != budget_limit:
-            raise ValueError("budget_exhausted requires budget_used equal to budget_limit.")
-    elif (budget_limit is None) != (budget_used is None):
-        raise ValueError("budget_limit and budget_used must be provided together.")
-    started = perf_counter()
-    hypotheses: list[Hypothesis] = []
-    counts: Counter[CandidateStatus] = Counter()
-    candidate_count = 0
-    for position in positions_xy:
-        evaluation = scorer.evaluate(position)
-        candidate_count += 1
-        counts[evaluation.status] += 1
-        if evaluation.hypothesis is not None:
-            hypotheses.append(evaluation.hypothesis)
-    hypotheses.sort(key=lambda item: item.score)
-    localization = LocalizationResult(
-        hypotheses=tuple(hypotheses),
-        elapsed_s=perf_counter() - started,
-        decision_status="ambiguous" if hypotheses else "no_fix",
+    accumulator = CandidateSearchAccumulator(scorer)
+    iterator = iter(positions_xy)
+    if candidate_limit is not None:
+        if type(candidate_limit) is not int or candidate_limit < 1:
+            raise ValueError("candidate_limit must be a positive integer.")
+        for position in iterator:
+            if accumulator.candidate_count >= candidate_limit and accumulator.is_new(position):
+                search_status = "budget_exhausted"
+                budget_limit = candidate_limit
+                budget_used = candidate_limit
+                break
+            accumulator.add(position)
+        if search_status == "completed" and budget_limit is None:
+            budget_limit = candidate_limit
+            budget_used = accumulator.candidate_count
+    else:
+        for position in iterator:
+            accumulator.add(position)
+    return accumulator.finish(
         search_status=search_status,
-        certificate_scope="none",
         budget_limit=budget_limit,
         budget_used=budget_used,
-        report_count=len(scorer.measurements.measurements),
-        objective_version=scorer.config.objective_version,
-    )
-    return CandidateSearchRun(
-        localization=localization,
-        candidate_count=candidate_count,
-        outcome_counts=tuple((status, counts[status]) for status in _STATUS_ORDER),
+        certificate_scope=certificate_scope,
     )
 
 
@@ -234,6 +308,7 @@ __all__ = [
     "CandidateEvaluation",
     "CandidateScorer",
     "CandidateSearchRun",
+    "CandidateSearchAccumulator",
     "CandidateStatus",
     "score_candidate_positions",
 ]

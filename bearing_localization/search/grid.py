@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from math import isfinite
 from time import perf_counter
-from typing import Literal, Protocol
+from typing import Protocol
 
 import numpy as np
 
@@ -205,26 +205,55 @@ def run_grid_search(
     )
 
 
+def _grid_positions_v2(
+    bounds: tuple[float, float, float, float], spacing_m: float
+) -> Iterable[tuple[float, float]]:
+    xmin, xmax, ymin, ymax = bounds
+
+    def axis(low: float, high: float) -> Iterable[float]:
+        index = 0
+        last = low
+        while True:
+            value = low + index * spacing_m
+            if value > high + 1e-9:
+                break
+            last = min(value, high)
+            yield last
+            index += 1
+        if high - last > 1e-9:
+            yield high
+
+    for east_m in axis(xmin, xmax):
+        for north_m in axis(ymin, ymax):
+            yield east_m, north_m
+
+
 def run_grid_search_v2(
     scorer: CandidateScorer,
-    candidate_positions: Iterable[tuple[float, float]],
     *,
-    search_status: Literal["completed", "budget_exhausted"] = "completed",
-    budget_limit: int | None = None,
-    budget_used: int | None = None,
+    grid_spacing_m: float = 250.0,
+    candidate_positions: Iterable[tuple[float, float]] | None = None,
 ) -> CandidateSearchRun:
-    """Dispatch caller-generated version-two candidates through the common scorer.
+    """Score a uniform grid over all declared bounds with the V2 objective.
 
-    This adapter never converts a finite candidate minimum into a global
-    optimality certificate or an accepted fix. Candidate generation remains
-    owned by the associated grid, hierarchical, or randomized driver.
+    An explicit position iterable provides fixed-candidate mode for parity
+    tests and externally generated exact grids. No port prior or map subset is
+    inferred when the full bounds are available.
     """
+    if not isfinite(grid_spacing_m) or grid_spacing_m <= 0.0:
+        raise ValueError("grid_spacing_m must be finite and positive.")
+    if candidate_positions is None:
+        bounds = scorer.config.bounds_xy
+        if bounds is None:
+            raise ValueError("V2 grid search requires config.bounds_xy.")
+        positions = _grid_positions_v2(bounds, grid_spacing_m)
+    else:
+        positions = candidate_positions
     return score_candidate_positions(
         scorer,
-        candidate_positions,
-        search_status=search_status,
-        budget_limit=budget_limit,
-        budget_used=budget_used,
+        positions,
+        candidate_limit=scorer.config.candidate_budget,
+        certificate_scope="finite_candidate_set",
     )
 
 
