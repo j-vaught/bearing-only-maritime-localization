@@ -177,3 +177,21 @@ def test_preparation_failure_requires_empty_hashed_ledgers(tmp_path) -> None:
     events.write_text("{}\n")
     with pytest.raises(EvaluationError, match="events hash mismatch"):
         validate_preparation_failure(tmp_path)
+
+
+def test_sparse_completed_modes_map_by_mode_index_not_row_ordinal() -> None:
+    rows, a20, assigned = _fixtures()
+    sparse = [row for row in rows if row["mode_index"] != 48]
+    verify_coarse_selection(sparse, a20, assigned)
+
+
+def test_shuffled_completed_rows_keep_source_mode_identity() -> None:
+    rows, a20, assigned = _fixtures()
+    verify_coarse_selection(list(reversed(rows)), a20, assigned)
+
+
+def test_duplicate_completed_mode_is_rejected() -> None:
+    rows, a20, assigned = _fixtures()
+    rows[-1] = deepcopy(rows[0])
+    with pytest.raises(EvaluationError, match="duplicate row"):
+        verify_coarse_selection(rows, a20, assigned)

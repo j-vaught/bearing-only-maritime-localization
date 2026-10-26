@@ -40,10 +40,16 @@ def verify_coarse_selection(
     """Prove mode identities, original A20 seeds, and all three serialized starts."""
     require(len(a20_rows) == len(assigned_rows) == 64, "source bundles must each contain 64 modes")
     require(len(rows) <= 64, "coarse output has more than 64 rows")
-    for index, row in enumerate(rows):
+    seen_modes: set[int] = set()
+    for row in rows:
+        mode = row.get("mode_index")
+        require(type(mode) is int and 0 <= mode < 64, "row mode index is invalid")
+        mode = cast(int, mode)
+        require(mode not in seen_modes, f"duplicate row for mode {mode}")
+        seen_modes.add(mode)
+        index = mode
         a20 = _row_mapping(a20_rows[index])
         assigned = _row_mapping(assigned_rows[index])
-        require(row.get("mode_index") == index, f"row {index} mode order mismatch")
         require(
             row.get("input_index") == a20.get("input_index") == assigned.get("input_index"),
             f"row {index} input_index is not the frozen A20/assigned input",
@@ -122,7 +128,81 @@ def verify_coarse_selection(
 def validate_coarse_artifact(
     output: Path, a20_root: Path, assigned_root: Path
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    manifest, rows, events = parallel_eval.validate_manifest(output)
+    manifest = parallel_eval.read_json(output / "manifest.json")
+    require(manifest.get("mode_count") == 64, "artifact mode count is not 64")
+    rows_file = manifest.get("rows_file")
+    require(
+        type(rows_file) is str and Path(cast(str, rows_file)).name == rows_file,
+        "rows_file is not a safe basename",
+    )
+    rows_path = output / cast(str, rows_file)
+    require(
+        parallel_eval.sha256_file(rows_path) == manifest.get("rows_sha256"),
+        "rows hash differs from manifest",
+    )
+    rows = parallel_eval.read_jsonl(rows_path)
+    row_modes_raw = [row.get("mode_index") for row in rows]
+    require(
+        all(type(mode) is int and 0 <= mode < 64 for mode in row_modes_raw),
+        "row mode index is invalid",
+    )
+    row_modes = cast(list[int], row_modes_raw)
+    require(len(set(row_modes)) == len(row_modes), "duplicate row mode index")
+    completed_raw = manifest.get("completed_mode_indices")
+    require(type(completed_raw) is list, "completed mode list is missing")
+    completed = cast(list[int], completed_raw)
+    require(sorted(completed) == sorted(row_modes), "completed mode list differs from rows")
+    require(manifest.get("completed_mode_count") == len(rows), "completed mode count differs")
+    failed_raw = manifest.get("failed_mode_indices")
+    unknown_raw = manifest.get("unknown_mode_indices")
+    require(type(failed_raw) is list and type(unknown_raw) is list, "mode dispositions are missing")
+    failed = cast(list[int], failed_raw)
+    unknown = cast(list[int], unknown_raw)
+    require(
+        sorted(completed + failed + unknown) == list(range(64)),
+        "mode dispositions do not partition the fixed inventory",
+    )
+    require(manifest.get("failed_mode_count") == len(failed), "failed mode count differs")
+    require(manifest.get("unknown_mode_count") == len(unknown), "unknown mode count differs")
+    events_file = manifest.get("events_file")
+    require(
+        type(events_file) is str and Path(cast(str, events_file)).name == events_file,
+        "events_file is not a safe basename",
+    )
+    events = parallel_eval.verify_event_chain(output / cast(str, events_file), manifest)
+    checkpoint_file = manifest.get("checkpoint_file")
+    require(
+        type(checkpoint_file) is str and Path(cast(str, checkpoint_file)).name == checkpoint_file,
+        "checkpoint_file is not a safe basename",
+    )
+    checkpoint = parallel_eval.read_json(output / cast(str, checkpoint_file))
+    require(
+        checkpoint.get("rows_sha256") == manifest.get("rows_sha256"), "checkpoint rows hash differs"
+    )
+    parallel_eval.verify_checkpoint_prefix(output, checkpoint, events)
+    parallel_eval.event_index(events)
+    allowed_event_modes = set(completed) | set(failed) | set(unknown)
+    require(
+        all(event.get("mode_index") in allowed_event_modes for event in events),
+        "event references an unrecorded mode",
+    )
+    for row in rows:
+        mode = row["mode_index"]
+        result_count = sum(
+            1
+            for event in events
+            if event.get("mode_index") == mode and event.get("phase") == "branch_result"
+        )
+        started_count = sum(
+            1
+            for event in events
+            if event.get("mode_index") == mode and event.get("phase") == "branch_started"
+        )
+        require(
+            result_count == started_count == row.get("branch_event_count"),
+            f"mode {mode} branch event inventory differs from row",
+        )
+    require(checkpoint.get("status") == manifest.get("status"), "checkpoint status differs")
     require(
         manifest.get("schema") == "parallel-assignment-expansion-diagnostic-v1",
         "unexpected parallel diagnostic schema",
@@ -181,12 +261,6 @@ def validate_coarse_artifact(
         "seed-stage identity hash mismatch",
     )
     verify_coarse_selection(rows, cast(list[dict[str, Any]], a20_rows), assigned_rows)
-    parallel_eval.validate_event_inventory(events, rows)
-    checkpoint = parallel_eval.read_json(output / "checkpoint.json")
-    require(checkpoint.get("status") == manifest.get("status"), "checkpoint status differs")
-    require(
-        checkpoint.get("rows_sha256") == manifest.get("rows_sha256"), "checkpoint rows hash differs"
-    )
     return manifest, rows, events, cast(list[dict[str, Any]], a20_rows)
 
 
@@ -208,18 +282,19 @@ def canonical_rescore(
     )
     static = Path(source_pins["input_paths"]["measurements"]).parent
     scorer = serial.build_scorer(static, Path(source_pins["config_path"]))
-    for index, row in enumerate(rows):
+    for row in rows:
+        mode = row["mode_index"]
         for item in row["start_alternatives"]:
             raw = serial._hypothesis(item["saved_hypothesis"], "saved start")
             exact = serial._revalidate(scorer, raw)
             require(
                 serial.asdict(exact) == item["canonical_hypothesis"],
-                f"mode {index} canonical start rescore mismatch",
+                f"mode {mode} canonical start rescore mismatch",
             )
         for key in ("seed", "best_hypothesis"):
             source = serial._hypothesis(row[key], key)
             exact = serial._revalidate(scorer, source)
-            require(serial.asdict(exact) == row[key], f"mode {index} {key} rescore mismatch")
+            require(serial.asdict(exact) == row[key], f"mode {mode} {key} rescore mismatch")
 
 
 def main() -> None:
