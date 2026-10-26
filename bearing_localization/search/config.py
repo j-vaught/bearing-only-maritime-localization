@@ -30,6 +30,7 @@ class SearchConfig:
     proposal_source_pair_budget: int | None = None
     proposal_cell_budget: int = 1_000_000
     proposal_chunk_size: int = 4_096
+    proposal_solver_tolerance_deg: float = 1e-7
     absolute_score_tolerance: float = 1e-8
     relative_score_tolerance: float = 1e-10
     generated_sigma_deg: float = 0.5
@@ -81,6 +82,7 @@ class SearchConfig:
             ("generated_sigma_deg", self.generated_sigma_deg),
             ("sigma_floor_deg", self.sigma_floor_deg),
             ("circular_merge_tolerance_deg", self.circular_merge_tolerance_deg),
+            ("proposal_solver_tolerance_deg", self.proposal_solver_tolerance_deg),
         ):
             if not isfinite(value) or value <= 0.0:
                 raise ValueError(f"{name} must be finite and positive.")

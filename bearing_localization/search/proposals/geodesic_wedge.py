@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from math import asin, ceil, degrees, floor, isfinite
+from math import asin, ceil, degrees, isfinite
 from typing import Literal
 
 import numpy as np
@@ -77,6 +77,8 @@ class GeodesicWedgeProposalResult:
     range_step_m: float
     angular_sample_gap_deg: float
     angular_sample_count: int
+    solver_tolerance_deg: float
+    max_solver_residual_deg: float
 
     @property
     def proposal_ids(self) -> tuple[str, ...]:
@@ -149,6 +151,113 @@ def _cell_residual_and_evidence(
     return True, normalized, precision * (1.0 - normalized)
 
 
+def _neighbor_cell_indices(
+    local_x: NDArray[np.float64],
+    local_y: NDArray[np.float64],
+    valid: NDArray[np.bool_],
+    cell_size_m: float,
+) -> NDArray[np.int64]:
+    """Return the lexicographically sorted unique nine-cell sample splat."""
+    x = local_x.reshape(-1)[valid.reshape(-1)]
+    y = local_y.reshape(-1)[valid.reshape(-1)]
+    if not x.size:
+        return np.empty((0, 2), dtype=np.int64)
+    base_i = np.floor(x / cell_size_m).astype(np.int64)
+    base_j = np.floor(y / cell_size_m).astype(np.int64)
+    offsets = np.asarray((-1, 0, 1), dtype=np.int64)
+    neighbors_i = (base_i[:, None] + offsets[None, :])[:, :, None]
+    neighbors_j = (base_j[:, None] + offsets[None, :])[:, None, :]
+    cells = np.column_stack(
+        (
+            np.broadcast_to(neighbors_i, (x.size, 3, 3)).reshape(-1),
+            np.broadcast_to(neighbors_j, (x.size, 3, 3)).reshape(-1),
+        )
+    )
+    minimum_i = int(cells[:, 0].min())
+    maximum_i = int(cells[:, 0].max())
+    minimum_j = int(cells[:, 1].min())
+    maximum_j = int(cells[:, 1].max())
+    width_j = maximum_j - minimum_j + 1
+    height_i = maximum_i - minimum_i + 1
+    int64_max = np.iinfo(np.int64).max
+    if width_j <= 0 or height_i > int64_max // width_j:
+        return np.unique(cells, axis=0)
+    keys = (cells[:, 0] - minimum_i) * width_j + (cells[:, 1] - minimum_j)
+    unique_keys = np.unique(keys)
+    return np.column_stack(
+        (unique_keys // width_j + minimum_i, unique_keys % width_j + minimum_j)
+    ).astype(np.int64, copy=False)
+
+
+def _cell_residual_and_evidence_batch(
+    *,
+    source_lon_deg: float,
+    source_lat_deg: float,
+    cell_lon_deg: NDArray[np.float64],
+    cell_lat_deg: NDArray[np.float64],
+    desired_bearing_deg: float,
+    cell_size_m: float,
+    angular_tolerance_deg: float,
+    sigma_deg: float,
+    final_distance_m: float,
+) -> tuple[NDArray[np.bool_], NDArray[np.float64], NDArray[np.float64]]:
+    """Evaluate a bounded vector of cell centers, scalar-checking boundaries."""
+    bearings, _, distances_raw = _GEOD.inv(
+        cell_lon_deg,
+        cell_lat_deg,
+        np.full(cell_lon_deg.shape, source_lon_deg, dtype=np.float64),
+        np.full(cell_lat_deg.shape, source_lat_deg, dtype=np.float64),
+    )
+    bearings = np.asarray(bearings, dtype=np.float64)
+    distances = np.asarray(distances_raw, dtype=np.float64)
+    half_diagonal = cell_size_m * 2.0**0.5 / 2.0
+    finite = np.isfinite(distances)
+    near_range = np.abs(distances - final_distance_m) <= 1e-6
+    near_origin = np.abs(distances - half_diagonal) <= 1e-6
+    far_enough = finite & (distances > half_diagonal)
+    quantization = np.zeros_like(distances)
+    quantization[far_enough] = np.degrees(
+        np.arcsin(np.minimum(1.0, half_diagonal / distances[far_enough]))
+    )
+    residual = np.abs(_wrap_signed(bearings - desired_bearing_deg))
+    threshold = angular_tolerance_deg + quantization
+    near_angle = far_enough & (np.abs(residual - threshold) <= 1e-10)
+    fallback = near_range | near_origin | near_angle
+
+    within_range = finite & (distances <= final_distance_m)
+    accepted = np.zeros(distances.shape, dtype=bool)
+    normalized = np.full(distances.shape, np.inf, dtype=np.float64)
+    evidence = np.zeros(distances.shape, dtype=np.float64)
+    close = within_range & (distances <= half_diagonal)
+    normalized[close] = 1.0
+    eligible = (
+        finite
+        & (distances <= final_distance_m)
+        & (distances > half_diagonal)
+        & (residual <= threshold)
+    )
+    accepted = close | eligible
+    denominator = np.maximum(sigma_deg + quantization, 1e-12)
+    normalized[eligible] = np.minimum(1.0, residual[eligible] / denominator[eligible])
+    precision = np.minimum(1.0, sigma_deg / denominator)
+    evidence[eligible] = precision[eligible] * (1.0 - normalized[eligible])
+
+    for index in np.flatnonzero(fallback):
+        scalar = _cell_residual_and_evidence(
+            source_lon_deg=source_lon_deg,
+            source_lat_deg=source_lat_deg,
+            cell_lon_deg=float(cell_lon_deg[index]),
+            cell_lat_deg=float(cell_lat_deg[index]),
+            desired_bearing_deg=desired_bearing_deg,
+            cell_size_m=cell_size_m,
+            angular_tolerance_deg=angular_tolerance_deg,
+            sigma_deg=sigma_deg,
+            final_distance_m=final_distance_m,
+        )
+        accepted[index], normalized[index], evidence[index] = scalar
+    return accepted, normalized, evidence
+
+
 def generate_geographic_reverse_wedge_proposals_geodesic(
     observations: Sequence[WedgeObservation],
     catalog: Sequence[GeographicWedgeCatalogObject],
@@ -162,6 +271,7 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
     source_chunk_size: int = 256,
     range_step_m: float | None = None,
     observation_sigmas_deg: Mapping[int, float] | None = None,
+    solver_tolerance_deg: float = 1e-7,
 ) -> GeodesicWedgeProposalResult:
     """Generate cells from sampled WGS84 reverse rays.
 
@@ -184,6 +294,8 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
         raise ValueError("source_chunk_size must be a positive integer.")
     if range_step_m is not None and (not isfinite(range_step_m) or range_step_m <= 0.0):
         raise ValueError("range_step_m must be finite and positive when supplied.")
+    if not isfinite(solver_tolerance_deg) or solver_tolerance_deg <= 0.0:
+        raise ValueError("solver_tolerance_deg must be finite and positive.")
 
     obs = tuple(sorted(observations, key=lambda item: item.report_index))
     objects = tuple(sorted(catalog, key=lambda item: item.key))
@@ -216,6 +328,13 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
     from maritime_localization_shared.geospatial.reverse_bearing import (
         solve_reverse_bearing_observer,
     )
+
+    maximum_solver_tolerance = min(0.001, 0.01 * min(sigma_by_report.values()))
+    if solver_tolerance_deg > maximum_solver_tolerance:
+        raise ValueError(
+            "solver_tolerance_deg must not exceed min(0.001 degrees, "
+            "0.01 times the minimum effective observation sigma)."
+        )
 
     source_lonlat = np.asarray(
         [(item.longitude_deg, item.latitude_deg) for item in objects],
@@ -260,6 +379,7 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
     sample_total = 0
     sample_failed = 0
     sample_degenerate = 0
+    max_solver_residual = 0.0
     budget_reason: Literal["none", "source_pairs", "candidate_cells"] = "none"
 
     for observation in obs:
@@ -280,6 +400,7 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
                 source_chunk[:, None, None, :],
                 desired,
                 ranges,
+                tolerance_deg=solver_tolerance_deg,
             )
             points = np.asarray(solved.observer_lonlat_deg, dtype=np.float64)
             converged = np.asarray(solved.converged, dtype=bool)
@@ -290,6 +411,10 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
             sample_total += int(points.shape[0] * points.shape[1] * points.shape[2])
             sample_failed += int(np.count_nonzero(failed_mask))
             sample_degenerate += int(np.count_nonzero(degenerate))
+            max_solver_residual = max(
+                max_solver_residual,
+                float(np.max(np.abs(solved.angular_residual_deg), initial=0.0)),
+            )
             failed_pairs += int(np.count_nonzero(np.any(failed_mask, axis=(1, 2))))
 
             projected_x, projected_y = forward.transform(points[..., 0], points[..., 1])
@@ -297,39 +422,31 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
             local_y = np.asarray(projected_y, dtype=np.float64) - origin_y
             chunk_exhausted = False
             for local_row, source_index in enumerate(range(chunk_start, chunk_start + chunk_size)):
-                pair_cells: set[tuple[int, int]] = set()
-                for sample_index in np.flatnonzero(valid[local_row].reshape(-1)):
-                    base_i = floor(
-                        float(local_x[local_row].reshape(-1)[sample_index] / cell_size_m)
-                    )
-                    base_j = floor(
-                        float(local_y[local_row].reshape(-1)[sample_index] / cell_size_m)
-                    )
-                    pair_cells.update(
-                        (base_i + di, base_j + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1)
-                    )
+                cells = _neighbor_cell_indices(
+                    local_x[local_row], local_y[local_row], valid[local_row], cell_size_m
+                )
                 pair_evidence: dict[tuple[int, int], tuple[float, float]] = {}
                 source_lon, source_lat = source_chunk[local_row]
-                for cell_i, cell_j in sorted(pair_cells):
-                    center_x = (cell_i + 0.5) * cell_size_m + origin_x
-                    center_y = (cell_j + 0.5) * cell_size_m + origin_y
+                if cells.size:
+                    cell_i_values = cells[:, 0]
+                    cell_j_values = cells[:, 1]
+                    center_x = (cell_i_values + 0.5) * cell_size_m + origin_x
+                    center_y = (cell_j_values + 0.5) * cell_size_m + origin_y
                     center_lon, center_lat = inverse.transform(center_x, center_y)
-                    accepted, residual, evidence = _cell_residual_and_evidence(
+                    accepted, residuals, evidences = _cell_residual_and_evidence_batch(
                         source_lon_deg=float(source_lon),
                         source_lat_deg=float(source_lat),
-                        cell_lon_deg=float(center_lon),
-                        cell_lat_deg=float(center_lat),
+                        cell_lon_deg=np.asarray(center_lon, dtype=np.float64),
+                        cell_lat_deg=np.asarray(center_lat, dtype=np.float64),
                         desired_bearing_deg=observation.bearing_deg,
                         cell_size_m=cell_size_m,
                         angular_tolerance_deg=angular_tolerance_deg,
                         sigma_deg=sigma_deg,
                         final_distance_m=final_distance_m,
                     )
-                    if not accepted:
-                        continue
-                    previous = pair_evidence.get((cell_i, cell_j))
-                    if previous is None or residual < previous[0]:
-                        pair_evidence[(cell_i, cell_j)] = (residual, evidence)
+                    for index in np.flatnonzero(accepted):
+                        cell = (int(cell_i_values[index]), int(cell_j_values[index]))
+                        pair_evidence[cell] = (float(residuals[index]), float(evidences[index]))
                 for cell, evidence in pair_evidence.items():
                     if cell not in witness_index and len(witness_index) >= max_candidate_cells:
                         budget_reason = "candidate_cells"
@@ -403,6 +520,8 @@ def generate_geographic_reverse_wedge_proposals_geodesic(
         range_step_m=float(step_m),
         angular_sample_gap_deg=float(angular_gap_deg),
         angular_sample_count=int(angular_offsets_deg.size),
+        solver_tolerance_deg=float(solver_tolerance_deg),
+        max_solver_residual_deg=float(max_solver_residual),
     )
 
 
