@@ -1,0 +1,37 @@
+{
+  "search_argv": [
+    "bearing-localization-search",
+    "--schema-version",
+    "2",
+    "--measurements",
+    "{measurements_path}",
+    "--catalog",
+    "{search_catalog_path}",
+    "--map",
+    "{search_map_path}",
+    "--config",
+    "{search_config_path}",
+    "--projected-crs",
+    "EPSG:32618",
+    "--output",
+    "{estimate_path}"
+  ],
+  "evaluator_argv": [
+    "bearing-localization-evaluate",
+    "--schema-version",
+    "2",
+    "--estimate",
+    "{estimate_path}",
+    "--truth",
+    "{truth_path}",
+    "--support",
+    "{support_path}",
+    "--output",
+    "{evaluation_path}"
+  ],
+  "search_catalog": "/absolute/path/to/full-coast-catalog-v2.json",
+  "search_map": "/absolute/path/to/full-coast-map-v2.json",
+  "search_config": "/absolute/path/to/frozen-search-config-v2.json",
+  "search_domain_scope": "full_coast",
+  "search_map_scope": "full_coast"
+}
