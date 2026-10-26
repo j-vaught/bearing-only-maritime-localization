@@ -22,6 +22,7 @@ from ..proposals.wedge import (
     WedgeObservation,
     WedgeProposalResult,
     _candidate_cells_for_source,
+    _CandidateRasterBudgetExceeded,
     generate_reverse_wedge_proposals,
 )
 
@@ -153,7 +154,7 @@ def generate_reverse_wedge_proposals_cupy(
     max_range_m: float,
     cell_size_m: float = 250.0,
     angular_tolerance_deg: float = 0.5,
-    max_source_pairs: int = 1_000_000,
+    max_source_pairs: int = 100_000,
     max_candidate_cells: int = 100_000,
     max_cells_per_chunk: int = 65536,
     cupy_module: Any | None = None,
@@ -167,16 +168,22 @@ def generate_reverse_wedge_proposals_cupy(
     for o in obs:
         cells = set()
         for s in cat:
-            cells.update(
-                _candidate_cells_for_source(
-                    s.east_m,
-                    s.north_m,
-                    o.bearing_deg,
-                    cell_size_m=cell_size_m,
-                    max_range_m=max_range_m,
-                    angular_tolerance_deg=angular_tolerance_deg,
+            try:
+                cells.update(
+                    _candidate_cells_for_source(
+                        s.east_m,
+                        s.north_m,
+                        o.bearing_deg,
+                        cell_size_m=cell_size_m,
+                        max_range_m=max_range_m,
+                        angular_tolerance_deg=angular_tolerance_deg,
+                        max_cells=max(1_024, max_candidate_cells),
+                    )
                 )
-            )
+            except _CandidateRasterBudgetExceeded:
+                # The CPU authority returns an explicit candidate_cells budget
+                # disposition for the same source when the raster is excessive.
+                break
         cells = sorted(cells)
         for start in range(0, len(cells), max_cells_per_chunk):
             chunk = cells[start : start + max_cells_per_chunk]
