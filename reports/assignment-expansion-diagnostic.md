@@ -8,6 +8,8 @@ The output is an immutable, unique directory containing fsynced per-mode rows, a
 
 The manifest reports ranked selected-mode results with processed and pending counts while retaining decision_status=ambiguous, search_status=budget_exhausted, certificate_scope=none, and full_domain_complete=false. The source search therefore remains incomplete and no truth or evaluator input is used.
 
+A read-only preflight under the canonical lock inspected the normal candidate pools without fitting expansion branches. Across 64 modes it found 14,473 pool records, 14,257 eligible records, 104 unmatched-report slots, and 22,000 single-addition candidate branches. Per-mode eligible records ranged from 3 to 1,061 and candidate branches ranged from 0 to 3,183. No nonvisual or unsupported-model records were counted.
+
 The proposed execution command is below. It must be approved by the coordinator after the prerequisite module commit and other locked jobs finish.
 
 ~~~text
