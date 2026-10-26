@@ -105,6 +105,7 @@ def test_true_north_wraparound_merge_nearest_type_and_metadata() -> None:
     assert solo.catalog_uncertainty_m == 4.5
     assert solo.extent_half_width_deg == pytest.approx(0.02)
     assert not north_group.ais_antenna_offset_supported
+    assert north_group.visible_feature_offset_quality == "nominal_zero_unknown"
     assert result.coverage_status == "known"
 
 
@@ -218,3 +219,76 @@ def test_range_boundary_excludes_feature_outside_exact_geodesic_radius() -> None
 
     assert result.groups == ()
     assert result.unresolved_member_keys == ()
+
+
+def test_unknown_observer_coverage_is_unresolved_even_with_empty_catalog() -> None:
+    origin_xy = _origin_xy()
+    catalog = _catalog()
+    outside_coverage = box(
+        origin_xy[0] + 100_000,
+        origin_xy[1] + 100_000,
+        origin_xy[0] + 110_000,
+        origin_xy[1] + 110_000,
+    )
+
+    result = predict_visible_groups(
+        origin_xy,
+        catalog,
+        observer_crs=CRS_UTM,
+        visibility_radius_m=1_000,
+        vector_map=_vector_map(coverage=outside_coverage),
+    )
+
+    assert result.groups == ()
+    assert result.coverage_status == "unresolved"
+    assert result.unresolved_member_keys == ()
+    assert not result.unresolved_model
+
+
+def test_supported_visible_feature_offset_corrects_true_bearing_and_range() -> None:
+    raw_lon, raw_lat = _at_distance(1_000, 0.0)
+    target_lon, target_lat, _ = _GEOD.fwd(raw_lon, raw_lat, 90.0, 200.0)
+    catalog = _catalog(
+        CatalogRecordV2(
+            key="offset-ais",
+            longitude_deg=raw_lon,
+            latitude_deg=raw_lat,
+            normalized_type="vessel",
+            metadata=(
+                ("visible_feature_offset_east_m", 200.0),
+                ("visible_feature_offset_north_m", 0.0),
+                ("position_uncertainty_m", 3.0),
+            ),
+        )
+    )
+
+    result = _predict(catalog)
+    observer_lon, observer_lat = _FROM_XY.transform(*_origin_xy())
+    expected_bearing, _, expected_range = _GEOD.inv(
+        observer_lon, observer_lat, target_lon, target_lat
+    )
+
+    assert len(result.groups) == 1
+    group = result.groups[0]
+    assert group.bearing_deg == pytest.approx(expected_bearing % 360.0, abs=1e-8)
+    assert group.range_m == pytest.approx(expected_range, abs=1e-6)
+    assert group.catalog_uncertainty_m == 3.0
+    assert group.ais_antenna_offset_supported
+    assert group.visible_feature_offset_quality == "calibrated"
+
+
+def test_unsupported_antenna_and_dimension_metadata_marks_model_unresolved() -> None:
+    catalog = _catalog(
+        _record(
+            "unsupported",
+            10.0,
+            500.0,
+            metadata=(("antenna_offset_m", 2.0), ("vessel_length_m", 30.0)),
+        )
+    )
+
+    result = _predict(catalog)
+
+    assert result.groups == ()
+    assert result.unresolved_model
+    assert result.unresolved_model_keys == ("unsupported",)

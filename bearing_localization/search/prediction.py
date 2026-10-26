@@ -8,10 +8,10 @@ bearings, and map coverage uncertainty is carried explicitly in the result.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite
+from math import atan2, degrees, hypot, isfinite
 from typing import Literal
 
-from pyproj import CRS, Transformer
+from pyproj import CRS, Geod, Transformer
 
 from maritime_localization_shared.contracts.inputs_v2 import CatalogRecordV2, CatalogV2
 from maritime_localization_shared.contracts.object_types import (
@@ -27,6 +27,12 @@ from maritime_localization_shared.geospatial.spatial_index import GeographicSpat
 from maritime_localization_shared.geospatial.vector_map import VectorMap
 
 CoverageStatus = Literal["known", "unresolved"]
+OffsetQuality = Literal["calibrated", "nominal_zero_unknown", "unsupported"]
+_GEOD = Geod(ellps="WGS84")
+_VISIBLE_OFFSET_KEYS = {
+    "visible_feature_offset_east_m",
+    "visible_feature_offset_north_m",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +47,7 @@ class PredictedVisibleGroup:
     extent_half_width_deg: float
     catalog_uncertainty_m: float | None
     ais_antenna_offset_supported: bool = False
+    visible_feature_offset_quality: OffsetQuality = "nominal_zero_unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +57,8 @@ class PredictedGroupSet:
     groups: tuple[PredictedVisibleGroup, ...]
     coverage_status: CoverageStatus
     unresolved_member_keys: tuple[str, ...]
+    unresolved_model: bool = False
+    unresolved_model_keys: tuple[str, ...] = ()
 
 
 def predict_visible_groups(
@@ -72,9 +81,12 @@ def predict_visible_groups(
     before LOS. Unknown observer/LOS coverage marks the result unresolved and
     does not silently classify the affected feature as visible or blocked.
 
-    AIS feature/antenna offsets have no standardized V2 metadata key and are
-    not applied. ``catalog_uncertainty_m`` carries a recognized position
-    uncertainty metadata value when supplied; otherwise it is ``None``.
+    Explicit visible-feature east/north offset metadata are applied as
+    true-east/north WGS84 offsets from the catalog reference point. Missing
+    offsets use a nominal zero with unknown quality. Supplied unsupported
+    dimensional or antenna-offset metadata sets unresolved_model and excludes
+    that record from definite groups. catalog_uncertainty_m carries recognized
+    position uncertainty when supplied; otherwise it is None.
     """
     if not isinstance(catalog, CatalogV2):
         raise TypeError("catalog must be a CatalogV2 instance.")
@@ -120,19 +132,65 @@ def predict_visible_groups(
     expected_keys = tuple(record.key for record in catalog.records)
     if index.keys != expected_keys:
         raise ValueError("spatial_index must match catalog keys and order.")
-    nearby_indices = index.query_radius(observer_lon, observer_lat, visibility_radius_m)
     forward = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
+    physical_records = tuple(
+        record
+        for record in catalog.records
+        if is_visual_entity(
+            record.normalized_type or record.raw_type,
+            type_labels_enabled=type_labels_enabled,
+        )
+    )
+    physical_by_key = {record.key: record for record in physical_records}
+    offset_data = {record.key: _visible_feature_offset(record) for record in physical_records}
+    max_offset_m = max(
+        (
+            hypot(east_m, north_m)
+            for east_m, north_m, quality in offset_data.values()
+            if quality != "unsupported"
+        ),
+        default=0.0,
+    )
+    nearby_indices = index.query_radius(
+        observer_lon, observer_lat, visibility_radius_m + max_offset_m
+    )
     detections: list[DetectedObject] = []
     metadata_by_key: dict[str, CatalogRecordV2] = {}
+    offset_applied_by_key: dict[str, OffsetQuality] = {}
     unresolved: list[str] = []
+    unresolved_model_keys = tuple(
+        sorted(
+            record.key for record in physical_records if offset_data[record.key][2] == "unsupported"
+        )
+    )
     observer_status = vector_map.point_water_status(observer_xy)
 
     for record_index in nearby_indices:
         record = catalog.records[record_index]
-        source_type = record.normalized_type or record.raw_type
-        if not is_visual_entity(source_type, type_labels_enabled=type_labels_enabled):
+        if record.key not in physical_by_key:
             continue
-        target_east_m, target_north_m = forward.transform(record.longitude_deg, record.latitude_deg)
+        east_offset_m, north_offset_m, offset_quality = offset_data[record.key]
+        if offset_quality == "unsupported":
+            continue
+        if east_offset_m != 0.0 or north_offset_m != 0.0:
+            offset_bearing_deg = degrees(atan2(east_offset_m, north_offset_m)) % 360.0
+            offset_range_m = hypot(east_offset_m, north_offset_m)
+            target_lon, target_lat, _ = _GEOD.fwd(
+                record.longitude_deg,
+                record.latitude_deg,
+                offset_bearing_deg,
+                offset_range_m,
+            )
+        else:
+            target_lon, target_lat = record.longitude_deg, record.latitude_deg
+        geometry = geodesic_bearing_distance(
+            (float(observer_lon), float(observer_lat)),
+            (float(target_lon), float(target_lat)),
+        )
+        if geometry.distance_m > visibility_radius_m:
+            continue
+
+        target_east_m, target_north_m = forward.transform(target_lon, target_lat)
         target_xy = (float(target_east_m), float(target_north_m))
         visibility = vector_map.line_visibility(observer_xy, target_xy)
         if visibility == "unknown" or observer_status == "unknown":
@@ -141,12 +199,7 @@ def predict_visible_groups(
         if visibility == "blocked" or observer_status == "land":
             continue
 
-        geometry = geodesic_bearing_distance(
-            (float(observer_lon), float(observer_lat)),
-            (record.longitude_deg, record.latitude_deg),
-        )
-        # GeographicSpatialIndex has already performed the inclusive exact
-        # range check; geodesic distance is retained for representative choice.
+        source_type = record.normalized_type or record.raw_type
         detections.append(
             DetectedObject(
                 object_id=record.key,
@@ -159,6 +212,7 @@ def predict_visible_groups(
             )
         )
         metadata_by_key[record.key] = record
+        offset_applied_by_key[record.key] = offset_quality
 
     grouped = group_angular_detections(detections, angular_resolution_deg)
     key_to_detection = {item.object_id: item for item in detections}
@@ -183,14 +237,59 @@ def predict_visible_groups(
                 range_m=representative.range_m,
                 extent_half_width_deg=extent,
                 catalog_uncertainty_m=_group_uncertainty(member_keys, metadata_by_key),
+                ais_antenna_offset_supported=offset_applied_by_key[representative_key]
+                == "calibrated",
+                visible_feature_offset_quality=offset_applied_by_key[representative_key],
             )
         )
 
     return PredictedGroupSet(
         groups=tuple(output),
-        coverage_status="unresolved" if unresolved else "known",
+        coverage_status="unresolved" if unresolved or observer_status == "unknown" else "known",
         unresolved_member_keys=tuple(sorted(unresolved)),
+        unresolved_model=bool(unresolved_model_keys),
+        unresolved_model_keys=unresolved_model_keys,
     )
+
+
+def _visible_feature_offset(record: CatalogRecordV2) -> tuple[float, float, OffsetQuality]:
+    metadata = _record_metadata(record)
+    present = _VISIBLE_OFFSET_KEYS.intersection(metadata)
+    if not present:
+        quality: OffsetQuality = (
+            "unsupported" if _has_unsupported_model_metadata(metadata) else "nominal_zero_unknown"
+        )
+        return 0.0, 0.0, quality
+    if present != _VISIBLE_OFFSET_KEYS:
+        return 0.0, 0.0, "unsupported"
+    east_m = metadata["visible_feature_offset_east_m"]
+    north_m = metadata["visible_feature_offset_north_m"]
+    if (
+        isinstance(east_m, bool)
+        or not isinstance(east_m, (int, float))
+        or not isfinite(east_m)
+        or isinstance(north_m, bool)
+        or not isinstance(north_m, (int, float))
+        or not isfinite(north_m)
+        or _has_unsupported_model_metadata(metadata)
+    ):
+        return 0.0, 0.0, "unsupported"
+    return float(east_m), float(north_m), "calibrated"
+
+
+def _has_unsupported_model_metadata(metadata: dict[str, object]) -> bool:
+    for key in metadata:
+        normalized = key.casefold()
+        if "visible_feature_offset_" in normalized and key not in _VISIBLE_OFFSET_KEYS:
+            return True
+        if normalized == "angular_half_width_deg":
+            continue
+        if any(
+            token in normalized
+            for token in ("antenna", "dimension", "length", "beam", "width", "height")
+        ):
+            return True
+    return False
 
 
 def _circular_separation(first_deg: float, second_deg: float) -> float:
