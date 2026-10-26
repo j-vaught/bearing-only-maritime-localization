@@ -68,6 +68,8 @@ def predict_visible_groups(
     observer_crs: str | int | CRS,
     visibility_radius_m: float,
     vector_map: VectorMap,
+    minimum_range_m: float = 0.0,
+    range_inclusive: bool = True,
     angular_resolution_deg: float = 0.1,
     type_labels_enabled: bool = True,
     spatial_index: GeographicSpatialIndex | None = None,
@@ -77,8 +79,8 @@ def predict_visible_groups(
     ``observer_xy_m`` is expressed in ``observer_crs``, which must be the
     same projected-metre CRS used by ``vector_map``. Catalog coordinates are
     transformed from their V2 longitude/latitude fields only for map LOS; range
-    and true bearing always use WGS84 geodesics. Range is inclusive and applied
-    before LOS. Unknown observer/LOS coverage marks the result unresolved and
+    and true bearing always use WGS84 geodesics. The configured range interval
+    is applied before LOS and angular grouping. Unknown observer/LOS coverage marks the result unresolved and
     does not silently classify the affected feature as visible or blocked.
 
     Explicit visible-feature east/north offset metadata are applied as
@@ -96,6 +98,12 @@ def predict_visible_groups(
         raise TypeError("type_labels_enabled must be a bool.")
     if not isfinite(visibility_radius_m) or visibility_radius_m < 0.0:
         raise ValueError("visibility_radius_m must be finite and nonnegative.")
+    if not isfinite(minimum_range_m) or minimum_range_m < 0.0:
+        raise ValueError("minimum_range_m must be finite and nonnegative.")
+    if minimum_range_m > visibility_radius_m:
+        raise ValueError("minimum_range_m cannot exceed visibility_radius_m.")
+    if type(range_inclusive) is not bool:
+        raise TypeError("range_inclusive must be a bool.")
     if not isfinite(angular_resolution_deg) or not 0.0 <= angular_resolution_deg < 180.0:
         raise ValueError("angular_resolution_deg must be finite and in [0, 180).")
 
@@ -158,11 +166,7 @@ def predict_visible_groups(
     metadata_by_key: dict[str, CatalogRecordV2] = {}
     offset_applied_by_key: dict[str, OffsetQuality] = {}
     unresolved: list[str] = []
-    unresolved_model_keys = tuple(
-        sorted(
-            record.key for record in physical_records if offset_data[record.key][2] == "unsupported"
-        )
-    )
+    unresolved_model_keys: list[str] = []
     observer_status = vector_map.point_water_status(observer_xy)
 
     for record_index in nearby_indices:
@@ -171,6 +175,7 @@ def predict_visible_groups(
             continue
         east_offset_m, north_offset_m, offset_quality = offset_data[record.key]
         if offset_quality == "unsupported":
+            unresolved_model_keys.append(record.key)
             continue
         if east_offset_m != 0.0 or north_offset_m != 0.0:
             offset_bearing_deg = degrees(atan2(east_offset_m, north_offset_m)) % 360.0
@@ -187,7 +192,10 @@ def predict_visible_groups(
             (float(observer_lon), float(observer_lat)),
             (float(target_lon), float(target_lat)),
         )
-        if geometry.distance_m > visibility_radius_m:
+        if range_inclusive:
+            if geometry.distance_m < minimum_range_m or geometry.distance_m > visibility_radius_m:
+                continue
+        elif geometry.distance_m <= minimum_range_m or geometry.distance_m >= visibility_radius_m:
             continue
 
         target_east_m, target_north_m = forward.transform(target_lon, target_lat)
@@ -248,7 +256,7 @@ def predict_visible_groups(
         coverage_status="unresolved" if unresolved or observer_status == "unknown" else "known",
         unresolved_member_keys=tuple(sorted(unresolved)),
         unresolved_model=bool(unresolved_model_keys),
-        unresolved_model_keys=unresolved_model_keys,
+        unresolved_model_keys=tuple(sorted(unresolved_model_keys)),
     )
 
 
