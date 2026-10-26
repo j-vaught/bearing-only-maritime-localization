@@ -1021,6 +1021,14 @@ def _v2_fixture(tmp_path: Path):
         eligibility.append(
             SimpleNamespace(
                 trial_id=trial_id,
+                split="development",
+                port_id="port-001",
+                placement_id=f"placement-{index + 1:03d}",
+                realization="0",
+                range_m=1000,
+                report_types=True,
+                physical_seed=100 + index,
+                sensor_condition=profile,
                 supported=supported,
                 status=status,
                 eligibility_status="unresolved"
@@ -1057,9 +1065,20 @@ def _v2_fixture(tmp_path: Path):
                 algorithm=condition.algorithm,
             )
             key = f"{range_m}m_types{'on' if use_types else 'off'}"
+            gate_context = (
+                context
+                if key == "1000m_typeson"
+                else CalibrationContext(
+                    catalog_sha256=context.catalog_sha256,
+                    map_sha256=context.map_sha256,
+                    scope_manifest_sha256=context.scope_manifest_sha256,
+                    search_execution_sha256=hashlib.sha256(key.encode()).hexdigest(),
+                    implementation_sha256=context.implementation_sha256,
+                )
+            )
             condition_contexts[key] = {
                 "calibration_condition": gate_condition.as_dict(),
-                "calibration_context": context.as_dict(),
+                "calibration_context": gate_context.as_dict(),
             }
     manifest = {
         "schema_version": 1,
@@ -1154,6 +1173,14 @@ def test_v2_condition_projection_accepts_other_conditions_in_split_manifest(
         *snapshot.all_trials,
         SimpleNamespace(
             trial_id=other["trial_id"],
+            split="development",
+            port_id="port-001",
+            placement_id="placement-099",
+            realization="0",
+            range_m=5000,
+            report_types=True,
+            physical_seed=909,
+            sensor_condition="nominal",
             supported=False,
             status="unsupported",
             eligibility_status="unsupported",
@@ -1220,6 +1247,68 @@ def test_v2_condition_projection_accepts_other_conditions_in_split_manifest(
     )
     assert document["trial_count"] == 4
     assert other["trial_id"] not in {row["trial_id"] for row in document["all_trials"]}
+
+
+def test_v2_condition_document_rejects_truncated_eligibility_plan(
+    tmp_path: Path,
+) -> None:
+    plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
+        tmp_path
+    )
+    with pytest.raises(ValueError, match="exactly match"):
+        build_condition_document(
+            trial_rows=plans[:-1],
+            run_manifest=manifest,
+            manifest_path=run_path,
+            input_root=tmp_path / "inputs",
+            split="development",
+            eligibility_snapshot=snapshot,
+            eligibility_manifest_path=eligibility_path,
+            condition=condition,
+            context=context,
+        )
+
+
+def test_v2_condition_document_rejects_wrong_gate_context_binding(
+    tmp_path: Path,
+) -> None:
+    import hashlib
+
+    plans, snapshot, eligibility_path, run_path, manifest, condition, context = _v2_fixture(
+        tmp_path
+    )
+    manifest["condition_contexts"]["1000m_typeson"]["calibration_context"][
+        "search_execution_sha256"
+    ] = "f" * 64
+    identity_fields = (
+        "plan_sha256",
+        "eligibility_plan_sha256",
+        "eligibility_manifest_sha256",
+        "config_sha256",
+        "splits_sha256",
+        "trial_table_sha256",
+        "condition_contexts",
+    )
+    identity = {key: manifest[key] for key in identity_fields}
+    manifest["run_identity_sha256"] = hashlib.sha256(
+        json.dumps(
+            {"schema": "accuracy-formal-run-identity-v1", **identity},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    with pytest.raises(ValueError, match="pre-search binding"):
+        build_condition_document(
+            trial_rows=plans,
+            run_manifest=manifest,
+            manifest_path=run_path,
+            input_root=tmp_path / "inputs",
+            split="development",
+            eligibility_snapshot=snapshot,
+            eligibility_manifest_path=eligibility_path,
+            condition=condition,
+            context=context,
+        )
 
 
 def test_v2_condition_document_rejects_run_metadata_mismatch(tmp_path: Path) -> None:
