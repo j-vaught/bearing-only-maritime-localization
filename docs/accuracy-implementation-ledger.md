@@ -46,10 +46,10 @@ Each of the six range and type conditions requires at least 90% unique-fix avail
 | A34 | Data and geometry integration | Passed data/geometry integration; integrated 88fcf27; source ambiguity retained |
 | A35 | Search integration | Passed search integration checks; integrated 718c11e |
 | A36 | GPU correctness integration | Passed GPU integration and CLI device parity; integrated 71da644 |
-| A37 | Independent regression and CI | Running independent full regression and CI audit |
-| A38 | Performance and held-out evaluation | Awaiting prerequisites |
-| A39 | Figures and reproducibility documentation | Awaiting prerequisites |
-| A40 | Independent release review | Awaiting prerequisites |
+| A37 | Independent regression and CI | Prior gate passed 505 tests; renewed gate pending end-to-end corrections |
+| A38 | Performance and held-out evaluation | Archive and execution helpers tested; formal evaluation pending corrected handoffs |
+| A39 | Figures and reproducibility documentation | Exact map archives and verification integrated; result figures await evaluation |
+| A40 | Independent release review | Read-only preflight underway; final verdict awaits final evidence |
 
 ## Evidence
 
@@ -70,3 +70,15 @@ Thirty-three specialist agents have been dispatched. Accuracy and held-out evalu
 Thirty-seven specialist agents have now been dispatched. The combined runtime catalog preserves 66,668 records, including all 64,400 chart records; 44,580 chart records carry unresolved identity information. The detailed geographic mosaic preserves known port coverage and marks the remaining domain unknown. These inputs do not establish complete-coast visibility.
 
 The one-, two-, and four-device CLI checks returned identical hypotheses, decision statuses, and budget accounting for the nine-candidate reference fixture. These are correctness checks, not performance or accuracy benchmarks.
+
+## End-to-end preflight corrections
+
+All forty specialist roles have been dispatched. The prior automated gate passed 505 tests, with 25 optional GPU tests skipped in the CPU environment and seven subtests passed. Separate hardware checks passed on one, two, and four devices. These checks establish only the tested software behavior, not the six release accuracy requirements.
+
+The preflight review identified and corrected an overly restrictive chart-identity rule. All valid chart records remain eligible for range, visibility, and association calculations. Physical support counts remain conservative and use only distinct resolved nearest representatives after angular merging. The source linkage heuristic is an explicit study assumption. Missing names and uncertain cross-chart linkage remain diagnostic metadata.
+
+The search decision now separates verified competing local modes from global optimality certificates. Raw distant proposals cannot establish positive confidence, and low-gap alternatives can veto acceptance. Standalone CLI wiring and independent regression are being updated before calibration.
+
+The program handoff review also identified different projected coordinate systems between simulator truth and search output, static settings across range/type conditions, and shared output paths between algorithm runs. Corrections preserve raw inputs and estimates, record coordinate provenance, create condition-specific configurations, and isolate hashed run artifacts. Explicit-coordinate evaluation computes physical error geodesically.
+
+The map archives are committed under data/maps/accuracy-inputs with streaming checksum verification. They preserve the exact partial source collection, coast mosaic, and twenty-four port maps. Unknown coverage remains unknown. Seven hundred prepared rows using the superseded catalog remain archived as provisional evidence; no held-out search has run. Formal accuracy, latency, and measured-bearing field validation remain unvalidated.
