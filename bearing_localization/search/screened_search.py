@@ -186,6 +186,9 @@ def screened_candidate_search(
     counts: Counter[CandidateStatus] = Counter()
     seen_ids: set[str] = set()
     best: FeasibleIncumbent | None = None
+    threshold_cache_valid = False
+    threshold_cache_key: tuple[float, float] | None = None
+    threshold_cache_value: int | None = None
     incumbent_validation_count = 0
     incumbent_validation_elapsed = 0.0
     if feasible_incumbent is not None:
@@ -233,18 +236,27 @@ def screened_candidate_search(
         visibility: VisibilityScreenResult | None = None
         lower: CandidateLowerBoundResult | None = None
 
-        if best is not None and bound_supported:
+        if (
+            best is not None
+            and bound_supported
+            and scorer.vector_map.point_water_status(position) == "water"
+        ):
             candidate_margin = max(
                 requested_margin,
                 scorer.config.absolute_score_tolerance
                 + scorer.config.relative_score_tolerance * abs(best.score),
             )
-            threshold = _minimum_useful_group_threshold(
-                prepared_bound,
-                max_group_count,
-                best.score,
-                candidate_margin,
-            )
+            current_threshold_key = (best.score, candidate_margin)
+            if not threshold_cache_valid or current_threshold_key != threshold_cache_key:
+                threshold_cache_value = _minimum_useful_group_threshold(
+                    prepared_bound,
+                    max_group_count,
+                    best.score,
+                    candidate_margin,
+                )
+                threshold_cache_key = current_threshold_key
+                threshold_cache_valid = True
+            threshold = threshold_cache_value
             screen_start = perf_counter()
             visibility = screen_candidate_visibility(
                 position,
