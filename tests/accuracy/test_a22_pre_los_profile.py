@@ -11,6 +11,7 @@ from accuracy.test_a21_pre_los import _measurements, _prepared_bundle, _records
 from bearing_localization.search.config import SearchConfig
 from tools.profile_pre_los_bound import (
     CandidatePoint,
+    _best_and_ties,
     independently_validate_prunes,
     load_truth_free_expanded_incumbent,
     pre_los_screen,
@@ -287,4 +288,69 @@ def test_truth_free_expanded_loader_binds_inputs_and_scoring_semantics(tmp_path)
             expected_static_hashes=static_hashes,
             active_config=active_config,
             expected_score=1.0,
+        )
+
+
+def test_better_external_incumbent_can_prune_entire_candidate_sample():
+    scorer, seed_position = _scorer()
+    incumbent = CandidatePoint("expanded-winner", seed_position)
+    incumbent_evaluation = scorer.evaluate(seed_position)
+    assert incumbent_evaluation.status == "scored" and incumbent_evaluation.hypothesis is not None
+    candidates = tuple(
+        CandidatePoint(f"offset-{offset}", (seed_position[0] + offset, seed_position[1]))
+        for offset in (10.0, 25.0, 50.0, 100.0, 200.0)
+    )
+    dispositions, summary = pre_los_screen(
+        scorer,
+        candidates,
+        external_incumbent=incumbent,
+        saved_incumbent_score=incumbent_evaluation.hypothesis.score,
+    )
+    exact_sample = {
+        candidate.candidate_id: scorer.evaluate(candidate.position_xy_m) for candidate in candidates
+    }
+    exact_best = min(
+        [incumbent_evaluation.hypothesis.score]
+        + [value.hypothesis.score for value in exact_sample.values() if value.hypothesis]
+    )
+    pruned = [item for item in dispositions if item.action == "proposed_prune"]
+    independently_validate_prunes(scorer, pruned, exact_best_score=exact_best)
+    assert len(pruned) == len(candidates)
+    assert set(item.candidate_id for item in dispositions) == set(exact_sample)
+    assert set(summary["exact_results"]) == {incumbent.candidate_id}
+    assert _best_and_ties({}, [candidate.candidate_id for candidate in candidates]) == (None, [])
+
+
+def test_external_ties_are_retained_and_postpass_rejects_missing_tie():
+    scorer, seed_position = _scorer()
+    external_position = (seed_position[0] + 100.0, seed_position[1])
+    candidate_position = (seed_position[0] + 10.0, seed_position[1])
+    external = CandidatePoint("external", external_position)
+    candidate = CandidatePoint("candidate-tie", candidate_position)
+    external_score = scorer.evaluate(external_position).hypothesis
+    candidate_score = scorer.evaluate(candidate_position).hypothesis
+    assert external_score is not None and candidate_score is not None
+    assert math.isclose(external_score.score, candidate_score.score, abs_tol=1e-8, rel_tol=1e-10)
+    dispositions, _ = pre_los_screen(
+        scorer,
+        (candidate,),
+        external_incumbent=external,
+        saved_incumbent_score=external_score.score,
+    )
+    assert dispositions[0].action != "proposed_prune"
+    forged = replace(
+        dispositions[0],
+        action="proposed_prune",
+        exact_status=None,
+        score=None,
+        lower_bound=candidate_score.score,
+        bound_supported=True,
+        preparation_supported=True,
+        coverage_certified=True,
+    )
+    with pytest.raises(AssertionError, match="exact-score tie"):
+        independently_validate_prunes(
+            scorer,
+            (forged,),
+            exact_best_score=external_score.score,
         )
