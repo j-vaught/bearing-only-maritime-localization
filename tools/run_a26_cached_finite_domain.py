@@ -71,6 +71,11 @@ def _partial_state_bindings(output_root: Path) -> dict[str, Any]:
         "candidate_inventory_sha256": None,
         "chunk_results_sha256": sha256_tree(output_root / "chunk-results"),
         "hypotheses_sha256": sha256_tree(output_root / "hypotheses"),
+        "candidate_dispositions_sha256": (
+            sha256_file(output_root / "candidate-dispositions.jsonl")
+            if (output_root / "candidate-dispositions.jsonl").is_file()
+            else None
+        ),
     }
     for name in ("candidate-plan.jsonl", "candidate-inventory.jsonl"):
         path = output_root / name
@@ -247,6 +252,11 @@ def resume_verified_chunks(
                 raise ValueError(f"Resume source hypothesis tree hash mismatch at {root}.")
             if manifest.get("run_identity_sha256") != identity_sha:
                 raise ValueError(f"Resume source manifest identity hash mismatch at {root}.")
+            dispositions_path = root / "candidate-dispositions.jsonl"
+            if not dispositions_path.is_file() or manifest.get(
+                "candidate_dispositions_sha256"
+            ) != sha256_file(dispositions_path):
+                raise ValueError(f"Resume source disposition hash mismatch at {root}.")
         for path in sorted((root / "chunk-results").glob("chunk-*.json")):
             existing = source_files.get(path.name)
             if existing is not None and sha256_file(existing) != sha256_file(path):
@@ -1212,6 +1222,7 @@ def run_finite_domain(
         "candidate_plan_sha256": sha256_file(output_root / "candidate-plan.jsonl"),
         "chunk_results_sha256": sha256_tree(output_root / "chunk-results"),
         "hypotheses_sha256": sha256_tree(output_root / "hypotheses"),
+        "candidate_dispositions_sha256": sha256_file(output_root / "candidate-dispositions.jsonl"),
         "candidate_order": "cli_geodesic_matching_votes_water_residual_evidence_cell_v1",
         "worker_config": {
             "workers": workers,
