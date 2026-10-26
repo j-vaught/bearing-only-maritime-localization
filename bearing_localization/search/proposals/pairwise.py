@@ -7,7 +7,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from itertools import combinations
-from math import isfinite, radians
+from math import atan2, cos, degrees, hypot, isfinite, radians, sin
 from typing import Literal
 
 import numpy as np
@@ -82,6 +82,36 @@ class PairwiseProposalBatch:
 def _proposal_id(obs_pair: tuple[int, int], key_pair: tuple[str, str]) -> str:
     payload = json.dumps([obs_pair, key_pair], ensure_ascii=True, separators=(",", ":"))
     return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _geodesic_polar_local_xy(
+    origin_lonlat: tuple[float, float],
+    point_lonlat: tuple[float, float],
+    geod: Geod,
+) -> tuple[float, float]:
+    """Project a point into an ellipsoidal AEQD frame using geodesic polar coordinates."""
+    azimuth_deg, _, distance_m = geod.inv(
+        origin_lonlat[0], origin_lonlat[1], point_lonlat[0], point_lonlat[1]
+    )
+    azimuth_rad = radians(azimuth_deg)
+    return distance_m * sin(azimuth_rad), distance_m * cos(azimuth_rad)
+
+
+def _geodesic_polar_to_geographic(
+    origin_lonlat: tuple[float, float],
+    east_m: float,
+    north_m: float,
+    geod: Geod,
+) -> tuple[float, float]:
+    """Invert ellipsoidal AEQD coordinates without constructing a CRS transformer."""
+    distance_m = hypot(east_m, north_m)
+    if distance_m == 0.0:
+        return origin_lonlat
+    azimuth_deg = degrees(atan2(east_m, north_m)) % 360.0
+    longitude_deg, latitude_deg, _ = geod.fwd(
+        origin_lonlat[0], origin_lonlat[1], azimuth_deg, distance_m
+    )
+    return float(longitude_deg), float(latitude_deg)
 
 
 def generate_pairwise_proposals(
@@ -268,8 +298,12 @@ def generate_geographic_pairwise_proposals(
             [np.sin(radians(observation_j.bearing_deg)), np.cos(radians(observation_j.bearing_deg))]
         )
         matrix = np.column_stack((ui, -uj))
-        if abs(float(np.linalg.det(matrix))) < minimum_sine:
+        determinant = abs(float(np.linalg.det(matrix)))
+        if determinant < minimum_sine:
             continue
+        # Transform rounding can change strict ray-sign or inclusive range decisions
+        # near their boundaries, so reevaluate that narrow band with the old frame.
+        decision_tolerance_m = 1e-6 / max(determinant, 1e-12)
         for source in records:
             nearby_keys = geo_index.query_radius_keys(
                 source.longitude_deg, source.latitude_deg, 2.0 * max_range_m
@@ -292,29 +326,98 @@ def generate_geographic_pairwise_proposals(
                     midpoint_bearing,
                     separation / 2.0,
                 )
-                pair_frame = LocalFrame((midpoint_lon, midpoint_lat))
+                pair_midpoint = (float(midpoint_lon), float(midpoint_lat))
+                source_xy = _geodesic_polar_local_xy(
+                    pair_midpoint, (source.longitude_deg, source.latitude_deg), geod
+                )
+                target_xy = _geodesic_polar_local_xy(
+                    pair_midpoint, (target.longitude_deg, target.latitude_deg), geod
+                )
+                pair_frame: LocalFrame | None = None
                 for assigned_i, assigned_j in ((source, target), (target, source)):
-                    source_xy = pair_frame.to_local(
-                        (assigned_i.longitude_deg, assigned_i.latitude_deg)
-                    )
-                    target_xy = pair_frame.to_local(
-                        (assigned_j.longitude_deg, assigned_j.latitude_deg)
-                    )
-                    delta = np.asarray(source_xy) - np.asarray(target_xy)
+                    if assigned_i.key == source.key:
+                        assigned_i_xy, assigned_j_xy = source_xy, target_xy
+                    else:
+                        assigned_i_xy, assigned_j_xy = target_xy, source_xy
+                    if pair_frame is not None:
+                        assigned_i_xy = pair_frame.to_local(
+                            (assigned_i.longitude_deg, assigned_i.latitude_deg)
+                        )
+                        assigned_j_xy = pair_frame.to_local(
+                            (assigned_j.longitude_deg, assigned_j.latitude_deg)
+                        )
+                    delta = np.asarray(assigned_i_xy) - np.asarray(assigned_j_xy)
                     try:
                         range_i, range_j = np.linalg.solve(matrix, delta)
                     except np.linalg.LinAlgError:
                         continue
+                    if min(abs(float(range_i)), abs(float(range_j))) <= decision_tolerance_m:
+                        pair_frame = LocalFrame(pair_midpoint)
+                        assigned_i_xy = pair_frame.to_local(
+                            (assigned_i.longitude_deg, assigned_i.latitude_deg)
+                        )
+                        assigned_j_xy = pair_frame.to_local(
+                            (assigned_j.longitude_deg, assigned_j.latitude_deg)
+                        )
+                        delta = np.asarray(assigned_i_xy) - np.asarray(assigned_j_xy)
+                        try:
+                            range_i, range_j = np.linalg.solve(matrix, delta)
+                        except np.linalg.LinAlgError:
+                            continue
                     if range_i <= 0.0 or range_j <= 0.0:
                         continue
-                    local_candidate = np.asarray(source_xy) - range_i * ui
-                    candidate_lonlat = pair_frame.to_geographic(*local_candidate)
+                    local_candidate = np.asarray(assigned_i_xy) - range_i * ui
+                    if pair_frame is None:
+                        candidate_lonlat = _geodesic_polar_to_geographic(
+                            pair_midpoint,
+                            float(local_candidate[0]),
+                            float(local_candidate[1]),
+                            geod,
+                        )
+                    else:
+                        candidate_lonlat = pair_frame.to_geographic(
+                            float(local_candidate[0]), float(local_candidate[1])
+                        )
                     candidate_to_i = geodesic_bearing_distance(
                         candidate_lonlat, (assigned_i.longitude_deg, assigned_i.latitude_deg)
                     ).distance_m
                     candidate_to_j = geodesic_bearing_distance(
                         candidate_lonlat, (assigned_j.longitude_deg, assigned_j.latitude_deg)
                     ).distance_m
+                    if (
+                        pair_frame is None
+                        and min(
+                            abs(max_range_m - candidate_to_i),
+                            abs(max_range_m - candidate_to_j),
+                        )
+                        <= decision_tolerance_m
+                    ):
+                        pair_frame = LocalFrame(pair_midpoint)
+                        assigned_i_xy = pair_frame.to_local(
+                            (assigned_i.longitude_deg, assigned_i.latitude_deg)
+                        )
+                        assigned_j_xy = pair_frame.to_local(
+                            (assigned_j.longitude_deg, assigned_j.latitude_deg)
+                        )
+                        delta = np.asarray(assigned_i_xy) - np.asarray(assigned_j_xy)
+                        try:
+                            range_i, range_j = np.linalg.solve(matrix, delta)
+                        except np.linalg.LinAlgError:
+                            continue
+                        if range_i <= 0.0 or range_j <= 0.0:
+                            continue
+                        local_candidate = np.asarray(assigned_i_xy) - range_i * ui
+                        candidate_lonlat = pair_frame.to_geographic(
+                            float(local_candidate[0]), float(local_candidate[1])
+                        )
+                        candidate_to_i = geodesic_bearing_distance(
+                            candidate_lonlat,
+                            (assigned_i.longitude_deg, assigned_i.latitude_deg),
+                        ).distance_m
+                        candidate_to_j = geodesic_bearing_distance(
+                            candidate_lonlat,
+                            (assigned_j.longitude_deg, assigned_j.latitude_deg),
+                        ).distance_m
                     if candidate_to_i > max_range_m or candidate_to_j > max_range_m:
                         continue
                     if max_proposals is not None and generated >= max_proposals:
