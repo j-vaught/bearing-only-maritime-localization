@@ -17,6 +17,7 @@ from bearing_localization.search.decision import (
     CompetitorCoverageEvidence,
     decide_localization,
 )
+from bearing_localization.search.modes import SearchModeEvidence
 from maritime_localization_shared.contracts.localization import (
     Assignment,
     Hypothesis,
@@ -73,6 +74,20 @@ def _result(
     )
 
 
+def _mode(
+    hypothesis: Hypothesis, stop_reason: str = "displacement_below_0_01m"
+) -> SearchModeEvidence:
+    assert hypothesis.uncertainty is not None
+    return SearchModeEvidence(
+        east_m=hypothesis.east_m,
+        north_m=hypothesis.north_m,
+        score=hypothesis.score,
+        matched_catalog_keys=tuple(sorted(a.catalog_key for a in hypothesis.assignments)),
+        radius_95_m=hypothesis.uncertainty.major_radius_m,
+        stop_reason=stop_reason,
+    )
+
+
 def _coverage(
     *,
     evaluated_candidate_count: int = 20,
@@ -90,19 +105,27 @@ def _coverage(
 
 def test_accepts_distant_competitor_when_gap_and_radius_are_at_thresholds():
     result = _result(_hypothesis(0, 0, 100), _hypothesis(100, 2))
-    decision = decide_localization(result, _calibration(), coverage=_coverage())
+    decision = decide_localization(
+        result,
+        _calibration(),
+        coverage=_coverage(),
+        mode_evidence=tuple(_mode(h) for h in result.hypotheses),
+    )
     assert (decision.decision_status, decision.accepted_index) == ("accepted", 0)
 
 
 def test_distant_tie_and_broad_basin_remain_ambiguous():
     tie = _result(_hypothesis(0, 0), _hypothesis(500, 1.99))
-    assert decide_localization(tie, _calibration(), coverage=_coverage()).reason == (
-        "distant_competitor_within_calibrated_score_gap"
-    )
+    assert decide_localization(
+        tie,
+        _calibration(),
+        coverage=_coverage(),
+        mode_evidence=tuple(_mode(h) for h in tie.hypotheses),
+    ).reason == ("distant_competitor_within_calibrated_score_gap")
     broad = _result(_hypothesis(0, 0), _hypothesis(50, 0.1))
-    assert decide_localization(broad, _calibration(), coverage=_coverage()).reason == (
-        "no_meaningful_distant_competitor_or_global_exclusion"
-    )
+    assert decide_localization(
+        broad, _calibration(), coverage=_coverage(), mode_evidence=(_mode(broad.hypotheses[0]),)
+    ).reason == ("no_meaningful_distant_competitor_or_global_exclusion")
 
 
 def test_missing_or_singular_ellipse_is_ambiguous_even_with_unrestricted_radius():
@@ -135,9 +158,12 @@ def test_missing_calibration_budget_and_minimum_matches_fail_closed():
 def test_finite_certificate_is_not_global_and_coverage_flags_need_evidence():
     result = _result(_hypothesis(0, 0), certificate="finite_candidate_set", gap=0.0)
     evidence = _coverage(global_bound_excludes_outside=True)
-    assert decide_localization(result, _calibration(), coverage=evidence).reason == (
-        "no_meaningful_distant_competitor_or_global_exclusion"
-    )
+    assert decide_localization(
+        result,
+        _calibration(),
+        coverage=evidence,
+        mode_evidence=(_mode(result.hypotheses[0]),),
+    ).reason == ("no_meaningful_distant_competitor_or_global_exclusion")
     assert (
         decide_localization(
             result,
@@ -156,17 +182,28 @@ def test_finite_certificate_is_not_global_and_coverage_flags_need_evidence():
             coverage=_coverage(
                 search_extent_m=99,
             ),
+            mode_evidence=(_mode(result.hypotheses[0]),),
         ).reason
-        == "competitor_search_extent_below_100m"
+        == "no_meaningful_distant_competitor_or_global_exclusion"
     )
 
 
 def test_zero_gap_continuous_certificate_can_exclude_outside():
     result = _result(_hypothesis(0, 0), certificate="continuous_objective", gap=0.0)
     decision = decide_localization(
-        result, _calibration(), coverage=_coverage(global_bound_excludes_outside=True)
+        result,
+        _calibration(),
+        coverage=_coverage(global_bound_excludes_outside=True),
+        mode_evidence=(_mode(result.hypotheses[0]),),
     )
     assert decision.decision_status == "accepted"
+    small_declared_extent = decide_localization(
+        result,
+        _calibration(),
+        coverage=_coverage(search_extent_m=1.0, global_bound_excludes_outside=True),
+        mode_evidence=(_mode(result.hypotheses[0]),),
+    )
+    assert small_declared_extent.decision_status == "accepted"
 
 
 def test_calibration_grid_pass_and_split_rejection(tmp_path):
