@@ -578,4 +578,3 @@ def test_missing_source_fixture_is_rejected(tmp_path: Path) -> None:
     _write_json(parallel / "manifest.json", manifest)
     with pytest.raises(evaluator.EvaluationError, match="assignment source is missing"):
         evaluator.evaluate(serial, parallel)
-
