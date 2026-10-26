@@ -40,7 +40,7 @@ from tools.run_assigned_refinement_diagnostic import (
 
 MODE_COUNT = 64
 FLOOR_BYTES = 40 * 1024**3
-MAX_OUTPUT_BYTES = 20 * 1024**2
+MAX_OUTPUT_BYTES = 50 * 1024**2
 SCORE_ATOL = 1e-8
 SCORE_RTOL = 1e-10
 DEFAULT_TIMEOUT_S = 1800.0
@@ -76,6 +76,27 @@ def check_resources(path: Path) -> int:
 
 def _alarm(_signal: int, _frame: Any) -> None:
     raise TimeoutError("whole diagnostic deadline exceeded")
+
+
+def package_provenance() -> dict[str, str]:
+    """Capture the loaded package and runner hashes used by this process."""
+
+    import bearing_localization
+    from bearing_localization.search import assignment_expansion
+
+    package_source = Path(bearing_localization.__file__).resolve()
+    package_root = package_source.parent.parent
+    package_commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=package_root, text=True
+    ).strip()
+    module_source = Path(assignment_expansion.__file__).resolve()
+    return {
+        "package_source": str(package_source),
+        "package_commit": package_commit,
+        "assignment_expansion_source": str(module_source),
+        "assignment_expansion_sha256": sha256(module_source),
+        "runner_sha256": sha256(Path(__file__).resolve()),
+    }
 
 
 def _hypothesis(value: Any, field: str) -> Hypothesis:
@@ -307,12 +328,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "harness_commit": subprocess.check_output(
                         ["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT, text=True
                     ).strip(),
-                    "package_commit": assigned_manifest["package_commit"],
+                    "input_assigned_package_commit": assigned_manifest["package_commit"],
                     "frozen_scoring_source_sha": pins["frozen_scoring_source_sha"],
                     "input_paths": pins["input_paths"],
                     "config_path": pins["config_path"],
                 }
             )
+            manifest.update(package_provenance())
             _write_json(manifest_path, manifest)
             with events_path.open("a") as events_stream:
 
@@ -341,6 +363,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                             }
                         )
                     try:
+
+                        def result_callback(event: dict[str, Any], i: int = mode_index) -> None:
+                            record(i, "branch_result", event)
+
                         result = expand_assignments(
                             scorer,
                             exact_by_label[chosen_label],
@@ -348,6 +374,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                             progress_callback=lambda event, i=mode_index: record(
                                 i, "branch_started", event
                             ),
+                            result_callback=result_callback,
                         )
                     except Exception as exc:
                         failure = {
@@ -371,8 +398,6 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                             f"{type(exc).__name__}: {exc}",
                         )
                         raise
-                    for event in result.branch_events:
-                        record(mode_index, "branch_result", dict(event))
                     mode_row = {
                         "mode_index": mode_index,
                         "input_index": row.get("input_index"),

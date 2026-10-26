@@ -4,7 +4,7 @@ The runner consumes the durable 64-mode assigned refinement artifact and its A20
 
 Each mode retains both finalized assigned-refinement alternatives. The selected start is the lower exact finalized score, with the frozen label order providing the deterministic tie break. Both alternatives are canonically re-scored and their assignments and scores must match the saved values. The selected exact hypothesis is passed to expand_assignments with ExpansionConfig(local_radius_m=1000, max_nfev=100, max_branches=5000).
 
-The output is an immutable, unique directory containing fsynced per-mode rows, a hash-chained branch-event stream, a checkpoint, and a manifest. The callback checks the 40 GiB free-space reserve and 20 MiB output cap before and after every event. A timeout, resource failure, or branch exception is retained in the event stream and checkpoint before the run terminates. Resume is explicitly unsupported.
+The output is an immutable, unique directory containing fsynced per-mode rows, a hash-chained branch-event stream, a checkpoint, and a manifest. The callback checks the 40 GiB free-space reserve and 50 MiB output cap before and after every event. A timeout, resource failure, or branch exception is retained in the event stream and checkpoint before the run terminates. Resume is explicitly unsupported.
 
 The manifest reports ranked selected-mode results with processed and pending counts while retaining decision_status=ambiguous, search_status=budget_exhausted, certificate_scope=none, and full_domain_complete=false. The source search therefore remains incomplete and no truth or evaluator input is used.
 

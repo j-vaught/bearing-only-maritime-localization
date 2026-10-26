@@ -4,16 +4,20 @@ import argparse
 import ast
 import hashlib
 import json
+import sys
 from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from bearing_localization.search.assignment_expansion import ExpansionConfig
 from maritime_localization_shared.contracts.localization import Assignment, Hypothesis
 from tools.run_assignment_expansion_diagnostic import (
     FLOOR_BYTES,
+    MAX_OUTPUT_BYTES,
     MODE_COUNT,
     DiagnosticInputError,
     _alarm,
@@ -21,6 +25,7 @@ from tools.run_assignment_expansion_diagnostic import (
     check_resources,
     choose_best_start,
     load_assigned_bundle,
+    package_provenance,
     run,
 )
 
@@ -100,6 +105,15 @@ def test_hash_mismatch_is_rejected(tmp_path: Path) -> None:
         load_assigned_bundle(assigned, a20)
 
 
+def test_wrong_assigned_package_pin_is_rejected(tmp_path: Path) -> None:
+    assigned, a20 = make_bundle(tmp_path)
+    manifest = json.loads((assigned / "manifest.json").read_text())
+    manifest["package_commit"] = "wrong"
+    (assigned / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(DiagnosticInputError, match="pins"):
+        load_assigned_bundle(assigned, a20)
+
+
 def test_missing_64_rows_is_rejected(tmp_path: Path) -> None:
     assigned, a20 = make_bundle(tmp_path, count=63)
     with pytest.raises(DiagnosticInputError, match="64"):
@@ -134,6 +148,14 @@ def test_canonical_lock_path_is_shared_benchmark_lock() -> None:
     assert lock.parent.name == ".agent-work"
 
 
+def test_loaded_package_provenance_is_distinct_from_input_pin() -> None:
+    provenance = package_provenance()
+    assert provenance["package_source"].endswith("bearing_localization/__init__.py")
+    assert len(provenance["package_commit"]) == 40
+    assert len(provenance["assignment_expansion_sha256"]) == 64
+    assert len(provenance["runner_sha256"]) == 64
+
+
 def test_disk_reserve_is_enforced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "tools.run_assignment_expansion_diagnostic.shutil.disk_usage",
@@ -141,6 +163,10 @@ def test_disk_reserve_is_enforced(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     )
     with pytest.raises(OSError, match="reserve"):
         check_resources(tmp_path)
+
+
+def test_output_cap_has_room_for_all_branch_events() -> None:
+    assert MAX_OUTPUT_BYTES == 50 * 1024**2
 
 
 def test_runner_does_not_import_truth_or_evaluator_modules() -> None:
