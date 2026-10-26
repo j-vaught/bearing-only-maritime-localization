@@ -26,6 +26,19 @@ ROWS_NAME = "assignment-expansion-rows.jsonl"
 EVENTS_NAME = "branch-events.jsonl"
 CHECKPOINT_NAME = "checkpoint.json"
 MODE_COUNT = 64
+NO_BRANCH_STATUSES = {
+    "no_unmatched_reports",
+    "invalid_bounds",
+    "invalid_seed",
+    "stale_hypothesis",
+    "invalid_water",
+    "unresolved_coverage",
+    "unresolved_model",
+    "unsupported_calibration",
+    "unsupported_covariance",
+    "insufficient_assignments",
+    "invalid_assignment",
+}
 ATOL = 1e-8
 RTOL = 1e-10
 
@@ -69,7 +82,7 @@ def _same_hypothesis(a: Any, b: Any) -> bool:
     )
 
 
-def validate_mode_counts(manifest: dict[str, Any]) -> None:
+def validate_mode_counts(manifest: dict[str, Any]) -> tuple[int, int]:
     require(manifest.get("mode_count") == MODE_COUNT, "mode cap must be exactly 64")
     completed_raw = manifest.get("completed_mode_count")
     pending_raw = manifest.get("pending_mode_count")
@@ -79,10 +92,26 @@ def validate_mode_counts(manifest: dict[str, Any]) -> None:
     )
     completed = cast(int, completed_raw)
     pending = cast(int, pending_raw)
-    require(completed + pending == MODE_COUNT, "completed and pending counts do not sum to 64")
     require(
-        completed == MODE_COUNT and pending == 0,
-        "incomplete assignment expansion cannot be evaluated",
+        0 <= completed <= MODE_COUNT and 0 <= pending <= MODE_COUNT,
+        "completed or pending mode count is out of range",
+    )
+    require(completed + pending == MODE_COUNT, "completed and pending counts do not sum to 64")
+    status = manifest.get("status")
+    require(
+        status in {"completed", "interrupted", "failed"},
+        "manifest is not in a durable terminal state",
+    )
+    if status == "completed":
+        require(completed == MODE_COUNT and pending == 0, "completed run must contain all modes")
+    return completed, pending
+
+
+def validate_completed_prefix(rows: list[dict[str, Any]], completed_count: int) -> None:
+    require(len(rows) == completed_count, "row count differs from durable completed prefix")
+    require(
+        [row.get("mode_index") for row in rows] == list(range(completed_count)),
+        "durable rows are not the exact deterministic mode prefix",
     )
 
 
@@ -150,6 +179,28 @@ def validate_branch_score_sequence(
     return improved
 
 
+def validate_no_branch_mode(row: dict[str, Any], seed: Any, best: Any) -> None:
+    require(
+        row.get("status") in NO_BRANCH_STATUSES,
+        "empty branch counters have no recognized preflight status",
+    )
+    require(
+        row.get("counters") == {} and row.get("branch_event_count") == 0,
+        "preflight mode must preserve empty counters and zero branch events",
+    )
+    require(
+        _same_hypothesis(best, seed),
+        "preflight mode changed its exact seed without exploring a branch",
+    )
+    require(
+        type(row.get("completed")) is bool,
+        "preflight completion flag must be retained as a boolean",
+    )
+    require(
+        row.get("budget_exhausted") is False, "preflight mode cannot claim branch-budget exhaustion"
+    )
+
+
 def validate_no_unmatched_mode(
     row: dict[str, Any],
     seed: Any,
@@ -200,17 +251,34 @@ def verify_event_chain(events: list[dict[str, Any]]) -> str:
 
 
 def verify_mode_event_correspondence(
-    rows: list[dict[str, Any]], events: list[dict[str, Any]]
+    rows: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    *,
+    partial_mode_index: int | None = None,
 ) -> dict[int, dict[str, int]]:
     by_mode: dict[int, dict[str, dict[int, dict[str, Any]]]] = {
         index: {"branch_started": {}, "branch_result": {}, "failure": {}}
         for index in range(MODE_COUNT)
     }
+    previous_mode = -1
     for record in events:
         mode = record["mode_index"]
+        require(mode >= previous_mode, "branch event modes are not in deterministic order")
+        previous_mode = mode
         phase = record["phase"]
         event = record["event"]
-        require(phase != "failure", "a completed diagnostic cannot contain a failure event")
+        if phase == "failure":
+            require(
+                partial_mode_index is not None and mode == partial_mode_index,
+                "failure event is outside the unfinished tail mode",
+            )
+            require(
+                event.get("status") == "mode_exception",
+                "unfinished mode failure event is malformed",
+            )
+            require(not by_mode[mode]["failure"], "duplicate unfinished mode failure")
+            by_mode[mode]["failure"][-1] = event
+            continue
         branch_id = event.get("branch_id")
         require(type(branch_id) is int and branch_id >= 0, "branch_id must be nonnegative")
         bucket = by_mode[mode][phase]
@@ -221,24 +289,27 @@ def verify_mode_event_correspondence(
         started = by_mode[index]["branch_started"]
         finished = by_mode[index]["branch_result"]
         require(set(started) == set(finished), "started branch lacks exactly one result event")
-        require(
-            row.get("branch_event_count") == len(finished),
-            "row branch event count differs from durable event ledger",
-        )
         counters_raw = row.get("counters")
         require(type(counters_raw) is dict, "row counters must be an object")
         counters = cast(dict[str, Any], counters_raw)
-        if row.get("status") == "no_unmatched_reports":
-            require(counters == {}, "no-unmatched mode should preserve its empty counters")
+        if counters == {}:
+            require(
+                row.get("status") in NO_BRANCH_STATUSES,
+                "empty counters have no recognized preflight status",
+            )
             require(
                 not started and not finished and row.get("branch_event_count") == 0,
-                "no-unmatched mode must have zero branch events",
+                "preflight mode must have zero branch events",
             )
             result[index] = {"started": 0, "result": 0, "failure": 0}
             continue
         require(
             counters.get("visited_branches") == len(finished),
             "visited branch count differs from durable result events",
+        )
+        require(
+            row.get("branch_event_count") == len(finished),
+            "row branch event count differs from durable result events",
         )
         for branch_id, start in started.items():
             end = finished[branch_id]
@@ -252,7 +323,44 @@ def verify_mode_event_correspondence(
         result[index] = {
             "started": len(started),
             "result": len(finished),
-            "failure": len(by_mode[index]["failure"]),
+            "failure": 0,
+        }
+    if partial_mode_index is not None:
+        require(
+            partial_mode_index == len(rows),
+            "partial event mode is not the next uncompleted prefix index",
+        )
+        started = by_mode[partial_mode_index]["branch_started"]
+        finished = by_mode[partial_mode_index]["branch_result"]
+        failures = by_mode[partial_mode_index]["failure"]
+        require(set(finished).issubset(started), "unfinished result event lacks a start event")
+        require(
+            set(started) == set(range(len(started))),
+            "unfinished started branch IDs are not a contiguous prefix",
+        )
+        require(
+            set(finished) == set(range(len(finished))),
+            "unfinished result branch IDs are not a contiguous prefix",
+        )
+        require(
+            len(started) - len(finished) <= 1, "unfinished mode has more than one unreturned branch"
+        )
+        require(len(failures) <= 1, "unfinished mode has duplicate failure events")
+        for branch_id, start in started.items():
+            if branch_id in finished:
+                end = finished[branch_id]
+                for key in ("report_index", "catalog_key"):
+                    require(
+                        start.get(key) == end.get(key),
+                        f"unfinished branch {key} differs across events",
+                    )
+            require(
+                start.get("status") == "started", "unfinished branch-start event has invalid status"
+            )
+        result[partial_mode_index] = {
+            "started": len(started),
+            "result": len(finished),
+            "failure": len(failures),
         }
     return result
 
@@ -289,12 +397,12 @@ def validate_expansion_bundle(
     source_root: Path,
     a20_root: Path,
     assigned_root: Path,
+    full_branch_rescore: bool = True,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     manifest_path = root / "manifest.json"
     manifest = read_json(manifest_path)
     require(manifest.get("schema") == SCHEMA, "unsupported assignment-expansion schema")
-    require(manifest.get("status") == "completed", "assignment expansion did not complete")
-    validate_mode_counts(manifest)
+    completed_count, pending_count = validate_mode_counts(manifest)
     require(
         manifest.get("full_domain_complete") is False, "diagnostic claims full-domain completion"
     )
@@ -384,12 +492,15 @@ def validate_expansion_bundle(
     rows = read_jsonl(rows_path)
     events = read_jsonl(events_path)
     checkpoint = read_json(checkpoint_path)
-    require(len(rows) == MODE_COUNT, "durable rows must contain 64 modes")
-    require(checkpoint.get("status") == "completed", "checkpoint is not completed")
+    validate_completed_prefix(rows, completed_count)
     require(
-        checkpoint.get("completed_mode_count") == MODE_COUNT
-        and checkpoint.get("pending_mode_count") == 0,
-        "checkpoint counts are inconsistent",
+        checkpoint.get("status") in {"completed", "in_progress", "interrupted", "failed"},
+        "checkpoint has an unknown durable status",
+    )
+    require(
+        checkpoint.get("completed_mode_count") == completed_count
+        and checkpoint.get("pending_mode_count") == pending_count,
+        "checkpoint counts differ from manifest",
     )
     require(
         checkpoint.get("rows_sha256") == manifest.get("rows_sha256")
@@ -405,14 +516,19 @@ def validate_expansion_bundle(
         event_digest == manifest.get("event_digest") == checkpoint.get("event_digest"),
         "final event chain digest differs from manifest/checkpoint",
     )
-    event_counts = verify_mode_event_correspondence(rows, events)
+    partial_mode_index = completed_count if pending_count > 0 else None
+    event_counts = verify_mode_event_correspondence(
+        rows, events, partial_mode_index=partial_mode_index
+    )
     exact_evaluations: dict[tuple[float, float], Any] = {}
 
     require(
         len(assigned_rows) == MODE_COUNT and len(a20_rows) == MODE_COUNT,
         "source artifacts must each contain 64 selected modes",
     )
-    for index, (row, assigned, a20) in enumerate(zip(rows, assigned_rows, a20_rows, strict=True)):
+    for index, (row, assigned, a20) in enumerate(
+        zip(rows, assigned_rows[:completed_count], a20_rows[:completed_count], strict=True)
+    ):
         require(row.get("mode_index") == index, "expansion rows are not in deterministic order")
         require(
             row.get("input_index") == assigned.get("input_index") == a20.get("input_index"),
@@ -489,14 +605,16 @@ def validate_expansion_bundle(
         counts_raw = row.get("counters")
         require(type(counts_raw) is dict, "mode counters are missing")
         counts = cast(dict[str, Any], counts_raw)
-        if row.get("status") == "no_unmatched_reports":
-            validate_no_unmatched_mode(
-                row,
-                seed,
-                best,
-                measurement_count=len(scorer.measurements.measurements),
-                result_event_count=event_counts[index]["result"],
-            )
+        if counts == {}:
+            validate_no_branch_mode(row, seed, best)
+            if row.get("status") == "no_unmatched_reports":
+                validate_no_unmatched_mode(
+                    row,
+                    seed,
+                    best,
+                    measurement_count=len(scorer.measurements.measurements),
+                    result_event_count=event_counts[index]["result"],
+                )
             continue
         require(
             type(counts.get("candidate_branches")) is int
@@ -537,6 +655,8 @@ def validate_expansion_bundle(
                 type(pose) is list and len(pose) == 2,
                 "exact branch result lacks its evaluated pose",
             )
+            if not full_branch_rescore:
+                continue
             exact_eval = evaluate_exact_position(
                 scorer, exact_evaluations, (float(pose[0]), float(pose[1]))
             )
@@ -561,10 +681,11 @@ def validate_expansion_bundle(
             exact_branch_hypotheses.append(branch_hypothesis)
         validate_objective_progress(seed.score, best.score, improved_scores)
         if best.score < seed.score:
-            require(
-                any(_same_hypothesis(best, candidate) for candidate in exact_branch_hypotheses),
-                "best improved hypothesis is not an exact completed branch result",
-            )
+            if full_branch_rescore:
+                require(
+                    any(_same_hypothesis(best, candidate) for candidate in exact_branch_hypotheses),
+                    "best improved hypothesis is not an exact completed branch result",
+                )
         else:
             require(_same_hypothesis(best, seed), "non-improved result changed the seed hypothesis")
         require(
@@ -602,7 +723,13 @@ def validate_expansion_bundle(
                 counts["unvisited_branches"] > 0 and row.get("budget_exhausted") is True,
                 "budget-exhausted expansion has no pending branch work",
             )
-    _verify_ranked_manifest(manifest, rows)
+    if manifest.get("status") == "completed":
+        _verify_ranked_manifest(manifest, rows)
+    else:
+        require(
+            manifest.get("ranked_selected_modes") is None,
+            "incomplete run must not publish a selected-mode ranking",
+        )
     return manifest, rows, events
 
 
@@ -662,9 +789,9 @@ def evaluate_rows(
         results, key=lambda item: (item["expanded"]["score"], item["mode_index"])
     )
     for rank, item in enumerate(seed_ranked, 1):
-        item["seed_score_rank_within_64"] = rank
+        item["seed_score_rank_within_completed_modes"] = rank
     for rank, item in enumerate(expanded_ranked, 1):
-        item["expanded_score_rank_within_64"] = rank
+        item["expanded_score_rank_within_completed_modes"] = rank
     return results
 
 
@@ -676,6 +803,7 @@ def evaluate_artifact(
     assigned_root: Path,
     truth_dir: Path,
     expected_bindings: dict[str, Any],
+    full_branch_rescore: bool = True,
 ) -> dict[str, Any]:
     run = load_run(source_root, expected_bindings=expected_bindings)
     a20_manifest, a20_rows = load_refinement(a20_root, source_root, run)
@@ -702,6 +830,7 @@ def evaluate_artifact(
         source_root=source_root,
         a20_root=a20_root,
         assigned_root=assigned_root,
+        full_branch_rescore=full_branch_rescore,
     )
     truth_path = truth_dir / "truth.json"
     support_path = truth_dir / "support.json"
@@ -745,9 +874,26 @@ def evaluate_artifact(
         modes, key=lambda item: (item["expanded"]["geodesic_error_m"], item["mode_index"])
     )
     for rank, item in enumerate(error_rank, 1):
-        item["expanded_error_rank_within_64"] = rank
+        item["expanded_error_rank_within_completed_modes"] = rank
     source_errors = [item["seed"]["geodesic_error_m"] for item in modes]
     expanded_errors = [item["expanded"]["geodesic_error_m"] for item in modes]
+    completed_count = manifest["completed_mode_count"]
+    pending_count = manifest["pending_mode_count"]
+    partial_mode_index = completed_count if pending_count > 0 else None
+    tail_events = (
+        [event for event in events if event["mode_index"] == partial_mode_index]
+        if partial_mode_index is not None
+        else []
+    )
+    mode_status_counts: dict[str, int] = {}
+    for row in rows:
+        mode_status_counts[row["status"]] = mode_status_counts.get(row["status"], 0) + 1
+    branch_result_count = sum(
+        counts["result"]
+        for counts in verify_mode_event_correspondence(
+            rows, events, partial_mode_index=partial_mode_index
+        ).values()
+    )
     return {
         "schema": "a35-assignment-expansion-evaluation-v1",
         "evaluation_only": True,
@@ -760,9 +906,15 @@ def evaluate_artifact(
         "source_disposition_counts": run.disposition_counts,
         "expansion_status": manifest.get("status"),
         "mode_count": MODE_COUNT,
-        "selected_mode_scope": "fixed 64 modes from the preceding selected-set diagnostic",
-        "completed_mode_count": manifest.get("completed_mode_count"),
-        "pending_mode_count": manifest.get("pending_mode_count"),
+        "completed_mode_count": completed_count,
+        "pending_mode_count": pending_count,
+        "evaluation_status": "complete_audit" if full_branch_rescore else "provisional",
+        "branch_rescore_complete": full_branch_rescore,
+        "mode_status_counts": mode_status_counts,
+        "partial_mode_event_count": len(tail_events),
+        "partial_mode_events": tail_events,
+        "durable_branch_result_event_count": branch_result_count,
+        "selected_mode_scope": "fixed prefix of 64 selected-set modes",
         "source_run_identity_sha256": run.manifest.get("run_identity_sha256"),
         "assigned_manifest_sha256": manifest.get("assigned_manifest_sha256"),
         "assigned_rows_sha256": assigned_manifest.get("rows_sha256"),
@@ -778,15 +930,17 @@ def evaluate_artifact(
             "support": sha256_file(support_path),
             "truth_crs": sha256_file(crs_path),
         },
-        "seed_best_score": min(item["seed"]["score"] for item in modes),
-        "expanded_best_score": min(item["expanded"]["score"] for item in modes),
-        "seed_best_error_m": min(source_errors),
-        "expanded_best_error_m": min(expanded_errors),
-        "expanded_best_score_rank_row": expanded_rank[0]["mode_index"],
-        "nearest_expanded_mode_index": error_rank[0]["mode_index"],
+        "seed_best_score": min((item["seed"]["score"] for item in modes), default=None),
+        "expanded_best_score": min((item["expanded"]["score"] for item in modes), default=None),
+        "seed_best_error_m": min(source_errors, default=None),
+        "expanded_best_error_m": min(expanded_errors, default=None),
+        "expanded_best_score_rank_row": expanded_rank[0]["mode_index"] if expanded_rank else None,
+        "nearest_expanded_mode_index": error_rank[0]["mode_index"] if error_rank else None,
         "expanded_modes_within_100m": sum(error <= 100.0 for error in expanded_errors),
         "mode_evaluations": modes,
-        "event_mode_counts": verify_mode_event_correspondence(rows, events),
+        "event_mode_counts": verify_mode_event_correspondence(
+            rows, events, partial_mode_index=partial_mode_index
+        ),
     }
 
 
@@ -802,6 +956,11 @@ def main() -> int:
         "output",
     ):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument(
+        "--provisional",
+        action="store_true",
+        help="Skip exact branch-pose rescoring after start and best-row validation.",
+    )
     args = parser.parse_args()
     result = evaluate_artifact(
         args.root,
@@ -810,6 +969,7 @@ def main() -> int:
         assigned_root=args.assigned_root,
         truth_dir=args.truth_dir,
         expected_bindings=read_json(args.expected_bindings),
+        full_branch_rescore=not args.provisional,
     )
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n")
     print(

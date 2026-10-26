@@ -23,7 +23,9 @@ from tools.evaluate_assignment_expansion import (
     choose_start_label,
     evaluate_exact_position,
     validate_branch_score_sequence,
+    validate_completed_prefix,
     validate_mode_counts,
+    validate_no_branch_mode,
     validate_no_unmatched_mode,
     validate_objective_progress,
     verify_event_chain,
@@ -162,15 +164,27 @@ def test_objective_cannot_increase_or_claim_unsupported_improvement() -> None:
 
 
 def test_unknown_pending_modes_are_rejected() -> None:
-    validate_mode_counts({"mode_count": 64, "completed_mode_count": 64, "pending_mode_count": 0})
+    validate_mode_counts(
+        {
+            "status": "completed",
+            "mode_count": 64,
+            "completed_mode_count": 64,
+            "pending_mode_count": 0,
+        }
+    )
     with pytest.raises(ValueError, match="sum to 64"):
         validate_mode_counts(
             {"mode_count": 64, "completed_mode_count": 63, "pending_mode_count": 0}
         )
-    with pytest.raises(ValueError, match="incomplete"):
-        validate_mode_counts(
-            {"mode_count": 64, "completed_mode_count": 63, "pending_mode_count": 1}
-        )
+    assert validate_mode_counts(
+        {
+            "schema": "assignment-expansion-diagnostic-v1",
+            "status": "interrupted",
+            "mode_count": 64,
+            "completed_mode_count": 63,
+            "pending_mode_count": 1,
+        }
+    ) == (63, 1)
 
 
 def test_canonical_event_hash_is_stable_sorted_json() -> None:
@@ -260,3 +274,46 @@ def test_branch_improvement_events_follow_strict_best_sequence() -> None:
         )
     with pytest.raises(ValueError, match="has no exact score"):
         validate_branch_score_sequence(10.0, [{"status": "improved", "exact_score": None}])
+
+
+def test_partial_rows_must_be_exact_canonical_prefix() -> None:
+    validate_completed_prefix(
+        [{"mode_index": 0}, {"mode_index": 1}, {"mode_index": 2}],
+        completed_count=3,
+    )
+    with pytest.raises(ValueError, match="row count"):
+        validate_completed_prefix([{"mode_index": 0}], completed_count=2)
+    with pytest.raises(ValueError, match="deterministic mode prefix"):
+        validate_completed_prefix([{"mode_index": 0}, {"mode_index": 2}], completed_count=2)
+
+
+def test_unfinished_tail_events_are_retained_without_completing_branch() -> None:
+    completed_row = {
+        "mode_index": 0,
+        "status": "no_unmatched_reports",
+        "counters": {},
+        "branch_event_count": 0,
+    }
+    tail_start = _event_record(
+        0,
+        "",
+        1,
+        "branch_started",
+        {"branch_id": 0, "report_index": 4, "catalog_key": "ais:tail", "status": "started"},
+    )
+    counts = verify_mode_event_correspondence([completed_row], [tail_start], partial_mode_index=1)
+    assert counts[1] == {"started": 1, "result": 0, "failure": 0}
+
+
+def test_preflight_failure_preserves_empty_evidence_without_changing_seed() -> None:
+    seed = Hypothesis(1.0, 2.0, 3.0)
+    row = {
+        "status": "invalid_assignment",
+        "counters": {},
+        "branch_event_count": 0,
+        "completed": False,
+        "budget_exhausted": False,
+    }
+    validate_no_branch_mode(row, seed, seed)
+    with pytest.raises(ValueError, match="without exploring"):
+        validate_no_branch_mode(row, seed, Hypothesis(2.0, 2.0, 2.0))
