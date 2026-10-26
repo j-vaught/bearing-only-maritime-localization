@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from tools.evaluate_assigned_refinement import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools.evaluate_assigned_refinement import (  # noqa: E402
     bearing_information_summary,
     validate_start_evidence,
 )
-from tools.evaluate_cached_finite_domain import decode_hypothesis
+from tools.evaluate_cached_finite_domain import decode_hypothesis  # noqa: E402
 
 
 def hypothesis(score: float, east: float, north: float) -> dict[str, Any]:

@@ -79,8 +79,12 @@ def _scenario():
     map_ = VectorMap(
         None,
         crs=CRS_M,
-        coverage_geometry=box(_CANDIDATE[0] - 10_000, _CANDIDATE[1] - 10_000,
-                              _CANDIDATE[0] + 10_000, _CANDIDATE[1] + 10_000),
+        coverage_geometry=box(
+            _CANDIDATE[0] - 10_000,
+            _CANDIDATE[1] - 10_000,
+            _CANDIDATE[0] + 10_000,
+            _CANDIDATE[1] + 10_000,
+        ),
     )
     scorer = CandidateScorer(measurements, catalog, map_, config)
     prepared = prepare_pre_los_targets(scorer, _CANDIDATE)
@@ -90,30 +94,35 @@ def _scenario():
 def _exact_subset_score(measurements, config, records, visible_keys) -> float:
     by_key = {record.key: record for record in records}
     detections = [
-        DetectedObject(key, by_key[key].object_type or "unknown",
-                       by_key[key].bearing_deg, by_key[key].range_m)
+        DetectedObject(
+            key, by_key[key].object_type or "unknown", by_key[key].bearing_deg, by_key[key].range_m
+        )
         for key in visible_keys
     ]
     groups = group_angular_detections(
-        detections, config.circular_merge_tolerance_deg,
+        detections,
+        config.circular_merge_tolerance_deg,
         report_type_labels=config.use_types,
     ).truth_groups
     predicted = []
     for member_keys in groups:
-        representative_key = min(
-            member_keys, key=lambda key: (by_key[key].range_m, key)
-        )
+        representative_key = min(member_keys, key=lambda key: (by_key[key].range_m, key))
         representative = by_key[representative_key]
         uncertainty = max(
-            (by_key[key].uncertainty_m for key in member_keys
-             if by_key[key].uncertainty_m is not None),
+            (
+                by_key[key].uncertainty_m
+                for key in member_keys
+                if by_key[key].uncertainty_m is not None
+            ),
             default=0.0,
         )
-        predicted.append((
-            representative.bearing_deg,
-            representative.object_type,
-            degrees(atan2(uncertainty, representative.range_m)),
-        ))
+        predicted.append(
+            (
+                representative.bearing_deg,
+                representative.object_type,
+                degrees(atan2(uncertainty, representative.range_m)),
+            )
+        )
     costs = build_likelihood_costs(
         measurements,
         [item[0] for item in predicted],
@@ -158,11 +167,16 @@ def test_lower_bound_edge_floors_match_direct_uncertainty_variants():
     assert all(len(row) == len(records) for row in result.edge_floor_matrix)
     for j, record in enumerate(records):
         component = next(group for group in result.component_keys if record.key in group)
-        known = {prepared_record.uncertainty_m for prepared_record in records
-                 if prepared_record.key in component
-                 and prepared_record.uncertainty_m is not None}
-        values = ({0.0, *(float(v) for v in known)} if record.uncertainty_m is None
-                  else {float(v) for v in known if v >= record.uncertainty_m})
+        known = {
+            prepared_record.uncertainty_m
+            for prepared_record in records
+            if prepared_record.key in component and prepared_record.uncertainty_m is not None
+        }
+        values = (
+            {0.0, *(float(v) for v in known)}
+            if record.uncertainty_m is None
+            else {float(v) for v in known if v >= record.uncertainty_m}
+        )
         variants = [
             build_likelihood_costs(
                 measurements,
@@ -175,9 +189,7 @@ def test_lower_bound_edge_floors_match_direct_uncertainty_variants():
         ]
         for i in range(len(measurements.measurements)):
             expected = min(float(vector[i]) for vector in variants)
-            assert result.edge_floor_matrix[i][j] == pytest.approx(
-                expected, abs=1e-8, rel=1e-10
-            )
+            assert result.edge_floor_matrix[i][j] == pytest.approx(expected, abs=1e-8, rel=1e-10)
 
 
 def test_reference_assignment_oracle_manual_costs_preserve_ties_and_forbidden_edges():
