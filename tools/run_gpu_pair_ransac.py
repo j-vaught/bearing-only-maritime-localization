@@ -10,7 +10,7 @@ from time import perf_counter
 
 import cupy as cp
 import numpy as np
-from pyproj import Geod, Transformer
+from pyproj import Geod, Proj, Transformer
 from scipy.spatial import cKDTree  # ty: ignore[unresolved-import]
 
 from maritime.accuracy_cli import SearchV2Session
@@ -53,30 +53,31 @@ def run_ransac(
         [item.longitude_deg for item in records], [item.latitude_deg for item in records]
     )
     coordinates = np.column_stack((east, north)).astype(np.float64, copy=False)
-    object_pairs = cKDTree(coordinates).query_pairs(2.0 * config.max_range_m, output_type="ndarray")
+    object_lon = np.asarray([item.longitude_deg for item in records])
+    object_lat = np.asarray([item.latitude_deg for item in records])
+    factors = Proj(scorer.vector_map.crs).get_factors(object_lon, object_lat)
+    projection_radius_scale = max(1.0, float(np.max(factors.meridional_scale)) * 1.01)
+    projected_max_range = config.max_range_m * projection_radius_scale
+    object_pairs = cKDTree(coordinates).query_pairs(
+        2.0 * projected_max_range, output_type="ndarray"
+    )
     if len(object_pairs) == 0:
         raise ValueError("No catalog object pairs lie within twice the sensor range.")
 
     report_bearings = np.asarray([item.bearing_deg for item in measurements.measurements])
     report_count = len(report_bearings)
     report_pairs = np.column_stack(np.triu_indices(report_count, k=1)).astype(np.int64)
-    center_e, center_n = (xmin + xmax) / 2.0, (ymin + ymax) / 2.0
-    to_geo = Transformer.from_crs(scorer.vector_map.crs, "EPSG:4326", always_xy=True)
-    center_lon, center_lat = to_geo.transform(center_e, center_n)
-    destinations = _GEOD.fwd(
-        np.full(report_count, center_lon),
-        np.full(report_count, center_lat),
-        report_bearings,
-        np.full(report_count, 1_000.0),
+    # Projection convergence varies along a coast-spanning search.  Compute the
+    # local direction of true north at each anchor rather than using the center.
+    north_lon, north_lat, _ = _GEOD.fwd(
+        object_lon, object_lat, np.zeros(len(records)), np.full(len(records), 1_000.0)
     )
-    target_e, target_n = to_map.transform(destinations[0], destinations[1])
-    grid_bearings = np.mod(
-        np.degrees(np.arctan2(np.asarray(target_e) - center_e, np.asarray(target_n) - center_n)),
-        360.0,
+    north_e, north_n = to_map.transform(north_lon, north_lat)
+    grid_correction = np.arctan2(
+        np.asarray(north_e) - coordinates[:, 0], np.asarray(north_n) - coordinates[:, 1]
     )
-    directions = np.column_stack(
-        (np.sin(np.deg2rad(grid_bearings)), np.cos(np.deg2rad(grid_bearings)))
-    )
+    report_angles = np.deg2rad(report_bearings)
+    directions = np.column_stack((np.sin(report_angles), np.cos(report_angles)))
     pair_determinants = (
         directions[report_pairs[:, 0], 1] * directions[report_pairs[:, 1], 0]
         - directions[report_pairs[:, 0], 0] * directions[report_pairs[:, 1], 1]
@@ -96,7 +97,8 @@ def run_ransac(
     in_bounds_total = 0
 
     with cp.cuda.Device(scorer.device_ids[0]):
-        cp_dirs = cp.asarray(directions)
+        cp_report_angles = cp.asarray(report_angles)
+        cp_grid_correction = cp.asarray(grid_correction)
         cp_coords = cp.asarray(coordinates)
         cp_object_pairs = cp.asarray(object_pairs)
         cp_report_pairs = cp.asarray(report_pairs)
@@ -116,8 +118,10 @@ def run_ransac(
             target_index = cp.where(cp_swap, object_i, object_j)
             a = cp_coords[source_index]
             b = cp_coords[target_index]
-            u = cp_dirs[report_i]
-            v = cp_dirs[report_j]
+            angle_i = cp_report_angles[report_i] + cp_grid_correction[source_index]
+            angle_j = cp_report_angles[report_j] + cp_grid_correction[target_index]
+            u = cp.stack((cp.sin(angle_i), cp.cos(angle_i)), axis=1)
+            v = cp.stack((cp.sin(angle_j), cp.cos(angle_j)), axis=1)
             delta = a - b
             determinant = u[:, 1] * v[:, 0] - u[:, 0] * v[:, 1]
             range_i = (-delta[:, 0] * v[:, 1] + delta[:, 1] * v[:, 0]) / determinant
@@ -125,10 +129,11 @@ def run_ransac(
             x = a[:, 0] - range_i * u[:, 0]
             y = a[:, 1] - range_i * u[:, 1]
             valid = (
-                (range_i > 0.0)
+                (cp.abs(determinant) >= np.sin(np.deg2rad(0.1)))
+                & (range_i > 0.0)
                 & (range_j > 0.0)
-                & (range_i <= config.max_range_m)
-                & (range_j <= config.max_range_m)
+                & (range_i <= projected_max_range)
+                & (range_j <= projected_max_range)
                 & (x >= xmin)
                 & (x <= xmax)
                 & (y >= ymin)
@@ -248,6 +253,7 @@ def run_ransac(
         "consensus_candidates": len(candidates),
         "top_report_support": max(consensus, default=0),
         "cell_size_m": cell_size_m,
+        "projection_radius_scale": projection_radius_scale,
         **pipeline_diagnostics,
     }
     return CandidateSearchRun(
