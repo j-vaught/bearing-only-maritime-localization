@@ -13,10 +13,10 @@ ProgressCallback = Callable[[str, int, int], None]
 
 @dataclass(slots=True)
 class _StageRate:
-    last_time: float
-    last_completed: int
+    start_time: float
+    start_completed: int
+    last_report_time: float
     rate_per_s: float = 0.0
-    last_report_time: float = 0.0
 
 
 class SearchProgressReporter:
@@ -35,19 +35,11 @@ class SearchProgressReporter:
         now = monotonic()
         state = self._stages.get(stage)
         if state is None:
-            state = _StageRate(now, completed, last_report_time=now)
+            state = _StageRate(now, completed, now)
             self._stages[stage] = state
-        else:
-            elapsed = now - state.last_time
-            if elapsed > 0.0 and completed > state.last_completed:
-                instant_rate = (completed - state.last_completed) / elapsed
-                state.rate_per_s = (
-                    instant_rate
-                    if state.rate_per_s == 0.0
-                    else 0.35 * instant_rate + 0.65 * state.rate_per_s
-                )
-            state.last_time = now
-            state.last_completed = completed
+        elapsed = now - state.start_time
+        if elapsed > 0.0 and completed > state.start_completed:
+            state.rate_per_s = (completed - state.start_completed) / elapsed
         if completed < total and now - state.last_report_time < self.interval_s:
             return
         remaining_s = (total - completed) / state.rate_per_s if state.rate_per_s > 0.0 else None
