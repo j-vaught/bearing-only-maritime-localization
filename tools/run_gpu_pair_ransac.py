@@ -37,6 +37,7 @@ def run_ransac(
     batch_size: int,
     cell_size_m: float,
     progress: SearchProgressReporter,
+    consensus_score_limit: int,
 ) -> tuple[CandidateSearchRun, dict[str, int | float]]:
     """Sample compatible-in-range anchor pairs, then score consensus cells."""
     config = scorer.config
@@ -191,6 +192,8 @@ def run_ransac(
     if not candidates:
         raise RuntimeError("RANSAC produced no candidate cluster with three-report support.")
 
+    candidates = candidates[:consensus_score_limit]
+    consensus = consensus[:consensus_score_limit]
     scoring = score_candidate_positions_batched(
         scorer,
         candidates,
@@ -238,8 +241,14 @@ def main() -> int:
     parser.add_argument("--cell-size-m", type=float, default=500.0)
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--progress-interval-s", type=float, default=5.0)
+    parser.add_argument("--consensus-score-limit", type=int, default=128)
     args = parser.parse_args()
-    if args.iterations < 1 or args.batch_size < 1 or args.cell_size_m <= 0.0:
+    if (
+        args.iterations < 1
+        or args.batch_size < 1
+        or args.cell_size_m <= 0.0
+        or args.consensus_score_limit < 1
+    ):
         parser.error("iterations, batch size, and cell size must be positive")
     started = perf_counter()
     session = SearchV2Session(args.catalog, args.map, args.projected_crs)
@@ -268,6 +277,7 @@ def main() -> int:
             batch_size=args.batch_size,
             cell_size_m=args.cell_size_m,
             progress=progress,
+            consensus_score_limit=args.consensus_score_limit,
         )
     write_contract(args.output, run.localization)
     args.output.with_suffix(args.output.suffix + ".diagnostics.json").write_text(
