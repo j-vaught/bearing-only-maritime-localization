@@ -102,12 +102,15 @@ def run_ransac(
             report_selection = rng.integers(0, len(report_pairs), size=count)
             object_selection = rng.integers(0, len(object_pairs), size=count)
             swap = rng.integers(0, 2, size=count, dtype=np.int8).astype(bool)
-            report_i = cp_report_pairs[report_selection, 0]
-            report_j = cp_report_pairs[report_selection, 1]
-            object_i = cp_object_pairs[object_selection, 0]
-            object_j = cp_object_pairs[object_selection, 1]
-            source_index = cp.where(swap, object_j, object_i)
-            target_index = cp.where(swap, object_i, object_j)
+            cp_report_selection = cp.asarray(report_selection)
+            cp_object_selection = cp.asarray(object_selection)
+            cp_swap = cp.asarray(swap)
+            report_i = cp_report_pairs[cp_report_selection, 0]
+            report_j = cp_report_pairs[cp_report_selection, 1]
+            object_i = cp_object_pairs[cp_object_selection, 0]
+            object_j = cp_object_pairs[cp_object_selection, 1]
+            source_index = cp.where(cp_swap, object_j, object_i)
+            target_index = cp.where(cp_swap, object_i, object_j)
             a = cp_coords[source_index]
             b = cp_coords[target_index]
             u = cp_dirs[report_i]
