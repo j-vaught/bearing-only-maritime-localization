@@ -72,3 +72,54 @@ def test_limit_reports_unprocessed_frontier():
     assert not result.complete
     assert result.unprocessed
     assert result.pruned_count == 0
+
+
+def test_shared_map_evidence_is_not_prepared_concurrently(monkeypatch):
+    import threading
+    import time
+
+    import maritime.search.gpu.region_prune_pipeline as pipeline
+
+    cp = gpu_or_skip()
+    if cp.cuda.runtime.getDeviceCount() < 2:
+        pytest.skip("Two CUDA devices unavailable")
+    original = pipeline.build_region_evidence
+    state_lock = threading.Lock()
+    active = 0
+    maximum = 0
+
+    def observed(*args, **kwargs):
+        nonlocal active, maximum
+        with state_lock:
+            active += 1
+            maximum = max(maximum, active)
+        try:
+            time.sleep(0.005)
+            return original(*args, **kwargs)
+        finally:
+            with state_lock:
+                active -= 1
+
+    monkeypatch.setattr(pipeline, "build_region_evidence", observed)
+    coverage = box(-100, -100, 20100, 10100)
+    vector_map = VectorMap(None, crs="EPSG:32618", coverage_geometry=coverage)
+    result = pipeline.prune_map_regions_gpu(
+        vector_map,
+        (),
+        (),
+        search_bounds_en_m=(0, 20000, 0, 10000),
+        chart_coverage_geometry=None,
+        chart_catalog_complete=False,
+        catalog_objects_cover_envelope=False,
+        visibility_radius_m=1000,
+        certified_max_projection_scale=None,
+        certified_azimuth_error_deg=None,
+        minimum_distinct_markers=None,
+        device_ids=(0, 1),
+        initial_cell_size_m=10000,
+        target_cell_size_m=10000,
+        batch_size=1,
+        cupy_module=cp,
+    )
+    assert result.complete
+    assert maximum == 1

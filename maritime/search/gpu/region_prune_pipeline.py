@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from importlib import import_module
+from threading import Lock
 from typing import Any
 
 from shapely.geometry.base import BaseGeometry
@@ -65,21 +66,25 @@ def prune_map_regions_gpu(
     initial = make_initial_regions(search_bounds_en_m, cell_size_m=initial_cell_size_m)
     all_objects = tuple(objects)
     detections = tuple(marker_detections)
+    # Workers share the same complex GEOS geometries. Serialize all access to
+    # that map; GPU classification can still run concurrently on each device.
+    geometry_lock = Lock()
 
     def evaluate(device_id: int, cells: tuple[RegionCell, ...]) -> tuple[RegionDecision, ...]:
-        evidence = tuple(
-            build_region_evidence(
-                vector_map,
-                cell,
-                visibility_radius_m=visibility_radius_m,
-                chart_coverage_geometry=chart_coverage_geometry,
-                chart_catalog_complete=chart_catalog_complete,
-                catalog_objects_cover_envelope=catalog_objects_cover_envelope,
-                certified_max_projection_scale=certified_max_projection_scale,
-                objects=all_objects,
+        with geometry_lock:
+            evidence = tuple(
+                build_region_evidence(
+                    vector_map,
+                    cell,
+                    visibility_radius_m=visibility_radius_m,
+                    chart_coverage_geometry=chart_coverage_geometry,
+                    chart_catalog_complete=chart_catalog_complete,
+                    catalog_objects_cover_envelope=catalog_objects_cover_envelope,
+                    certified_max_projection_scale=certified_max_projection_scale,
+                    objects=all_objects,
+                )
+                for cell in cells
             )
-            for cell in cells
-        )
         decisions = list(
             classify_regions_cupy(
                 cells,
@@ -102,16 +107,17 @@ def prune_map_regions_gpu(
                     if recorded
                     else tuple(tuple(True for _ in evidence[i].objects) for _ in detections)
                 )
-            land = classify_land_blocking_cupy(
-                [cells[i] for i in eligible],
-                detections,
-                [evidence[i] for i in eligible],
-                vector_map,
-                compatible_object_masks=masks,
-                certified_land_barriers_en_m=certified_land_barriers_en_m,
-                cupy_module=cp,
-                device_id=device_id,
-            )
+            with geometry_lock:
+                land = classify_land_blocking_cupy(
+                    [cells[i] for i in eligible],
+                    detections,
+                    [evidence[i] for i in eligible],
+                    vector_map,
+                    compatible_object_masks=masks,
+                    certified_land_barriers_en_m=certified_land_barriers_en_m,
+                    cupy_module=cp,
+                    device_id=device_id,
+                )
             for index, proof in zip(eligible, land, strict=True):
                 if proof.blocked:
                     decisions[index] = RegionDecision("prune", proof.reason)
