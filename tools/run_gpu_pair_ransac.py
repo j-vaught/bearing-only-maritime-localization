@@ -153,6 +153,8 @@ def run_ransac(
     neighborhood_east = np.zeros_like(sum_east)
     neighborhood_north = np.zeros_like(sum_north)
     grid = np.arange(ny * nx).reshape(ny, nx)
+    report_presence_grid = report_presence.reshape(ny, nx, report_count)
+    neighborhood_reports_grid = neighborhood_reports.reshape(ny, nx, report_count)
     for dy in (-1, 0, 1):
         y_src = slice(max(0, -dy), min(ny, ny - dy))
         y_dst = slice(max(0, dy), min(ny, ny + dy))
@@ -161,9 +163,7 @@ def run_ransac(
             x_dst = slice(max(0, dx), min(nx, nx + dx))
             source_grid = grid[y_src, x_src].ravel()
             target_grid = grid[y_dst, x_dst].ravel()
-            neighborhood_reports[y_dst, x_dst] |= report_presence[source_grid].reshape(
-                y_dst.stop - y_dst.start, x_dst.stop - x_dst.start, report_count
-            )
+            neighborhood_reports_grid[y_dst, x_dst] |= report_presence_grid[y_src, x_src]
             neighborhood_counts[target_grid] += proposal_counts[source_grid]
             neighborhood_east[target_grid] += sum_east[source_grid]
             neighborhood_north[target_grid] += sum_north[source_grid]
