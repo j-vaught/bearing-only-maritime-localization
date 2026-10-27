@@ -16,6 +16,7 @@ from scipy.spatial import cKDTree  # ty: ignore[unresolved-import]
 from maritime.accuracy_cli import SearchV2Session
 from maritime.schemas.inputs_v2 import MeasurementSetV2
 from maritime.search.config_serialization import read_search_config
+from maritime.search.gpu.experimental_pipeline import score_candidate_positions_experimental
 from maritime.search.gpu.search_adapter import (
     GpuCandidateScorer,
     score_candidate_positions_batched,
@@ -38,7 +39,8 @@ def run_ransac(
     cell_size_m: float,
     progress: SearchProgressReporter,
     consensus_score_limit: int,
-) -> tuple[CandidateSearchRun, dict[str, int | float]]:
+    experimental_batched_pipeline: bool = False,
+) -> tuple[CandidateSearchRun, dict[str, object]]:
     """Sample compatible-in-range anchor pairs, then score consensus cells."""
     config = scorer.config
     bounds = config.bounds_xy
@@ -194,23 +196,50 @@ def run_ransac(
 
     candidates = candidates[:consensus_score_limit]
     consensus = consensus[:consensus_score_limit]
-    scoring = score_candidate_positions_batched(
-        scorer,
-        candidates,
-        batch_size=8,
-        candidate_limit=min(config.candidate_budget, len(candidates)),
-        progress_callback=lambda completed, total: progress(
-            "gpu_consensus_scoring", completed, total
-        ),
-        progress_total=max(1, min(config.candidate_budget, len(candidates))),
-    )
+    if experimental_batched_pipeline:
+        pipeline = score_candidate_positions_experimental(
+            scorer,
+            candidates,
+            batch_size=8,
+            progress=progress,
+            telemetry=scorer.telemetry,
+            device_id=scorer.device_ids[0],
+        )
+        scoring = pipeline.run
+        pipeline_diagnostics: dict[str, object] = {
+            "experimental_batched_pipeline": 1,
+            "pipeline_shoreline_cpu_fallbacks": pipeline.shoreline_cpu_fallbacks,
+            "pipeline_scored_candidates": dict(scoring.outcome_counts).get("scored", 0),
+            "pipeline_cpu_verified_costs_only": 1,
+            "pipeline_full_gpu": 0,
+            "pipeline_candidate_ids": list(pipeline.stable_candidate_ids),
+            "pipeline_candidate_outcomes": [
+                {"candidate_id": candidate_id, "status": status}
+                for candidate_id, status in pipeline.candidate_outcomes
+            ],
+        }
+        pipeline_diagnostics.update(
+            {f"pipeline_{name}_s": value for name, value in pipeline.stage_seconds.items()}
+        )
+    else:
+        scoring = score_candidate_positions_batched(
+            scorer,
+            candidates,
+            batch_size=8,
+            candidate_limit=min(config.candidate_budget, len(candidates)),
+            progress_callback=lambda completed, total: progress(
+                "gpu_consensus_scoring", completed, total
+            ),
+            progress_total=max(1, min(config.candidate_budget, len(candidates))),
+        )
+        pipeline_diagnostics = {"experimental_batched_pipeline": 0}
     result = replace(
         scoring.localization,
         budget_limit=iterations,
         budget_used=iterations,
         certificate_scope="none",
     )
-    diagnostics: dict[str, int | float] = {
+    diagnostics: dict[str, object] = {
         "proposal_samples": iterations,
         "catalog_neighbor_pairs": int(len(object_pairs)),
         "bearing_pairs": int(len(report_pairs)),
@@ -219,6 +248,7 @@ def run_ransac(
         "consensus_candidates": len(candidates),
         "top_report_support": max(consensus, default=0),
         "cell_size_m": cell_size_m,
+        **pipeline_diagnostics,
     }
     return CandidateSearchRun(
         localization=result,
@@ -242,6 +272,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--progress-interval-s", type=float, default=5.0)
     parser.add_argument("--consensus-score-limit", type=int, default=128)
+    parser.add_argument("--experimental-batched-pipeline", action="store_true")
     args = parser.parse_args()
     if (
         args.iterations < 1
@@ -278,6 +309,7 @@ def main() -> int:
             cell_size_m=args.cell_size_m,
             progress=progress,
             consensus_score_limit=args.consensus_score_limit,
+            experimental_batched_pipeline=args.experimental_batched_pipeline,
         )
     write_contract(args.output, run.localization)
     args.output.with_suffix(args.output.suffix + ".diagnostics.json").write_text(
