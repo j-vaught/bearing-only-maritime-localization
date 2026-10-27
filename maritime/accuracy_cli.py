@@ -511,11 +511,13 @@ def _search_dispatch(
                 GpuCandidateScorer,
                 score_candidate_positions_batched,
             )
-            from maritime.search.reference_grid import enumerate_grid_points
+            from maritime.search.reference_grid import enumerate_grid_points, grid_shape
 
             if not isinstance(scorer, GpuCandidateScorer):
                 raise TypeError("GPU grid search requires GpuCandidateScorer.")
             assert config.bounds_xy is not None
+            shape = grid_shape(config.bounds_xy, spacing_m)
+            total = shape[0] * shape[1]
             from maritime.search.candidate_order import order_candidate_positions
 
             positions = order_candidate_positions(
@@ -531,7 +533,7 @@ def _search_dispatch(
                 progress_callback=(
                     (
                         lambda completed, progress_total: progress_callback(
-                            "gpu_reference_grid", completed, progress_total
+                            "gpu_grid", completed, progress_total
                         )
                     )
                     if progress_callback is not None
@@ -599,6 +601,16 @@ def _search_dispatch(
                 enumerate_grid_points(bounds, spacing_m),
                 candidate_limit=config.candidate_budget,
                 certificate_scope="finite_candidate_set",
+                progress_callback=(
+                    (
+                        lambda completed, progress_total: progress_callback(
+                            "gpu_reference_grid", completed, progress_total
+                        )
+                    )
+                    if progress_callback is not None
+                    else None
+                ),
+                progress_total=min(total, config.candidate_budget),
             )
             outcome_counts = dict(run.outcome_counts)
             evaluated = run.candidate_count
