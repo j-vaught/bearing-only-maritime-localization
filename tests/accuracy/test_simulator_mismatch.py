@@ -246,3 +246,21 @@ def test_detection_drop_occurs_after_merge_and_retains_truth_group_diagnostic():
     assert run.diagnostics.groups[0].catalog_member_keys == ("a", "b")
     assert run.diagnostics.groups[0].observation_index is None
     assert all(item.observation_index is None for item in run.truth.objects)
+
+
+def test_extra_reports_are_vessels_and_respect_disabled_labels():
+    sensor = _sensor(detection_probability=0.0, expected_clutter_reports=10.0)
+    run = _run(sensor=sensor, seed=11)
+    assert run.diagnostics.clutter_report_count > 0
+    assert all(item.object_type == "vessel" for item in run.measurements.measurements)
+
+    unlabeled = _run(
+        sensor=_sensor(
+            detection_probability=0.0,
+            expected_clutter_reports=10.0,
+            report_type_labels=False,
+        ),
+        seed=11,
+    )
+    assert len(unlabeled.measurements.measurements) == len(run.measurements.measurements)
+    assert all(item.object_type is None for item in unlabeled.measurements.measurements)

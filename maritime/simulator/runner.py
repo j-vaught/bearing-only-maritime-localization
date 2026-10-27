@@ -524,7 +524,7 @@ def run_simulator_v2(
                 bearing_deg=float(clutter_rng.uniform(0.0, 360.0)),
                 timestamp_utc=timestamp_utc,
                 sigma_deg=sensor.bearing_sigma_deg,
-                object_type=None,
+                object_type="vessel" if sensor.report_type_labels else None,
                 angular_half_width_deg=0.0,
             )
         )
