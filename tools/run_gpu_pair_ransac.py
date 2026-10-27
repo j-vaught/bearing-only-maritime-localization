@@ -161,10 +161,8 @@ def run_ransac(
             x_dst = slice(max(0, dx), min(nx, nx + dx))
             source_grid = grid[y_src, x_src].ravel()
             target_grid = grid[y_dst, x_dst].ravel()
-            np.logical_or.at(
-                neighborhood_reports,
-                target_grid[:, None],
-                report_presence[source_grid],
+            neighborhood_reports[y_dst, x_dst] |= report_presence[source_grid].reshape(
+                y_dst.stop - y_dst.start, x_dst.stop - x_dst.start, report_count
             )
             neighborhood_counts[target_grid] += proposal_counts[source_grid]
             neighborhood_east[target_grid] += sum_east[source_grid]
