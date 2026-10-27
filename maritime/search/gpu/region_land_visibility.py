@@ -14,6 +14,7 @@ from math import isfinite
 from typing import Any
 
 import numpy as np
+from shapely import contains_properly
 from shapely.geometry import Polygon, box
 from shapely.geometry.base import BaseGeometry
 
@@ -216,7 +217,7 @@ def derive_certified_land_barrier_tiles(
             bottom = y0 + iy * tile_size_m
             top = min(bottom + tile_size_m, y1)
             tile = box(left, bottom, right, top)
-            if not land.contains(tile) or not land.boundary.disjoint(tile):
+            if not contains_properly(land, tile):
                 continue
             if not coverage.covers(tile):
                 continue
@@ -254,7 +255,7 @@ def _certified_rectangular_land(
         if x0 >= x1 or y0 >= y1:
             continue
         candidate = box(x0, y0, x1, y1)
-        if not land.contains(candidate) or not land.boundary.disjoint(candidate):
+        if not contains_properly(land, candidate):
             continue
         if not coverage.covers(candidate):
             continue

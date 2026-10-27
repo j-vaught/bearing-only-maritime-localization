@@ -11,6 +11,7 @@ from collections.abc import Iterable
 from math import isfinite
 
 from pyproj import Transformer
+from shapely import contains_properly
 from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 
@@ -81,9 +82,7 @@ def build_region_evidence(
     )
 
     land = vector_map.land_geometry
-    land_fully_covers = bool(
-        map_covers_cell and land.contains(region) and land.boundary.disjoint(region)
-    )
+    land_fully_covers = bool(map_covers_cell and contains_properly(land, region))
     if map_unknown is not None and map_unknown.intersects(region):
         land_status: bool | None = None
     elif not map_covers_cell:

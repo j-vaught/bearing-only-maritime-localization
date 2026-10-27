@@ -1,4 +1,4 @@
-from shapely.geometry import box
+from shapely.geometry import GeometryCollection, LineString, box
 
 from maritime.geometry.vector_map import VectorMap
 from maritime.schemas.inputs_v2 import CatalogRecordV2
@@ -113,3 +113,12 @@ def test_asymmetric_cell_bounds_use_east_north_order():
         certified_max_projection_scale=1.0,
     )
     assert evidence.map_evidence_covers_visibility_envelope
+
+
+def test_mixed_land_geometry_proves_interior_without_collection_boundary():
+    vm = VectorMap(box(0, 0, 800, 800), crs="EPSG:32618", coverage_geometry=box(-10, -10, 900, 900))
+    vm._land = GeometryCollection([box(0, 0, 800, 800), LineString([(850, 0), (850, 800)])])
+    inside = build_region_evidence(vm, RegionCell((100, 200, 100, 200)), visibility_radius_m=0)
+    touching = build_region_evidence(vm, RegionCell((0, 100, 100, 200)), visibility_radius_m=0)
+    assert inside.land_fully_covers is True
+    assert touching.land_fully_covers is False
