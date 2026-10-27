@@ -83,9 +83,9 @@ class SensorConfigurationV2:
     angular_resolution_deg: float = 0.1
     bearing_sigma_deg: float = 0.5
     detection_probability: float = 0.9
-    type_error_probability: float = 0.05
+    type_error_probability: float = 0.0
     expected_clutter_reports: float = 1.0
-    outlier_probability: float = 0.05
+    outlier_probability: float = 0.0
     report_type_labels: bool = True
 
     def __post_init__(self) -> None:
