@@ -22,4 +22,4 @@ build/
 /runs/**/*.log
 
 # Reusable compiled input/index cache; figures remain trackable.
-/.cache/resident-world/
+/.cache/resident-world
