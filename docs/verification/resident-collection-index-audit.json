@@ -1,0 +1,464 @@
+{
+  "scope": "Independent tiny geometry/index audit on GPU3; no full world or cache rebuilt",
+  "saved_cache_bytes_and_mtime_unchanged": true,
+  "cases": [
+    {
+      "scenario": "collection",
+      "effective_land_type": "GeometryCollection",
+      "legacy_index_polygons": 0,
+      "fixed_index_polygons": 1,
+      "raw_land_wkb_sha256": "b1ede269dc077ac2cc07c52c2a87682ce70e479ddb69019676ebad613fb52339",
+      "packed_arrays_bitwise_identical": true,
+      "rays": [
+        {
+          "ray": [
+            0.0,
+            0.0,
+            4.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "blocked",
+          "gpu_code": 1,
+          "direct_known_land_interior": true
+        },
+        {
+          "ray": [
+            0.0,
+            3.0,
+            4.0,
+            3.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 0,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            0.0,
+            -2.0,
+            4.0,
+            -2.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            2.0,
+            0.0,
+            4.0,
+            0.0
+          ],
+          "legacy_cpu": "blocked",
+          "fixed_cpu": "blocked",
+          "gpu_code": 1,
+          "direct_known_land_interior": true
+        }
+      ],
+      "points": [
+        {
+          "xy": [
+            0.0,
+            0.0
+          ],
+          "legacy_cpu": "water",
+          "fixed_cpu": "water",
+          "gpu_code": 0
+        },
+        {
+          "xy": [
+            2.0,
+            0.0
+          ],
+          "legacy_cpu": "land",
+          "fixed_cpu": "land",
+          "gpu_code": 1
+        },
+        {
+          "xy": [
+            5.0,
+            0.0
+          ],
+          "legacy_cpu": "land",
+          "fixed_cpu": "water",
+          "gpu_code": 2
+        }
+      ]
+    },
+    {
+      "scenario": "hole_collection",
+      "effective_land_type": "GeometryCollection",
+      "legacy_index_polygons": 0,
+      "fixed_index_polygons": 1,
+      "raw_land_wkb_sha256": "98a43310507d68d4383b92e4d3185f52f8273e71193bfd9f8a4a239023568967",
+      "packed_arrays_bitwise_identical": true,
+      "rays": [
+        {
+          "ray": [
+            0.0,
+            0.0,
+            4.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "blocked",
+          "gpu_code": 1,
+          "direct_known_land_interior": true
+        },
+        {
+          "ray": [
+            0.0,
+            3.0,
+            4.0,
+            3.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 0,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            0.0,
+            -2.0,
+            4.0,
+            -2.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            2.0,
+            0.0,
+            4.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "blocked",
+          "gpu_code": 1,
+          "direct_known_land_interior": true
+        },
+        {
+          "ray": [
+            1.6,
+            0.0,
+            2.4,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 0,
+          "direct_known_land_interior": false
+        }
+      ],
+      "points": [
+        {
+          "xy": [
+            0.0,
+            0.0
+          ],
+          "legacy_cpu": "water",
+          "fixed_cpu": "water",
+          "gpu_code": 0
+        },
+        {
+          "xy": [
+            2.0,
+            0.0
+          ],
+          "legacy_cpu": "water",
+          "fixed_cpu": "water",
+          "gpu_code": 0
+        },
+        {
+          "xy": [
+            5.0,
+            0.0
+          ],
+          "legacy_cpu": "land",
+          "fixed_cpu": "water",
+          "gpu_code": 2
+        }
+      ]
+    },
+    {
+      "scenario": "normalized_overlap_collection",
+      "effective_land_type": "GeometryCollection",
+      "legacy_index_polygons": 0,
+      "fixed_index_polygons": 1,
+      "raw_land_wkb_sha256": "5559bcdc19722485ffbdfd17b92b89a9695903ee7c78d3a54fbd9b059c2f025f",
+      "packed_arrays_bitwise_identical": true,
+      "rays": [
+        {
+          "ray": [
+            0.0,
+            0.0,
+            4.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "blocked",
+          "gpu_code": 1,
+          "direct_known_land_interior": true
+        },
+        {
+          "ray": [
+            0.0,
+            3.0,
+            4.0,
+            3.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 0,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            0.0,
+            -2.0,
+            4.0,
+            -2.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            2.0,
+            0.0,
+            4.0,
+            0.0
+          ],
+          "legacy_cpu": "blocked",
+          "fixed_cpu": "blocked",
+          "gpu_code": 1,
+          "direct_known_land_interior": true
+        }
+      ],
+      "points": [
+        {
+          "xy": [
+            0.0,
+            0.0
+          ],
+          "legacy_cpu": "water",
+          "fixed_cpu": "water",
+          "gpu_code": 0
+        },
+        {
+          "xy": [
+            2.0,
+            0.0
+          ],
+          "legacy_cpu": "land",
+          "fixed_cpu": "land",
+          "gpu_code": 1
+        },
+        {
+          "xy": [
+            5.0,
+            0.0
+          ],
+          "legacy_cpu": "land",
+          "fixed_cpu": "water",
+          "gpu_code": 2
+        }
+      ]
+    },
+    {
+      "scenario": "unknown_observer_collection",
+      "effective_land_type": "GeometryCollection",
+      "legacy_index_polygons": 0,
+      "fixed_index_polygons": 1,
+      "raw_land_wkb_sha256": "f5965c839afccc0f5263d69072b15e221817d256f5f5083d8d3235a8ba58353d",
+      "packed_arrays_bitwise_identical": true,
+      "rays": [
+        {
+          "ray": [
+            0.0,
+            0.0,
+            4.0,
+            0.0
+          ],
+          "legacy_cpu": "unknown",
+          "fixed_cpu": "unknown",
+          "gpu_code": 1,
+          "direct_known_land_interior": true
+        },
+        {
+          "ray": [
+            0.0,
+            3.0,
+            4.0,
+            3.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 0,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            0.0,
+            -2.0,
+            4.0,
+            -2.0
+          ],
+          "legacy_cpu": "clear",
+          "fixed_cpu": "clear",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "legacy_cpu": "unknown",
+          "fixed_cpu": "unknown",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "legacy_cpu": "unknown",
+          "fixed_cpu": "unknown",
+          "gpu_code": 2,
+          "direct_known_land_interior": false
+        },
+        {
+          "ray": [
+            2.0,
+            0.0,
+            4.0,
+            0.0
+          ],
+          "legacy_cpu": "blocked",
+          "fixed_cpu": "blocked",
+          "gpu_code": 1,
+          "direct_known_land_interior": true
+        }
+      ],
+      "points": [
+        {
+          "xy": [
+            0.0,
+            0.0
+          ],
+          "legacy_cpu": "unknown",
+          "fixed_cpu": "unknown",
+          "gpu_code": 2
+        },
+        {
+          "xy": [
+            2.0,
+            0.0
+          ],
+          "legacy_cpu": "land",
+          "fixed_cpu": "land",
+          "gpu_code": 1
+        },
+        {
+          "xy": [
+            5.0,
+            0.0
+          ],
+          "legacy_cpu": "land",
+          "fixed_cpu": "water",
+          "gpu_code": 2
+        }
+      ]
+    }
+  ],
+  "interpretation": "Recursive CPU polygon indexing restores interior blocking. Preparing only polygon parts removes false land from line remnants. Packed layers are bitwise unchanged.",
+  "remaining_policy_differences": "GPU shoreline/coverage-edge coincidences remain unknown rather than CPU clear. GPU gives blocked on an unknown-observer ray crossing known land; CPU prioritizes unknown observer."
+}

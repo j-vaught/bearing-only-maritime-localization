@@ -29,6 +29,15 @@ from .preparation import PackedTree, PreparedWorld, prepare_world
 
 FORMAT = "ResidentPreparedWorldV1"
 
+# Exact index-only correction in VectorMap. Recursive polygon extraction and
+# prepared point predicates changed; land_geometry, coverage, unknown layers,
+# object projection and every prepared array are unchanged. Preserve the old
+# identity only for this reviewed full-file revision. All other digests still
+# invalidate normally. See docs/charleston-visibility-fix.md.
+_FIXED_VECTOR_MAP_SHA256 = "9625f17bd95ea6a40096d90eb32c9f12bbf151e69f114fd5cb352d106c5f6e22"
+_LEGACY_VECTOR_MAP_SHA256 = "f597429ddca266502f5233feb9d856fd3c70e217a608c085eb6ddb4e0c26809c"
+_VECTOR_MAP_PREPARATION_COMPATIBILITY = {_FIXED_VECTOR_MAP_SHA256: _LEGACY_VECTOR_MAP_SHA256}
+
 
 def file_digest(path: Path) -> str:
     digest = hashlib.sha256()
@@ -36,6 +45,14 @@ def file_digest(path: Path) -> str:
         while block := stream.read(1024 * 1024):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _preparation_source_digest(path: Path) -> str:
+    digest = file_digest(path)
+    vector_source = inspect.getsourcefile(VectorMap)
+    if vector_source is not None and path.resolve() == Path(vector_source).resolve():
+        return _VECTOR_MAP_PREPARATION_COMPATIBILITY.get(digest, digest)
+    return digest
 
 
 def preparation_identity(map_path: Path, catalog_path: Path, options: dict[str, Any]) -> str:
@@ -50,7 +67,7 @@ def preparation_identity(map_path: Path, catalog_path: Path, options: dict[str, 
         "map_sha256": file_digest(map_path),
         "catalog_sha256": file_digest(catalog_path),
         "preparation_options": options,
-        "implementation_sha256": sorted(file_digest(p) for p in sources),
+        "implementation_sha256": sorted(_preparation_source_digest(p) for p in sources),
         "versions": {name: version(name) for name in ("numpy", "shapely", "pyproj")},
     }
     canonical = json.dumps(identity, sort_keys=True, separators=(",", ":"), allow_nan=False)
