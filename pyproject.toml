@@ -48,3 +48,6 @@ exclude = [".agent-work"]
 pythonpath = ["."]
 testpaths = ["tests"]
 norecursedirs = [".agent-work", ".git", ".venv", "build", "dist", "node_modules", "venv", "*.egg", "CVS", "_darcs", "{arch}"]
+
+[tool.setuptools.package-data]
+"maritime.search.gpu.resident" = ["*.cu"]

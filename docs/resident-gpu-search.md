@@ -1,0 +1,56 @@
+# Resident GPU search implementation awaiting execution approval
+
+The resident path is separate from the earlier CPU-limited coastwise search. Its source has been written, but it has not been compiled, tested, profiled or used for a localization result. No speed or accuracy result is claimed.
+
+The CPU prepares the immutable map and catalog once. Preparation clips the source map through the existing map adapter, projects catalog coordinates, preserves uncertainty and identity metadata, and constructs balanced spatial trees. Each selected device receives its own arrays. This preprocessing is outside the iterative search and must be timed separately.
+
+Once preparation finishes, the CPU assigns batches of root-cell identifiers to available devices. Each device generates those cells, classifies and prunes them, subdivides survivors, predicts visible objects, groups circular bearings and matches trusted chart-aid detections. The arrays used in these calculations remain on that device. Only aggregate counters, periodic frontier snapshots and terminal result files return to the host. File I/O, kernel launches and task scheduling still require CPU activity. Zero CPU activity is not a valid execution claim.
+
+## Source path for each operation
+
+| Operation | Implementation | Execution location by construction |
+| --- | --- | --- |
+| Immutable input preparation | `resident/preparation.py` | CPU, before traversal |
+| Initial root-cell generation | `seed_cells` | CUDA |
+| Land, water and unknown classification | `inside`, `covers_box`, `point` | CUDA |
+| Nearby-object queries | Object-tree traversal in `prune_cells` and `predict_groups` | CUDA |
+| Whole-cell marker pruning | `prune_cells` | CUDA |
+| Whole-cell land-blocking witness | `barrier` | CUDA |
+| Survivor compaction and subdivision | CuPy masks and `ResidentDevice.split` | CUDA device arrays |
+| WGS84 candidate inverse projection and ellipsoidal bearings | `inverse_utm`, `geodesic` | CUDA |
+| Candidate-to-object visibility | `ray` | CUDA |
+| Circular grouping and frontmost representative selection | `predict_groups` | CUDA |
+| Injective assignment and residual objective | `batched_hungarian` | CUDA |
+| Root-task scheduling, kernel launches and output | `run_resident_search` | CPU coordination and I/O |
+
+The old `GpuShorelineIndex`, `build_region_evidence`, `predict_visible_groups`, and CPU assignment functions are not called by the resident traversal. The existing Hungarian CUDA source is used directly, without its wrapper that reconstructs assignments on the host. There is no missing-CUDA fallback. A missing runtime or solver failure stops this path visibly.
+
+## Correctness rules
+
+Only typed chart-aid detections create deterministic matching obligations. Additional vessel detections do not create chart-aid obligations. Missing vessels and undetected chart aids never exclude a location. All surviving cells continue to the declared terminal size. There is no top-N cutoff. Scores apply only to the centers of terminal cells; no center score eliminates the rest of its cell.
+
+This first resident path scores chart-aid observations only. It does not add an AIS likelihood term. Association uniqueness is not evaluated; a consistent center is not a unique fix.
+
+Known map coverage and chart completeness remain independent. Unknown map areas remain unknown. Projection, position, marker reliability, physical identity, and bearing-bound certificates must be supplied explicitly. Uncertain record positions are not turned into exact positions. Duplicate physical identities remain ambiguous. Whole-cell land proofs require strict interior containment. Land-blocking rectangles are sufficient witnesses and do not claim to prove all possible occlusions.
+
+Boundary coincidences, too many ray crossings, excessive object counts, numerical failure and unknown geometry produce unresolved outcomes or explicit errors. The code never silently discards objects to fit a buffer. It currently supports EPSG:32618, at most 256 marker reports, a configurable nearby-object capacity and a configured workspace budget. Source map and catalog preparation includes CPU geometry and coordinate projection.
+
+The current Gaussian sensor noise has a 0.5 degree standard deviation, without a finite guaranteed maximum. Supplying a hard bearing tolerance is an explicit additional modeling assumption. The `numerical_validation_accepted` switch defaults to false and disables hard marker pruning and conclusive marker scores until numerical validation is accepted. It is an assertion, not an automatically verified certificate. Dataset coverage and identity uncertainty can still prevent conclusive pruning after the kernels are verified.
+
+## Verification sequence requiring approval
+
+First, inspect and compile the new files and run only the synthetic map-query and coordinate checks in `tests/test_resident_gpu_search.py`. These compare points, holes, coverage, unknown regions, rays, projection and bearings with independent references. No Charleston search is part of that first step.
+
+After that step passes and receives review, run the marker-matching and domain-traversal checks. The matching check patches CPU geometry and assignment functions to raise if called during GPU scoring. Add stress cases for capacity limits, geometric degeneracy, distinct-object association and device scheduling before using the path for a result.
+
+Next, approve a small profiled synthetic search. Capture a CUDA timeline and GPU utilization, with preprocessing, file output and active search reported separately. CUDA event spans alone include launch gaps and do not establish kernel occupancy or prove that all wall time is GPU computation. Runtime evidence must accompany the source-level execution table before this path is described as verified.
+
+Finally, obtain approval for the full Eastern Seaboard Charleston run using the corrected measurement frame. Truth remains separate and is used only for evaluation after the search produces its outputs.
+
+The CLI `tools/run_resident_marker_search.py` requires an explicit `--execute` flag to initialize inputs and run. Without it, the CLI only prints its static execution contract. That command has not been invoked during implementation either. Future tests, profiling and searches require user approval before execution.
+
+## Output and recovery limits
+
+Each root task writes all terminal center records and periodic device-frontier snapshots. The manifest identifies every catalog row and all search assumptions. A summary reports completed roots, total evaluated regions and elapsed time. It does not manufacture a location fix or an accuracy result.
+
+Automatic resume is not implemented. A crash may leave an earlier frontier snapshot; the snapshots are diagnostic artifacts and are not a guaranteed transactionally resumable checkpoint. Failed runs must not be described as complete. The implementation is staged for verification and still requires the tests and profiling above.
