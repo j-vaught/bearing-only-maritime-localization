@@ -46,8 +46,11 @@ def main() -> None:
     parser.add_argument("--settings", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cache-dir", type=Path, default=Path(".cache/resident-world"))
-    parser.add_argument("--coarse-only", action="store_true",
-                        help="Explicitly allow stopping at the initial cell size")
+    parser.add_argument(
+        "--coarse-only",
+        action="store_true",
+        help="Explicitly allow stopping at the initial cell size",
+    )
     parser.add_argument("--execute", action="store_true", help="Execute only after user approval")
     args = parser.parse_args()
     if not args.execute:
@@ -64,9 +67,9 @@ def main() -> None:
     from maritime.geometry.vector_map import VectorMap
     from maritime.schemas.inputs_v2 import CatalogV2, MapV2, MeasurementSetV2
     from maritime.schemas.object_types import normalize_object_type
+    from maritime.search.gpu.resident.cache import load_or_prepare, preparation_identity
     from maritime.search.gpu.resident.engine import ResidentConfig, run_resident_search
     from maritime.search.gpu.resident.preparation import prepare_world
-    from maritime.search.gpu.resident.cache import load_or_prepare, preparation_identity
     from maritime.serialization import read_contract
 
     preparation_started = perf_counter()
@@ -83,10 +86,17 @@ def main() -> None:
         raise ValueError("Unexpected settings field; observer truth is not an accepted input.")
     config = ResidentConfig(**settings["search"])
     check_resolution(config.initial_size_m, config.terminal_size_m, args.coarse_only)
-    print(json.dumps({"stage": "configured_resolution",
-                      "initial_cell_size_m": config.initial_size_m,
-                      "stopping_cell_size_m": config.terminal_size_m,
-                      "coarse_only": args.coarse_only}), flush=True)
+    print(
+        json.dumps(
+            {
+                "stage": "configured_resolution",
+                "initial_cell_size_m": config.initial_size_m,
+                "stopping_cell_size_m": config.terminal_size_m,
+                "coarse_only": args.coarse_only,
+            }
+        ),
+        flush=True,
+    )
     tolerance = settings["marker_tolerance_deg"]
     measurements = read_contract(Path(settings["measurements"]), MeasurementSetV2)
     if (
@@ -103,7 +113,9 @@ def main() -> None:
     preparation_options = dict(settings.get("preparation", {}))
     print(json.dumps({"stage": "prepared_cache_lookup_cpu"}), flush=True)
     cache_key = preparation_identity(
-        Path(settings["map"]), Path(settings["catalog"]), preparation_options,
+        Path(settings["map"]),
+        Path(settings["catalog"]),
+        preparation_options,
     )
 
     def builder():
@@ -114,14 +126,25 @@ def main() -> None:
         preparation = dict(preparation_options)
         if "chart_geometry_geojson" in preparation:
             preparation["chart_geometry"] = shape(preparation.pop("chart_geometry_geojson"))
-        print(json.dumps({"stage": "spatial_index_preparation_cpu",
-                          "markers": len(markers), "catalog_records": len(catalog.records)}),
-              flush=True)
+        print(
+            json.dumps(
+                {
+                    "stage": "spatial_index_preparation_cpu",
+                    "markers": len(markers),
+                    "catalog_records": len(catalog.records),
+                }
+            ),
+            flush=True,
+        )
         return prepare_world(vector_map, catalog, **preparation)
 
     world, cache_hit = load_or_prepare(args.cache_dir, cache_key, builder)
-    print(json.dumps({"stage": "prepared_world_ready", "cache_hit": cache_hit,
-                      "cache_key": cache_key}), flush=True)
+    print(
+        json.dumps(
+            {"stage": "prepared_world_ready", "cache_hit": cache_hit, "cache_key": cache_key}
+        ),
+        flush=True,
+    )
     print(
         json.dumps(
             {
@@ -140,8 +163,8 @@ def main() -> None:
         args.output,
     )
     (args.output / "prepared-cache.json").write_text(
-        json.dumps({"key": cache_key, "hit": cache_hit, "directory": str(args.cache_dir)},
-                   indent=2) + "\n"
+        json.dumps({"key": cache_key, "hit": cache_hit, "directory": str(args.cache_dir)}, indent=2)
+        + "\n"
     )
     (args.output / "settings.json").write_text(json.dumps(settings, indent=2) + "\n")
     hashes = {
