@@ -1,0 +1,67 @@
+{
+  "scope": "Full coast coarse pass; no fine refinement. Truth used only here after search.",
+  "terminal_count": 16691,
+  "status_counts": {
+    "3": 1163,
+    "2": 15210,
+    "1": 318
+  },
+  "flag_counts": {
+    "0": 2357,
+    "1": 13488,
+    "8": 799,
+    "9": 47
+  },
+  "finite_complete_nominal_matches": 0,
+  "consistent_centers": 0,
+  "best_consistent": [],
+  "best_nominal_unresolved_or_consistent": [],
+  "truth_containing_retained_cells": [
+    {
+      "bounds_xy_m": [
+        39633.502276735264,
+        3629585.3102704627,
+        49633.502276735264,
+        3639585.3102704627
+      ],
+      "center_lon": -79.8587941493638,
+      "center_lat": 32.75497051034733,
+      "status": 2,
+      "flags": 8,
+      "total_abs_bearing_residual_deg": null,
+      "distance_to_truth_m": 4639.366926018208,
+      "matched_reports": 5
+    }
+  ],
+  "summary": {
+    "evaluated": 39567,
+    "pruned": 22843,
+    "terminal": 16691,
+    "completed_roots": 39435,
+    "complete": true,
+    "elapsed_s": 98.94776289723814,
+    "accuracy_evaluated": false,
+    "numerical_validation_accepted": true
+  },
+  "timing": {
+    "total_wall_s": 450.73,
+    "cpu_preparation_s": 345.1715183756314,
+    "search_phase_s": 98.94776289723814,
+    "search_phase_includes_host_coordination": true
+  },
+  "source_commit": "6be1a9c",
+  "gpu_devices": [
+    0,
+    2
+  ],
+  "input_design": {
+    "scope": "Full configured Eastern Seaboard rectangle, initial 10 km cells; centers are not fine localization.",
+    "world_model": "Same catalog-record-per-target nominal world as the corrected simulator. No observer truth or measurement associations used in preparation.",
+    "raw_catalog_sha256": "2554a1f6e574b6b9ffdefe6bb7b96636d756c9cbd87018be8f7e078738227704",
+    "bearing_gate": "Hard +/-0.5 degrees, matching the corrected truncated Gaussian sensor; underlying sigma=1/6 degree.",
+    "projection_bounds": "Broad experimental scale 2.0 and azimuth 30-degree envelopes; conditional bounds, not a measured speed/accuracy guarantee.",
+    "refinement": "All surviving regions remain available; center scores never reject their entire cells.",
+    "identity_scope": "Each simulator catalog record produces its own physical target. Source physical-identity confidence is not a real-world certificate.",
+    "complete_real_world_charts_claimed": false
+  }
+}
