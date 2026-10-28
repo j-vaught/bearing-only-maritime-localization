@@ -33,10 +33,21 @@ CONTRACT = {
 }
 
 
+def check_resolution(initial_m: float, stopping_m: float, coarse_only: bool) -> None:
+    if stopping_m >= initial_m and not coarse_only:
+        raise ValueError(
+            "Equal initial and stopping sizes disable refinement. "
+            "Choose a smaller terminal_size_m or explicitly pass --coarse-only."
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--settings", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--cache-dir", type=Path, default=Path(".cache/resident-world"))
+    parser.add_argument("--coarse-only", action="store_true",
+                        help="Explicitly allow stopping at the initial cell size")
     parser.add_argument("--execute", action="store_true", help="Execute only after user approval")
     args = parser.parse_args()
     if not args.execute:
@@ -55,6 +66,7 @@ def main() -> None:
     from maritime.schemas.object_types import normalize_object_type
     from maritime.search.gpu.resident.engine import ResidentConfig, run_resident_search
     from maritime.search.gpu.resident.preparation import prepare_world
+    from maritime.search.gpu.resident.cache import load_or_prepare, preparation_identity
     from maritime.serialization import read_contract
 
     preparation_started = perf_counter()
@@ -70,6 +82,11 @@ def main() -> None:
     }:
         raise ValueError("Unexpected settings field; observer truth is not an accepted input.")
     config = ResidentConfig(**settings["search"])
+    check_resolution(config.initial_size_m, config.terminal_size_m, args.coarse_only)
+    print(json.dumps({"stage": "configured_resolution",
+                      "initial_cell_size_m": config.initial_size_m,
+                      "stopping_cell_size_m": config.terminal_size_m,
+                      "coarse_only": args.coarse_only}), flush=True)
     tolerance = settings["marker_tolerance_deg"]
     measurements = read_contract(Path(settings["measurements"]), MeasurementSetV2)
     if (
@@ -83,23 +100,28 @@ def main() -> None:
         for m in measurements.measurements
         if normalize_object_type(m.object_type) == "physical_aid"
     ]
-    catalog = read_contract(Path(settings["catalog"]), CatalogV2)
-    map_input = read_contract(Path(settings["map"]), MapV2)
-    vector_map = VectorMap.from_map_v2(map_input, target_crs="EPSG:32618")
-    preparation = dict(settings.get("preparation", {}))
-    if "chart_geometry_geojson" in preparation:
-        preparation["chart_geometry"] = shape(preparation.pop("chart_geometry_geojson"))
-    print(
-        json.dumps(
-            {
-                "stage": "spatial_index_preparation_cpu",
-                "markers": len(markers),
-                "catalog_records": len(catalog.records),
-            }
-        ),
-        flush=True,
+    preparation_options = dict(settings.get("preparation", {}))
+    print(json.dumps({"stage": "prepared_cache_lookup_cpu"}), flush=True)
+    cache_key = preparation_identity(
+        Path(settings["map"]), Path(settings["catalog"]), preparation_options,
     )
-    world = prepare_world(vector_map, catalog, **preparation)
+
+    def builder():
+        print(json.dumps({"stage": "cache_miss_map_loading_cpu"}), flush=True)
+        catalog = read_contract(Path(settings["catalog"]), CatalogV2)
+        map_input = read_contract(Path(settings["map"]), MapV2)
+        vector_map = VectorMap.from_map_v2(map_input, target_crs="EPSG:32618")
+        preparation = dict(preparation_options)
+        if "chart_geometry_geojson" in preparation:
+            preparation["chart_geometry"] = shape(preparation.pop("chart_geometry_geojson"))
+        print(json.dumps({"stage": "spatial_index_preparation_cpu",
+                          "markers": len(markers), "catalog_records": len(catalog.records)}),
+              flush=True)
+        return prepare_world(vector_map, catalog, **preparation)
+
+    world, cache_hit = load_or_prepare(args.cache_dir, cache_key, builder)
+    print(json.dumps({"stage": "prepared_world_ready", "cache_hit": cache_hit,
+                      "cache_key": cache_key}), flush=True)
     print(
         json.dumps(
             {
@@ -116,6 +138,10 @@ def main() -> None:
         np.asarray([m.bearing_deg for m in markers]),
         np.full(len(markers), tolerance, dtype=np.float64),
         args.output,
+    )
+    (args.output / "prepared-cache.json").write_text(
+        json.dumps({"key": cache_key, "hit": cache_hit, "directory": str(args.cache_dir)},
+                   indent=2) + "\n"
     )
     (args.output / "settings.json").write_text(json.dumps(settings, indent=2) + "\n")
     hashes = {
