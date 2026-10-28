@@ -66,6 +66,7 @@ def _sensor(**kwargs) -> SensorConfigurationV2:
         "visibility_radius_m": 10_000,
         "angular_resolution_deg": 0.1,
         "bearing_sigma_deg": 0.0,
+        "bearing_max_error_deg": None,
         "detection_probability": 1.0,
         "type_error_probability": 0.0,
         "expected_clutter_reports": 0.0,
@@ -264,3 +265,27 @@ def test_extra_reports_are_vessels_and_respect_disabled_labels():
     )
     assert len(unlabeled.measurements.measurements) == len(run.measurements.measurements)
     assert all(item.object_type is None for item in unlabeled.measurements.measurements)
+
+
+def test_bounded_bearing_noise_is_truncated_not_clipped():
+    from maritime.simulator.runner import _bearing_error
+
+    for index in range(1024):
+        angle = 359.99 if index % 2 else 0.01
+        result = _bearing_error(
+            angle,
+            seed=11,
+            key=str(index),
+            sigma_deg=1.0,
+            outlier_probability=0.0,
+            heading_bias_deg=0.0,
+            max_error_deg=0.5,
+        )
+        error = (result - angle + 180.0) % 360.0 - 180.0
+        assert abs(error) <= 0.5
+        assert abs(error) != 0.5
+
+
+def test_hard_bearing_bound_rejects_outliers():
+    with pytest.raises(ValueError, match="hard bearing bound"):
+        SensorConfigurationV2(outlier_probability=0.05)

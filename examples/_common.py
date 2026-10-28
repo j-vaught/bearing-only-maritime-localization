@@ -86,7 +86,7 @@ def simulate(
     observer_id: str = "B1",
     observer_table: str = "observer_locations.csv",
     range_m: float = 10_000.0,
-    sigma_deg: float = 0.5,
+    sigma_deg: float = 1.0 / 6.0,
     seed: int = 11,
 ) -> Frame:
     """Create one realization with range, land blocking, angular merging and noise."""

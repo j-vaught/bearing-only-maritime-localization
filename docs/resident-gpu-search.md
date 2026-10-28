@@ -35,7 +35,7 @@ Known map coverage and chart completeness remain independent. Unknown map areas 
 
 Boundary coincidences, too many ray crossings, excessive object counts, numerical failure and unknown geometry produce unresolved outcomes or explicit errors. The code never silently discards objects to fit a buffer. It currently supports EPSG:32618, at most 256 marker reports, a configurable nearby-object capacity and a configured workspace budget. Source map and catalog preparation includes CPU geometry and coordinate projection.
 
-The current Gaussian sensor noise has a 0.5 degree standard deviation, without a finite guaranteed maximum. Supplying a hard bearing tolerance is an explicit additional modeling assumption. The `numerical_validation_accepted` switch defaults to false and disables hard marker pruning and conclusive marker scores until numerical validation is accepted. It is an assertion, not an automatically verified certificate. Dataset coverage and identity uncertainty can still prevent conclusive pruning after the kernels are verified.
+The corrected default sensor uses Gaussian-shaped noise truncated at +/-0.5 degrees, with an underlying standard deviation of 1/6 degree. The hard 0.5-degree bound, rather than the standard deviation, supplies the marker tolerance. Older saved measurements used unbounded noise and must not be reused under this bound. The `numerical_validation_accepted` switch defaults to false and disables hard marker pruning and conclusive marker scores until numerical validation is accepted. It is an assertion, not an automatically verified certificate. Dataset coverage and identity uncertainty can still prevent conclusive pruning after the kernels are verified.
 
 ## Verification sequence requiring approval
 

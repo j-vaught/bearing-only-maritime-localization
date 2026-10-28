@@ -81,7 +81,8 @@ class SensorConfigurationV2:
 
     visibility_radius_m: float = 10_000.0
     angular_resolution_deg: float = 0.1
-    bearing_sigma_deg: float = 0.5
+    bearing_sigma_deg: float = 1.0 / 6.0
+    bearing_max_error_deg: float | None = 0.5
     detection_probability: float = 0.9
     type_error_probability: float = 0.0
     expected_clutter_reports: float = 1.0
@@ -93,6 +94,15 @@ class SensorConfigurationV2:
             value = getattr(self, name)
             if not isfinite(value) or value < 0.0:
                 raise ValueError(f"{name} must be finite and nonnegative.")
+        if self.bearing_max_error_deg is not None:
+            if (
+                isinstance(self.bearing_max_error_deg, bool)
+                or not isfinite(self.bearing_max_error_deg)
+                or self.bearing_max_error_deg < 0
+            ):
+                raise ValueError("bearing_max_error_deg must be finite and nonnegative or None.")
+            if self.outlier_probability != 0:
+                raise ValueError("A hard bearing bound requires outlier_probability=0.")
         if self.visibility_radius_m == 0.0:
             raise ValueError("visibility_radius_m must be positive.")
         if (

@@ -45,6 +45,8 @@ def main() -> None:
     if args.settings is None or args.output is None:
         parser.error("Execution requires --settings and a new --output directory.")
     # Input preparation and CUDA imports are below the explicit execution gate.
+    from time import perf_counter
+
     import numpy as np
     from shapely.geometry import shape
 
@@ -55,6 +57,8 @@ def main() -> None:
     from maritime.search.gpu.resident.preparation import prepare_world
     from maritime.serialization import read_contract
 
+    preparation_started = perf_counter()
+    print(json.dumps({"stage": "input_loading_cpu"}), flush=True)
     settings = json.loads(args.settings.read_text())
     if set(settings) - {
         "map",
@@ -85,7 +89,27 @@ def main() -> None:
     preparation = dict(settings.get("preparation", {}))
     if "chart_geometry_geojson" in preparation:
         preparation["chart_geometry"] = shape(preparation.pop("chart_geometry_geojson"))
+    print(
+        json.dumps(
+            {
+                "stage": "spatial_index_preparation_cpu",
+                "markers": len(markers),
+                "catalog_records": len(catalog.records),
+            }
+        ),
+        flush=True,
+    )
     world = prepare_world(vector_map, catalog, **preparation)
+    print(
+        json.dumps(
+            {
+                "stage": "gpu_search_starting",
+                "preparation_s": perf_counter() - preparation_started,
+                "objects": len(world.objects),
+            }
+        ),
+        flush=True,
+    )
     summary = run_resident_search(
         world,
         config,
