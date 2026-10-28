@@ -88,3 +88,7 @@ The authorized server job builds the full-coast index, saves it atomically, then
 The job process has its own session, closed client descriptors and file logging on the HDD, so disconnecting the client does not stop it. It records phase status, process IDs, cache verification, progress, periodic frontier snapshots, health and completion/error state. A disk-space guard checks the destination filesystem and terminates the search if free space falls below 20 GiB. Frontier snapshots remain diagnostic; automatic recovery from a failed GPU search is not implemented.
 
 The exact server storage paths and launch settings are recorded in docs/verification/charleston-detached-hdd-job.json. That record was captured while cache preparation was in progress and is not evidence that the cache build or search had already completed. Server-local links are not committed as portable repository content.
+
+## Opt-in pruning and parallelism revision
+
+The original search continues unchanged while the new device implementation is checked separately. [Independent chart proofs and true-bearing envelopes](resident-pruning-bounds.md) describes the replacement for the fixed 30-degree pruning allowance, parallel candidate/object prediction, cooperative assignment, remaining serial dependencies and short old/new evidence. The revision reuses the saved prepared-world cache. Its short comparison does not establish coast-wide localization accuracy or automatically change the active search.
