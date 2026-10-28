@@ -1,0 +1,23 @@
+{
+  "method": "instrumented CUDA dispatch plus CPU query guards; not a CUDA timeline",
+  "device": "NVIDIA RTX 6000 Ada Generation",
+  "kernel_dispatch_counts": {
+    "seed_cells": 1,
+    "prune_cells": 4,
+    "predict_groups": 2,
+    "batched_hungarian": 2,
+    "candidate_scope": 2
+  },
+  "cpu_query_fallback_calls": 0,
+  "cpu_coordination_and_io_present": true,
+  "completion": {
+    "evaluated": 21,
+    "pruned": 0,
+    "terminal": 16,
+    "completed_roots": 1,
+    "complete": true,
+    "elapsed_s": 0.010379740968346596,
+    "accuracy_evaluated": false,
+    "numerical_validation_accepted": true
+  }
+}

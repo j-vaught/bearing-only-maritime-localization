@@ -102,8 +102,14 @@ def pack_tree(items: np.ndarray, bounds: np.ndarray) -> PackedTree:
 
 def _edge_tree(geometry: Any) -> PackedTree:
     e = _edges(geometry)
-    b = np.column_stack((np.minimum(e[:, 0], e[:, 2]), np.minimum(e[:, 1], e[:, 3]),
-                         np.maximum(e[:, 0], e[:, 2]), np.maximum(e[:, 1], e[:, 3])))
+    b = np.column_stack(
+        (
+            np.minimum(e[:, 0], e[:, 2]),
+            np.minimum(e[:, 1], e[:, 3]),
+            np.maximum(e[:, 0], e[:, 2]),
+            np.maximum(e[:, 1], e[:, 3]),
+        )
+    )
     return pack_tree(e, b)
 
 
@@ -128,11 +134,22 @@ def prepare_world(
     caller inputs. No certificate is inferred from object count or shoreline.
     Unsupported offsets stay unbounded. Larger per-record bounds win.
     """
+    for name, value in (
+        ("catalog_complete", catalog_complete),
+        ("catalog_objects_cover_envelope", catalog_objects_cover_envelope),
+        ("identities_certified", identities_certified),
+        ("exact_positions_asserted", exact_positions_asserted),
+        ("nominal_offsets_asserted", nominal_offsets_asserted),
+    ):
+        if type(value) is not bool:
+            raise TypeError(f"{name} must be a bool, not a truthy setting.")
     if vector_map.crs != CRS.from_epsg(32618):
         raise ValueError("Resident kernels currently support EPSG:32618 only.")
-    for name, value in (("max_projection_scale", max_projection_scale),
-                        ("azimuth_error_deg", azimuth_error_deg),
-                        ("position_bound_m", position_bound_m)):
+    for name, value in (
+        ("max_projection_scale", max_projection_scale),
+        ("azimuth_error_deg", azimuth_error_deg),
+        ("position_bound_m", position_bound_m),
+    ):
         if value is not None and (not isfinite(value) or value < 0):
             raise ValueError(f"{name} must be a finite nonnegative bound.")
     if max_projection_scale is not None and max_projection_scale < 1:
@@ -141,9 +158,15 @@ def prepare_world(
         raise ValueError("Exact-position assertion conflicts with nonzero bound.")
     if chart_geometry is not None and (not chart_geometry.is_valid or chart_geometry.is_empty):
         raise ValueError("Chart coverage must be a nonempty valid polygonal geometry.")
-    layers = tuple(_edge_tree(g) for g in (
-        vector_map.land_geometry, vector_map._coverage, vector_map._unknown, chart_geometry,
-    ))
+    layers = tuple(
+        _edge_tree(g)
+        for g in (
+            vector_map.land_geometry,
+            vector_map._coverage,
+            vector_map._unknown,
+            chart_geometry,
+        )
+    )
     forward = Transformer.from_crs("EPSG:4326", vector_map.crs, always_xy=True)
     geod = Geod(ellps="WGS84")
     rows = []
@@ -158,14 +181,19 @@ def prepare_world(
         lon, lat = record.longitude_deg, record.latitude_deg
         if quality == "calibrated" and (east != 0 or north != 0):
             from math import atan2, degrees, hypot
+
             lon, lat, _ = geod.fwd(lon, lat, degrees(atan2(east, north)), hypot(east, north))
         bound = _effective_position_uncertainty(
-            record, bound_m=position_bound_m, exact_asserted=exact_positions_asserted,
+            record,
+            bound_m=position_bound_m,
+            exact_asserted=exact_positions_asserted,
         )
         if quality == "unsupported" or (quality != "calibrated" and not nominal_offsets_asserted):
             bound = None
         metadata = dict(record.metadata)
-        entity = metadata.get("physical_entity_id") or dict(record.provenance).get("physical_entity_id")
+        entity = metadata.get("physical_entity_id") or dict(record.provenance).get(
+            "physical_entity_id"
+        )
         # Global certificate must also certify that remaining distinct keys are
         # distinct physical objects; repeated explicit physical IDs stay ambiguous.
         token = str(entity) if entity else record.key
@@ -176,12 +204,25 @@ def prepare_world(
         extent = float(metadata.get("angular_half_width_deg", 0.0) or 0.0)
         if not isfinite(extent) or not 0 <= extent <= 180:
             raise ValueError("Invalid chart-object angular extent.")
-        rows.append((x, y, lon, lat, float("inf") if bound is None else bound,
-                     extent, kind, int(identities_certified)))
+        rows.append(
+            (
+                x,
+                y,
+                lon,
+                lat,
+                float("inf") if bound is None else bound,
+                extent,
+                kind,
+                int(identities_certified),
+            )
+        )
         keys.append(record.key)
     if len(set(keys)) != len(keys):
-        raise ValueError("Duplicate catalog keys require explicit reconciliation before preparation.")
+        raise ValueError(
+            "Duplicate catalog keys require explicit reconciliation before preparation."
+        )
     from collections import Counter
+
     counts = Counter(identity_tokens)
     for i, token in enumerate(identity_tokens):
         if counts[token] > 1:
@@ -201,10 +242,16 @@ def prepare_world(
             raise ValueError("Land barrier must be strictly inside known land.")
         barriers.append((x0, y0, x1, y1))
     return PreparedWorld(
-        layers, objects, tuple(keys), object_tree,
+        layers,
+        objects,
+        tuple(keys),
+        object_tree,
         np.asarray(barriers, dtype=np.float64).reshape((-1, 4)),
-        bool(np.isfinite(objects[:, 4]).all()), vector_map._coverage is not None,
+        bool(np.isfinite(objects[:, 4]).all()),
+        vector_map._coverage is not None,
         bool(chart_geometry is not None and catalog_complete and catalog_objects_cover_envelope),
-        catalog_complete, bool(identities_certified and all(counts[v] == 1 for v in identity_tokens)),
-        max_projection_scale, azimuth_error_deg,
+        catalog_complete,
+        bool(identities_certified and all(counts[v] == 1 for v in identity_tokens)),
+        max_projection_scale,
+        azimuth_error_deg,
     )

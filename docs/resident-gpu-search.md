@@ -1,6 +1,6 @@
-# Resident GPU search implementation awaiting execution approval
+# Resident GPU search with limited synthetic verification
 
-The resident path is separate from the earlier CPU-limited coastwise search. Its source has been written, but it has not been compiled, tested, profiled or used for a localization result. No speed or accuracy result is claimed.
+The resident path is separate from the earlier CPU-limited coastwise search. The kernels have compiled and the approved small synthetic suite passed 28 checks on an NVIDIA RTX 6000 Ada. This path has not been profiled with a CUDA activity timeline or used for a coast-wide localization result. No coast-wide speed or accuracy result is claimed.
 
 The CPU prepares the immutable map and catalog once. Preparation clips the source map through the existing map adapter, projects catalog coordinates, preserves uncertainty and identity metadata, and constructs balanced spatial trees. Each selected device receives its own arrays. This preprocessing is outside the iterative search and must be timed separately.
 
@@ -47,10 +47,20 @@ Next, approve a small profiled synthetic search. Capture a CUDA timeline and GPU
 
 Finally, obtain approval for the full Eastern Seaboard Charleston run using the corrected measurement frame. Truth remains separate and is used only for evaluation after the search produces its outputs.
 
-The CLI `tools/run_resident_marker_search.py` requires an explicit `--execute` flag to initialize inputs and run. Without it, the CLI only prints its static execution contract. That command has not been invoked during implementation either. Future tests, profiling and searches require user approval before execution.
+The CLI `tools/run_resident_marker_search.py` requires an explicit `--execute` flag to initialize inputs and run. Without it, the CLI only prints its static execution contract. The CLI has not been used to start a coast-wide search. Further profiling and search runs require user approval before execution.
 
 ## Output and recovery limits
 
 Each root task writes all terminal center records and periodic device-frontier snapshots. The manifest identifies every catalog row and all search assumptions. A summary reports completed roots, total evaluated regions and elapsed time. It does not manufacture a location fix or an accuracy result.
 
-Automatic resume is not implemented. A crash may leave an earlier frontier snapshot; the snapshots are diagnostic artifacts and are not a guaranteed transactionally resumable checkpoint. Failed runs must not be described as complete. The implementation is staged for verification and still requires the tests and profiling above.
+Automatic resume is not implemented. A crash may leave an earlier frontier snapshot; the snapshots are diagnostic artifacts and are not a guaranteed transactionally resumable checkpoint. Failed runs must not be described as complete. The implementation still requires broader geometric and numerical checks and representative profiling before a full search.
+
+## Approved synthetic evidence on October 28, 2026
+
+The final focused command was uv run pytest -q tests/test_resident_gpu_search.py --basetemp /tmp/resident-gpu-small-proof --tb=short. It passed 28 checks after correcting a runtime-header compilation issue, rejecting nonboolean certificate flags, and adding explicit numerical margins at range and bearing cutoffs. Near-tied representative ranges and near-zero distances remain unresolved. The final bearing gate combines primitive error bounds using a factor of three because it includes both a representative bearing and a two-bearing group extent. These tests do not certify universal numerical bounds.
+
+The instrumented tiny traversal evaluated 21 regions, retained and scored all 16 terminal cells, and recorded CUDA launches for seeding, pruning, prediction, coverage and Hungarian assignment. Its CPU query guards recorded zero calls. The observed record is stored in docs/verification/resident-gpu-small-test.json. The test deliberately uses CPU reference calculations outside the search to check device outputs.
+
+Two independent source reviews found no CPU geometry, bearing, grouping or assignment fallback in the resident traversal. Both confirmed CPU activity for input preparation, scheduling, synchronization, aggregate counters and result output. Full terminal arrays and periodic frontiers are synchronously copied to the host for writing; boolean compaction can also synchronize. Prediction and matching include serial work within each candidate GPU thread, so residence on a GPU does not establish efficient use of the device.
+
+Nsight Systems and Nsight Compute were not found on the server. The saved evidence is instrumented dispatch plus CPU query guards, not a CUDA activity timeline, CPU utilization measurement or coast-wide performance benchmark. No Charleston or full Eastern Seaboard search was launched in this verification.

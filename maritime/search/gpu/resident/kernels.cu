@@ -1,6 +1,5 @@
-// Experimental resident search kernels. Not execution-verified.
+// Experimental resident search kernels. Synthetic checks passed; coast validation pending.
 // All query coordinates use EPSG:32618. Every bounded workspace fails closed.
-#include <math.h>
 #define PI 3.1415926535897932384626433832795
 #define DEG (180.0/PI)
 #define EPS 1e-6
@@ -153,7 +152,7 @@ extern "C" __global__ void prune_cells(const double* cells,int count,
     const double* mb,const int* mc,const double* me,const int* mo,
     const double* ob,const int* oc,const double* objects,int on,
     const double* bearings,const double* tolerances,int nd,
-    const double* rects,int nr,double radius,double scale,double azimuth,
+    const double* rects,int nr,double radius,double range_error,double bearing_error,double scale,double azimuth,
     double max_uncertainty,int marker_proofs,int distinct_proofs,int* state){
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
     const double* c=cells+4*i;Map m={mb,mc,me,mo};state[i]=0;
@@ -162,7 +161,7 @@ extern "C" __global__ void prune_cells(const double* cells,int count,
         !boundary_box(m,2,c[0],c[1],c[2],c[3]);
     if(known&&covers_box(m,0,c[0],c[1],c[2],c[3])){state[i]=1;return;}
     if(!known||!marker_proofs||nd==0||nd>256)return;
-    double margin=radius*scale+EPS;
+    double margin=(radius+range_error)*scale+EPS;
     if(!covers_box(m,3,c[0]-margin,c[1]-margin,c[2]+margin,c[3]+margin))return;
     if(!covers_box(m,1,c[0]-margin,c[1]-margin,c[2]+margin,c[3]+margin)||
        boundary_box(m,2,c[0]-margin,c[1]-margin,c[2]+margin,c[3]+margin)||
@@ -180,7 +179,7 @@ extern "C" __global__ void prune_cells(const double* cells,int count,
         ++candidates;double dist=hypot(o[0]-cx,o[1]-cy),rad=cr+unc;
         double angle=fmod(atan2(o[0]-cx,o[1]-cy)*DEG+360.,360.);
         double expand=dist<=rad?180.:asin(fmin(1.,rad/dist))*DEG;
-        for(int d=0;d<nd;++d)if(angular(angle,bearings[d])<=tolerances[d]+expand+azimuth+o[5]+1e-8)possible[d]=true;
+        for(int d=0;d<nd;++d)if(angular(angle,bearings[d])<=tolerances[d]+expand+azimuth+o[5]+bearing_error)possible[d]=true;
     }
     for(int d=0;d<nd;++d)if(!possible[d]){state[i]=2;return;}
     if(distinct_proofs&&candidates<nd)state[i]=3;
@@ -198,7 +197,7 @@ extern "C" __global__ void query_rays(const double* rays,int n,const double* mb,
 extern "C" __global__ void predict_groups(const double* cells,int count,
     const double* mb,const int* mc,const double* me,const int* mo,
     const double* ob,const int* oc,const double* objects,int on,
-    double radius,double scale,double resolution,int capacity,
+    double radius,double range_error,double bearing_error,double scale,double resolution,int capacity,
     double* angles,double* ranges,int* ids,int* exact,
     double* group_angles,double* group_extents,int* group_ids,int* group_exact,
     int* group_counts,int* flags,int* point_states){
@@ -208,13 +207,15 @@ extern "C" __global__ void predict_groups(const double* cells,int count,
     if(point_states[i]==1)return;
     if(point_states[i]==2)flags[i]|=1;
     double lon,lat;if(!inverse_utm(x,y,&lon,&lat)){flags[i]|=4;return;}
-    int stack[64],sp=0,n=0;if(on)stack[sp++]=0;double r=radius*scale+EPS;
+    int stack[64],sp=0,n=0;if(on)stack[sp++]=0;double r=(radius+range_error)*scale+EPS;
     int base=i*capacity;
     while(sp){int node=stack[--sp];if(!overlap(ob+4*node,x-r,y-r,x+r,y+r))continue;
         int l=oc[2*node],rr=oc[2*node+1];if(l>=0){if(sp>61){flags[i]|=4;return;}stack[sp++]=l;stack[sp++]=rr;continue;}
         int id=-l-1;const double* o=objects+8*id;double a,d;
         if(!geodesic(lon,lat,o[2]/DEG,o[3]/DEG,&a,&d)){flags[i]|=4;continue;}
-        if(d>radius)continue;
+        if(d<=2*range_error)flags[i]|=8;
+        if(d>radius+range_error)continue;
+        if(fabs(d-radius)<=range_error)flags[i]|=8;
         int vis=ray(m,x,y,o[0],o[1]);if(vis==1)continue;
         if(vis==2)flags[i]|=1;
         if(n==capacity){flags[i]|=2;return;}
@@ -228,13 +229,17 @@ extern "C" __global__ void predict_groups(const double* cells,int count,
     if(n==0)return;
     int start=0;bool gap=false;
     for(int j=0;j<n;++j){double a=angles[base+(j+1)%n]-angles[base+j];if(a<0)a+=360.;
+        if(fabs(a-resolution)<=2*bearing_error)flags[i]|=8;
         if(a>resolution){start=(j+1)%n;gap=true;break;}}
     int rep=-1,g=0,gstart=0;bool certain=true;
     for(int j=0;j<n;++j){int k=(start+j)%n,id=ids[base+k];
         if(rep<0||ranges[base+k]<ranges[base+rep]||(ranges[base+k]==ranges[base+rep]&&id<ids[base+rep]))rep=k;
         certain=certain&&(exact[base+k]!=0);
         double delta=angles[base+(k+1)%n]-angles[base+k];if(delta<0)delta+=360.;
+        if(fabs(delta-resolution)<=2*bearing_error)flags[i]|=8;
         if((gap&&delta>resolution)||j==n-1){
+            for(int z=gstart;z<=j;++z){int k2=(start+z)%n;
+                if(k2!=rep&&fabs(ranges[base+k2]-ranges[base+rep])<=2*range_error)flags[i]|=8;}
             int rid=ids[base+rep];const double* o=objects+8*rid;
             double extent=0.;for(int z=gstart;z<=j;++z){int k2=(start+z)%n;extent=fmax(extent,angular(angles[base+k2],angles[base+rep])+objects[8*ids[base+k2]+5]);}
             if(o[6]!=2){group_angles[base+g]=angles[base+rep];group_extents[base+g]=fmin(180.,extent);
