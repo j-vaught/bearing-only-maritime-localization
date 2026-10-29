@@ -1,0 +1,389 @@
+{
+  "schema": "CharlestonDistinctMarkerCheckV1",
+  "created_utc": "2026-10-29T15:02:54.898000+00:00",
+  "scope": "One approved Charleston regional GPU0 search; not an Eastern Seaboard rerun",
+  "source_commit": "691b8cba2e9c50b61ddd39847abb750d809902a4",
+  "job": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/charleston-distinct-marker-check-20261029T145905Z",
+  "settings": {
+    "map": "runs/charleston-search/20261026T222955253680Z/projected-valid-map.json",
+    "catalog": "runs/resident-charleston-coastwide-10km-20261028-inputs/nominal-simulation-catalog.json",
+    "measurements": "/home/jvaught2/projects/bearing-only-maritime-localization/docs/verification/charleston-blind-measurements.json",
+    "marker_tolerance_deg": 0.5,
+    "search": {
+      "bounds_en_m": [
+        26138.220256118686,
+        50882.070714222034,
+        3622679.57948653,
+        3651530.135405235
+      ],
+      "devices": [
+        0
+      ],
+      "radius_m": 10000.0,
+      "initial_size_m": 1000.0,
+      "terminal_size_m": 1.0,
+      "batch_cells": 128,
+      "roots_per_task": 8,
+      "object_capacity": 2048,
+      "device_workspace_budget_bytes": 2000000000,
+      "checkpoint_every_batches": 10,
+      "trusted_marker_labels": true,
+      "hard_bearing_bounds_asserted": true,
+      "numerical_validation_accepted": true
+    },
+    "preparation": {
+      "chart_geometry_geojson": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1524309.6784374337,
+              2599585.3102704627
+            ],
+            [
+              1524309.6784374337,
+              5188044.413143414
+            ],
+            [
+              -320366.49772326474,
+              5188044.413143414
+            ],
+            [
+              -320366.49772326474,
+              2599585.3102704627
+            ],
+            [
+              1524309.6784374337,
+              2599585.3102704627
+            ]
+          ]
+        ]
+      },
+      "catalog_complete": true,
+      "catalog_objects_cover_envelope": true,
+      "identities_certified": true,
+      "exact_positions_asserted": true,
+      "nominal_offsets_asserted": false,
+      "max_projection_scale": 2.0,
+      "azimuth_error_deg": 30.0
+    }
+  },
+  "launch": {
+    "supervisor_pid": 926764,
+    "devices": [
+      0
+    ],
+    "source_commit": "691b8cba2e9c50b61ddd39847abb750d809902a4",
+    "approved_scope": "one small Charleston search with saved regional bounds; no coast-wide run",
+    "cache_rebuild_forbidden": true,
+    "truth_not_search_input": true
+  },
+  "search_summary": {
+    "evaluated": 1341,
+    "pruned": 1016,
+    "terminal": 171,
+    "completed_roots": 725,
+    "complete": true,
+    "elapsed_s": 1.8187368758954108,
+    "accuracy_evaluated": false,
+    "numerical_validation_accepted": true
+  },
+  "pipeline_status": {
+    "stage": "complete",
+    "updated_utc": "2026-10-29T14:59:19.007072+00:00",
+    "total_pipeline_s": 13.712908457033336,
+    "estimate_available": true,
+    "cache_unchanged": true
+  },
+  "estimate": {
+    "schema": "ResidentBlindEstimateV1",
+    "created_utc": "2026-10-29T14:59:17.474056+00:00",
+    "selection_rule": "Minimum sum absolute residual; ties east then north",
+    "full_region_search_complete": true,
+    "search_summary": {
+      "evaluated": 1341,
+      "pruned": 1016,
+      "terminal": 171,
+      "completed_roots": 725,
+      "complete": true,
+      "elapsed_s": 1.8187368758954108,
+      "accuracy_evaluated": false,
+      "numerical_validation_accepted": true
+    },
+    "positive_marker_reports": 64,
+    "terminal_centers": 171,
+    "consistent_centers": 59,
+    "fully_matched_centers_including_unresolved": 59,
+    "status_counts": {
+      "0": 59,
+      "1": 40,
+      "2": 72,
+      "3": 0
+    },
+    "estimate": {
+      "east_m": 40376.013224868686,
+      "north_m": 3636456.43495528,
+      "longitude_deg": -79.90500298513778,
+      "latitude_deg": 32.77001922252112,
+      "sum_absolute_bearing_residual_deg": 6.275072101460495,
+      "status": 0,
+      "flags": 0,
+      "matched_positive_markers": 64,
+      "matched_object_keys": [
+        "chart-coordinate:0x1.0637e076cdbc8p+5:-0x1.3f9c2eefd793cp+6",
+        "chart-coordinate:0x1.063bc1fd65f20p+5:-0x1.3f9afeedb1490p+6",
+        "chart-coordinate:0x1.064fb0c7b3888p+5:-0x1.3f8bf10b70768p+6",
+        "chart-coordinate:0x1.064756ae627e8p+5:-0x1.3f8551b4fe7a0p+6",
+        "chart-coordinate:0x1.0645be7876338p+5:-0x1.3f83b9a7561acp+6",
+        "chart-coordinate:0x1.0631645bca2b0p+5:-0x1.3f947fd5a3354p+6",
+        "chart-coordinate:0x1.0635ca94e4280p+5:-0x1.3f8ac5d561c6cp+6",
+        "enc-physical:e340cf2239676f6e3d81",
+        "chart-coordinate:0x1.062f261b1cbc0p+5:-0x1.3f8c86f6ffa64p+6",
+        "chart-coordinate:0x1.0633570fb14e0p+5:-0x1.3f7d73860999cp+6",
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDE.000:source_object_id=93438",
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDE.000:source_object_id=93440",
+        "chart-coordinate:0x1.062d77094bd90p+5:-0x1.3f864adff822cp+6",
+        "chart-coordinate:0x1.062bbf360b550p+5:-0x1.3f8e1c6c47510p+6",
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDD.000:source_object_id=93428",
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDD.000:source_object_id=93432",
+        "chart-coordinate:0x1.062a8c65d4700p+5:-0x1.3f7d6296ce0d4p+6",
+        "chart-coordinate:0x1.062abdbbb7d18p+5:-0x1.3f7c07d333184p+6",
+        "chart-coordinate:0x1.06256f4d95b50p+5:-0x1.3f7b474107314p+6",
+        "chart-coordinate:0x1.062472b37bc30p+5:-0x1.3f75dff8f97b8p+6",
+        "chart-coordinate:0x1.060f00d43b560p+5:-0x1.3f6f8df7a4e7cp+6",
+        "enc-physical:27b456c5926c7abe634c",
+        "chart-coordinate:0x1.060e96ded4368p+5:-0x1.3f788aac96cc4p+6",
+        "chart-coordinate:0x1.061d7ab4d2048p+5:-0x1.3f8f2f703013cp+6",
+        "chart-coordinate:0x1.05fe4cd749278p+5:-0x1.3f6b5f30113fcp+6",
+        "chart-coordinate:0x1.06139d4372458p+5:-0x1.3f8764ea65640p+6",
+        "chart-coordinate:0x1.05ec8e4e0bfc8p+5:-0x1.3f60e49037f10p+6",
+        "chart-coordinate:0x1.05dbc225a9dd8p+5:-0x1.3f4f611d51498p+6",
+        "chart-coordinate:0x1.05f0f22b2b270p+5:-0x1.3f681d557b5c8p+6",
+        "chart-coordinate:0x1.05d6bc0427ad0p+5:-0x1.3f510993fd788p+6",
+        "chart-coordinate:0x1.060a4e0f578c0p+5:-0x1.3f826cb45e410p+6",
+        "chart-coordinate:0x1.06027a12eb950p+5:-0x1.3f7bba3443d48p+6",
+        "chart-coordinate:0x1.05e7bccfff870p+5:-0x1.3f631eb9ff6acp+6",
+        "chart-coordinate:0x1.0606f10591398p+5:-0x1.3f8124c9e3e44p+6",
+        "enc-physical:577592243ec2bf80477d",
+        "chart-coordinate:0x1.0608ba336d150p+5:-0x1.3f8b8ebd9d850p+6",
+        "chart-coordinate:0x1.0607693045420p+5:-0x1.3f982e73b0d1cp+6",
+        "chart-coordinate:0x1.061e98dcdb380p+5:-0x1.3f9f048d2d7a8p+6",
+        "chart-coordinate:0x1.0608ee50ab130p+5:-0x1.3faa9eee6d308p+6",
+        "chart-coordinate:0x1.060ad60f6bae0p+5:-0x1.3faa9f3ef5084p+6",
+        "chart-coordinate:0x1.061139939f848p+5:-0x1.3fa9933424cacp+6",
+        "chart-coordinate:0x1.06154e3872378p+5:-0x1.3fac1574dc4b0p+6",
+        "chart-coordinate:0x1.0625697bc49c8p+5:-0x1.3fb5ef7dd1bd0p+6",
+        "chart-coordinate:0x1.0624c3dc63430p+5:-0x1.3fbe1a38906a4p+6",
+        "chart-coordinate:0x1.0628acd4dfc10p+5:-0x1.3fb1029ae4f34p+6",
+        "chart-coordinate:0x1.06438a7107aa0p+5:-0x1.3fa8ef92ca728p+6",
+        "chart-coordinate:0x1.065cf602503c8p+5:-0x1.3fb25deb6da1cp+6",
+        "chart-coordinate:0x1.0659cbb8d0968p+5:-0x1.3facea4a8c154p+6",
+        "chart-coordinate:0x1.064e06606c518p+5:-0x1.3fa91204e5420p+6",
+        "chart-coordinate:0x1.06647120d48c0p+5:-0x1.3fabb956ce430p+6",
+        "chart-coordinate:0x1.0674523f67f50p+5:-0x1.3fae1d282ef34p+6",
+        "chart-coordinate:0x1.065f0d33c5298p+5:-0x1.3fa9b42e7055cp+6",
+        "chart-coordinate:0x1.064b25db5bdc0p+5:-0x1.3fa501556a95cp+6",
+        "chart-coordinate:0x1.0647cac230918p+5:-0x1.3fa43d3290760p+6",
+        "chart-coordinate:0x1.064d07273bae0p+5:-0x1.3fa5019886744p+6",
+        "enc-component:harbour:Harbor.Radar_Transponder_Beacon_point:US5CHSED.000:source_object_id=59373",
+        "chart-coordinate:0x1.0675a3fe776a0p+5:-0x1.3faa4250dd684p+6",
+        "chart-coordinate:0x1.064f049a99740p+5:-0x1.3fa44be75f1f4p+6",
+        "chart-coordinate:0x1.067db687102a0p+5:-0x1.3faae95aa20d0p+6",
+        "chart-coordinate:0x1.0686fa5aa4918p+5:-0x1.3fabdaaf0d9f4p+6",
+        "chart-coordinate:0x1.066f5a1d82c80p+5:-0x1.3fa7e35fb6490p+6",
+        "chart-coordinate:0x1.062f7b75c2240p+5:-0x1.3f9f2fce23e50p+6",
+        "chart-coordinate:0x1.0645667eba1a8p+5:-0x1.3fa0cbd1244a8p+6",
+        "chart-coordinate:0x1.06409ee964b30p+5:-0x1.3f9cf538fca0cp+6"
+      ]
+    },
+    "diagnostic_best_complete_assignment": {
+      "east_m": 40376.013224868686,
+      "north_m": 3636456.43495528,
+      "longitude_deg": -79.90500298513778,
+      "latitude_deg": 32.77001922252112,
+      "sum_absolute_bearing_residual_deg": 6.275072101460495,
+      "status": 0,
+      "flags": 0,
+      "matched_positive_markers": 64,
+      "matched_object_keys": [
+        "chart-coordinate:0x1.0637e076cdbc8p+5:-0x1.3f9c2eefd793cp+6",
+        "chart-coordinate:0x1.063bc1fd65f20p+5:-0x1.3f9afeedb1490p+6",
+        "chart-coordinate:0x1.064fb0c7b3888p+5:-0x1.3f8bf10b70768p+6",
+        "chart-coordinate:0x1.064756ae627e8p+5:-0x1.3f8551b4fe7a0p+6",
+        "chart-coordinate:0x1.0645be7876338p+5:-0x1.3f83b9a7561acp+6",
+        "chart-coordinate:0x1.0631645bca2b0p+5:-0x1.3f947fd5a3354p+6",
+        "chart-coordinate:0x1.0635ca94e4280p+5:-0x1.3f8ac5d561c6cp+6",
+        "enc-physical:e340cf2239676f6e3d81",
+        "chart-coordinate:0x1.062f261b1cbc0p+5:-0x1.3f8c86f6ffa64p+6",
+        "chart-coordinate:0x1.0633570fb14e0p+5:-0x1.3f7d73860999cp+6",
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDE.000:source_object_id=93438",
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDE.000:source_object_id=93440",
+        "chart-coordinate:0x1.062d77094bd90p+5:-0x1.3f864adff822cp+6",
+        "chart-coordinate:0x1.062bbf360b550p+5:-0x1.3f8e1c6c47510p+6",
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDD.000:source_object_id=93428",
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDD.000:source_object_id=93432",
+        "chart-coordinate:0x1.062a8c65d4700p+5:-0x1.3f7d6296ce0d4p+6",
+        "chart-coordinate:0x1.062abdbbb7d18p+5:-0x1.3f7c07d333184p+6",
+        "chart-coordinate:0x1.06256f4d95b50p+5:-0x1.3f7b474107314p+6",
+        "chart-coordinate:0x1.062472b37bc30p+5:-0x1.3f75dff8f97b8p+6",
+        "chart-coordinate:0x1.060f00d43b560p+5:-0x1.3f6f8df7a4e7cp+6",
+        "enc-physical:27b456c5926c7abe634c",
+        "chart-coordinate:0x1.060e96ded4368p+5:-0x1.3f788aac96cc4p+6",
+        "chart-coordinate:0x1.061d7ab4d2048p+5:-0x1.3f8f2f703013cp+6",
+        "chart-coordinate:0x1.05fe4cd749278p+5:-0x1.3f6b5f30113fcp+6",
+        "chart-coordinate:0x1.06139d4372458p+5:-0x1.3f8764ea65640p+6",
+        "chart-coordinate:0x1.05ec8e4e0bfc8p+5:-0x1.3f60e49037f10p+6",
+        "chart-coordinate:0x1.05dbc225a9dd8p+5:-0x1.3f4f611d51498p+6",
+        "chart-coordinate:0x1.05f0f22b2b270p+5:-0x1.3f681d557b5c8p+6",
+        "chart-coordinate:0x1.05d6bc0427ad0p+5:-0x1.3f510993fd788p+6",
+        "chart-coordinate:0x1.060a4e0f578c0p+5:-0x1.3f826cb45e410p+6",
+        "chart-coordinate:0x1.06027a12eb950p+5:-0x1.3f7bba3443d48p+6",
+        "chart-coordinate:0x1.05e7bccfff870p+5:-0x1.3f631eb9ff6acp+6",
+        "chart-coordinate:0x1.0606f10591398p+5:-0x1.3f8124c9e3e44p+6",
+        "enc-physical:577592243ec2bf80477d",
+        "chart-coordinate:0x1.0608ba336d150p+5:-0x1.3f8b8ebd9d850p+6",
+        "chart-coordinate:0x1.0607693045420p+5:-0x1.3f982e73b0d1cp+6",
+        "chart-coordinate:0x1.061e98dcdb380p+5:-0x1.3f9f048d2d7a8p+6",
+        "chart-coordinate:0x1.0608ee50ab130p+5:-0x1.3faa9eee6d308p+6",
+        "chart-coordinate:0x1.060ad60f6bae0p+5:-0x1.3faa9f3ef5084p+6",
+        "chart-coordinate:0x1.061139939f848p+5:-0x1.3fa9933424cacp+6",
+        "chart-coordinate:0x1.06154e3872378p+5:-0x1.3fac1574dc4b0p+6",
+        "chart-coordinate:0x1.0625697bc49c8p+5:-0x1.3fb5ef7dd1bd0p+6",
+        "chart-coordinate:0x1.0624c3dc63430p+5:-0x1.3fbe1a38906a4p+6",
+        "chart-coordinate:0x1.0628acd4dfc10p+5:-0x1.3fb1029ae4f34p+6",
+        "chart-coordinate:0x1.06438a7107aa0p+5:-0x1.3fa8ef92ca728p+6",
+        "chart-coordinate:0x1.065cf602503c8p+5:-0x1.3fb25deb6da1cp+6",
+        "chart-coordinate:0x1.0659cbb8d0968p+5:-0x1.3facea4a8c154p+6",
+        "chart-coordinate:0x1.064e06606c518p+5:-0x1.3fa91204e5420p+6",
+        "chart-coordinate:0x1.06647120d48c0p+5:-0x1.3fabb956ce430p+6",
+        "chart-coordinate:0x1.0674523f67f50p+5:-0x1.3fae1d282ef34p+6",
+        "chart-coordinate:0x1.065f0d33c5298p+5:-0x1.3fa9b42e7055cp+6",
+        "chart-coordinate:0x1.064b25db5bdc0p+5:-0x1.3fa501556a95cp+6",
+        "chart-coordinate:0x1.0647cac230918p+5:-0x1.3fa43d3290760p+6",
+        "chart-coordinate:0x1.064d07273bae0p+5:-0x1.3fa5019886744p+6",
+        "enc-component:harbour:Harbor.Radar_Transponder_Beacon_point:US5CHSED.000:source_object_id=59373",
+        "chart-coordinate:0x1.0675a3fe776a0p+5:-0x1.3faa4250dd684p+6",
+        "chart-coordinate:0x1.064f049a99740p+5:-0x1.3fa44be75f1f4p+6",
+        "chart-coordinate:0x1.067db687102a0p+5:-0x1.3faae95aa20d0p+6",
+        "chart-coordinate:0x1.0686fa5aa4918p+5:-0x1.3fabdaaf0d9f4p+6",
+        "chart-coordinate:0x1.066f5a1d82c80p+5:-0x1.3fa7e35fb6490p+6",
+        "chart-coordinate:0x1.062f7b75c2240p+5:-0x1.3f9f2fce23e50p+6",
+        "chart-coordinate:0x1.0645667eba1a8p+5:-0x1.3fa0cbd1244a8p+6",
+        "chart-coordinate:0x1.06409ee964b30p+5:-0x1.3f9cf538fca0cp+6"
+      ]
+    },
+    "manifest_sha256": "7a2b233cd7eae5f774ceda1dd9edb6471a2c5d3fa6e6cb6772ee60ce0d4dcb0c",
+    "summary_sha256": "3d216f653a5b7144bfc7b2ff8e822cab8f2753361cd60ba124f95d597168f340",
+    "all_leaf_outputs_sha256": "c938b48858ebbf1d0933ee8c272bebfdba6153383759e7ba6e68bd3aa649e266",
+    "selector_source_sha256": "cdef7aaac2ee7ce80c11f6083f88fa5ed506549779d42e92594becee86fb04d3",
+    "truth_used_for_selection": false,
+    "selection_device": 0,
+    "cpu_roles": [
+      "read_saved_outputs",
+      "format_selected_coordinates",
+      "write_estimate"
+    ]
+  },
+  "estimate_freeze": {
+    "frozen_utc": "2026-10-29T14:59:17.706148+00:00",
+    "estimate_sha256": "b42d1401dda0f3980363166bfafba5070f2f2892a825164e147133b825e42db0"
+  },
+  "accuracy": {
+    "evaluated_utc": "2026-10-29T14:59:18.111176+00:00",
+    "estimate_frozen_utc": "2026-10-29T14:59:17.706148+00:00",
+    "estimate_sha256": "b42d1401dda0f3980363166bfafba5070f2f2892a825164e147133b825e42db0",
+    "truth_sha256": "63190f7b53df3574e238a6416bf32591e9b9e5bb1f04da668d7f11fd5fd81fbf",
+    "method": "WGS84 ellipsoidal geodesic distance; no fitted alignment",
+    "position_error_m": 2.1500544178536396,
+    "bearing_truth_to_estimate_deg": -7.474568552530725,
+    "estimated_latitude_deg": 32.77001922252112,
+    "estimated_longitude_deg": -79.90500298513778,
+    "true_latitude_deg": 32.77,
+    "true_longitude_deg": -79.905,
+    "matched_positive_markers": 64,
+    "status": 0,
+    "flags": 0,
+    "scope": "Single corrected simulated frame, completed declared search domain",
+    "truth_used_to_select_or_refine": false
+  },
+  "candidate_spread": {
+    "unresolved_max_distance_from_selected_estimate_m": 12.325458739673264,
+    "consistent_max_distance_from_selected_estimate_m": 7.8559691116761226,
+    "method": "WGS84 geodesic distances from saved candidate centers to frozen selected estimate"
+  },
+  "caches": {
+    "before": {
+      "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/prepared-cache/b6bcc2d3e0c0d960a2ba00e496d59ea37846dc3bb08f00ec773752d894caad90.npz": {
+        "size": 1306233869,
+        "mtime_ns": 1793216304631740569,
+        "sha256": "8f7c4335b9881787c64d3d89c093f4de460eee5bff1ab6e17313e4bc059a987d"
+      },
+      "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/resident-aid-objects/aid-view-86f52519f4021d096e92b668a31005530ebd9073f2c2055f3f75f964653940c6.npz": {
+        "size": 7073914,
+        "mtime_ns": 1793234826838026437,
+        "sha256": "92d10eea168ac13158c4863514c8c8b9d6d34e9a74acc28b094b9ce6c2d0176e"
+      }
+    },
+    "after": {
+      "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/prepared-cache/b6bcc2d3e0c0d960a2ba00e496d59ea37846dc3bb08f00ec773752d894caad90.npz": {
+        "size": 1306233869,
+        "mtime_ns": 1793216304631740569,
+        "sha256": "8f7c4335b9881787c64d3d89c093f4de460eee5bff1ab6e17313e4bc059a987d"
+      },
+      "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/resident-aid-objects/aid-view-86f52519f4021d096e92b668a31005530ebd9073f2c2055f3f75f964653940c6.npz": {
+        "size": 7073914,
+        "mtime_ns": 1793234826838026437,
+        "sha256": "92d10eea168ac13158c4863514c8c8b9d6d34e9a74acc28b094b9ce6c2d0176e"
+      }
+    },
+    "unchanged": true
+  },
+  "comparison": {
+    "previous_region_search": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/charleston-coast-corrected-profiled-20261029T013040Z/regional-profile-search",
+    "previous_summary": {
+      "evaluated": 16465,
+      "pruned": 11927,
+      "terminal": 603,
+      "completed_roots": 725,
+      "complete": true,
+      "elapsed_s": 21.012934745755047,
+      "accuracy_evaluated": false,
+      "numerical_validation_accepted": true
+    },
+    "previous_status_counts": {
+      "0": 59,
+      "1": 538,
+      "2": 1,
+      "3": 5
+    },
+    "new_status_counts": {
+      "0": 59,
+      "1": 40,
+      "2": 72,
+      "3": 0
+    },
+    "consistent_centers_identical": true,
+    "selected_center_identical": true,
+    "selected_residual_identical": true,
+    "evaluated_region_reduction_percent": 91.85545095657454,
+    "previous_timing_was_profiled": true,
+    "timing_comparison_is_not_instrumentation_matched": true,
+    "newly_unresolved_previously_inconsistent": 71,
+    "newly_unresolved_flags_zero": 71,
+    "newly_unresolved_nominal_matches": {
+      "60": 4,
+      "61": 14,
+      "62": 15,
+      "63": 38
+    },
+    "unchanged_boundary_unresolved": 1,
+    "terminal_negative_reasons": {
+      "2": 27,
+      "4": 13
+    }
+  },
+  "independent_saved_output_review": "All171 terminal cells occur in prior603 grid; consistent set and chosen center/residual are identical. Extra71 unresolved cells are the removal of nominal-group-failure-only rejection, not new numerical errors. No extra inference or search used. The cached barrier array has shape(0,4); no full raw-edge LOS query was executed by the feasibility graph.",
+  "remaining_limitation": "The saved cache contains zero universal land-barrier rectangles. The raw feasibility graph therefore removes no edges using land blockage and does not call full polygon LOS. Final nominal prediction still uses full shoreline LOS. Known-occluded raw aids can keep the raw graph feasible; grouping may also contribute. Saved outputs do not attribute each remaining center to one cause.",
+  "terminal_archive_sha256": "16fbb566c98b554ae07c9c7c3cea7f09bc2640c7581128ae16fefb4a95a72d91",
+  "saved_universal_land_barrier_count": 0
+}
