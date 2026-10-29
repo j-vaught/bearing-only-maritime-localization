@@ -55,7 +55,7 @@ def main() -> None:
         "matched_positive_markers": selected["matched_positive_markers"],
         "status": selected["status"],
         "flags": selected["flags"],
-        "scope": "Single corrected simulated frame, completed Charleston-region search",
+        "scope": "Single corrected simulated frame, completed declared search domain",
         "truth_used_to_select_or_refine": False,
     }
     with args.output.open("x") as stream:
