@@ -20,8 +20,8 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--device", type=int, default=3)
     args = parser.parse_args()
-    if args.device != 3:
-        parser.error("This bounded check is restricted to GPU3")
+    if args.device < 0:
+        parser.error("Choose a nonnegative CUDA device for saved-output selection")
     if args.output.exists():
         parser.error("Estimate output already exists; estimates are frozen once written")
     summary = json.loads((args.search / "summary.json").read_text())
