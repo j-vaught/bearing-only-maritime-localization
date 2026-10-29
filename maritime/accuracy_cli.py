@@ -19,6 +19,7 @@ from typing import Any, Literal, cast
 import numpy as np
 from pyproj import CRS, Transformer
 
+from maritime.catalog_identity import canonicalize_chart_aids
 from maritime.evaluation.metrics import (
     SupportManifest,
     evaluate_localization,
@@ -1625,7 +1626,7 @@ class SearchV2Session:
         normalized_crs = CRS.from_user_input(projected_crs).to_string()
         catalog_bytes = normalized_catalog_path.read_bytes()
         map_bytes = normalized_map_path.read_bytes()
-        catalog = loads_contract(catalog_bytes.decode("utf-8"), CatalogV2)
+        catalog = canonicalize_chart_aids(loads_contract(catalog_bytes.decode("utf-8"), CatalogV2))
         map_input = loads_contract(map_bytes.decode("utf-8"), MapV2)
         vector_map = VectorMap.from_map_v2(map_input, target_crs=normalized_crs)
         snapshot = _StaticSearchSnapshot(

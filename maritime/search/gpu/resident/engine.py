@@ -343,6 +343,7 @@ def run_resident_search(
     output_dir: Path,
     *,
     resume: bool = False,
+    device_factory: Any | None = None,
 ) -> dict[str, Any]:
     """All per-cell work runs on the devices; results apply to centers only.
 
@@ -354,6 +355,9 @@ def run_resident_search(
         raise NotImplementedError(
             "Automatic resume is pending validation; snapshots are preserved."
         )
+    factory = ResidentDevice if device_factory is None else device_factory
+    if not callable(factory):
+        raise TypeError("device_factory must construct a resident device.")
     bearings = np.asarray(bearings_deg, dtype=np.float64)
     tolerances = np.asarray(tolerances_deg, dtype=np.float64)
     if bearings.ndim != 1 or bearings.shape != tolerances.shape or len(bearings) > 256:
@@ -408,7 +412,7 @@ def run_resident_search(
 
     def worker(device: int) -> None:
         nonlocal next_root
-        resident = ResidentDevice(world, config, device)
+        resident = factory(world, config, device)
         cp = resident.cp
         with cp.cuda.Device(device), resident.stream:
             db, dt = cp.asarray(bearings), cp.asarray(tolerances)

@@ -17,6 +17,7 @@ from typing import Any, Literal
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+from maritime.catalog_identity import canonicalize_chart_aids
 from maritime.schemas.inputs_v2 import CatalogRecordV2, CatalogV2
 from maritime.schemas.object_types import normalize_object_type
 
@@ -108,6 +109,7 @@ def score_marker_candidates(
         raise ValueError("marker_id values must be unique within a candidate.")
     if not isinstance(predicted, PredictedGroupSet) or not isinstance(catalog, CatalogV2):
         raise TypeError("predicted and catalog must use their shared V2 types.")
+    catalog = canonicalize_chart_aids(catalog)
     if map_status not in ("known", "land", "unknown"):
         raise ValueError("map_status must be known, land, or unknown.")
     if matching_backend not in ("cpu", "gpu"):

@@ -27,6 +27,8 @@ CONTRACT = {
     ],
     "cpu_during_search": ["kernel_launch", "root_task_dispatch", "scalar_progress", "disk_io"],
     "cpu_query_fallback": False,
+    "chart_aid_identity": "one object per exact chart coordinate, shared with simulator",
+    "canonical_object_cache": "separate object-only sidecar; original map cache reused",
     "accuracy_claim": None,
     "gpu_performance_claim": None,
     "approved_runs": ["small_synthetic_checks"],
@@ -46,6 +48,16 @@ def main() -> None:
     parser.add_argument("--settings", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cache-dir", type=Path, default=Path(".cache/resident-world"))
+    parser.add_argument(
+        "--object-cache-dir",
+        type=Path,
+        help="Separate canonical object cache; defaults beside the resolved base cache",
+    )
+    parser.add_argument(
+        "--optimized",
+        action="store_true",
+        help="Use true-bearing pruning, parallel prediction and cooperative matching",
+    )
     parser.add_argument(
         "--coarse-only",
         action="store_true",
@@ -139,6 +151,29 @@ def main() -> None:
         return prepare_world(vector_map, catalog, **preparation)
 
     world, cache_hit = load_or_prepare(args.cache_dir, cache_key, builder)
+    # Reuse the original expensive map/index preparation unchanged. The separate
+    # logical object view has its own source/catalog/policy identity and cache.
+    from maritime.search.gpu.resident.aid_view import load_or_canonicalize
+    from maritime.search.gpu.resident.optimized import OptimizedResidentDevice
+
+    object_cache_dir = (
+        args.object_cache_dir or args.cache_dir.resolve().parent / "resident-aid-objects"
+    )
+    source_catalog = read_contract(Path(settings["catalog"]), CatalogV2)
+    world, object_cache_hit, object_cache_key = load_or_canonicalize(
+        object_cache_dir, cache_key, world, source_catalog
+    )
+    print(
+        json.dumps(
+            {
+                "stage": "canonical_objects_ready",
+                "cache_hit": object_cache_hit,
+                "cache_key": object_cache_key,
+                "objects": len(world.objects),
+            }
+        ),
+        flush=True,
+    )
     print(
         json.dumps(
             {"stage": "prepared_world_ready", "cache_hit": cache_hit, "cache_key": cache_key}
@@ -161,9 +196,22 @@ def main() -> None:
         np.asarray([m.bearing_deg for m in markers]),
         np.full(len(markers), tolerance, dtype=np.float64),
         args.output,
+        device_factory=OptimizedResidentDevice if args.optimized else None,
     )
     (args.output / "prepared-cache.json").write_text(
         json.dumps({"key": cache_key, "hit": cache_hit, "directory": str(args.cache_dir)}, indent=2)
+        + "\n"
+    )
+    (args.output / "canonical-object-cache.json").write_text(
+        json.dumps(
+            {
+                "key": object_cache_key,
+                "hit": object_cache_hit,
+                "directory": str(object_cache_dir),
+                "optimized": args.optimized,
+            },
+            indent=2,
+        )
         + "\n"
     )
     (args.output / "settings.json").write_text(json.dumps(settings, indent=2) + "\n")

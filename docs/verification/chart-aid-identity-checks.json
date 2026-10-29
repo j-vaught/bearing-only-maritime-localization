@@ -1,0 +1,44 @@
+{
+  "scope": "Exact-coordinate aid canonicalization unit/integration checks; no new Charleston or coast-wide search",
+  "focused_tests_passed": 144,
+  "synthetic_cli_evaluated_regions": 5,
+  "synthetic_cli_terminal_cells": 4,
+  "synthetic_gpu_device": 3,
+  "synthetic_one_aid_flags": 0,
+  "synthetic_one_aid_status": "consistent",
+  "cache_key_before": "b6bcc2d3e0c0d960a2ba00e496d59ea37846dc3bb08f00ec773752d894caad90",
+  "cache_key_now": "b6bcc2d3e0c0d960a2ba00e496d59ea37846dc3bb08f00ec773752d894caad90",
+  "archive_sha256_before": "8f7c4335b9881787c64d3d89c093f4de460eee5bff1ab6e17313e4bc059a987d",
+  "archive_sha256_now": "8f7c4335b9881787c64d3d89c093f4de460eee5bff1ab6e17313e4bc059a987d",
+  "archive_stat_now": [
+    1306233869,
+    1793216304631740569
+  ],
+  "archive_stat_before": [
+    1306233869,
+    1793216304631740569
+  ],
+  "raw_preparation_primitive_source_unchanged": {
+    "_visible_feature_offset": true,
+    "_effective_position_uncertainty": true
+  },
+  "baseline_kernel_unchanged": true,
+  "baseline_preparation_unchanged": true,
+  "existing_run_pid": 2630613,
+  "existing_run_alive": true,
+  "new_localization_accuracy_established": false,
+  "canonical_dataset": {
+    "source_records": 64400,
+    "canonical_records": 32168,
+    "chart_locations": 32168,
+    "one_chart_object_per_exact_coordinate": true,
+    "all_source_records_metadata_provenance_retained_losslessly": true,
+    "canonical_coarse_types": {
+      "physical_aid": 31925,
+      "unknown": 243
+    },
+    "source_compressed_sha256": "715c20867007aac95a8c06c756a158c205af5a1b0a773e39aaf1d23c66445ffc",
+    "canonical_compressed_sha256": "8fe8f64b18bdf25a7cfa672ff3df536142be1e0c32f2b19a312190533fbe6e66",
+    "canonical_path": "data/objects-chart-aids-canonical.json.gz"
+  }
+}

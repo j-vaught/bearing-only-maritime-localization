@@ -155,8 +155,10 @@ def test_duplicate_components_of_one_physical_aid_do_not_count_twice_or_reject()
         predicted,
         catalog,
     )
-    assert one.status == "consistent"
-    assert one.matches[0].physical_entity_id == "same-aid"
+    # A shared identity at different coordinates remains an alias ambiguity;
+    # it cannot certify support or turn missing markers into a hard rejection.
+    assert one.status == "unresolved"
+    assert one.reason is not None
     assert two.status != "inconsistent"
 
 
@@ -304,7 +306,10 @@ def test_non_unique_but_feasible_assignments_do_not_reject_candidate():
 def test_large_symmetric_matching_preserves_feasibility_without_top_n_cutoff():
     count = 24
     catalog = _catalog(
-        *(_catalog_record(f"aid-{i}", 180, entity=f"entity-{i}") for i in range(count))
+        *(
+            _catalog_record(f"aid-{i}", 180, range_m=2000 + i, entity=f"entity-{i}")
+            for i in range(count)
+        )
     )
     predicted = _predicted(*(_group(f"aid-{i}", 180) for i in range(count)))
     markers = tuple(MarkerObservation(f"m-{i}", 180, 0.1) for i in range(count))

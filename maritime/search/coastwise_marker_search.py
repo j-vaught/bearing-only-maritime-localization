@@ -22,6 +22,7 @@ from pyproj import Geod, Transformer
 from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 
+from maritime.catalog_identity import canonicalize_chart_aids
 from maritime.geometry.vector_map import VectorMap
 from maritime.schemas.inputs_v2 import CatalogV2
 from maritime.schemas.object_types import normalize_object_type
@@ -102,6 +103,7 @@ def run_coastwise_marker_search(
         raise TypeError("vector_map must be a VectorMap.")
     if not isinstance(catalog, CatalogV2):
         raise TypeError("catalog must be a CatalogV2.")
+    catalog = canonicalize_chart_aids(catalog)
     if matching_backend not in ("cpu", "gpu"):
         raise ValueError("matching_backend must be cpu or gpu.")
     marker_rows = tuple(markers)
@@ -367,6 +369,7 @@ def _catalog_region_objects(
 
     transformer = Transformer.from_crs("EPSG:4326", vector_map.crs, always_xy=True)
     objects = []
+    catalog = canonicalize_chart_aids(catalog)
     for record in catalog.records:
         object_type = normalize_object_type(record.normalized_type or record.raw_type)
         if object_type in {"vessel", "virtual_aid"}:

@@ -38,6 +38,15 @@ _FIXED_VECTOR_MAP_SHA256 = "9625f17bd95ea6a40096d90eb32c9f12bbf151e69f114fd5cb35
 _LEGACY_VECTOR_MAP_SHA256 = "f597429ddca266502f5233feb9d856fd3c70e217a608c085eb6ddb4e0c26809c"
 _VECTOR_MAP_PREPARATION_COMPATIBILITY = {_FIXED_VECTOR_MAP_SHA256: _LEGACY_VECTOR_MAP_SHA256}
 
+# These exact runtime-only revisions add canonicalization to CPU prediction and
+# scoring. The preparation primitives imported from these files are unchanged.
+# The RAW base cache still contains its original objects. Canonical object views
+# use a separate policy/source/catalog key in aid_view.py, never this base key.
+_PREDICTION_RUNTIME_SHA256 = "af5df997e3dbc19dc739c7a75f4daab1ef3c61761aa14ff78251d1f1f9eef1ea"
+_PREDICTION_BASE_SHA256 = "3024277611a6fea1f0e53f4ec4aadeb9e7493e5832c7bc4fb0386c92353982f8"
+_SCORING_RUNTIME_SHA256 = "a21c66a28eb7f3e5d924ddb82c6c923635611e39444581d5f803c949fa217f4a"
+_SCORING_BASE_SHA256 = "cabeb3aa65ec38edf8ec5b1fdefe31f9077f83bcddda51b7b0302a609f305511"
+
 
 def file_digest(path: Path) -> str:
     digest = hashlib.sha256()
@@ -52,6 +61,13 @@ def _preparation_source_digest(path: Path) -> str:
     vector_source = inspect.getsourcefile(VectorMap)
     if vector_source is not None and path.resolve() == Path(vector_source).resolve():
         return _VECTOR_MAP_PREPARATION_COMPATIBILITY.get(digest, digest)
+    for primitive, current, base in (
+        (_visible_feature_offset, _PREDICTION_RUNTIME_SHA256, _PREDICTION_BASE_SHA256),
+        (_effective_position_uncertainty, _SCORING_RUNTIME_SHA256, _SCORING_BASE_SHA256),
+    ):
+        source = inspect.getsourcefile(primitive)
+        if source is not None and path.resolve() == Path(source).resolve():
+            return base if digest == current else digest
     return digest
 
 

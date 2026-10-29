@@ -361,6 +361,11 @@ def run_simulator_v2(
         if not is_visual_entity(record.normalized_type or record.raw_type):
             continue
         metadata = _metadata(record.metadata)
+        if metadata.get("visible_feature_offset_geometry_unsupported") is True:
+            raise ValueError(
+                f"Chart aid {record.key!r} has conflicting or unsupported component offsets; "
+                "supply a supported physical observation point before simulation."
+            )
         catalog_key = record.key
         physical_entity_id = metadata.get("physical_entity_id")
         if physical_entity_id is None:
@@ -397,6 +402,11 @@ def run_simulator_v2(
         if not is_visual_entity(label):
             continue
         metadata = _metadata(item.metadata)
+        if metadata.get("visible_feature_offset_geometry_unsupported") is True:
+            raise ValueError(
+                f"Chart aid {item.object_id!r} has conflicting or unsupported component offsets; "
+                "supply a supported physical observation point before simulation."
+            )
         lon, lat = _offset_position(item.longitude_deg, item.latitude_deg, metadata)
         raw_width = metadata.get("angular_half_width_deg", 0.0)
         if not isinstance(raw_width, (int, float)) or not isfinite(raw_width) or raw_width < 0.0:

@@ -13,6 +13,7 @@ from typing import Literal
 
 from pyproj import CRS, Geod, Transformer
 
+from maritime.catalog_identity import canonicalize_chart_aids
 from maritime.geometry.angular_grouping import (
     DetectedObject,
     group_angular_detections,
@@ -94,6 +95,7 @@ class PreparedPredictionContext:
     forward: Transformer = field(repr=False, compare=False)
     max_offset_m: float
     signature: tuple[object, ...]
+    source_catalog: CatalogV2 | None = field(default=None, repr=False, compare=False)
 
 
 def prepare_prediction_context(
@@ -112,6 +114,8 @@ def prepare_prediction_context(
 
     if not isinstance(catalog, CatalogV2) or not isinstance(vector_map, VectorMap):
         raise TypeError("catalog and vector_map must be their V2 shared types.")
+    source_catalog = catalog
+    catalog = canonicalize_chart_aids(catalog)
     if not isinstance(type_labels_enabled, bool) or type(range_inclusive) is not bool:
         raise TypeError("type_labels_enabled and range_inclusive must be bool values.")
     if (
@@ -187,6 +191,7 @@ def prepare_prediction_context(
         Transformer.from_crs("EPSG:4326", crs, always_xy=True),
         maximum_offset,
         signature,
+        source_catalog,
     )
 
 
@@ -284,7 +289,10 @@ def predict_visible_groups(
         )
         if (
             not isinstance(prepared_context, PreparedPredictionContext)
-            or prepared_context.catalog is not catalog
+            or (
+                prepared_context.catalog is not catalog
+                and prepared_context.source_catalog is not catalog
+            )
             or prepared_context.vector_map is not vector_map
             or prepared_context.crs != crs
             or prepared_context.signature != expected

@@ -19,6 +19,7 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
+from maritime.catalog_identity import canonicalize_chart_aids
 from maritime.schemas.inputs_v2 import (
     CatalogRecordV2,
     CatalogV2,
@@ -377,9 +378,9 @@ def combine_ais_and_enc_physical_catalogs(
 ) -> CatalogV2:
     """Compose AIS and all source aids, resolving only defensible identities.
 
-    Resolved named groups are represented once with their source components.
-    Every component in an unresolved group remains a runtime physical record
-    carrying explicit identity ambiguity, so uncertainty cannot shrink search.
+    Resolved named groups retain their source components. All chart aids at
+    exactly the same latitude/longitude become one runtime physical object,
+    retaining source rows and geometric uncertainty. Vessels remain separate.
     AIS timestamps and quality are preserved unchanged.
     """
     if not isinstance(ais_catalog, CatalogV2):
@@ -546,12 +547,14 @@ def combine_ais_and_enc_physical_catalogs(
                 provenance=tuple(sorted(provenance.items())),
             )
         )
-    return CatalogV2(
-        records=tuple(records),
-        timestamp_utc=ais_catalog.timestamp_utc,
-        source="AIS source snapshot plus all NOAA ENC physical aid rows",
-        catalog_version="2-mixed-epoch",
-        catalog_id=catalog_id,
+    return canonicalize_chart_aids(
+        CatalogV2(
+            records=tuple(records),
+            timestamp_utc=ais_catalog.timestamp_utc,
+            source="AIS source snapshot plus NOAA ENC physical aids",
+            catalog_version="3-exact-coordinate-aids",
+            catalog_id=catalog_id,
+        )
     )
 
 

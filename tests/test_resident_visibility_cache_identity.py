@@ -53,3 +53,36 @@ def test_compatibility_is_restricted_to_vector_map_file(tmp_path, monkeypatch):
     other_source.write_text("not-the-vector-map-module")
     monkeypatch.setattr(cache, "file_digest", lambda path: cache._FIXED_VECTOR_MAP_SHA256)
     assert cache._preparation_source_digest(other_source) == cache._FIXED_VECTOR_MAP_SHA256
+
+
+@pytest.mark.parametrize(
+    "primitive,current,legacy",
+    [
+        (
+            cache._visible_feature_offset,
+            cache._PREDICTION_RUNTIME_SHA256,
+            cache._PREDICTION_BASE_SHA256,
+        ),
+        (
+            cache._effective_position_uncertainty,
+            cache._SCORING_RUNTIME_SHA256,
+            cache._SCORING_BASE_SHA256,
+        ),
+    ],
+)
+def test_runtime_only_revision_preserves_raw_base_cache_and_future_changes_invalidate(
+    tmp_path, monkeypatch, primitive, current, legacy
+):
+    paths = _inputs(tmp_path)
+    source = Path(inspect.getfile(primitive)).resolve()
+    original_digest = cache.file_digest
+    assert original_digest(source) == current
+    key = cache.preparation_identity(*paths, {})
+
+    def digest_for(value):
+        return lambda path: value if Path(path).resolve() == source else original_digest(path)
+
+    monkeypatch.setattr(cache, "file_digest", digest_for(legacy))
+    assert cache.preparation_identity(*paths, {}) == key
+    monkeypatch.setattr(cache, "file_digest", digest_for("f" * 64))
+    assert cache.preparation_identity(*paths, {}) != key

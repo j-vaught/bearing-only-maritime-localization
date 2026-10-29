@@ -458,7 +458,7 @@ def test_unknown_and_unsupported_offsets_do_not_inherit_position_certificates():
         CatalogRecordV2(
             "unsupported",
             lat,
-            lon,
+            lon + 0.001,
             normalized_type="physical_aid",
             metadata=(("visible_feature_offset_east_m", 500.0),),
         ),

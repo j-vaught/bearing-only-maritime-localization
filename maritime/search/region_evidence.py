@@ -127,22 +127,64 @@ def project_catalog_objects(
     uncertainty_m: float | None = None,
     identity_proven: bool = False,
     exact_position_asserted: bool = False,
+    nominal_visible_offsets_asserted: bool = False,
 ) -> tuple[RegionObject, ...]:
     """Project geographic catalog records into a projected metre CRS.
 
-    This helper preserves every input row, including duplicate identities and
-    unknown types. It does not infer chart completeness or identity proof.
+    Coincident chart-aid components become one physical object. Other input
+    rows, duplicate non-aid identities and unknown types remain unchanged. It does
+    not infer chart completeness or identity proof.
     """
     if uncertainty_m is not None and (not isfinite(uncertainty_m) or uncertainty_m < 0):
         raise ValueError("uncertainty_m must be finite and nonnegative, or None.")
     transformer = Transformer.from_crs("EPSG:4326", target_crs, always_xy=True)
+    from maritime.catalog_identity import canonicalize_chart_records
+    from maritime.schemas.inputs_v2 import CatalogRecordV2
+
+    rows = tuple(records)
+    if all(isinstance(row, CatalogRecordV2) for row in rows):
+        rows = canonicalize_chart_records(
+            tuple(row for row in rows if isinstance(row, CatalogRecordV2))
+        )
     result = []
-    for row_index, record in enumerate(records):
+    for row_index, record in enumerate(rows):
         if not all(hasattr(record, key) for key in ("key", "latitude_deg", "longitude_deg")):
             raise TypeError("catalog records must expose key, latitude_deg, and longitude_deg.")
-        east, north = transformer.transform(
-            getattr(record, "longitude_deg"), getattr(record, "latitude_deg")
-        )
+        longitude, latitude = getattr(record, "longitude_deg"), getattr(record, "latitude_deg")
+        effective_bound = uncertainty_m
+        effective_identity = identity_proven
+        effective_exact = exact_position_asserted
+        if isinstance(record, CatalogRecordV2):
+            from pyproj import Geod
+
+            from maritime.search.deterministic_marker_scoring import _effective_position_uncertainty
+            from maritime.search.prediction import _visible_feature_offset
+
+            east_offset, north_offset, quality = _visible_feature_offset(record)
+            supported = quality == "calibrated" or (
+                quality == "nominal_zero_unknown" and nominal_visible_offsets_asserted
+            )
+            effective_bound = (
+                _effective_position_uncertainty(
+                    record, bound_m=uncertainty_m, exact_asserted=exact_position_asserted
+                )
+                if supported
+                else None
+            )
+            if quality == "calibrated" and (east_offset != 0 or north_offset != 0):
+                from math import atan2, degrees, hypot
+
+                longitude, latitude, _ = Geod(ellps="WGS84").fwd(
+                    longitude,
+                    latitude,
+                    degrees(atan2(east_offset, north_offset)),
+                    hypot(east_offset, north_offset),
+                )
+            metadata = dict(record.metadata)
+            effective_identity = identity_proven and metadata.get("identity_ambiguous") is not True
+            effective_identity &= metadata.get("physical_linkage_status") != "unresolved"
+            effective_exact = supported and effective_bound == 0.0
+        east, north = transformer.transform(longitude, latitude)
         if not isfinite(east) or not isfinite(north):
             raise ValueError("catalog coordinate projection produced a non-finite position.")
         # Keep duplicate keys distinct as rows. The downstream count code then
@@ -154,9 +196,9 @@ def project_catalog_objects(
                 key=key,
                 east_m=east,
                 north_m=north,
-                position_uncertainty_m=uncertainty_m,
-                identity_proven=identity_proven,
-                exact_position_asserted=exact_position_asserted,
+                position_uncertainty_m=effective_bound,
+                identity_proven=effective_identity,
+                exact_position_asserted=effective_exact,
             )
         )
     return tuple(result)

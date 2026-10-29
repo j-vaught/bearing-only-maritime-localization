@@ -25,6 +25,7 @@ from shapely.geometry import GeometryCollection, LineString, Point
 from maritime.geometry.vector_map import VectorMap
 from maritime.schemas.inputs_v2 import CatalogV2
 from maritime.schemas.object_types import normalize_object_type
+from maritime.search.gpu.resident.aid_view import load_or_canonicalize
 from maritime.search.gpu.resident.cache import (
     file_digest,
     load_or_prepare,
@@ -112,7 +113,7 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=ROOT / "docs/verification/charleston-visibility-fixed-small.json",
+        default=ROOT / "docs/verification/charleston-single-aid-small.json",
     )
     args = parser.parse_args()
     before = json.loads(SNAPSHOT.read_text())
@@ -123,7 +124,6 @@ def main() -> None:
     )
     simulation_settings = json.loads(simulation_settings_file.read_text())
     source_paths = [
-        "maritime/search/gpu/resident/engine.py",
         "maritime/search/gpu/resident/kernels.cu",
         "maritime/search/gpu/resident/preparation.py",
         "maritime/search/gpu/batch_assignment.py",
@@ -248,7 +248,7 @@ def main() -> None:
         subset_catalog = replace(
             catalog, records=subset, catalog_id=catalog.catalog_id + "-charleston-local"
         )
-        del catalog, source_by_key
+        del source_by_key
         stage("cpu_indexed_and_unindexed_reference_rays")
         rays: list[dict[str, Any]] = []
         for i, target in zip(indices, targets, strict=True):
@@ -292,7 +292,19 @@ def main() -> None:
         config = replace(ResidentConfig(**settings["search"]), devices=(3,), batch_cells=4)
         stage("gpu3_ray_query_against_immutable_global_cache")
         setup = perf_counter()
-        resident = OptimizedResidentDevice(world, config, 3)
+        canonical_world, object_hit, object_key = load_or_canonicalize(
+            cache_file.parent.resolve().parent / "resident-aid-objects",
+            before["cache_key"],
+            world,
+            catalog,
+        )
+        report["canonical_object_view"] = {
+            "key": object_key,
+            "cache_hit": object_hit,
+            "raw_objects": len(world.objects),
+            "physical_objects": len(canonical_world.objects),
+        }
+        resident = OptimizedResidentDevice(canonical_world, config, 3)
         report["gpu_setup_s"] = perf_counter() - setup
         with cp.cuda.Device(3), resident.stream:
             ray_inputs = cp.asarray(
@@ -343,9 +355,7 @@ def main() -> None:
             seed=simulation_settings["seed"],
             trial_id="charleston-corrected-local-visibility-seed11",
         )
-        measurement_file = args.output.with_name(
-            "charleston-corrected-local-measurements-seed11.json"
-        )
+        measurement_file = args.output.with_name("charleston-single-aid-measurements-seed11.json")
         write_contract(measurement_file, simulation.measurements)
         report["corrected_measurements_file"] = str(measurement_file.relative_to(ROOT))
         report["sensor"] = asdict(sensor)
@@ -390,7 +400,8 @@ def main() -> None:
                     and len(np.unique(records)) == len(records),
                     "residual_deg": residual if np.isfinite(residual) else None,
                     "matched_object_keys": [
-                        world.object_keys[int(row)] if row >= 0 else None for row in matched
+                        canonical_world.object_keys[int(row)] if row >= 0 else None
+                        for row in matched
                     ],
                 }
             )
