@@ -8,6 +8,7 @@ from pathlib import Path
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, required=True)
+parser.add_argument("--site-ids", help="Comma-separated authoritative sites for an explicit retry")
 args = parser.parse_args()
 repo = Path(__file__).resolve().parents[3]
 output = args.output.resolve()
@@ -24,6 +25,8 @@ argv = [
     "--minimum-positive-aids",
     "16",
 ]
+if args.site_ids:
+    argv.extend(["--site-ids", args.site_ids])
 with (output / "supervisor.log").open("ab", buffering=0) as log:
     process = subprocess.Popen(
         argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True

@@ -184,14 +184,38 @@ def gpu_snapshot():
 
 def resource_guard():
     snapshot = gpu_snapshot()
-    for line in snapshot.splitlines():
-        fields = [value.strip() for value in line.split(",")]
-        if int(fields[0]) in (0, 1, 2) and (int(fields[3]) > 1024 or int(fields[4]) > 5):
-            raise RuntimeError(f"Required GPU busy; suite will not overlap another job. {line}")
+    indexed = subprocess.check_output(
+        ["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"], text=True
+    )
+    compute = subprocess.check_output(
+        ["nvidia-smi", "--query-compute-apps=gpu_uuid,pid", "--format=csv,noheader"], text=True
+    )
+    if busy_devices(snapshot, indexed, compute):
+        raise RuntimeError(
+            f"Required GPU has an active compute context or over1GiB allocation. {snapshot}"
+        )
     free = os.statvfs(REPO / "runs")
     if free.f_bavail * free.f_frsize < 20 * 1024**3:
         raise RuntimeError("Fewer than 20 GiB free on output storage")
-    return snapshot
+    return {
+        "gpu_snapshot": snapshot,
+        "compute_contexts": compute,
+        "guard": "No selected compute context and <=1GiB memory; ignore stale utilization",
+    }
+
+
+def busy_devices(snapshot, indexed, compute):
+    index_uuids = {
+        int(line.split(",")[0]): line.split(",")[1].strip() for line in indexed.splitlines()
+    }
+    active = {line.split(",")[0].strip() for line in compute.splitlines() if line.strip()}
+    busy = []
+    for line in snapshot.splitlines():
+        fields = [value.strip() for value in line.split(",")]
+        index = int(fields[0])
+        if index in (0, 1, 2) and (int(fields[3]) > 1024 or index_uuids[index] in active):
+            busy.append(index)
+    return busy
 
 
 def forbid_build(*args, **kwargs) -> NoReturn:
@@ -422,7 +446,7 @@ def geodesic_after_freeze(estimate_path, freeze_path, truth_path):
     }
 
 
-def summarize(output, records):
+def summarize(output, records, expected_sites=24):
     save(output / "results.json", records)
     with (output / "results.csv.pending").open("w") as stream:
         writer = csv.DictWriter(stream, fieldnames=FIELDS, extrasaction="ignore")
@@ -437,7 +461,8 @@ def summarize(output, records):
         {
             "updated_utc": now(),
             "recorded_sites": len(records),
-            "expected_sites": 24,
+            "expected_sites": expected_sites,
+            "all_selected_sites_recorded": len(records) == expected_sites,
             "all24_recorded": len(records) == 24,
             "status_counts": dict(Counter(r["status"] for r in records)),
             "completed_count": len(completed),
@@ -461,7 +486,13 @@ def run_suite(args):
     settings = read(REFERENCE)["settings"]
     settings.pop("measurements")
     simulation_settings = read(SIM_SETTINGS)
-    rows = sites()
+    all_rows = sites()
+    selected = (
+        set(args.site_ids.split(",")) if args.site_ids else {row["site_id"] for row in all_rows}
+    )
+    if not selected.issubset({row["site_id"] for row in all_rows}):
+        raise ValueError("Unknown selected observer site")
+    rows = [row for row in all_rows if row["site_id"] in selected]
     sources = sorted(
         set(
             [
@@ -485,6 +516,8 @@ def run_suite(args):
         "source_hashes": {str(p.relative_to(REPO)): digest(p) for p in sources},
         "search_timeout_s": args.search_timeout,
         "minimum_positive_aids": args.minimum_positive_aids,
+        "selected_sites": [row["site_id"] for row in rows],
+        "resource_guard": "No selected compute context; allocation <=1GiB",
         "aid_filter": "Detected physical_aid reports only; vessels and unknown reports excluded",
         "selection_timeout_s": 120,
         "terminal_ceiling": 2_000_000,
@@ -544,7 +577,7 @@ def run_suite(args):
     save(output / "cache-before.json", before)
     parity = output / "charleston-simulation-parity"
     parity.mkdir(exist_ok=True)
-    regenerated, _ = simulate(rows[16], vector_map, scene, simulation_settings, parity)
+    regenerated, _ = simulate(all_rows[16], vector_map, scene, simulation_settings, parity)
     saved = read(REPO / "docs/verification/charleston-blind-measurements.json")
     prior = [m["bearing_deg"] for m in saved["measurements"] if m["object_type"] == "physical_aid"]
     # Trial IDs differ, while physical reports and all noise draws must agree.
@@ -572,7 +605,7 @@ def run_suite(args):
         result_path = site_dir / "result.json"
         if result_path.exists() and resume_matches(read(result_path), provenance_hash):
             records.append(read(result_path))
-            summarize(output, records)
+            summarize(output, records, len(rows))
             continue
         directory = site_dir / datetime.now(UTC).strftime("attempt-%Y%m%dT%H%M%S%fZ")
         directory.mkdir()
@@ -771,7 +804,7 @@ def run_suite(args):
             save(result_path, record)
             save(directory / "result.json", record)
             records.append(record)
-            summarize(output, records)
+            summarize(output, records, len(rows))
             print(
                 json.dumps(
                     {
@@ -808,6 +841,9 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--search-timeout", type=int, default=600)
     parser.add_argument("--minimum-positive-aids", type=int, default=16)
+    parser.add_argument(
+        "--site-ids", help="Comma-separated authoritative sites for an explicit retry"
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args()

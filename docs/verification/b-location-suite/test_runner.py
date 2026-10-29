@@ -25,6 +25,16 @@ def sleeping_group(path):
 
 
 class RunnerChecks(unittest.TestCase):
+    def test_idle_gpu_utilization_and_compute_context_guard(self):
+        snapshot = "0, RTX, 49140, 15, 8\n1, RTX, 49140, 15, 0\n2, RTX, 49140, 38, 0"
+        indexed = "0, GPU-a\n1, GPU-b\n2, GPU-c\n3, GPU-d"
+        self.assertEqual(runner.busy_devices(snapshot, indexed, "GPU-d, 123"), [])
+        self.assertEqual(runner.busy_devices(snapshot, indexed, "GPU-a, 456"), [0])
+        self.assertEqual(
+            runner.busy_devices(snapshot.replace("49140, 15, 8", "49140, 2048, 0"), indexed, ""),
+            [0],
+        )
+
     def test_threshold_boundary(self):
         self.assertFalse(runner.eligible_aid_count(3))
         self.assertFalse(runner.eligible_aid_count(15))
