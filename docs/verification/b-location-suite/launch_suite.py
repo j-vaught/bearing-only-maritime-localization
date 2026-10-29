@@ -21,6 +21,8 @@ argv = [
     str(Path(__file__).with_name("run_suite.py")),
     "--output",
     str(output),
+    "--minimum-positive-aids",
+    "16",
 ]
 with (output / "supervisor.log").open("ab", buffering=0) as log:
     process = subprocess.Popen(

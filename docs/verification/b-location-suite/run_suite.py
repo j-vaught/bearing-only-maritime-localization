@@ -107,6 +107,10 @@ def resume_matches(result, provenance):
     return result.get("status") == "completed" and result.get("provenance_sha256") == provenance
 
 
+def eligible_aid_count(count, minimum=16):
+    return count >= minimum
+
+
 def command(module, *arguments):
     return [sys.executable, "-m", module, *map(str, arguments)]
 
@@ -480,6 +484,8 @@ def run_suite(args):
         "catalog_sha256": digest(Path(settings["catalog"])),
         "source_hashes": {str(p.relative_to(REPO)): digest(p) for p in sources},
         "search_timeout_s": args.search_timeout,
+        "minimum_positive_aids": args.minimum_positive_aids,
+        "aid_filter": "Detected physical_aid reports only; vessels and unknown reports excluded",
         "selection_timeout_s": 120,
         "terminal_ceiling": 2_000_000,
         "evaluated_ceiling": 50_000_000,
@@ -557,6 +563,7 @@ def run_suite(args):
         save(output / "status.json", {"stage": "preflight_passed", "updated_utc": now()})
         return
     records = []
+    aid_counts = []
     context = mp.get_context("fork")
     for row in rows:
         site = row["site_id"]
@@ -602,6 +609,27 @@ def run_suite(args):
                 positive_marker_reports=len(markers),
                 total_reports=total_reports,
             )
+            aid_counts.append(
+                {
+                    "site_id": site,
+                    "positive_marker_reports": len(markers),
+                    "eligible": eligible_aid_count(len(markers), args.minimum_positive_aids),
+                }
+            )
+            save(
+                output / "aid-counts-and-eligibility.json",
+                {"minimum_positive_aids": args.minimum_positive_aids, "counted_sites": aid_counts},
+            )
+            print(json.dumps({"stage": "aid_count_filter", **aid_counts[-1]}), flush=True)
+            if not eligible_aid_count(len(markers), args.minimum_positive_aids):
+                record.update(
+                    status="skipped_aid_count",
+                    reason=(
+                        f"Detected {len(markers)} positive aid reports; "
+                        f"minimum is {args.minimum_positive_aids}"
+                    ),
+                )
+                continue
             if not markers:
                 raise ValueError(
                     "Precondition failed. Positive chart-aid observations are required"
@@ -779,11 +807,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--search-timeout", type=int, default=600)
+    parser.add_argument("--minimum-positive-aids", type=int, default=16)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args()
     if args.search_timeout <= 0:
         parser.error("search timeout must be positive")
+    if args.minimum_positive_aids < 16:
+        parser.error("Approved policy requires more than15 detected positive aid reports")
     try:
         run_suite(args)
     except BaseException as error:

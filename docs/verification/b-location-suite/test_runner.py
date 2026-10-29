@@ -25,6 +25,11 @@ def sleeping_group(path):
 
 
 class RunnerChecks(unittest.TestCase):
+    def test_threshold_boundary(self):
+        self.assertFalse(runner.eligible_aid_count(3))
+        self.assertFalse(runner.eligible_aid_count(15))
+        self.assertTrue(runner.eligible_aid_count(16))
+
     def test_resume_requires_completed_and_exact_provenance(self):
         self.assertTrue(
             runner.resume_matches({"status": "completed", "provenance_sha256": "a"}, "a")

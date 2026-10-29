@@ -1,0 +1,14 @@
+{
+  "author": "J.C. Vaught",
+  "recorded_utc": "2026-10-29T21:24:12.615749+00:00",
+  "previous_output_root": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/b-location-suite-20261029",
+  "previous_stop_record": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/b-location-suite-20261029/user-stop-and-filter-change.json",
+  "minimum_positive_aids": 16,
+  "eligible_reports": "Detected physical_aid observations only",
+  "threshold_test": {
+    "15": "skip",
+    "16": "search",
+    "passed": true
+  },
+  "preservation": "Original stopped B1 attempt and logs retained unchanged"
+}
