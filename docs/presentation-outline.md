@@ -8,7 +8,7 @@ This document proposes the presentation and its figure production. It does not c
 
 Use Charleston as the recurring example. Begin with the localization problem, introduce globally referenced bearings, establish the actual geographic inputs, explain how observations are generated, then develop the search and finish with its recorded result and timing. Keep geographic landmarks, symbols, north orientation and object colors consistent as the scale changes.
 
-The main deck should contain approximately 36 slides, with 8 technical backup slides. Target approximately 50 minutes of delivery, with discussion bringing the review toward one hour. Shorten to 45 minutes by moving slides 3, 12, 13 and 35 into backup. These are narrative subdivisions rather than 36 unrelated topics. Several slides should be successive builds of the same geographic scene.
+The main deck should contain approximately 33 slides, with 8 technical backup slides. Target approximately 50 minutes of delivery, with discussion bringing the review toward one hour. Use the removed repetition to leave more time for figures, animation and discussion. The GPU explanation belongs with the exhaustive-search calculation, and cache details belong in timing notes or backup. These are narrative subdivisions rather than 36 unrelated topics. Several slides should be successive builds of the same geographic scene.
 
 Every geographic position, shoreline, catalog object, recorded candidate, measurement and execution count must come from a named source. Visibility, pruning and result illustrations must use the exact projected map recorded in that run’s settings, rather than replacing it with a live service or a different geographic export. The presentation may also contain mathematical constructions and calculations explicitly identified as such. Do not create arbitrary points, invented sensor measurements, decorative vessel photographs, placeholder performance bars or synthetic map textures.
 
@@ -17,6 +17,20 @@ Real geographic inputs and simulated observations are separate evidence classes.
 The opening range example is a sensitivity calculation on the actual Charleston geometry, not a comparison to prior work. Do not attribute a failure to a published method or present an unimplemented ranging estimator as an existing baseline. Similarly, the proposed AIS-plus-aids evaluation must not appear as a completed experiment.
 
 All authored maps, quantitative plots and diagrams will use Typst with CeTZ/Lilaq. Generate PDF/SVG/PNG figures and assemble animations from those rendered frames. PowerPoint titles, numerical labels and notes remain editable. Use default high-contrast plotting colors, square corners and filled stealth arrows. Garnet may serve as a restrained emphasis color. Source website screenshots are documentary captures; they do not replace quantitative maps.
+
+## Revision map
+
+The main sequence is now 33 slides. Original slide numbers are recorded here to preserve the discussion references. Figure IDs remain stable despite slide renumbering.
+
+| Original slide | Revision | New slide |
+|---|---|---|
+| 9. Shoreline detail and coverage. | Removed as a standalone slide. Map legends still represent unknown geometry correctly. | Removed. |
+| 13. Configured observation locations. | Renamed “Test locations.” | 12. |
+| 14. From mapped world to observations. | Reworked as the simulator’s forward input/output relationship, shown in two linked views. | 13. |
+| 25. Positive evidence rejects impossible cells. | Renamed “Pruning.” | 24. |
+| 28. Index reuse and multiple GPUs. | Removed; explain three-GPU work division with exhaustive-search complexity. | Integrated into 22. |
+| 34. Time to locate the observer. | One search-time headline. Loading and diagnostic pipeline durations move into notes/backup. | 32. |
+| 35. What is prepared once and what repeats. | Removed as repetitive. Cache construction/loading distinctions remain in timing notes. | Removed. |
 
 ## Verified numbers available for the deck
 
@@ -40,9 +54,9 @@ All authored maps, quantitative plots and diagrams will use Typst with CeTZ/Lila
 | 148; 67; 182 | Consistent, inconsistent and unresolved terminal centers. | Result map. |
 | 2.060304 m | Selected estimate’s WGS84 distance from simulated truth. | Result headline. |
 | 12.134402 m | Maximum unresolved-center distance from the selected estimate. | Candidate detail. This is not an error bound around truth. |
-| 7.388215 s | Cached input/preparation stage for the current full run. | Timing, separately from index creation. |
+| 7.388215 s | Loading/validating saved inputs and caches before the search API. No index rebuild. | Speaker notes or backup only. |
 | 8.461936 s | Current full search API wall time on GPUs 0–2. | Main timing headline. Not pure GPU-busy time. |
-| 23.449189 s | Entire recorded supervisor pipeline. | End-to-end timing. Includes preservation checks, selection and evaluation. |
+| 23.449189 s | Entire recorded supervisor pipeline, including preservation checks, selection and evaluation. | Speaker notes or backup only, not the main search-time headline. |
 
 The global AIS-source count includes 2,248 rows normalized as vessel and 20 without a normalized type. Preserve their source identity in the data slide and explain the classification distinction in notes. Unknown catalog types remain possibilities where a proof cannot rule out a chart object.
 
@@ -128,17 +142,7 @@ Speaker notes. Explain the declared geographic bounds from Florida Keys to Maine
 
 Asset. F08. New rendering from saved geographic archives. Approximately 1 minute.
 
-### 9. Shoreline detail and coverage
-
-Visual. Coast-wide known/unknown coverage beside Charleston shoreline detail, with actual chart-scale coverage footprints or a restrained scale-precedence strip.
-
-On slide. “76.56% known coverage” and “23.44% unknown.”
-
-Speaker notes. These fractions describe the declared geographic bounding box in the source metadata, not the fraction of ocean suitable for navigation. The mosaic selects berthing, harbor, approach, coastal, general and overview data in that precedence. This is variable-scale vector mapping, not a uniform raster meter resolution. Unknown coverage remains unknown and is never colored as verified water. Avoid saying all source conflicts were reconciled; the metadata does not establish that.
-
-Asset. F09. Saved map geometry and archived coverage footprints. Approximately 1.5 minutes.
-
-### 10. Charleston’s mapped objects
+### 9. Charleston’s mapped objects
 
 Visual. A generous harbor crop with actual aids and AIS positions. Add an inset of a busy channel or shoreline corner.
 
@@ -148,7 +152,7 @@ Speaker notes. Show the audience the objects that produce bearing structure. Exp
 
 Asset. F10. New saved-data rendering. Approximately 1 minute.
 
-### 11. Three components, one location
+### 10. Three components, one location
 
 Visual. A tight actual map crop centered at 32.7731847, −79.9054558. Use leader lines to the co-located beacon, light and daymark source records. Reveal their shared canonical location.
 
@@ -158,7 +162,7 @@ Speaker notes. The selected example is not a toy. It contains daymark object 191
 
 Asset. F11. New rendering of three actual retained source components. Approximately 1.5 minutes.
 
-### 12. The AIS snapshot
+### 11. The AIS snapshot
 
 Visual. A one-minute time window and the actual selected AIS positions. A small table-like graphic may show multiple source timestamps for one retained record only if those original reports are available.
 
@@ -168,27 +172,27 @@ Speaker notes. One report nearest the window midpoint was selected per vessel id
 
 Asset. F12. Source-selection diagram and existing position snapshot. Approximately 1 minute.
 
-### 13. Configured observation locations
+### 12. Test locations
 
-Visual. The 24 B locations over the coast, with a few real harbor crops arranged geographically.
+Visual. The 24 B locations over the coast, with a few actual harbor crops arranged geographically.
 
-On slide. “24 configured viewpoints.”
+On slide. “Test locations.”
 
-Speaker notes. Present these as locations available to define scenarios, not a 24-location accuracy study. Use the current observer CSV and its water-status/map-hash provenance. Existing visibility-range pages need to be regenerated with current canonicalization and visibility code before becoming current-method evidence. Charleston remains the completed search example.
+Speaker notes. Show the selected locations that define the test scenarios. Use the current observer CSV and its water-status/map-hash provenance. This map does not claim completed localization results at all 24 locations. Charleston remains the completed search example. Existing visibility-range pages need current canonicalization and visibility provenance before becoming current-method evidence.
 
 Asset. F13. New rendering; current-code multiport simulation recordings proposed. Approximately 1 minute.
 
-### 14. From mapped world to observations
+### 13. What the simulator produces
 
-Visual. The same Charleston scene in four successive views. Catalog objects, in-range objects, clear visible objects and final bearing reports.
+Visual. Two linked views of the same saved Charleston example. On the left, show the virtual boat at its known location on the real map, with mapped objects around it. On the right, show the resulting bearing-only observation frame as a polar display. Use a short reveal from the scene to the measured directions. Omit object identities, measured ranges and the boat coordinate from the search-input display. The extra vessel report is a bearing only and must not be drawn as a geographically located real vessel.
 
-On slide. “Mapped world → visible objects → reports.”
+On slide. “Mapped scene → bearing observations.” Numerical labels may show “64 aids + 6 vessels.”
 
-Speaker notes. Introduce the simulator as a controlled forward model. The underlying object locations and land polygons come from real data. Observer placement, detection noise, missed detections and extra vessel detections are simulated. Explain why this permits a known evaluation position while keeping that position out of the search inputs.
+Speaker notes. The simulator answers the forward question. If the boat were here, what directions would it observe? We choose a known boat position, calculate which real mapped objects can be seen, and generate the bearing reports with the configured sensor effects. The search then answers the reverse question. Given those reports, where could the boat be? It receives the observation list and catalog, not the chosen boat position. The known position is kept separately for evaluating the final estimate. This slide establishes the input/output relationship; the following slides explain range, land blocking, merging, noise and missed/extra detections individually. The reports are simulated observations on real geographic data, not onboard recordings.
 
-Asset. F14. Render saved canonical-frame diagnostics. Approximately 1.5 minutes.
+Asset. F14. Render the saved canonical scene and its exact 70-report frame. Approximately 1.5 minutes.
 
-### 15. Sensor configuration
+### 14. Sensor configuration
 
 Visual. A single range-and-angle map with concise numerical labels placed on relevant geometry.
 
@@ -198,7 +202,7 @@ Speaker notes. The angular resolution is a grouping parameter, not the bearing-e
 
 Asset. F15. Current protocol and real map. Approximately 1.5 minutes.
 
-### 16. Visibility range changes the scene
+### 15. Visibility range changes the scene
 
 Visual. Matched Charleston maps at 1, 3, 5 and 10 km, sharing the same coordinate frame, scale treatment and object legend.
 
@@ -208,7 +212,7 @@ Speaker notes. Separate the range limit from land visibility. Objects within the
 
 Asset. F16. Proposed new simulator/visibility recording on existing geography. Approximately 1.5 minutes.
 
-### 17. Land blocks sight lines
+### 16. Land blocks sight lines
 
 Visual. Two genuine saved Charleston rays. One to clear Beacon US5CHSDD object 93428; one to blocked Coastal Light US3SC1CB object 726545. Highlight the actual polygon intersection on the blocked ray.
 
@@ -218,7 +222,7 @@ Speaker notes. The saved diagnostic records the clear target at 2,749.54 m and t
 
 Asset. F17. Render saved ray records and polygons; no new diagnostic needed. Approximately 1.5 minutes.
 
-### 18. Angular merging
+### 17. Angular merging
 
 Visual. The actual saved pair that merged into saved observation index 58 (zero-based). Show its two geographic positions, their bearing separation, and the selected nearest representative. Use an enlarged angular inset without moving the actual points.
 
@@ -228,7 +232,7 @@ Speaker notes. Angularly unresolved objects can produce one report even when the
 
 Asset. F18. Saved group diagnostic and canonical coordinates. Approximately 1.5 minutes.
 
-### 19. Bounded angular noise
+### 18. Bounded angular noise
 
 Visual. A histogram of the actual saved frame’s recovered bearing errors, if the saved representative correspondence supports exact recovery, beside a selected bearing wedge on the map. Alternatively show only the configured probability density until that recovery is completed.
 
@@ -238,7 +242,7 @@ Speaker notes. Distinguish a measured histogram of simulated errors from a theor
 
 Asset. F19. Derived saved-data render or explicitly mathematical density. Approximately 1.5 minutes.
 
-### 20. Missed objects and extra vessel reports
+### 19. Missed objects and extra vessel reports
 
 Visual. A source-backed funnel or aligned scene snapshots with the exact current-frame counts.
 
@@ -248,7 +252,7 @@ Speaker notes. Two hundred physical objects are within range, 80 are clear-visib
 
 Asset. F20. Saved canonical-frame counts, with an additional recording only if needed for individual-object highlighting. Approximately 1.5 minutes.
 
-### 21. Worked harbor examples
+### 20. Worked harbor examples
 
 Visual. A shared-scale strip of Charleston, Norfolk and Portland, with real shoreline, aids and AIS. Reveal simulated bearing reports only for examples recorded with the current simulator.
 
@@ -258,7 +262,7 @@ Speaker notes. These examples explain how geometry differs across waterways. The
 
 Asset. F21. Charleston saved data plus proposed recordings for additional ports. Approximately 2 minutes.
 
-### 22. What the search must establish
+### 21. What the search must establish
 
 Visual. One mathematical formulation with a real-map thumbnail. Observed bearings are matched injectively to possible chart objects at a candidate position.
 
@@ -268,17 +272,17 @@ Speaker notes. Define observer position x, catalog position q_j, observation θ_
 
 Asset. F22. Mathematics and actual map context. Approximately 2 minutes.
 
-### 23. An exhaustive search budget
+### 22. Exhaustive search, even across multiple GPUs
 
-Visual. The actual projected search rectangle with its dimensions and a calculated grid-count expression. Avoid a fabricated runtime bar.
+Visual. The actual projected search rectangle with its dimensions and calculated grid count, followed by an ideal division across three GPU lanes. Keep a small current-method annotation that the recorded search uses GPUs 0–2. This is a work-budget diagram, not a measured brute-force experiment.
 
-On slide. “1 m grid” and “3.93 × 10^12 positions.”
+On slide. “1 m grid”, “3.93 × 10^12 positions” and “3 GPUs → approximately 1.31 × 10^12 positions per GPU.”
 
-Speaker notes. The rectangle is 1,644,676.176 m by 2,388,459.103 m. Using ceilings gives 1,644,677 × 2,388,460 = 3,928,245,227,420 grid cells. Even an optimistic full evaluation of 64 report checks per position would require approximately 2.51 × 10^14 checks before accounting for association and visibility. These are back-of-the-envelope counts, not a run. The declared rectangle includes land and offshore regions. Do not convert this count into days or GPU speed without a clearly labeled assumed throughput.
+Speaker notes. The rectangle is 1,644,676.176 m by 2,388,459.103 m. Using ceilings gives 1,644,677 × 2,388,460 = 3,928,245,227,420 grid cells. Even an optimistic full evaluation of 64 report checks per position implies approximately 2.51 × 10^14 checks before association and visibility costs. Perfect division across three GPUs still leaves approximately 1.31 trillion positions per device. Multiple GPUs divide the workload; pruning reduces the workload itself. The current implementation uses all three selected GPUs for numerical search, with CPU coordination and output. Do not invent a measured exhaustive runtime or convert counts into days without an explicitly assumed throughput. If useful in discussion, the calculation is T = N / (3r), where r is an assumed per-device throughput, not an observed rate. The declared rectangle includes land and offshore regions. Explain cached geographic preparation briefly in notes, rather than adding a separate GPU/cache workflow slide.
 
-Asset. F23. Derived calculation on the actual bounds. Approximately 1.5 minutes.
+Asset. F23. Derived calculation on actual bounds and the recorded three-device configuration. Approximately 2 minutes.
 
-### 24. Coarse-to-fine search
+### 23. Coarse-to-fine search
 
 Visual. One actual geographic cell subdivided into four children, with the bearing-support envelope narrowing over successive scales. Use one fixed real catalog object.
 
@@ -288,7 +292,7 @@ Speaker notes. All surviving regions are subdivided; there is no top-N location 
 
 Asset. F24. Mathematical subdivision of a real cell, clearly distinguished from a recorded survivor trajectory. Approximately 2 minutes.
 
-### 25. Positive evidence rejects impossible cells
+### 24. Pruning
 
 Visual. Actual recorded cells demonstrating known land, a report with no possible object, and insufficient distinct possible objects. Use modest captions and actual candidate bounds.
 
@@ -298,7 +302,7 @@ Speaker notes. A detection asserts that something exists. The code can reject wh
 
 Asset. F25. Proposed current-run decision recording. Approximately 2 minutes.
 
-### 26. Distinct markers must explain distinct reports
+### 25. Distinct markers must explain distinct reports
 
 Visual. A map crop and its actual recorded report-to-object incidence graph. Highlight a deficient subset and then a retained injective explanation from another recorded cell.
 
@@ -308,7 +312,7 @@ Speaker notes. Individual support and total nearby-object count are insufficient
 
 Asset. F26. Proposed incidence-graph capture during the current-code recording. Approximately 2 minutes.
 
-### 27. Safe rejection and unresolved positions
+### 26. Safe rejection and unresolved positions
 
 Visual. Actual known/unknown map geometry and the current terminal candidates, with a compact distinction between supported, disproved and unresolved.
 
@@ -318,17 +322,7 @@ Speaker notes. An unrelated nominal numerical warning cannot invalidate an indep
 
 Asset. F27. Current saved candidates plus code-grounded proof diagram. Approximately 1.5 minutes.
 
-### 28. Index reuse and multiple GPUs
-
-Visual. Archived map/catalog → saved spatial structures → three GPU lanes → terminal scoring. Use actual device root totals or measured profile spans as restrained annotations.
-
-On slide. “GPUs 0–2” and “Saved index reused.”
-
-Speaker notes. Geometry/catalog preparation is separate from per-observation search. The existing cache is reused and rebuilding was forbidden in the recorded run. Runtime uploads, input validation and cached-file loading still take time. CPU coordination dispatches root tasks and writes outputs; numerical graph construction, matching and prediction run on the devices. Completed root totals were 13,899, 13,552 and 11,984 for GPUs 0, 1 and 2. Do not call this zero CPU usage or imply a persistent GPU process was already measured across multiple observation frames.
-
-Asset. F28. Code diagram and saved per-device trace. Approximately 1.5 minutes.
-
-### 29. The coast-wide search contracts toward Charleston
+### 27. The coast-wide search contracts toward Charleston
 
 Visual. The principal two-panel animation. Left shows the fixed full coast. Right shows Charleston Harbor with a locator rectangle. Advance both panels through the same recorded decisions/scales, then finish at a meter-scale local inset.
 
@@ -338,7 +332,7 @@ Speaker notes. A parallel search does not execute globally synchronized spatial 
 
 Asset. F29. New approved recording required. Target 30–45 seconds of presentation playback; do not label its duration the measured search runtime. Approximately 2 minutes including explanation.
 
-### 30. Recorded search workload
+### 28. Recorded search workload
 
 Visual. Current-run count accounting and a spatial snapshot. A simple flow accounts for every evaluated region.
 
@@ -348,7 +342,7 @@ Speaker notes. The exact identities are 58,118 + 6,360 + 397 = 64,875 and 39,435
 
 Asset. F30. Render existing current counts; no new run required. Approximately 1 minute.
 
-### 31. The selected Charleston position
+### 29. The selected Charleston position
 
 Visual. Coast overview, harbor inset and meter-scale result inset. Show the selected estimate, simulated truth and actual matched chart-aid rays in controlled builds.
 
@@ -358,7 +352,7 @@ Speaker notes. The 2.060304 m distance is an independent WGS84 evaluation after 
 
 Asset. F31. New render of saved terminal archive, frozen estimate and evaluation file. Approximately 1.5 minutes.
 
-### 32. The remaining local alternatives
+### 30. The remaining local alternatives
 
 Visual. A readable meter grid around the result with different shapes/colors for the three saved statuses. Retain a harbor locator inset for context.
 
@@ -368,7 +362,7 @@ Speaker notes. Each center is one tested coordinate of a terminal cell. Consiste
 
 Asset. F32. Current terminal archive; no new run required. Approximately 1.5 minutes.
 
-### 33. Chart aids versus chart aids plus AIS
+### 31. Chart aids versus chart aids plus AIS
 
 Visual. A matched pair of the same scene and observations. One panel highlights the aid channel; the other highlights the proposed additional vessel-bearing constraints. Show numerical result plots only after the actual comparison exists.
 
@@ -378,27 +372,17 @@ Speaker notes. Hold the physical scene, map, detection frame and heading fixed. 
 
 Asset. F33. Planned implementation verification and paired experiments. No comparative performance numbers presently supported. Approximately 1.5 minutes.
 
-### 34. Time to locate the observer
+### 32. Time to locate the observer
 
-Visual. Three large measured duration bars with clearly separated timing scopes. Keep hardware and observation count in small supporting labels.
+Visual. The final Charleston result beside one large measured search-time callout. Keep the full-coast scope, 64 observed aid bearings and three-GPU configuration in concise supporting labels. Do not display cached loading or the diagnostic supervisor pipeline as additional search-time bars.
 
-On slide. “7.39 s cached input”, “8.46 s search”, “23.45 s complete pipeline.”
+On slide. “8.46 s search”, “Eastern Seaboard” and “3 GPUs.”
 
-Speaker notes. The 8.46 s search wall time includes device setup and coordination/output inside the API, rather than representing CUDA kernel busy time alone. The full pipeline also includes preservation checks, saved-output selection and separate evaluation. Include the recorded device models and memory capacities in notes if available; otherwise capture a dated hardware inventory separately, without running a benchmark. These three bars are different timing scopes and should not be stacked as if they were three non-overlapping phases. Use a precise timeline only after phase boundaries are actually recorded. Do not add a 98.5 s old-code bar, an 11.6× label, or an unmeasured brute-force runtime.
+Speaker notes. Geographic map/index construction is performed once for a fixed dataset and reused; it is not included in this search-time headline. The recorded standalone process also spent 7.39 seconds loading and validating saved inputs/cache data before entering the search API. That was reading an existing cache, not rebuilding it. The 8.46-second search API wall time still includes device setup/uploads and coordination/output within that API; it is not a separately measured steady-state GPU-only kernel time. The 23.45-second complete supervisor pipeline additionally includes preservation checks, frozen-output selection and separate truth evaluation. Keep these diagnostic timing scopes in notes or backup, not on this result slide. Initial index-build time and warm persistent multi-frame throughput are not established by this run. Do not claim an unmeasured lower warm-search time or label 8.46 seconds as total cold-start application latency. Include dated device-model details in notes when available. Do not add old-code timing comparisons or an unmeasured brute-force runtime.
 
-Asset. F34. Existing current-run durations and hardware records. Approximately 1 minute.
+Asset. F34. Saved current search duration, result and device records. Approximately 1 minute.
 
-### 35. What is prepared once and what repeats
-
-Visual. The actual preparation/cache workflow, with recorded cache hits and a repeat-observation arrow whose unmeasured portions are labeled in notes.
-
-On slide. “Map/index cache reused.” Optional “1.31 GB archive.”
-
-Speaker notes. Separate geographic index construction from reading the saved archive, projecting/validating fixed inputs, device uploads, per-frame observations and search. The base archive is 1,306,233,869 bytes on disk; this is not a GPU-memory measurement. The object sidecar is 7,073,914 bytes. Initial construction time and warm persistent multi-frame throughput are not established by the current 7.39 s cached loading measurement. Proposed future recordings can expose those stages without recreating the existing cache unnecessarily.
-
-Asset. F35. Source-defined workflow plus existing fingerprints. Approximately 1 minute.
-
-### 36. Current capability and next evaluation
+### 33. Current capability and next evaluation
 
 Visual. The final Charleston map next to a small map strip of planned additional ports. Keep the measured result visually dominant and the planned work clearly marked.
 
@@ -414,12 +398,12 @@ The following categories belong in the production checklist. “Render” means 
 
 | Figure group | Evidence status | Required work |
 |---|---|---|
-| F01, F02, F08–F13 | Actual geographic archives exist. | Render current map/catalog crops and source-count graphics. Capture official websites later. |
+| F01, F02, F08, F10–F13 | Actual geographic archives exist. | Render current map/catalog crops and source-count graphics. Capture official websites later. |
 | F03, F04, F22–F24 | Mathematical constructions on actual coordinates. | Compute declared geometry/calculations and render with Typst. Clearly label the calculation figures. |
 | F05, F14, F15, F17–F20 | Exact current frame and supporting diagnostics exist. | Export the saved representative/report links; render without substituting historical frames. Verify which error residuals can be recovered from saved truth. |
 | F16, F21 | Additional configured scenarios, not completed localization experiments. | Propose current-code visibility/simulator recordings at the requested radii and ports. |
 | F25, F26, F29 | Current full intermediate spatial decisions/graphs were not preserved. | Record a current-code traversal or a matched pruning replay with exact decision geometry and representative incidence graphs. |
-| F27, F30–F32, F34, F35 | Current final outputs, counts and profiles exist. | Render the saved result and timing scopes. |
+| F27, F30–F32, F34 | Current final outputs, counts and profiles exist. | Render the saved result and main search-time figure; retain other timing scopes in speaker notes or backup. |
 | F33 | No current combined observed-AIS-bearing accuracy/timing result. | First verify or implement the combined objective, then design and authorize paired measurements. |
 
 The dual-view animation should be one synchronized 16:9 MP4, with an accompanying static storyboard and a PDF fallback. Use a fixed coast panel and a Charleston panel with linked locator bounds. Show 10 km cells through the actual dyadic scales down to 0.6103515625 m, selecting roughly 10–15 key frames to keep the movie readable. Final local views can show 10–20 m of water with a harbor inset, rather than discarding the geographic reference.
@@ -491,7 +475,7 @@ Official source pages for later documentary captures are [NOAA ENC Direct](https
 
 | Deliverable | Contents |
 |---|---|
-| PowerPoint. | Approximately 36 visual main slides and 8 backup slides, editable titles/numbers, full speaker notes and embedded synchronized MP4. |
+| PowerPoint. | Approximately 33 visual main slides and 8 backup slides, editable titles/numbers, full speaker notes and embedded synchronized MP4. |
 | Static slide PDF. | All slides with meaningful video poster frames or storyboards. |
 | Meeting notes. | A separate Markdown or PDF companion with slide thumbnails, narration, derivations, parameter definitions, provenance and transitions. |
 | Figure library. | Typst sources, imported source-data files, rendered figures and exact input/version manifests. |
