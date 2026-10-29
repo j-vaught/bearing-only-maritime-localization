@@ -54,7 +54,7 @@ def main():
         source = ROOT / f"pruning/movie/stages/stage-{index:02d}.json"
         stage = json.loads(source.read_text())
         generation = 14 if stage["final"] else stage["generation"]
-        zoom = 1 if generation is None else 2 ** max(0, generation - 4)
+        zoom = 1 if generation is None else 2 ** max(0, min(generation, 13) - 4)
         span = base_span / zoom
         bounds = np.r_[center - span / 2, center + span / 2].tolist()
         bgjson = backgrounds / f"zoom-{zoom}.json"
