@@ -1,0 +1,8 @@
+{
+  "evaluated_matches": true,
+  "pruned_matches": true,
+  "terminal_rectangles_exactly_match": true,
+  "source_run": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/charleston-coast-corrected-profiled-20261029T013040Z",
+  "trace_sha256": "0e2cd880d8ad133df89ec2abb164ab6675e213641d50df0ca2ab91046eeb33a4",
+  "terminal_scoring_replayed": false
+}
