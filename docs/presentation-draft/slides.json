@@ -9,14 +9,15 @@
     "source_repository": "/home/jvaught2/projects/bearing-only-maritime-localization",
     "source_revision": "455f4e8",
     "result_source_revision": "369cc8bd81cc2b8c2de179050d65da8302b3f30f",
-    "no_new_searches_simulations_or_recordings": true,
+    "no_new_searches_simulations_or_recordings": false,
     "observation_class": "Simulated bearing reports on archived NOAA geometry and AIS positions",
     "current_objective": "64 chart-aid bearing reports only; six vessel observations are not objective inputs",
     "ais_combined_comparison": "Pending implementation verification and separately approved paired evaluation",
-    "current_trace_movie": "Pending separately approved recording; older playback is not current evidence",
+    "current_trace_movie": "Recorded current pruning traversal with exact hierarchy and all 64,875 region decisions, shown in scale order. The frozen 397 terminal classifications supply the final overlay.",
     "timing_scope": "8.461936 s search API includes its device setup, coordination and output; 7.388215 s is saved-input/cache loading, not rebuilding",
     "all_authored_figures": "Typst with CeTZ/Lilaq; square corners, high contrast, filled stealth arrows",
-    "implementation_baseline_revision": "d223427"
+    "implementation_baseline_revision": "d223427",
+    "new_execution_scope": "Approved pruning-only replay on GPUs 0\u20132. Existing saved caches reused. No terminal scoring or simulator execution."
   },
   "main": [
     {
@@ -52,7 +53,7 @@
       ],
       "notes": "The left view is the full declared Eastern Seaboard search rectangle. The Charleston inset lets us understand the observation scene, but that crop was not supplied as the position prior in the coast-wide experiment. Initially the observer is hidden so we can distinguish what the search receives from what the evaluator knows. The evaluator later uses the chosen Charleston coordinate to measure error. The solver instead receives the coast-wide catalog, map, bearing frame and search bounds. It must preserve alternatives elsewhere until the positive evidence rules them out. This distinction matters whenever a presentation zooms toward a result. A display crop can improve readability, but it cannot silently reduce the computational search area. The next example motivates why directions can be useful even when object range is uncertain.",
       "asset": "F01",
-      "figure_requirements": "Matched full Eastern Seaboard and Charleston views, with the observer’s location initially hidden. Reveal the evaluation location after showing the size of the search domain.",
+      "figure_requirements": "Matched full Eastern Seaboard and Charleston views, with the observer\u2019s location initially hidden. Reveal the evaluation location after showing the size of the search domain.",
       "source_paths": [
         "runs/charleston-search/20261026T222955253680Z/projected-valid-map.json",
         "data/sources.json",
@@ -73,7 +74,7 @@
       ],
       "notes": "Consider the saved Charleston observer and a mapped object along one bearing. Changing an inferred range moves the proposed observer along that same ray. The inset magnifies a calculated plus-or-minus ten-percent range change, corresponding to approximately plus-or-minus 276 projected meters on this geometry. The object positions and ray remain fixed; the displaced observer marks show the range sensitivity. This is a mathematical construction on real mapped coordinates. The search uses bearing constraints and a declared visibility range without accepting measured object ranges as input. Multiple directions then constrain the location jointly. Before combining those directions, we need to state their reference orientation.",
       "asset": "F03",
-      "figure_requirements": "Actual Charleston object coordinates with a fixed bearing ray and an along-ray zoom showing the calculated ±276 projected-meter displacement for ±10% range sensitivity. Keep the displaced observer marks inside the inset without moving the actual object coordinates.",
+      "figure_requirements": "Actual Charleston object coordinates with a fixed bearing ray and an along-ray zoom showing the calculated \u00b1276 projected-meter displacement for \u00b110% range sensitivity. Keep the displaced observer marks inside the inset without moving the actual object coordinates.",
       "source_paths": [
         "runs/charleston-search/20261026T222955253680Z/projected-valid-map.json",
         "data/sources.json",
@@ -83,8 +84,8 @@
       ],
       "evidence_status": "declared_mathematical_construction",
       "transition": "Define the orientation convention before using bearings.",
-      "asset_plan": "F03. Declared ±10% range-sensitivity calculation on the saved Charleston geometry, with an along-ray magnification. Approximately 1 minute.",
-      "caption": "Calculated ±10% range sensitivity on saved Charleston geometry",
+      "asset_plan": "F03. Declared \u00b110% range-sensitivity calculation on the saved Charleston geometry, with an along-ray magnification. Approximately 1 minute.",
+      "caption": "Calculated \u00b110% range sensitivity on saved Charleston geometry",
       "current_run_only": true
     },
     {
@@ -96,7 +97,7 @@
       ],
       "notes": "A relative camera direction and a globally referenced bearing are different quantities. Let $\\alpha$ be the observer-relative direction and $\\psi$ the known heading clockwise from true north. Their sum, wrapped around the circle, gives the global bearing $\\beta$. The figure uses the saved Charleston observer and mapped clear Beacon 93428. Its WGS84 azimuth is $\\beta = 86.6177095761^\\circ$. For this declared calculation, choose $\\psi = 30^\\circ$; the corresponding relative direction is $\\alpha = 56.6177095761^\\circ$. The thirty-degree heading is an illustrative input, not a recorded vessel heading. The current measurement file already contains global bearings, so the location solver does not estimate heading as another search dimension. Heading and sensor alignment are upstream assumptions. The true-north and heading rays use geodesically derived endpoints. Their projected angles differ from map-axis directions because grid north and true north differ on this projection.",
       "asset": "F04",
-      "figure_requirements": "Use data/heading-demo.json for the saved observer, clear Beacon 93428 bearing, and geodesically derived true-north and heading endpoints. Show the chosen ψ = 30°, relative α = 56.6177095761° and global β = 86.6177095761°. Identify the heading as a declared calculation rather than a recorded heading.",
+      "figure_requirements": "Use data/heading-demo.json for the saved observer, clear Beacon 93428 bearing, and geodesically derived true-north and heading endpoints. Show the chosen \u03c8 = 30\u00b0, relative \u03b1 = 56.6177095761\u00b0 and global \u03b2 = 86.6177095761\u00b0. Identify the heading as a declared calculation rather than a recorded heading.",
       "source_paths": [
         "runs/charleston-search/20261026T222955253680Z/projected-valid-map.json",
         "data/sources.json",
@@ -143,11 +144,11 @@
       "number": 6,
       "title": "The system",
       "onslide": [
-        "Data → observations → search → location"
+        "Data \u2192 observations \u2192 search \u2192 location"
       ],
       "notes": "This is the complete input-to-output relationship. Geographic objects and shoreline geometry define the world. A forward sensor model produces the observation frame. The reverse search asks which observer positions can explain the positive reports, and a declared selector chooses among certified terminal candidates. Two object channels appear in the scene: chart aids and vessels. The current coast-wide result uses only the chart-aid bearing reports as observed localization constraints. AIS-source objects can still affect the physical scene and its angular grouping, but the six observed vessel bearings are not passed into the current deterministic aid objective. A combined observed-vessel-bearing objective remains a proposed evaluation branch. That distinction will remain visible when we discuss results, so the audience does not attribute the reported accuracy to information that the solver did not use.",
       "asset": "F06",
-      "figure_requirements": "A flat process diagram built from actual input and output thumbnails. Geographic catalog → simulated bearing frame → spatial search → selected location. Show two observation channels, chart aids and vessels, entering the broader scene model.",
+      "figure_requirements": "A flat process diagram built from actual input and output thumbnails. Geographic catalog \u2192 simulated bearing frame \u2192 spatial search \u2192 selected location. Show two observation channels, chart aids and vessels, entering the broader scene model.",
       "source_paths": [
         "maritime/simulator/mismatch.py",
         "maritime/simulator/runner.py",
@@ -210,7 +211,7 @@
     },
     {
       "number": 9,
-      "title": "Charleston’s mapped objects",
+      "title": "Charleston\u2019s mapped objects",
       "onslide": [
         "Charleston Harbor"
       ],
@@ -234,11 +235,11 @@
       "number": 10,
       "title": "Three components, one location",
       "onslide": [
-        "3 source records → 1 chart object"
+        "3 source records \u2192 1 chart object"
       ],
       "notes": "This particular chart location illustrates the identity preparation directly. The daymark, light and beacon component records have exactly the same latitude and longitude, 32.7731847 and minus 79.9054558. Their source identifiers include daymark 191488, light 206646 and beacon 93433 in chart US5CHSDD.000. The canonicalizer represents that exact coordinate once while retaining the original component records and their attributes. It does not merge nearby coordinates using a distance threshold. This matters because counting every chart component as a distinct visible marker could produce false support for several observations. The resulting canonical object also appears in the final 64-object assignment, so this is part of the actual data path. Across the source catalog, 64,400 component rows become 32,168 exact-coordinate locations.",
       "asset": "F11",
-      "figure_requirements": "A tight actual map crop centered at 32.7731847, −79.9054558. Use leader lines to the co-located beacon, light and daymark source records. Reveal their shared canonical location.",
+      "figure_requirements": "A tight actual map crop centered at 32.7731847, \u221279.9054558. Use leader lines to the co-located beacon, light and daymark source records. Reveal their shared canonical location.",
       "source_paths": [
         "data/objects-chart-aids-canonical.json.gz",
         "data/objects-ais.json.gz",
@@ -256,7 +257,7 @@
       "title": "The AIS snapshot",
       "onslide": [
         "15 July 2023",
-        "12:00–12:01 UTC"
+        "12:00\u201312:01 UTC"
       ],
       "notes": "The AIS inputs come from a one-minute archived window on July 15, 2023, from 12:00 to 12:01 UTC. For each vessel identity, the retained report is the one nearest the midpoint of that window. That gives a position snapshot rather than a measured track for this presentation. We should not infer an observed path or velocity history from a single retained position. The distributed point catalog also omits vessel names and MMSIs. The chart extraction occurred in October 2026, so the physical scene is a mixed-epoch geographic test world rather than a reconstruction of one fully synchronized real harbor moment. This limits how we interpret a future AIS-bearing experiment. For the current result, the observed vessel-bearing channel remains outside the localization objective.",
       "asset": "F12",
@@ -296,8 +297,8 @@
       "number": 13,
       "title": "What the simulator produces",
       "onslide": [
-        "Map + boat position → reports",
-        "Reports + map → location"
+        "Map + boat position \u2192 reports",
+        "Reports + map \u2192 location"
       ],
       "notes": "The two linked views show opposite directions through the problem. In the forward direction, the simulator receives the map, catalog, chosen observer position and sensor configuration. It calculates range and land visibility, combines angularly unresolved objects and applies the configured detection effects. Its output is the observation list. In the reverse direction, the search receives that list and the geographic inputs, while the chosen observer position remains separate. It must infer where the boat could be. The known observer coordinate is retained only so the evaluator can later measure the selected estimate's error. The reports shown here are the exact saved 70-report canonical frame, with 64 aid reports and six vessel reports. They are simulated observations on real geographic geometry. The next slides unpack each forward-model operation.",
       "asset": "F14",
@@ -320,10 +321,10 @@
       "number": 14,
       "title": "Sensor configuration",
       "onslide": [
-        "360°",
+        "360\u00b0",
         "10 km",
-        "0.1°",
-        "±0.5°"
+        "0.1\u00b0",
+        "\u00b10.5\u00b0"
       ],
       "notes": "The sensor has a full-circle view and a ten-kilometer range limit. Its 0.1-degree angular resolution controls which nearby directions merge into one report. That resolution is separate from bearing noise. The underlying Gaussian noise distribution has standard deviation one-sixth of a degree, and rejection sampling restricts accepted draws to a hard half-degree bound. Detection probability is 0.9, allowing real groups to be missed. Deliberate type errors and the separate bearing-outlier mechanism are both disabled. Additional reports represent vessels only, with a Poisson mean of one. The saved frame contains one such extra report, but that count is a realization rather than a guaranteed count in every frame. The deterministic chart-aid search uses positive detections and applies no penalty when a listed aid is not observed.",
       "asset": "F15",
@@ -405,11 +406,11 @@
       "number": 17,
       "title": "Angular merging",
       "onslide": [
-        "80 visible objects → 79 groups"
+        "80 visible objects \u2192 79 groups"
       ],
       "notes": "The saved canonical scene has 80 clear-visible physical objects but only 79 angular groups. The illustrated pair contains two distinct mapped positions at bearings 343.59362054 and 343.68509401 degrees. Their separation is 0.09147347 degrees, below the configured 0.1-degree grouping threshold. Their ranges are approximately 2.036 and 4.433 kilometers, so the nearer object supplies the representative bearing and type. This pair produced saved observation index 58, using zero-based indexing. The map preserves both actual coordinates, while the angular inset magnifies their directional separation. Circular angular grouping also handles adjacent directions across the zero-degree wrap. This differs from exact-coordinate canonicalization, which resolves multiple chart components at one location. Angular merging instead describes distinct visible objects that the sensor cannot resolve in direction. The representative then receives the bounded sensor error described next.",
       "asset": "F18",
-      "figure_requirements": "Show the actual pair for saved observation index 58 (zero-based) at bearings 343.59362054° and 343.68509401°, separated by 0.09147347°. Mark ranges 2.036 km and 4.433 km and identify the nearer representative. Preserve actual coordinates and use a magnified angular inset with distinct endpoint callouts.",
+      "figure_requirements": "Show the actual pair for saved observation index 58 (zero-based) at bearings 343.59362054\u00b0 and 343.68509401\u00b0, separated by 0.09147347\u00b0. Mark ranges 2.036 km and 4.433 km and identify the nearer representative. Preserve actual coordinates and use a magnified angular inset with distinct endpoint callouts.",
       "source_paths": [
         "docs/verification/charleston-blind-measurements.json",
         "runs/charleston-canonical-blind-20261029T004504Z/preparation-check.json",
@@ -432,12 +433,12 @@
       "number": 18,
       "title": "Bounded angular noise",
       "onslide": [
-        "σ = 1/6°",
-        "|error| ≤ 0.5°"
+        "\u03c3 = 1/6\u00b0",
+        "|error| \u2264 0.5\u00b0"
       ],
       "notes": "The histogram contains the recovered bearing errors of the 69 detected physical groups in this exact saved Charleston frame. The additional vessel report is not a noisy observation of a physical target, so it is excluded from this histogram. The largest recovered absolute error is approximately 0.392584 degrees, within the configured half-degree bound. The generating distribution is Gaussian with underlying standard deviation one-sixth of a degree, rejection-sampled inside that bound. The histogram describes simulated draws on real geographic objects; it is not a distribution measured by an onboard sensor. The map wedge gives geometric intuition. At five kilometers, a half-degree deviation corresponds to approximately 43.6 meters of lateral displacement. That is a sensitivity calculation, not the selected localization error. Multiple bearings from distinct objects constrain the observer jointly.",
       "asset": "F19",
-      "figure_requirements": "Histogram of the 69 recovered physical-report errors from data/noise-histogram.json, with the hard ±0.5° bounds and optional explicitly theoretical truncated-Gaussian density. Add one saved-bearing map wedge. Do not include the extra bearing-only vessel report in the error histogram.",
+      "figure_requirements": "Histogram of the 69 recovered physical-report errors from data/noise-histogram.json, with the hard \u00b10.5\u00b0 bounds and optional explicitly theoretical truncated-Gaussian density. Add one saved-bearing map wedge. Do not include the extra bearing-only vessel report in the error histogram.",
       "source_paths": [
         "docs/verification/charleston-blind-measurements.json",
         "runs/charleston-canonical-blind-20261029T004504Z/preparation-check.json",
@@ -460,7 +461,7 @@
       "number": 19,
       "title": "Missed objects and extra vessel reports",
       "onslide": [
-        "200 → 80 → 79 → 69 + 1 = 70"
+        "200 \u2192 80 \u2192 79 \u2192 69 + 1 = 70"
       ],
       "notes": "The funnel records the exact current frame. Two hundred canonical physical objects are within range. Eighty have clear map-derived visibility, and those form 79 angular groups. Sixty-nine groups are detected. One additional vessel report brings the total to 70. Ten groups were therefore missed. The final labels are 64 chart-aid reports, five detected-vessel reports and one extra vessel report. The saved range-status export identifies the remaining 120 in-range physical objects as blocked in this frame; that is the recorded label, rather than an inference from their absence. The extra report has a direction and a vessel label, but no actual mapped position; drawing it at an arbitrary distance would manufacture data. Only the aid-bearing subset enters the current deterministic localization objective.",
       "asset": "F20",
@@ -539,12 +540,12 @@
       "number": 22,
       "title": "Exhaustive search, even across multiple GPUs",
       "onslide": [
-        "3.93 × 10¹² positions",
-        "3 GPUs → 1.31 × 10¹² each"
+        "3.93 \u00d7 10\u00b9\u00b2 positions",
+        "3 GPUs \u2192 1.31 \u00d7 10\u00b9\u00b2 each"
       ],
       "notes": "The declared projected rectangle is about 1,644,676 meters wide and 2,388,459 meters high. A calculated one-meter grid therefore contains approximately 3.93 trillion positions. Even a simplified budget of 64 report checks per position already implies about 251 trillion checks, before association and visibility are considered. Dividing the positions perfectly among three GPUs still leaves about 1.31 trillion positions for each device. This is arithmetic on the real bounds, not a benchmark. Multiple devices divide work; pruning changes how much work remains. The current implementation uses GPUs zero through two for the numerical search, while CPU coordination launches work and writes outputs. We do not infer days of brute-force runtime from an unmeasured throughput. The next slide shows how whole-region reasoning avoids visiting most of those fine locations.",
       "asset": "F23",
-      "figure_requirements": "The actual projected search rectangle with its dimensions and calculated grid count, followed by an ideal division across three GPU lanes. Keep a small current-method annotation that the recorded search uses GPUs 0–2. This is a work-budget diagram, not a measured brute-force experiment.",
+      "figure_requirements": "The actual projected search rectangle with its dimensions and calculated grid count, followed by an ideal division across three GPU lanes. Keep a small current-method annotation that the recorded search uses GPUs 0\u20132. This is a work-budget diagram, not a measured brute-force experiment.",
       "source_paths": [
         "docs/verification/charleston-coastwide-distinct-result.json",
         "docs/verification/charleston-coastwide-distinct-terminal-results.npz",
@@ -562,7 +563,7 @@
       "number": 23,
       "title": "Coarse-to-fine search",
       "onslide": [
-        "10,000 m → 0.61035 m",
+        "10,000 m \u2192 0.61035 m",
         "14 halvings"
       ],
       "notes": "The search starts with ten-kilometer root cells and subdivides every surviving cell into four children. It stops when a cell's maximum width is at most one meter. Under this dyadic schedule the nominal full-cell width reaches approximately 0.61035 meters after 14 halvings. There is no fixed top-N shortlist or random initial location sample. That preserves coverage, but subdivision alone does not reduce work. An unpruned tree would be enormous. The advantage comes from rejecting a coarse cell with a sound proof, which removes all of its descendants at once. The illustrated cell is an actual geographic region, while the subdivision overlay is mathematical unless it is tied to a recorded traversal. We next separate the predicates that can establish such a rejection from conditions that only leave a location unresolved.",
@@ -589,7 +590,7 @@
         "No explanation",
         "Too few markers"
       ],
-      "notes": "A positive marker detection asserts that a compatible object must exist. The code may reject a whole cell when known land covers it, when a positive report has no possible object under the bounds, or when there are too few distinct possible objects to explain all reports. Missing observations provide no chart-aid rejection evidence. A mapped aid can be present without being detected. Chart-catalog completeness and shoreline coverage are also different. An unknown patch of shoreline does not create a missing chart object, so a valid catalog impossibility proof need not wait for complete shoreline coverage throughout a surrounding square. The explanatory cells must come from actual current-code records. A newly captured decision trace is still needed for the per-scale map sequence; the saved final centers alone cannot reconstruct the earlier rejection history.",
+      "notes": "A positive chart-aid detection asserts an existing object. The four conditions shown can reject an entire candidate cell. The cell may be entirely known land, a report may have no possible object, there may be too few distinct possibilities, or no simultaneous injective assignment may exist. Missing a mapped aid never creates a penalty. The approved pruning-only recording captured every decision using the current GPU predicate. It contains 5,931 land rejections,39,011 individual-support rejections,475 distinct-count rejections and 12,701 injective-matching rejections. Their sum is 58,118. Unknown geometry cannot remove a possible explanation without a valid proof. The next slide shows an actual recorded matching rejection rather than a constructed adjacency example.",
       "asset": "F25",
       "figure_requirements": "Actual recorded cells demonstrating known land, a report with no possible object, and insufficient distinct possible objects. Use modest captions and actual candidate bounds.",
       "source_paths": [
@@ -600,7 +601,7 @@
         "docs/verification/charleston-coastwide-distinct-result.json",
         "docs/verification/charleston-coastwide-distinct-terminal-results.npz"
       ],
-      "evidence_status": "pending_current_trace_recording",
+      "evidence_status": "current_code_conditions_and_recorded_decisions",
       "transition": "Move from individual support to simultaneous distinct support.",
       "asset_plan": "F25. Proposed current-run decision recording. Approximately 2 minutes.",
       "caption": "Simulated observations on NOAA geometry",
@@ -610,18 +611,20 @@
       "number": 25,
       "title": "Distinct markers must explain distinct reports",
       "onslide": [
-        "Distinct reports → distinct objects"
+        "Distinct reports \u2192 distinct objects"
       ],
-      "notes": "Individual compatibility is not sufficient for a set of reports. Several observations can each have an apparent explanation while all relying on the same smaller set of physical objects. The incidence graph represents possible report-to-object edges, and exact augmenting-path matching checks whether all reports can be assigned simultaneously. If a subset of reports has fewer neighboring objects than reports, Hall's condition exposes the deficiency. The figure must use a recorded current graph rather than invented nodes. Unknown object types remain possible markers when they cannot be ruled out. Unknown visibility also preserves possibilities. Identity uncertainty, capacity overflow and unsupported numerical bounds must prevent an invalid rejection. This step tests necessary collective support while leaving final visibility and association certification to the candidate stage.",
+      "notes": "This graph is extracted from a real rejected cell in the approved coast-wide pruning recording. Reports 38,39 and 40 use zero-based order within the 64 positive aid reports. Every one of these three reports can be explained individually. However, their complete combined neighborhood contains only two canonical catalog entries. All six possible edges for this subset are drawn. Three distinct reports cannot be assigned to only two objects, so the entire candidate cell is rejected. The displayed object labels $q_0$ and $q_1$ are local drawing indices. They refer to snapshot columns 867 and 868, catalog rows 14232 and 14231; their complete canonical keys and supplied positions are preserved in the witness JSON. The full cell graph contains 1,359 candidate objects. The failure comes from the subset relationship, rather than a shortage in that overall count. Both graph flags and proof validity were checked in the recorded GPU output. The CPU extracted the explanatory subset afterward from saved adjacency; it did not decide search pruning. This is a recorded example of the Hall condition. The next slide distinguishes this conservative cell proof from final point scoring.",
       "asset": "F26",
       "figure_requirements": "A map crop and its actual recorded report-to-object incidence graph. Highlight a deficient subset and then a retained injective explanation from another recorded cell.",
       "source_paths": [
         "maritime/search/gpu/resident/distinct_pruning.py",
         "maritime/search/gpu/resident/distinct_pruning.cu",
         "maritime/search/gpu/resident/bearing_bounds.cu",
-        "docs/resident-pruning-bounds.md"
+        "docs/resident-pruning-bounds.md",
+        "docs/presentation-draft/pruning/witness.json",
+        "docs/presentation-draft/pruning/pruning-graphs/gpu-0-state-4.npz"
       ],
-      "evidence_status": "pending_current_trace_recording",
+      "evidence_status": "recorded_gpu_incidence_witness",
       "transition": "Distinguish impossibility from retained uncertainty.",
       "asset_plan": "F26. Proposed incidence-graph capture during the current-code recording. Approximately 2 minutes.",
       "caption": "Simulated observations on NOAA geometry",
@@ -632,12 +635,12 @@
       "title": "Deterministic marker scoring",
       "onslide": [
         "64 / 64",
-        "Hard ±0.5° bound",
+        "Hard \u00b10.5\u00b0 bound",
         "Summed absolute residual"
       ],
       "notes": "After conservative pruning, deterministic point scoring asks whether a center has a complete explanation for all 64 positive marker reports. The assignment must be injective, so distinct reports use distinct physical markers. Every selected wrapped bearing residual must satisfy the hard half-degree tolerance, including the numerical margin required by the implementation. A certified consistent center also requires zero numerical flags, known water at the observer, and certified visibility and grouping for the matched support. Unmatched catalog objects are not penalized because missing detections are allowed. The selector considers consistent centers with complete assignments and minimizes the sum of wrapped absolute bearing residuals. The selected Charleston center has a sum of 6.2809796 degrees across 64 matches; this is not a mean. Fixed east-then-north tie-breaking makes selection deterministic. The estimate is saved and hashed before the separate evaluator reads simulated truth. The conservative proof behavior and retained unresolved centers remain distinct from this ranking step.",
       "asset": "F27",
-      "figure_requirements": "Current figure plan. Display deterministic point scoring with wrapped absolute residuals, injective 64-of-64 marker matching, hard ±0.5° acceptance, zero flags, known observer water and certified matched visibility/grouping. Identify 6.2809796° as the selected summed residual. This aligns the explanation with the existing residual diagram and changes no algorithm.",
+      "figure_requirements": "Current figure plan. Display deterministic point scoring with wrapped absolute residuals, injective 64-of-64 marker matching, hard \u00b10.5\u00b0 acceptance, zero flags, known observer water and certified matched visibility/grouping. Identify 6.2809796\u00b0 as the selected summed residual. This aligns the explanation with the existing residual diagram and changes no algorithm.",
       "source_paths": [
         "maritime/search/gpu/resident/engine.py",
         "maritime/search/gpu/resident/optimized.py",
@@ -657,7 +660,7 @@
       "onslide": [
         "Current trace recording pending"
       ],
-      "notes": "The planned paired animation keeps the full coast visible while the Charleston panel reveals the local geometry. Both panels must refer to the same recorded decision state. Parallel execution does not produce globally synchronized spatial passes, so a scale-ordered playback should identify that ordering instead of implying a chronological sweep. Distant alternatives remain visible until their own decisions reject them. We must not create early survivor masks by tracing only the ancestors of final candidates, because that would conceal alternatives that existed earlier. The current exact intermediate geometry has not yet been recorded for this movie. A current-code recording or parity-checked replay needs separate approval. Presentation playback duration will be chosen for explanation and will not be labeled as the measured 8.46-second runtime.",
+      "notes": "The video shows the approved recording of every current pruning decision. It begins with all 39,435 root cells. The first 10 km pruning retains 851 and rejects 38,584. Subsequent frames group actual decisions by generation through 14 halvings; the ending cell width is 0.6103515625 m. Retained cell counts can increase when one region is replaced by four children. That count increase does not mean a larger candidate area. The fixed left panel keeps all surviving coastal regions visible. The right panel begins as a Charleston reference crop and zooms to all remaining regions once their global bounds fit in that harbor view. Earlier masks come from the recorded decisions, never from ancestors reconstructed only from final survivors. The trace contains 64,875 evaluated regions,58,118 rejections and 6,360 expansions, leaving 397 terminal rectangles. All recorded roots and four-child expansions were checked, and the final 397 rectangles are bitwise identical to the saved timed run. The final classification overlay comes from that frozen run and shows 148 consistent,67 inconsistent and 182 unresolved centers. Terminal scoring was not rerun. Playback is scale-ordered for explanation rather than the chronological interleaving of three GPUs. Recording overhead and playback duration do not replace the 8.46 second search measurement. The following slide accounts for the entire traversal.",
       "asset": "F29",
       "figure_requirements": "The principal two-panel animation. Left shows the fixed full coast. Right shows Charleston Harbor with a locator rectangle. Advance both panels through the same recorded decisions/scales, then finish at a meter-scale local inset.",
       "source_paths": [
@@ -665,11 +668,14 @@
         "docs/verification/charleston-coastwide-distinct-terminal-results.npz",
         "tools/run_resident_marker_search.py",
         "maritime/search/gpu/resident/engine.py",
-        "maritime/search/gpu/resident/optimized.py"
+        "maritime/search/gpu/resident/optimized.py",
+        "docs/presentation-draft/pruning/pruning-trace.npz",
+        "docs/presentation-draft/pruning/parity.json",
+        "docs/presentation-draft/pruning/movie/movie-manifest.json"
       ],
-      "evidence_status": "pending_current_trace_recording",
+      "evidence_status": "recorded_current_pruning_trace_with_frozen_terminal_overlay",
       "transition": "Account for every recorded region.",
-      "asset_plan": "F29. New approved recording required. Target 30–45 seconds of presentation playback; do not label its duration the measured search runtime. Approximately 2 minutes including explanation.",
+      "asset_plan": "F29. New approved recording required. Target 30\u201345 seconds of presentation playback; do not label its duration the measured search runtime. Approximately 2 minutes including explanation.",
       "caption": "Simulated observations on NOAA geometry",
       "current_run_only": true
     },
@@ -728,7 +734,7 @@
       ],
       "notes": "The current output contains 148 consistent, 67 inconsistent and 182 unresolved terminal centers. These are tested centers of terminal cells, not a continuous proof that every point inside each rectangle shares its center's status. All unresolved centers lie within approximately 12.1344 meters of the selected estimate. That spread is a description of this output, not a statistical confidence interval or a guaranteed error bound around truth. The unresolved nominal assignments explain 60 to 63 of the 64 reports, while the conservative raw graph still permits possible support. The saved graph does not establish whether every individual case is caused by occluded support, grouping or another retained possibility. No distant coastal alternatives remain in this completed domain, but the local ambiguity still belongs in the presentation. In the local map, the cross marks simulated truth and the diamond marks the selected estimate. The status symbols describe the saved terminal centers.",
       "asset": "F32",
-      "figure_requirements": "A readable meter grid around the result with different shapes/colors for the three saved statuses. Retain a harbor locator inset for context. Include the visible symbol key × Truth and ◆ Selected estimate.",
+      "figure_requirements": "A readable meter grid around the result with different shapes/colors for the three saved statuses. Retain a harbor locator inset for context. Include the visible symbol key \u00d7 Truth and \u25c6 Selected estimate.",
       "source_paths": [
         "docs/verification/charleston-coastwide-distinct-result.json",
         "docs/verification/charleston-coastwide-distinct-terminal-results.npz"
@@ -791,7 +797,7 @@
       "number": 33,
       "title": "Current capability and next evaluation",
       "onslide": [
-        "64 bearings · 2.06 m · 8.46 s"
+        "64 bearings \u00b7 2.06 m \u00b7 8.46 s"
       ],
       "notes": "The implemented result is a coast-wide search of one simulated Charleston frame using 64 positive aid bearings. It selected a point about 2.06 meters from simulated truth in an 8.46-second search API run on three GPUs. Real NOAA geography and archived AIS define the input scene, while the bearings, observer and sensor effects are simulated. The saved local alternatives remain part of that result. The next work follows directly from the current evidence. Record the exact present traversal for the explanatory animation, strengthen the local visibility or grouping proofs where appropriate, verify a combined vessel-bearing objective, and evaluate a declared set of additional ports. Those are proposed steps, not completed successes. The measured Charleston case supplies a concrete starting point for that evaluation program.",
       "asset": "F31",
@@ -821,7 +827,7 @@
       ],
       "notes": "This backup separates true north, grid north and the sensor-relative direction on the same saved Charleston geometry. A global bearing is clockwise from true north. For clear Beacon 93428, the WGS84 azimuth from the saved observer is $\\beta = 86.6177095761^\\circ$. The declared example chooses heading $\\psi = 30^\\circ$ and therefore relative bearing $\\alpha = 56.6177095761^\\circ$, using $\\beta = (\\psi + \\alpha)\\bmod 360^\\circ$. This chosen heading demonstrates the conversion; it is not a recorded vessel heading. The north and heading endpoints in data/heading-demo.json are derived geodesically before projection, so neither arrow should be replaced by an arbitrary map-axis direction. The actual saved reports already contain global bearings, and candidate predictions use WGS84 azimuths. Heading and sensor alignment are upstream assumptions rather than location-search dimensions. Wrapped residuals remain circular across zero degrees.",
       "asset": "F04",
-      "figure_requirements": "Use data/heading-demo.json for the saved observer, clear Beacon 93428 bearing, and geodesically derived true-north and heading endpoints. Show the chosen ψ = 30°, relative α = 56.6177095761° and global β = 86.6177095761°. Identify the heading as a declared calculation rather than a recorded heading.",
+      "figure_requirements": "Use data/heading-demo.json for the saved observer, clear Beacon 93428 bearing, and geodesically derived true-north and heading endpoints. Show the chosen \u03c8 = 30\u00b0, relative \u03b1 = 56.6177095761\u00b0 and global \u03b2 = 86.6177095761\u00b0. Identify the heading as a declared calculation rather than a recorded heading.",
       "source_paths": [
         "runs/charleston-search/20261026T222955253680Z/projected-valid-map.json",
         "data/sources.json",
@@ -845,9 +851,9 @@
       "number": "A2",
       "title": "Complete sensor specification",
       "onslide": [
-        "360° · 10 km",
-        "σ = 1/6° · bound ±0.5°",
-        "70 reports · 64 aids"
+        "360\u00b0 \u00b7 10 km",
+        "\u03c3 = 1/6\u00b0 \u00b7 bound \u00b10.5\u00b0",
+        "70 reports \u00b7 64 aids"
       ],
       "notes": "The current frame uses seed 11, a ten-kilometer range, full-circle coverage and 0.1-degree angular resolution. The 69 recovered physical-report errors have a maximum absolute value of approximately 0.392584 degrees. Its underlying Gaussian bearing draw has standard deviation one-sixth of a degree and is rejection-sampled within a half-degree bound. There is no deliberate type mislabeling or separate outlier component. Each angular group is detected with probability 0.9, and vessel-only extra reports have Poisson mean one. The saved canonical frame has 200 physical objects within range, 80 clear-visible objects, 79 groups, 69 detected groups and one extra vessel report. That gives 70 reports, with 64 aid bearings used by the solver and six vessel bearings not used as localization observations. These exact counts belong to this frame and must not be replaced with the older 164-report summary.",
       "asset": "F15",
@@ -894,7 +900,7 @@
         "Injective assignment",
         "Identity certificate"
       ],
-      "notes": "The report-to-object graph encodes possible support, not independently measured associations. Unknown object types may still be markers, and unknown visibility must preserve an edge. Count and Hall-deficiency proofs require the stated physical identity assumptions, together with distinct positive reports from one view. The augmenting-path solver can reassign earlier matches to make room for a later report, which avoids the failure of a greedy one-pass assignment. A recorded deficient subset would provide the strongest explanatory figure, but that graph has not yet been captured for the current run. Until a separately approved recording exists, a current mathematical statement can be shown without fabricating graph nodes or calling them measured. Missing detections never add a negative chart-aid term.",
+      "notes": "The current rejection proof requires an injective assignment from all 64 positive aid reports to possible canonical objects over the entire cell. Individual degrees and overall candidate count are insufficient. Hall deficiency supplies a concrete obstruction. In the recorded example on main slide 25, reports 38,39 and 40 have exactly two neighbors, so no injection exists despite 1,359 candidate objects in the whole graph. The witness includes all six edges of that subset. Unknown bounds and invalid metadata retain possibilities. The GPU performs the graph construction and matching; a later CPU analysis selected the displayed subset from saved incidence. Main slide 25 provides the visual example, while this backup states the general condition.",
       "asset": "F26",
       "figure_requirements": "Current-run explanatory incidence graph remains pending.",
       "source_paths": [
@@ -903,7 +909,7 @@
         "maritime/search/gpu/resident/bearing_bounds.cu",
         "docs/resident-pruning-bounds.md"
       ],
-      "evidence_status": "pending_current_trace_recording",
+      "evidence_status": "code_proof_with_recorded_witness_reference",
       "transition": "Return to the main discussion after resolving this detail.",
       "caption": "",
       "current_run_only": true
@@ -935,7 +941,7 @@
       "title": "Catalog provenance and epochs",
       "onslide": [
         "NOAA ENC",
-        "AIS snapshot · July 2023"
+        "AIS snapshot \u00b7 July 2023"
       ],
       "notes": "The distributed geographic inputs retain source information and are not presented as a synchronized real harbor measurement. The AIS archive contributes 2,268 selected records in the July 15, 2023 one-minute window. The chart extraction occurred in October 2026. Source chart features span scales, and exact-coordinate canonicalization combines chart components without merging nearby distinct points. The resulting 32,168 chart locations retain their source components, including unresolved classification or identity metadata where applicable. Maps should distinguish source class from object class and candidate status. Official website captures provide documentary provenance only; the archived files and their hashes define what the search actually used. A website screenshot must therefore have its own capture date, rather than standing in for the archived service response.",
       "asset": "F07",
@@ -983,7 +989,7 @@
       ],
       "notes": "The remaining unresolved centers are genuine saved alternatives, rather than removed outliers. Their nominal grouped assignments match 60 to 63 of the 64 positive reports, but the independent raw-object graph has not proved them impossible. The raw graph preserves possible objects without full polygon sight-line edge removal, and the saved universal rectangular barrier list is empty. The final nominal predictor does apply full shoreline LOS, so the two stages can differ in what they rule out. The archive alone does not assign every unresolved center a unique geometric cause. A future approved per-center diagnostic could expose the relevant visible, blocked and grouped support. Keep the local spread distinct from a probability contour, confidence interval or guaranteed bound on observer error. In the local map, the cross marks simulated truth and the diamond marks the selected estimate. The status symbols describe the saved terminal centers.",
       "asset": "F32",
-      "figure_requirements": "Existing candidates; per-center causal diagnostics pending. Include the visible symbol key × Truth and ◆ Selected estimate.",
+      "figure_requirements": "Existing candidates; per-center causal diagnostics pending. Include the visible symbol key \u00d7 Truth and \u25c6 Selected estimate.",
       "source_paths": [
         "docs/verification/charleston-coastwide-distinct-result.json",
         "docs/verification/charleston-coastwide-distinct-terminal-results.npz",

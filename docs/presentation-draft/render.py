@@ -60,7 +60,7 @@ def main():
     manifest = {
         "source": "figures.typ; map.typ; technical.typ",
         "rendering": "Typst/CeTZ to vector PDF; PDF rasterized for slide assembly",
-        "figures": figures,
+        "figures": sorted(p.stem for p in (ROOT / "figures").glob("*.pdf")),
         "no_model_executions": True,
     }
     (ROOT / "render-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

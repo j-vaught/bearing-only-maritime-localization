@@ -99,8 +99,8 @@
       "bytes": 166352
     },
     "data/sources.json": {
-      "sha256": "429d7747193bc71ef2b797917932974397d17643946ae383ee88044539028fa5",
-      "bytes": 11479
+      "sha256": "d721f9ec1549fcba86a3a1da837fc9b57031327f9808054c0bc5d19c1a7adcff",
+      "bytes": 11637
     },
     "data/technical.json": {
       "sha256": "840e7d54c1ea742aaa0d441d91390d6770886266486a1d5e9c7d58f7f6556435",
@@ -507,7 +507,7 @@
       "slide": 24,
       "title": "Pruning",
       "planned_asset": "F25",
-      "evidence_status": "pending_current_trace_recording",
+      "evidence_status": "current_code_conditions_and_recorded_decisions",
       "drawing_source": "figures.typ; map.typ; technical.typ",
       "files": {
         "figures/24.pdf": {
@@ -524,16 +524,16 @@
       "slide": 25,
       "title": "Distinct markers must explain distinct reports",
       "planned_asset": "F26",
-      "evidence_status": "pending_current_trace_recording",
-      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "evidence_status": "recorded_gpu_incidence_witness",
+      "drawing_source": "pruning/witness.typ",
       "files": {
         "figures/25.pdf": {
-          "sha256": "baa14b5f63ef98f9b2cc641a99ac85b1f9f41a97fdb059afd5a0d0b081e57280",
-          "bytes": 26717
+          "sha256": "b6ca453b87b15c0a40c19580aa86c61dc7bc4e3d1dfc0a6fdfc11b76656fab40",
+          "bytes": 39494
         },
         "figures/25.png": {
-          "sha256": "3e293217856244a0c44d4f042685eb4aea6c95845ecc9475d29c0d4693e8aeba",
-          "bytes": 65395
+          "sha256": "bf41dd86c1a0594241c26e34f4a6cbee0ec84d999111d05a868f631505e8f41b",
+          "bytes": 106846
         }
       }
     },
@@ -558,16 +558,16 @@
       "slide": 27,
       "title": "The coast-wide search contracts toward Charleston",
       "planned_asset": "F29",
-      "evidence_status": "pending_current_trace_recording",
-      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "evidence_status": "recorded_current_pruning_trace_with_frozen_terminal_overlay",
+      "drawing_source": "pruning/pruning-movie.typ",
       "files": {
         "figures/27.pdf": {
-          "sha256": "ab027230a716accba894a4d90b95031970187362beec5b0f7949092caf26dd88",
-          "bytes": 386489
+          "sha256": "1fb8427a40a8a5a6323405c22e0d533d03eb13d113af370e3a66a07c9c37f10e",
+          "bytes": 284355
         },
         "figures/27.png": {
-          "sha256": "3111de315e0daa61293ecd66215e4420910651caa775f5f167ebd9cf39e940d7",
-          "bytes": 99672
+          "sha256": "487a73094593607bc19c0f8a7f0231ebd77cd1074907c569e53f9403e5c086ba",
+          "bytes": 147966
         }
       }
     },
@@ -728,16 +728,16 @@
       "slide": "A4",
       "title": "Injective feasibility proof",
       "planned_asset": "F26",
-      "evidence_status": "pending_current_trace_recording",
+      "evidence_status": "code_proof_with_recorded_witness_reference",
       "drawing_source": "figures.typ; map.typ; technical.typ",
       "files": {
         "figures/A4.pdf": {
-          "sha256": "bd00daf132d7a6a0c688d37b98976e1aedb87727bfb537bfc07024e779607429",
-          "bytes": 26717
+          "sha256": "14af7524c01e17c228572b6c1cece96ff0d84bbf304513b5d681de278a245601",
+          "bytes": 26379
         },
         "figures/A4.png": {
-          "sha256": "3e293217856244a0c44d4f042685eb4aea6c95845ecc9475d29c0d4693e8aeba",
-          "bytes": 65395
+          "sha256": "d7200df9f047c1b6103eec7b6fdd990b4388a9a1a029136d0410b0fcb782e3a1",
+          "bytes": 65343
         }
       }
     },
@@ -811,6 +811,15 @@
     }
   ],
   "media": {
+    "pruning/movie/pruning-playback.mp4": {
+      "sha256": "f57662f9808930d05cde4aea61724c94ae2d2d27a51692d159c5d1b3c06b4b61",
+      "bytes": 755035,
+      "width": 1920,
+      "height": 1080,
+      "r_frame_rate": "24/1",
+      "duration": "38.000000",
+      "nb_frames": "912"
+    },
     "videos/recorded-result-overview.mp4": {
       "sha256": "705eb367c8b697808d6fa14c948ba86fc7158987cac35a8e7c19ef99270be243",
       "bytes": 322502,
@@ -832,17 +841,18 @@
   },
   "deck": {
     "file": "slides.pdf",
-    "sha256": "051aa203ac696b141087371eaeddbd6787c3674b73d23c255d6411d6e37d4518"
+    "sha256": "89d1f102d1ffffbff900a668b68c3d72771979c4dc6e614bbc71e365e92d2cfe",
+    "bytes": 3796907
   },
-  "render_scope": "Saved-data rendering and declared geometric/work-count calculations. No search or simulation execution.",
-  "pending": "Detailed current spatial pruning trace and actual rejection incidence graphs; combined observed-AIS localization comparison.",
+  "render_scope": "Original saved experiment outputs, approved pruning-only GPU replay, and declared calculations. No terminal scoring or simulation was rerun.",
+  "pending": "Combined observed-AIS localization comparison and additional-port localization evaluation.",
   "source_documents": {
     "slides.typ": "326cf84cf131ccc516641ad972eaf09a50186d2bc64bfca451d32dfa9735c39a",
-    "slides.json": "2fbe8ea8d7653edbc7110e3743edc1cd660535da4e41b59984ef64eb9dab0712",
-    "notes.md": "9bb253cfe7193a35f539ff971b5982107d21bbd75bd0c63866c4cf7f37be2c71",
-    "figures.typ": "e1a4099b620812f4501f5314ace5da224fe83d53a951ca22fecd7c8cfdb93aa6",
+    "slides.json": "a2f91a35b6d8eb64dae7de2e795b4acf6f5aaf017d8e646ae4586cf009e18b2a",
+    "notes.md": "d353402e41dba5224618750afb9e5db850be89dc6923345c8c4fb22ac19c1088",
+    "figures.typ": "6bf8eb1d450351b302a3b0b97072444b615be1ea42155654522024468c9d44bf",
     "map.typ": "90c4e2b7c3dd273d740f231dbf68c02bc73d59d77e39fa7f5e4cf578b1e006e3",
-    "technical.typ": "11f7b228454518b213aa073306ab23613ec49df00d6aadf79231a0dd07972516"
+    "technical.typ": "f41ad3a9eebfa37faa9913ecb45047855649e1976d44e104b0f1af36d5c00780"
   },
   "pagination": {
     "format": "page / total",
@@ -855,5 +865,17 @@
       "Results",
       "Technical backup"
     ]
+  },
+  "recording_source_revision": "a6ce56c",
+  "pruning_recording": {
+    "trace": "pruning/pruning-trace.npz",
+    "trace_sha256": "3cdd8903cbd66e8a6e6b13cecb75b1ef15460ae4f4b3a6e9056743878f989089",
+    "parity": "pruning/parity.json",
+    "all_decisions": 64875,
+    "terminal_rectangles_exactly_match": 397,
+    "terminal_scoring_executed": false,
+    "caches_unchanged": true,
+    "movie": "pruning/movie/pruning-playback.mp4",
+    "witness": "pruning/witness.json"
   }
 }

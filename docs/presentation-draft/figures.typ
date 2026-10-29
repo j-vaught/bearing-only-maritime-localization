@@ -1,6 +1,7 @@
 #import "@preview/cetz:0.5.2": canvas, draw
 #import "map.typ": *
 #import "technical.typ": *
+#import "pruning/pruning-movie.typ": figure as trace-figure
 
 #set page(width:276mm,height:128mm,margin:0mm,fill:white)
 #set text(font:"Arial",size:14pt,fill:black)
@@ -416,16 +417,10 @@
   else if id == "22" { tech-budget() }
   else if id == "23" { tech-refinement() }
   else if id == "24" { tech-pruning() }
-  else if id == "25" { tech-distinct-proof() }
+  else if id == "25" { include "pruning/witness.typ" }
   else if id == "28" { tech-workload() }
   else if id == "27" {
-    canvas(length:1mm,{
-      import draw: *
-      rect((0,0),(276,128),stroke:none)
-      basemap(coast,origin:(0,12),w:110,h:110,points:false,title:[Full coast])
-      basemap(harbor,origin:(121,12),w:152,h:110,points:true,title:[Charleston])
-      empty-capture((24,35),224,56,[VIDEO · progressive pruning],[Current spatial decision recording required])
-    })
+    trace-figure(json("pruning/movie/body-poster.json"),body:true)
   } else if id == "29" {
     canvas(length:1mm,{
       import draw: *

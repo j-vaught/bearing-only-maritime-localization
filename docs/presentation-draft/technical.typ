@@ -151,7 +151,7 @@
   _label((228.5, 76), [$q_1, dots, q_(n_C)$], size: 25pt)
   _label((138, 43), [$i != k => pi(i) != pi(k)$], size: 23pt)
   _label((138, 23), [$abs(N_(C) (S)) < abs(S) => nu(E_C) < 64$], size: 23pt)
-  _label((138, 6), [Equations only. Actual rejection adjacency awaits a recorded witness.], size: 14pt, color: _muted)
+  _label((138, 6), [General condition. The recorded rejection witness is shown on slide 25.], size: 14pt, color: _muted)
 })
 
 // Residual scoring is distinct from the conservative whole-cell support graph.

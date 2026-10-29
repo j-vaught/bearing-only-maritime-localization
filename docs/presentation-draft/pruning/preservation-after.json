@@ -1,0 +1,117 @@
+{
+  "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/prepared-cache/b6bcc2d3e0c0d960a2ba00e496d59ea37846dc3bb08f00ec773752d894caad90.npz": {
+    "size": 1306233869,
+    "mtime_ns": 1793216304631740569,
+    "sha256": "8f7c4335b9881787c64d3d89c093f4de460eee5bff1ab6e17313e4bc059a987d"
+  },
+  "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/resident-aid-objects/aid-view-86f52519f4021d096e92b668a31005530ebd9073f2c2055f3f75f964653940c6.npz": {
+    "size": 7073914,
+    "mtime_ns": 1793234826838026437,
+    "sha256": "92d10eea168ac13158c4863514c8c8b9d6d34e9a74acc28b094b9ce6c2d0176e"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/docs/verification/charleston-coastwide-distinct-result.json": {
+    "size": 20485,
+    "mtime_ns": 1793290222168365671,
+    "sha256": "f09ecdbf67736ef081c3ee8b8f4c48b249ecd8f75ebf7516cd5a006cba6b554d"
+  },
+  "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/charleston-coast-distinct-marker-20261029T153236Z/settings.json": {
+    "size": 1747,
+    "mtime_ns": 1793287956201311940,
+    "sha256": "9c5f51045578a3942f0bbafd7d66345e628980d49f48347cccb0afe2c70f95c4"
+  },
+  "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/charleston-coast-distinct-marker-20261029T153236Z/estimate-before-truth.json": {
+    "size": 10998,
+    "mtime_ns": 1793287978103266765,
+    "sha256": "573343e37aacc7ee5fc2e8cb10ca9c44147ae75afc06b779d4733fcc4542fded"
+  },
+  "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/charleston-coast-distinct-marker-20261029T153236Z/estimate-freeze.json": {
+    "size": 144,
+    "mtime_ns": 1793287978346446350,
+    "sha256": "31dc58cc6b284dbfe8074807f40cd4ab8f96e483436b5a5a9b24344d9206de5b"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/docs/verification/charleston-coastwide-distinct-terminal-results.npz": {
+    "size": 414848,
+    "mtime_ns": 1793290106572946319,
+    "sha256": "06a662575e177b3444c87d9d8fa62f0e0ee1a26345af47818e07c4dc58e942ce"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/parallel_prediction.py": {
+    "size": 9599,
+    "mtime_ns": 1793223021964195447,
+    "sha256": "26e90384cb20b910e488f16a47a624bcb106cef8cbf574783a8acf1756395d60"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/__init__.py": {
+    "size": 169,
+    "mtime_ns": 1793207942855081537,
+    "sha256": "aed585c1ba0795935a5aad76d57e01c6d9ad52cdfaa9bc4315883826e76675c8"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/cache.py": {
+    "size": 8077,
+    "mtime_ns": 1793233055212827531,
+    "sha256": "0f9b47a8860f73bbd40b36af637273e7d5ba1a1ecaeb5285a10aa03ce251f859"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/profiling.py": {
+    "size": 18860,
+    "mtime_ns": 1793237649173598965,
+    "sha256": "1a125f16556cbc07043fa25c08811e66894329c4b9b340da569eb0e55622c634"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/cooperative_matching.py": {
+    "size": 4208,
+    "mtime_ns": 1793222935975428314,
+    "sha256": "811b86464d72498cd861a085c21ef934a12b8f658158fd363a308df7e3d36511"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/chart_pruning.py": {
+    "size": 5385,
+    "mtime_ns": 1793249664317625680,
+    "sha256": "4b25afed1ffcd2905c86d04f4dcefe48b349e62af99c6e2612c31767d593fdff"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/engine.py": {
+    "size": 24584,
+    "mtime_ns": 1793250039933795080,
+    "sha256": "ab667ddc96af569c8eb2c81e6e6d69ea80b7350f5b5e5600a7440a3b8543aab5"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/preparation.py": {
+    "size": 10181,
+    "mtime_ns": 1793209188618047038,
+    "sha256": "2e663ff9e6419c902ebba57f92f3de922e0b956e828f1d2915039e4fc914778c"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/aid_view.py": {
+    "size": 17474,
+    "mtime_ns": 1793233808421508899,
+    "sha256": "5ea89dbb3653cc71971df28c459c59d4d5db09729b0c0cecef34074050a4a230"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/optimized.py": {
+    "size": 5880,
+    "mtime_ns": 1793249732888321448,
+    "sha256": "1a1c94dfe68a2ca062460dec4f023c7f83625dfa85b36e8084ace4db77909936"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/distinct_pruning.py": {
+    "size": 12228,
+    "mtime_ns": 1793250265195475397,
+    "sha256": "167e834fc9c495af072d4d81593fa2f252af9d13eb5c02e353473b34d41b221c"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/bearing_bounds.cu": {
+    "size": 1875,
+    "mtime_ns": 1793223317211404987,
+    "sha256": "6295916a0c521ab5babf0e378366cdbe3ae29cc4d6afda8d584c9e6b3bfe64a2"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/kernels.cu": {
+    "size": 15294,
+    "mtime_ns": 1793209371639516822,
+    "sha256": "9726f85b9358573574ca80a2e6f18ba10b348a11bd0e7a317ea7a4354cb339b7"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/distinct_pruning.cu": {
+    "size": 11527,
+    "mtime_ns": 1793250244017635817,
+    "sha256": "2dc86d3c5c723ac7222147ea4d008aadf71ab5c9ad0b0d31c7357795dc046e6e"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/parallel_prediction.cu": {
+    "size": 6504,
+    "mtime_ns": 1793222886272560885,
+    "sha256": "8d4f8dd4f210ac23129b2d645c8c13cec01ed9610c62bf1f32b7c25b03b24ebb"
+  },
+  "/home/jvaught2/projects/bearing-only-maritime-localization/maritime/search/gpu/resident/cooperative_matching.cu": {
+    "size": 5872,
+    "mtime_ns": 1793224760592884814,
+    "sha256": "e69c63544c812cecf33d6b45e081e3da12da25a01e33e51a03a224c8227e022e"
+  }
+}
