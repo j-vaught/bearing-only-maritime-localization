@@ -832,16 +832,28 @@
   },
   "deck": {
     "file": "slides.pdf",
-    "sha256": "2b99ad63463d12ae84a3834344999b70d5fb54c5e2fac2c524ffa656ac1d81cc"
+    "sha256": "051aa203ac696b141087371eaeddbd6787c3674b73d23c255d6411d6e37d4518"
   },
   "render_scope": "Saved-data rendering and declared geometric/work-count calculations. No search or simulation execution.",
   "pending": "Detailed current spatial pruning trace and actual rejection incidence graphs; combined observed-AIS localization comparison.",
   "source_documents": {
-    "slides.typ": "646aa6208b66b2ac16d76d4969a6136d0c173da4b421e19f87ded3e0663c6671",
+    "slides.typ": "326cf84cf131ccc516641ad972eaf09a50186d2bc64bfca451d32dfa9735c39a",
     "slides.json": "2fbe8ea8d7653edbc7110e3743edc1cd660535da4e41b59984ef64eb9dab0712",
     "notes.md": "9bb253cfe7193a35f539ff971b5982107d21bbd75bd0c63866c4cf7f37be2c71",
     "figures.typ": "e1a4099b620812f4501f5314ace5da224fe83d53a951ca22fecd7c8cfdb93aa6",
     "map.typ": "90c4e2b7c3dd273d740f231dbf68c02bc73d59d77e39fa7f5e4cf578b1e006e3",
     "technical.typ": "11f7b228454518b213aa073306ab23613ec49df00d6aadf79231a0dd07972516"
+  },
+  "pagination": {
+    "format": "page / total",
+    "total_pages": 41,
+    "sections": [
+      "Introduction",
+      "Geographic data",
+      "Simulator",
+      "Search",
+      "Results",
+      "Technical backup"
+    ]
   }
 }

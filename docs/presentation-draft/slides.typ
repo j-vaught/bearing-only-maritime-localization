@@ -11,19 +11,21 @@
   let title-size=if slide.title.len()>55 {24pt} else {27pt}
   place(top+left,dx:18mm,dy:11mm,block(width:284mm)[#text(size:title-size,weight:"bold")[#slide.title]])
   place(top+left,dx:18mm,dy:30mm,line(length:284mm,stroke:0.65pt+rgb("#73000A")))
-  place(top+left,dx:18mm,dy:36mm,image("figures/"+id+".png",width:284mm))
+  place(top+left,dx:22mm,dy:36mm,image("figures/"+id+".png",width:276mm))
   if id=="01" {
-    place(bottom+left,dx:18mm,dy:-6mm,text(size:12pt)[J.C. Vaught])
+    place(bottom+left,dx:18mm,dy:-10mm,text(size:12pt)[J.C. Vaught])
   } else if id in video-slides {
     let caption=if id=="13" {[VIDEO PLACEHOLDER · saved scene → bearing observations]} else {[VIDEO PLACEHOLDER · synchronized pruning trace]}
-    place(bottom+left,dx:18mm,dy:-5mm,text(size:11pt,fill:rgb("#73000A"))[#caption])
+    place(bottom+left,dx:18mm,dy:-10mm,text(size:10pt,fill:rgb("#73000A"))[#caption])
   } else if id=="20" {
-    place(bottom+left,dx:18mm,dy:-5mm,text(size:10pt)[Real map/catalog crops · only Charleston has the completed localization result shown here.])
+    place(bottom+left,dx:18mm,dy:-10mm,text(size:10pt)[Real map/catalog crops · only Charleston has the completed localization result shown here.])
   } else if id=="31" {
-    place(bottom+left,dx:18mm,dy:-5mm,text(size:10pt)[Proposed evaluation · current result uses chart-aid bearings.])
+    place(bottom+left,dx:18mm,dy:-10mm,text(size:10pt)[Proposed evaluation · current result uses chart-aid bearings.])
   } else if id=="29" or id=="32" or id=="33" {
-    place(bottom+left,dx:18mm,dy:-5mm,text(size:10pt)[Simulated observations on archived NOAA geometry.])
+    place(bottom+left,dx:18mm,dy:-10mm,text(size:10pt)[Simulated observations on archived NOAA geometry.])
   }
-  place(bottom+right,dx:-18mm,dy:-5mm,text(size:11pt,fill:rgb("#666666"))[#slide.number])
+  let section=if i < 6 {"Section 1 · Introduction"} else if i < 12 {"Section 2 · Geographic data"} else if i < 20 {"Section 3 · Simulator"} else if i < 28 {"Section 4 · Search"} else if i < 33 {"Section 5 · Results"} else {"Section 6 · Technical backup"}
+  place(bottom+left,dx:18mm,dy:-3mm,text(size:10pt,fill:rgb("#555555"))[#section])
+  place(bottom+right,dx:-18mm,dy:-3mm,text(size:10pt,fill:rgb("#555555"))[#(i+1) / #slides.len()#if type(slide.number)!=int [ · #slide.number]])
   if i < slides.len() - 1 {pagebreak()}
 }
