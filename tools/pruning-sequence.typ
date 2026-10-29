@@ -1,5 +1,5 @@
 #import "@preview/cetz:0.5.2": canvas, draw
-#set page(width: 260mm, height: 245mm, margin: 10mm, fill: white)
+#set page(width: 260mm, height: 265mm, margin: 10mm, fill: white)
 #set text(font: "DejaVu Sans", size: 10pt, fill: black)
 #let data = json("stages.json")
 #let blue = rgb("#1f77b4")
