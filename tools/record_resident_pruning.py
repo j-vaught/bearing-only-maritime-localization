@@ -64,6 +64,7 @@ def recorded_run(*args: Any, **kwargs: Any) -> dict[str, Any]:
             "1": "entire_cell_known_land",
             "2": "at_least_one_positive_marker_has_no_possible_match",
             "3": "too_few_distinct_possible_markers",
+            "4": "no_injective_positive_marker_explanation",
         },
         "depth_semantics": "dyadic cell scale; clipped edge roots may be narrower",
         "summary": result,

@@ -24,6 +24,17 @@ from maritime.search.gpu.batch_assignment import _RAW_HUNGARIAN_SOURCE
 from .preparation import PreparedWorld
 
 
+def _terminal_status_codes(
+    cp: Any, point_states: Any, positive_certified: Any, negative_certified: Any
+) -> Any:
+    """Keep a separate physical impossibility proof above nominal group matches."""
+    return cp.where(
+        point_states == 1,
+        3,
+        cp.where(negative_certified, 1, cp.where(positive_certified, 0, 2)),
+    ).astype(cp.int32)
+
+
 @dataclass(frozen=True)
 class ResidentConfig:
     bounds_en_m: tuple[float, float, float, float]
@@ -187,6 +198,10 @@ class ResidentDevice:
         )
         return state
 
+    def positive_marker_rejection(self, cells: Any, bearings: Any, tolerances: Any) -> Any:
+        """Optional certified positive-evidence proof; baseline retains its old gates."""
+        return None
+
     def score(self, cells: Any, bearings: Any, tolerances: Any) -> dict[str, Any]:
         """Prediction, grouping, matching and residuals stay on this device."""
         cp, cfg, w = self.cp, self.config, self.world
@@ -233,6 +248,7 @@ class ResidentDevice:
                 residual_deg=cp.full(b, cp.nan),
                 flags=flags,
                 matched_records=cp.empty((b, 0), dtype=cp.int32),
+                marker_rejection_reason=cp.zeros(b, dtype=cp.int32),
             )
         valid = cp.arange(g)[None, :] < gc[:, None]
         ga, ge = cp.where(valid, ga, 0.0), cp.where(valid, ge, 0.0)
@@ -288,23 +304,49 @@ class ResidentDevice:
         exact_matches = cp.take_along_axis(gx, index, axis=1) == 1
         record_ids = cp.where(live, cp.take_along_axis(gi, index, axis=1), -1)
         complete = cp.all(live, axis=1)
-        certain = complete & cp.all(exact_matches, axis=1) & (flags == 0) & (point == 0)
-        chart_known = cp.empty(b, dtype=cp.int32)
-        self._launch(
-            "candidate_scope",
-            b,
-            (
-                cells,
-                np.int32(b),
-                *self.map_args,
-                np.float64(cfg.radius_m * (w.max_projection_scale or 1)),
-                chart_known,
-            ),
+        selected_residual = cp.take_along_axis(residual, index[:, :, None], axis=2)[:, :, 0]
+        # A group extent is possible support, not a measured displacement of its
+        # representative. Only a match inside the physical bearing tolerance can
+        # certify a position; a numerical-boundary match remains unresolved.
+        physical_match = selected_residual < tolerances[None, :] - decision_margin
+        certain = (
+            complete & cp.all(exact_matches & physical_match, axis=1) & (flags == 0) & (point == 0)
         )
-        assumptions = bool(self.marker_proofs and self.exact_world and w.identities_complete)
-        certain &= assumptions & (chart_known == 1)
-        impossible = (~complete) & (flags == 0) & (point == 0) & (chart_known == 1) & assumptions
-        status = cp.where(point == 1, 3, cp.where(certain, 0, cp.where(impossible, 1, 2)))
+        assumptions = bool(
+            self.marker_proofs
+            and getattr(self, "exact_marker_world", self.exact_world)
+            and getattr(self, "marker_identities_complete", w.identities_complete)
+        )
+        # Known observer water and individually certified matched sight lines are
+        # sufficient positive evidence. Unrelated shoreline outside those rays
+        # need not fill a square surrounding the complete sensor view.
+        certain &= assumptions
+        rejection_reason = self.positive_marker_rejection(cells, bearings, tolerances)
+        if rejection_reason is None:
+            # Retain the legacy baseline's negative-evidence gates. Optimized
+            # scoring replaces this with a separate conservative physical graph.
+            chart_known = cp.empty(b, dtype=cp.int32)
+            self._launch(
+                "candidate_scope",
+                b,
+                (
+                    cells,
+                    np.int32(b),
+                    *self.map_args,
+                    np.float64(cfg.radius_m * (w.max_projection_scale or 1)),
+                    chart_known,
+                ),
+            )
+            impossible = (
+                (~complete) & (flags == 0) & (point == 0) & (chart_known == 1) & assumptions
+            )
+            rejection_reason = cp.zeros(b, dtype=cp.int32)
+        else:
+            # Global nominal grouping/visibility warnings remain diagnostics.
+            # They cannot invalidate an independently certified absence of any
+            # injective explanation, including when another map area is unknown.
+            impossible = (rejection_reason >= 2) & (rejection_reason <= 4)
+        status = _terminal_status_codes(cp, point, certain, impossible)
         if bool(cp.any(errors != 0).item()):
             raise RuntimeError("CUDA assignment error; no fallback score was generated.")
         return dict(
@@ -313,6 +355,7 @@ class ResidentDevice:
             residual_deg=cp.where(complete, matched, cp.nan),
             flags=flags,
             matched_records=record_ids,
+            marker_rejection_reason=rejection_reason,
         )
 
     def split(self, cells: Any) -> Any:
@@ -395,6 +438,20 @@ def run_resident_search(
             "4": "numerical_failure",
             "8": "numerical_boundary",
         },
+        marker_rejection_reasons={
+            "0": "no certified physical-positive rejection",
+            "2": "positive marker has no possible object",
+            "3": "too few distinct possible objects",
+            "4": "no injective positive-marker explanation",
+        },
+        uncertainty_semantics=(
+            "Nominal flags remain diagnostics. An independent certified physical-positive "
+            "rejection may establish inconsistent status despite unrelated nominal flags."
+        ),
+        positive_marker_model=(
+            "Distinct physical representatives with bounded bearing error; group extent "
+            "does not certify an arbitrary representative bearing displacement."
+        ),
         position_support_complete=world.position_support_complete,
         chart_scope_certified=world.chart_scope_certified,
         marker_bearings_deg=bearings.tolist(),

@@ -29,13 +29,28 @@ class OptimizedResidentDevice(ResidentDevice):
         self.use_cooperative_matching = cooperative_matching
         self.use_true_bearings = true_bearings
         self.use_independent_chart_pruning = independent_chart_pruning
-        if independent_chart_pruning and true_bearings:
-            # Native true bearings do not depend on the old projection-angle
-            # allowance. Retain every other independent proof certificate.
+        if independent_chart_pruning:
+            cp = self.cp
+            with cp.cuda.Device(device), self.stream:
+                objects = self.object_args[2]
+                eligible = objects[:, 6] != 2
+                bounds = objects[eligible, 4]
+                self.chart_position_support_complete = bool(cp.all(cp.isfinite(bounds)).item())
+                self.exact_marker_world = bool(cp.all(bounds == 0).item())
+                self.marker_identities_complete = bool(cp.all(objects[eligible, 7] == 1).item())
+                self.max_uncertainty = (
+                    float(cp.max(bounds).item())
+                    if self.chart_position_support_complete and len(bounds)
+                    else 0.0
+                )
+            # Known vessels cannot explain a positive chart-aid report. Their
+            # positional or identity uncertainty must not disable aid proofs.
+            # Unknown object types remain included among possible chart markers.
             self.marker_proofs = bool(
                 world.chart_scope_certified
-                and world.position_support_complete
+                and self.chart_position_support_complete
                 and world.max_projection_scale is not None
+                and (true_bearings or world.azimuth_error_deg is not None)
                 and config.trusted_marker_labels
                 and config.hard_bearing_bounds_asserted
                 and config.numerical_validation_accepted
@@ -68,6 +83,18 @@ class OptimizedResidentDevice(ResidentDevice):
                 destination[...] = result[key]
             return
         super()._launch(name, n, args)
+
+    def positive_marker_rejection(self, cells: Any, bearings: Any, tolerances: Any) -> Any:
+        """Prove center impossibility without unrelated nominal predictor warnings."""
+        if not self.use_independent_chart_pruning:
+            return super().positive_marker_rejection(cells, bearings, tolerances)
+        cp = self.cp
+        centers = (cells[:, :2] + cells[:, 2:]) * 0.5
+        center_cells = cp.concatenate((centers, centers), axis=1)
+        reasons = prune_chart_geometry(
+            self, center_cells, bearings, tolerances, true_bearings=self.use_true_bearings
+        )
+        return cp.where((reasons >= 2) & (reasons <= 4), reasons, 0).astype(cp.int32)
 
     def _cooperative_assignment(self, grid: Any, block: Any, args: tuple[Any, ...]) -> None:
         cp = self.cp

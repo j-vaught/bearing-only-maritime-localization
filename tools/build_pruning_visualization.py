@@ -180,7 +180,7 @@ def main():
             retained=len(retained),
             rejected=len(rejected),
             retained_area_m2=area,
-            state_counts={str(s): int(np.count_nonzero(states[selected] == s)) for s in range(4)},
+            state_counts={str(s): int(np.count_nonzero(states[selected] == s)) for s in range(5)},
         )
         statistics.append(row)
         bounds = np.r_[retained[:, :2].min(0), retained[:, 2:].max(0)] if len(retained) else domain

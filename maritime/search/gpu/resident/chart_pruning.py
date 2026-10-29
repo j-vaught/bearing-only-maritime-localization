@@ -11,6 +11,12 @@ from typing import Any
 
 import numpy as np
 
+from .distinct_pruning import (
+    build_distinct_chart_graph,
+    prune_distinct_chart_geometry,
+    solve_distinct_chart_graph,
+)
+
 
 def _source(true_bearings: bool = True) -> str:
     source = Path(__file__).with_name("kernels.cu").read_text()
@@ -42,6 +48,8 @@ def _source(true_bearings: bool = True) -> str:
         at = source.index('extern "C" __global__ void prune_chart_geometry')
         helper = Path(__file__).with_name("bearing_bounds.cu").read_text()
         source = source[:at] + helper + "\n" + source[at:]
+    distinct_source = Path(__file__).with_name("distinct_pruning.cu").read_text()
+    source += f"\n#define DISTINCT_TRUE_BEARINGS {int(true_bearings)}\n{distinct_source}"
     return source
 
 
@@ -59,9 +67,25 @@ def module_for(resident: Any, true_bearings: bool = True) -> Any:
 
 
 def prune_chart_geometry(
-    resident: Any, cells: Any, bearings: Any, tolerances: Any, *, true_bearings: bool = True
+    resident: Any,
+    cells: Any,
+    bearings: Any,
+    tolerances: Any,
+    *,
+    true_bearings: bool = True,
+    distinct_markers: bool = True,
 ) -> Any:
-    """Allow independent catalog proofs; never prune from shoreline absence."""
+    """Prove whole-cell physical impossibility, including distinct-marker matching.
+
+    The graph path requires a possible injective assignment of positive physical
+    reports to canonical objects. Unsupported bounds and exhausted workspaces
+    retain the cell. Set distinct_markers=False for the reviewed individual-only
+    path. Missing detections never create pruning evidence.
+    """
+    if distinct_markers:
+        return prune_distinct_chart_geometry(
+            resident, cells, bearings, tolerances, true_bearings=true_bearings
+        )
     cp, world, config = resident.cp, resident.world, resident.config
     if true_bearings and world.crs != "EPSG:32618":
         raise ValueError("True-bearing bounds are restricted to EPSG:32618.")
@@ -92,3 +116,12 @@ def prune_chart_geometry(
             ),
         )
     return state
+
+
+__all__ = [
+    "build_distinct_chart_graph",
+    "module_for",
+    "prune_chart_geometry",
+    "prune_distinct_chart_geometry",
+    "solve_distinct_chart_graph",
+]

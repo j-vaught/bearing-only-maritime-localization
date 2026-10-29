@@ -56,7 +56,7 @@ def main() -> None:
     parser.add_argument(
         "--optimized",
         action="store_true",
-        help="Use true-bearing pruning, parallel prediction and cooperative matching",
+        help="Use distinct-marker pruning, true bearings, parallel prediction and matching",
     )
     parser.add_argument(
         "--coarse-only",
