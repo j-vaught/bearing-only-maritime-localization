@@ -251,5 +251,6 @@
       "plot_time_s": 8.50740412203595,
       "error_m": 1.753628004458505
     }
-  ]
+  ],
+  "plot_scope": "19 completed searches only. Timeout and filtered skips are excluded from all three plots. All completed points share one marker style; raw catalog provenance remains in the data."
 }
