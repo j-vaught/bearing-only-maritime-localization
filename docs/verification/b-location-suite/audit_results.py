@@ -31,16 +31,18 @@ repo = Path(__file__).resolve().parents[3]
 records = read(output / "results.json")
 manifest = read(output / "manifest.json")
 assert read(output / "status.json")["stage"] == "finished"
-assert len(records) == 24
-assert [row["site_id"] for row in records] == [f"B{i}" for i in range(1, 25)]
+expected_sites = manifest.get("suite_order", [f"B{i}" for i in range(1, 25)])
+assert len(records) == len(expected_sites)
+assert [row["site_id"] for row in records] == expected_sites
 assert manifest["provenance"]["minimum_positive_aids"] == 16
 assert read(output / "cache-before.json") == read(output / "cache-after.json")
 with (repo / "data/observer_locations.csv").open() as stream:
-    observers = list(csv.DictReader(stream))
+    observers = {r["site_id"]: r for r in csv.DictReader(stream)}
 geod = Geod(ellps="WGS84")
 audited = []
-for row, observer in zip(records, observers, strict=True):
+for row in records:
     site = row["site_id"]
+    observer = observers[site]
     directory = Path(row["attempt_directory"])
     assert row["latitude_deg"] == observer["latitude_deg"]
     assert row["longitude_deg"] == observer["longitude_deg"]

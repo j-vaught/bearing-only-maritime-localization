@@ -1,0 +1,10 @@
+{
+  "evaluated": 102903,
+  "pruned": 86958,
+  "terminal": 78,
+  "completed_roots": 39435,
+  "complete": true,
+  "elapsed_s": 8.847971075680107,
+  "accuracy_evaluated": false,
+  "numerical_validation_accepted": true
+}

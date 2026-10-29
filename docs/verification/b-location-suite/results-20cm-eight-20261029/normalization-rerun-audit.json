@@ -1,0 +1,105 @@
+{
+  "author": "J.C. Vaught",
+  "passed": true,
+  "sites": [
+    {
+      "site_id": "B2",
+      "status": "completed",
+      "search_s": 8.096388972364366,
+      "position_error_m": 2.2459275103319025,
+      "devices_with_saved_root_outputs": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "site_id": "B6",
+      "status": "completed",
+      "search_s": 8.37907857913524,
+      "position_error_m": 0.9329296526183358,
+      "devices_with_saved_root_outputs": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "site_id": "B7",
+      "status": "completed",
+      "search_s": 21.006522382609546,
+      "position_error_m": 2.3383598148920237,
+      "devices_with_saved_root_outputs": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "site_id": "B18",
+      "status": "completed",
+      "search_s": 12.379672024864703,
+      "position_error_m": 23.45564118214372,
+      "devices_with_saved_root_outputs": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "site_id": "B19",
+      "status": "completed",
+      "search_s": 8.847971075680107,
+      "position_error_m": 0.39553968561762054,
+      "devices_with_saved_root_outputs": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "site_id": "B20",
+      "status": "completed",
+      "search_s": 9.698596008121967,
+      "position_error_m": 1.2639793057816449,
+      "devices_with_saved_root_outputs": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "site_id": "B21",
+      "status": "completed",
+      "search_s": 8.143060356378555,
+      "position_error_m": 0.2172849917798253,
+      "devices_with_saved_root_outputs": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "site_id": "B22",
+      "status": "completed",
+      "search_s": 8.855479583144188,
+      "position_error_m": 0.4082858162709077,
+      "devices_with_saved_root_outputs": [
+        0,
+        1,
+        2
+      ]
+    }
+  ],
+  "scientific_settings_and_seed_unchanged": true,
+  "changed_production_sources": [
+    "maritime/catalog_identity.py",
+    "maritime/search/gpu/resident/aid_view.py"
+  ],
+  "warning_certification_and_selection_sources_unchanged": true,
+  "saved_map_cache_reused_and_unchanged": true,
+  "previous_object_sidecar_unchanged": true,
+  "new_object_sidecar_fingerprints_stable": true,
+  "observations_regenerated_from_normalized_catalog": true,
+  "searches_performed_by_audit": 0
+}

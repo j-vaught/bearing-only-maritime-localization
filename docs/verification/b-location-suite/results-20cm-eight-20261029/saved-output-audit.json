@@ -1,0 +1,53 @@
+{
+  "author": "J.C. Vaught",
+  "audited_utc": "2026-10-29T22:37:27.858234+00:00",
+  "passed": true,
+  "records": [
+    {
+      "site_id": "B2",
+      "status": "completed",
+      "passed": true
+    },
+    {
+      "site_id": "B6",
+      "status": "completed",
+      "passed": true
+    },
+    {
+      "site_id": "B7",
+      "status": "completed",
+      "passed": true
+    },
+    {
+      "site_id": "B18",
+      "status": "completed",
+      "passed": true
+    },
+    {
+      "site_id": "B19",
+      "status": "completed",
+      "passed": true
+    },
+    {
+      "site_id": "B20",
+      "status": "completed",
+      "passed": true
+    },
+    {
+      "site_id": "B21",
+      "status": "completed",
+      "passed": true
+    },
+    {
+      "site_id": "B22",
+      "status": "completed",
+      "passed": true
+    }
+  ],
+  "cache_fingerprints_unchanged": true,
+  "strict_more_than15_aids_verified": true,
+  "completed_estimates_and_geodesic_errors_verified": true,
+  "authoritative_coordinates_preserved": true,
+  "all_searched_configs_match_saved_full_coast_reference": true,
+  "new_searches_run_for_audit": 0
+}
