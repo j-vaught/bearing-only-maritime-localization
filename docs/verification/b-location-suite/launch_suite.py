@@ -9,6 +9,8 @@ from pathlib import Path
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--site-ids", help="Comma-separated authoritative sites for an explicit retry")
+parser.add_argument("--refresh-aid-view", action="store_true")
+parser.add_argument("--normalized-catalog-check", action="store_true")
 args = parser.parse_args()
 repo = Path(__file__).resolve().parents[3]
 output = args.output.resolve()
@@ -25,6 +27,10 @@ argv = [
     "--minimum-positive-aids",
     "16",
 ]
+if args.refresh_aid_view:
+    argv.append("--refresh-aid-view")
+if args.normalized_catalog_check:
+    argv.append("--normalized-catalog-check")
 if args.site_ids:
     argv.extend(["--site-ids", args.site_ids])
 with (output / "supervisor.log").open("ab", buffering=0) as log:
@@ -39,7 +45,7 @@ launch = {
     "log": str(output / "supervisor.log"),
     "status": str(output / "status.json"),
     "output": str(output),
-    "approved_scope": "Sequential B1 through B24 full coast searches, GPUs 0,1,2, after checks",
+    "approved_scope": f"Full-coast sites {args.site_ids or 'B1 through B24'}, GPUs 0,1,2",
     "detached_session": True,
 }
 (output / "launch.json").write_text(json.dumps(launch, indent=2) + "\n")

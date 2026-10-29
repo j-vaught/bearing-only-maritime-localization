@@ -35,6 +35,29 @@ class RunnerChecks(unittest.TestCase):
             [0],
         )
 
+    def test_normalized_catalog_alignment_accepts_match_and_rejects_position_mismatch(self):
+        from types import SimpleNamespace
+
+        import numpy as np
+        from pyproj import Transformer
+
+        from maritime.schemas.inputs_v2 import CatalogRecordV2
+
+        record = CatalogRecordV2("aid", 32.77, -79.905, raw_type="physical_aid")
+        x, y = Transformer.from_crs(4326, 32618, always_xy=True).transform(-79.905, 32.77)
+        world = SimpleNamespace(
+            crs="EPSG:32618",
+            object_keys=("aid",),
+            objects=np.asarray([[x, y, -79.905, 32.77, 0, 0, 1, 1]]),
+        )
+        scene = SimpleNamespace(catalog=SimpleNamespace(records=(record,)))
+        result = runner.normalized_catalog_alignment(world, scene)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["objects_checked"], 1)
+        world.objects[0, 0] += 1
+        with self.assertRaisesRegex(ValueError, "normalized position differs"):
+            runner.normalized_catalog_alignment(world, scene)
+
     def test_threshold_boundary(self):
         self.assertFalse(runner.eligible_aid_count(3))
         self.assertFalse(runner.eligible_aid_count(15))

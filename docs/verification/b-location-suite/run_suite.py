@@ -222,7 +222,7 @@ def forbid_build(*args, **kwargs) -> NoReturn:
     raise RuntimeError("Saved cache missing; rebuilding is forbidden")
 
 
-def prepare(settings):
+def prepare(settings, *, refresh_aid_view=False):
     from shapely import from_geojson
 
     from maritime.schemas.inputs_v2 import CatalogV2, MapV2
@@ -243,7 +243,8 @@ def prepare(settings):
     print(json.dumps({"stage": "canonical_object_cache_loading", "utc": now()}), flush=True)
     original = aid_view._build_view
     try:
-        setattr(aid_view, "_build_view", forbid_build)
+        if not refresh_aid_view:
+            setattr(aid_view, "_build_view", forbid_build)
         world, object_hit, object_key = aid_view.load_or_canonicalize(
             object_dir, key, world, source_catalog
         )
@@ -269,6 +270,7 @@ def prepare(settings):
         "simulator_map_scene_load_s": time.perf_counter() - map_start,
         "base_cache_hit": hit,
         "object_cache_hit": object_hit,
+        "object_refresh_allowed": refresh_aid_view,
         "base_cache_key": key,
         "object_cache_key": object_key,
         "catalog_records": len(source_catalog.records),
@@ -297,6 +299,47 @@ def prepare(settings):
     if "cupy" in sys.modules:
         raise RuntimeError("Supervisor must not initialize CUDA before forking")
     return world, layers, scene, metadata
+
+
+def normalized_catalog_alignment(world, scene):
+    """Verify the updated object catalog directly, without a reference-frame search."""
+    import numpy as np
+    from pyproj import Transformer
+
+    from maritime.catalog_identity import COORDINATE_MERGE_RADIUS_M, RULE
+    from maritime.schemas.object_types import is_visual_entity, normalize_object_type
+    from maritime.simulator.runner import _offset_position
+
+    records = {
+        r.key: r for r in scene.catalog.records if is_visual_entity(r.normalized_type or r.raw_type)
+    }
+    if set(records) != set(world.object_keys):
+        raise ValueError("Simulator/search normalized object keys differ")
+    forward = Transformer.from_crs("EPSG:4326", world.crs, always_xy=True)
+    max_error = 0.0
+    for key, row in zip(world.object_keys, world.objects, strict=True):
+        record = records[key]
+        lon, lat = _offset_position(
+            record.longitude_deg, record.latitude_deg, dict(record.metadata)
+        )
+        x, y = forward.transform(lon, lat)
+        expected = np.asarray((x, y, lon, lat))
+        error = float(np.max(np.abs(row[:2] - expected[:2])))
+        if error > 1e-6 or not np.allclose(row[2:4], expected[2:4], rtol=0, atol=1e-12):
+            raise ValueError(f"Simulator/search normalized position differs for {key}")
+        kind = normalize_object_type(record.normalized_type or record.raw_type)
+        if row[6] != (1 if kind == "physical_aid" else 2 if kind == "vessel" else 0):
+            raise ValueError(f"Simulator/search normalized type differs for {key}")
+        max_error = max(max_error, error)
+    return {
+        "passed": True,
+        "rule": RULE,
+        "merge_radius_m": COORDINATE_MERGE_RADIUS_M,
+        "objects_checked": len(records),
+        "max_projected_coordinate_error_m": max_error,
+        "reference_frame_replayed": False,
+        "search_executed": False,
+    }
 
 
 def simulate(row, layers, scene, simulation_settings, directory):
@@ -516,6 +559,10 @@ def run_suite(args):
         "source_hashes": {str(p.relative_to(REPO)): digest(p) for p in sources},
         "search_timeout_s": args.search_timeout,
         "minimum_positive_aids": args.minimum_positive_aids,
+        "object_refresh_allowed": args.refresh_aid_view,
+        "catalog_validation": "normalized_catalog_alignment"
+        if args.normalized_catalog_check
+        else "saved_charleston_frame",
         "selected_sites": [row["site_id"] for row in rows],
         "resource_guard": "No selected compute context; allocation <=1GiB",
         "aid_filter": "Detected physical_aid reports only; vessels and unknown reports excluded",
@@ -564,7 +611,7 @@ def run_suite(args):
         return
     resource_guard()
     save(output / "status.json", {"stage": "shared_preparation", "updated_utc": now()})
-    world, vector_map, scene, shared = prepare(settings)
+    world, vector_map, scene, shared = prepare(settings, refresh_aid_view=args.refresh_aid_view)
     before = {
         p: {
             "sha256": digest(p),
@@ -575,23 +622,30 @@ def run_suite(args):
     }
     save(output / "shared-preparation.json", shared)
     save(output / "cache-before.json", before)
-    parity = output / "charleston-simulation-parity"
-    parity.mkdir(exist_ok=True)
-    regenerated, _ = simulate(all_rows[16], vector_map, scene, simulation_settings, parity)
-    saved = read(REPO / "docs/verification/charleston-blind-measurements.json")
-    prior = [m["bearing_deg"] for m in saved["measurements"] if m["object_type"] == "physical_aid"]
-    # Trial IDs differ, while physical reports and all noise draws must agree.
-    parity_result = {
-        "passed": regenerated == prior,
-        "regenerated_markers": len(regenerated),
-        "saved_markers": len(prior),
-        "saved_measurements_sha256": digest(
-            REPO / "docs/verification/charleston-blind-measurements.json"
-        ),
-    }
-    save(output / "charleston-simulation-parity.json", parity_result)
-    if not parity_result["passed"]:
-        raise RuntimeError("Charleston simulation parity failed; no suite search launched")
+    if args.normalized_catalog_check:
+        save(
+            output / "normalized-catalog-alignment.json", normalized_catalog_alignment(world, scene)
+        )
+    else:
+        parity = output / "charleston-simulation-parity"
+        parity.mkdir(exist_ok=True)
+        regenerated, _ = simulate(all_rows[16], vector_map, scene, simulation_settings, parity)
+        saved = read(REPO / "docs/verification/charleston-blind-measurements.json")
+        prior = [
+            m["bearing_deg"] for m in saved["measurements"] if m["object_type"] == "physical_aid"
+        ]
+        # Trial IDs differ, while physical reports and all noise draws must agree.
+        parity_result = {
+            "passed": regenerated == prior,
+            "regenerated_markers": len(regenerated),
+            "saved_markers": len(prior),
+            "saved_measurements_sha256": digest(
+                REPO / "docs/verification/charleston-blind-measurements.json"
+            ),
+        }
+        save(output / "charleston-simulation-parity.json", parity_result)
+        if not parity_result["passed"]:
+            raise RuntimeError("Charleston simulation parity failed; no suite search launched")
     if args.preflight_only:
         save(output / "status.json", {"stage": "preflight_passed", "updated_utc": now()})
         return
@@ -843,6 +897,16 @@ def main():
     parser.add_argument("--minimum-positive-aids", type=int, default=16)
     parser.add_argument(
         "--site-ids", help="Comma-separated authoritative sites for an explicit retry"
+    )
+    parser.add_argument(
+        "--refresh-aid-view",
+        action="store_true",
+        help="Allow a new object-only sidecar; base map rebuild remains forbidden",
+    )
+    parser.add_argument(
+        "--normalized-catalog-check",
+        action="store_true",
+        help="Check current normalized simulator/search object agreement",
     )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--preflight-only", action="store_true")
