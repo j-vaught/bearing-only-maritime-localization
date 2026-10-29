@@ -1,0 +1,9 @@
+{
+  "source": "figures.typ; map.typ; technical.typ",
+  "rendering": "Typst/CeTZ to vector PDF; PDF rasterized for slide assembly",
+  "figures": [
+    "29",
+    "A3"
+  ],
+  "no_model_executions": true
+}
