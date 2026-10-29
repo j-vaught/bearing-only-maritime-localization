@@ -1,0 +1,149 @@
+{
+  "minimum_positive_aids": 16,
+  "sites": [
+    {
+      "site_id": "B1",
+      "positive_marker_reports": 3,
+      "eligible": false,
+      "status": "skipped_aid_count"
+    },
+    {
+      "site_id": "B2",
+      "positive_marker_reports": 67,
+      "eligible": true,
+      "status": "failed"
+    },
+    {
+      "site_id": "B3",
+      "positive_marker_reports": 14,
+      "eligible": false,
+      "status": "skipped_aid_count"
+    },
+    {
+      "site_id": "B4",
+      "positive_marker_reports": 79,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B5",
+      "positive_marker_reports": 33,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B6",
+      "positive_marker_reports": 34,
+      "eligible": true,
+      "status": "failed"
+    },
+    {
+      "site_id": "B7",
+      "positive_marker_reports": 24,
+      "eligible": true,
+      "status": "failed"
+    },
+    {
+      "site_id": "B8",
+      "positive_marker_reports": 25,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B9",
+      "positive_marker_reports": 66,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B10",
+      "positive_marker_reports": 8,
+      "eligible": false,
+      "status": "skipped_aid_count"
+    },
+    {
+      "site_id": "B11",
+      "positive_marker_reports": 17,
+      "eligible": true,
+      "status": "timeout"
+    },
+    {
+      "site_id": "B12",
+      "positive_marker_reports": 30,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B13",
+      "positive_marker_reports": 49,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B14",
+      "positive_marker_reports": 100,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B15",
+      "positive_marker_reports": 70,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B16",
+      "positive_marker_reports": 20,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B17",
+      "positive_marker_reports": 64,
+      "eligible": true,
+      "status": "completed"
+    },
+    {
+      "site_id": "B18",
+      "positive_marker_reports": 20,
+      "eligible": true,
+      "status": "failed"
+    },
+    {
+      "site_id": "B19",
+      "positive_marker_reports": 28,
+      "eligible": true,
+      "status": "failed"
+    },
+    {
+      "site_id": "B20",
+      "positive_marker_reports": 23,
+      "eligible": true,
+      "status": "failed"
+    },
+    {
+      "site_id": "B21",
+      "positive_marker_reports": 53,
+      "eligible": true,
+      "status": "failed"
+    },
+    {
+      "site_id": "B22",
+      "positive_marker_reports": 33,
+      "eligible": true,
+      "status": "failed"
+    },
+    {
+      "site_id": "B23",
+      "positive_marker_reports": 15,
+      "eligible": false,
+      "status": "skipped_aid_count"
+    },
+    {
+      "site_id": "B24",
+      "positive_marker_reports": 58,
+      "eligible": true,
+      "status": "completed"
+    }
+  ]
+}

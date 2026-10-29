@@ -1,0 +1,12 @@
+{
+  "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/prepared-cache/b6bcc2d3e0c0d960a2ba00e496d59ea37846dc3bb08f00ec773752d894caad90.npz": {
+    "sha256": "8f7c4335b9881787c64d3d89c093f4de460eee5bff1ab6e17313e4bc059a987d",
+    "size": 1306233869,
+    "mtime_ns": 1793216304631740569
+  },
+  "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/resident-aid-objects/aid-view-86f52519f4021d096e92b668a31005530ebd9073f2c2055f3f75f964653940c6.npz": {
+    "sha256": "92d10eea168ac13158c4863514c8c8b9d6d34e9a74acc28b094b9ce6c2d0176e",
+    "size": 7073914,
+    "mtime_ns": 1793234826838026437
+  }
+}
