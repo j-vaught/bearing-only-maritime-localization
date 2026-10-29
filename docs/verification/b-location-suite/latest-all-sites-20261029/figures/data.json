@@ -1,0 +1,255 @@
+{
+  "author": "J.C. Vaught",
+  "scope": "Latest saved result for every B1\u2013B24 site. Eight 20 cm reruns replace prior failed rows; other sites retain earlier catalog results.",
+  "source_hashes": {
+    "original_csv": "24423809cc81aefcc84e6e6fb5efdf7dad08f40f779e63789964cb46961b632c",
+    "rerun_csv": "befbb470861087bb5c0d247822baef752fa593d26573b4f3677b289ebbb3c8a9"
+  },
+  "total_sites": 24,
+  "searched_sites": 20,
+  "certified_estimates": 19,
+  "timeouts": 1,
+  "skipped_sites": 4,
+  "rows": [
+    {
+      "site": "B1",
+      "port": "Searsport ME",
+      "aids": 3,
+      "status": "skipped_aid_count",
+      "cohort": "earlier_catalog",
+      "search_s": null,
+      "plot_time_s": null,
+      "error_m": null
+    },
+    {
+      "site": "B2",
+      "port": "Portland ME",
+      "aids": 62,
+      "status": "completed",
+      "cohort": "20cm_rerun",
+      "search_s": 8.096388972364366,
+      "plot_time_s": 8.096388972364366,
+      "error_m": 2.2459275103319025
+    },
+    {
+      "site": "B3",
+      "port": "Portsmouth NH",
+      "aids": 14,
+      "status": "skipped_aid_count",
+      "cohort": "earlier_catalog",
+      "search_s": null,
+      "plot_time_s": null,
+      "error_m": null
+    },
+    {
+      "site": "B4",
+      "port": "Boston",
+      "aids": 79,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 8.175225920975208,
+      "plot_time_s": 8.175225920975208,
+      "error_m": 0.875253962638143
+    },
+    {
+      "site": "B5",
+      "port": "Providence",
+      "aids": 33,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 14.530378237832338,
+      "plot_time_s": 14.530378237832338,
+      "error_m": 3.56543193667121
+    },
+    {
+      "site": "B6",
+      "port": "New Haven",
+      "aids": 36,
+      "status": "completed",
+      "cohort": "20cm_rerun",
+      "search_s": 8.37907857913524,
+      "plot_time_s": 8.37907857913524,
+      "error_m": 0.9329296526183358
+    },
+    {
+      "site": "B7",
+      "port": "Bridgeport CT",
+      "aids": 24,
+      "status": "completed",
+      "cohort": "20cm_rerun",
+      "search_s": 21.006522382609546,
+      "plot_time_s": 21.006522382609546,
+      "error_m": 2.3383598148920237
+    },
+    {
+      "site": "B8",
+      "port": "Port Jefferson NY",
+      "aids": 25,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 8.878142201341689,
+      "plot_time_s": 8.878142201341689,
+      "error_m": 1.841855930161129
+    },
+    {
+      "site": "B9",
+      "port": "New York and New Jersey",
+      "aids": 66,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 8.153641093987972,
+      "plot_time_s": 8.153641093987972,
+      "error_m": 0.9424969456630262
+    },
+    {
+      "site": "B10",
+      "port": "South Jersey",
+      "aids": 8,
+      "status": "skipped_aid_count",
+      "cohort": "earlier_catalog",
+      "search_s": null,
+      "plot_time_s": null,
+      "error_m": null
+    },
+    {
+      "site": "B11",
+      "port": "Philadelphia",
+      "aids": 17,
+      "status": "timeout",
+      "cohort": "earlier_catalog",
+      "search_s": 597.4141478477977,
+      "plot_time_s": 600,
+      "error_m": null
+    },
+    {
+      "site": "B12",
+      "port": "Wilmington DE",
+      "aids": 30,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 11.435310697183013,
+      "plot_time_s": 11.435310697183013,
+      "error_m": 1.3321148759348196
+    },
+    {
+      "site": "B13",
+      "port": "Baltimore",
+      "aids": 49,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 8.615781679283828,
+      "plot_time_s": 8.615781679283828,
+      "error_m": 1.9415635631752717
+    },
+    {
+      "site": "B14",
+      "port": "Virginia Hampton Roads",
+      "aids": 100,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 7.813942257780582,
+      "plot_time_s": 7.813942257780582,
+      "error_m": 2.0761644099585754
+    },
+    {
+      "site": "B15",
+      "port": "Morehead City",
+      "aids": 70,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 7.941480373032391,
+      "plot_time_s": 7.941480373032391,
+      "error_m": 1.3238734953981257
+    },
+    {
+      "site": "B16",
+      "port": "Wilmington NC",
+      "aids": 20,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 371.49643658613786,
+      "plot_time_s": 371.49643658613786,
+      "error_m": 0.7424118686022323
+    },
+    {
+      "site": "B17",
+      "port": "Charleston",
+      "aids": 64,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 7.819304667878896,
+      "plot_time_s": 7.819304667878896,
+      "error_m": 2.060303536941018
+    },
+    {
+      "site": "B18",
+      "port": "Savannah",
+      "aids": 21,
+      "status": "completed",
+      "cohort": "20cm_rerun",
+      "search_s": 12.379672024864703,
+      "plot_time_s": 12.379672024864703,
+      "error_m": 23.45564118214372
+    },
+    {
+      "site": "B19",
+      "port": "Brunswick GA",
+      "aids": 26,
+      "status": "completed",
+      "cohort": "20cm_rerun",
+      "search_s": 8.847971075680107,
+      "plot_time_s": 8.847971075680107,
+      "error_m": 0.39553968561762054
+    },
+    {
+      "site": "B20",
+      "port": "Jacksonville",
+      "aids": 21,
+      "status": "completed",
+      "cohort": "20cm_rerun",
+      "search_s": 9.698596008121967,
+      "plot_time_s": 9.698596008121967,
+      "error_m": 1.2639793057816449
+    },
+    {
+      "site": "B21",
+      "port": "Port Canaveral",
+      "aids": 57,
+      "status": "completed",
+      "cohort": "20cm_rerun",
+      "search_s": 8.143060356378555,
+      "plot_time_s": 8.143060356378555,
+      "error_m": 0.2172849917798253
+    },
+    {
+      "site": "B22",
+      "port": "Palm Beach",
+      "aids": 33,
+      "status": "completed",
+      "cohort": "20cm_rerun",
+      "search_s": 8.855479583144188,
+      "plot_time_s": 8.855479583144188,
+      "error_m": 0.4082858162709077
+    },
+    {
+      "site": "B23",
+      "port": "Port Everglades",
+      "aids": 15,
+      "status": "skipped_aid_count",
+      "cohort": "earlier_catalog",
+      "search_s": null,
+      "plot_time_s": null,
+      "error_m": null
+    },
+    {
+      "site": "B24",
+      "port": "PortMiami",
+      "aids": 58,
+      "status": "completed",
+      "cohort": "earlier_catalog",
+      "search_s": 8.50740412203595,
+      "plot_time_s": 8.50740412203595,
+      "error_m": 1.753628004458505
+    }
+  ]
+}
