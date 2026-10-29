@@ -1,7 +1,9 @@
-"""Exact-coordinate chart-aid identity shared by simulation and search.
+"""Normalized-coordinate chart-aid identity shared by simulation and search.
 
-The rule merges eligible aid records only when their parsed latitude and
-longitude values are equal. It never rounds coordinates or merges by distance.
+Eligible aid positions within 0.20 m are coalesced using WGS84 distances.
+Every source position in a group must be within that radius of every other
+source position, preventing chains from joining more widely separated aids.
+Representative keys use ten decimal places to remove floating-point roundoff.
 Non-chart records are returned unchanged. Fog signals, radio stations, and
 retro reflectors can join coordinate groups while retaining unknown coarse type
 unless a co-located known physical aid establishes it. Component snapshots
@@ -17,14 +19,17 @@ from collections import OrderedDict, defaultdict
 from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import asdict, fields, replace
-from math import isfinite
+from math import cos, isfinite, radians, sin
 from threading import Lock
 from typing import Any
 
 from maritime.schemas.inputs_v2 import CatalogRecordV2, CatalogV2
 from maritime.schemas.object_types import normalize_object_type
 
-RULE = "user_exact_coordinate_rule_v1"
+RULE = "user_coordinate_radius_rule_v2"
+COORDINATE_MERGE_RADIUS_M = 0.20
+COORDINATE_DECIMAL_PLACES = 10
+_SOURCE_RULES = {"user_exact_coordinate_rule_v1", RULE}
 COMPONENT_SCHEMA = "CatalogRecordV2CompleteV1"
 _OFFSET_KEYS = {"visible_feature_offset_east_m", "visible_feature_offset_north_m"}
 _BOUND_KEYS = ("position_uncertainty_m", "horizontal_uncertainty_m", "uncertainty_m")
@@ -47,7 +52,7 @@ _catalog_cache: OrderedDict[int, tuple[CatalogV2, CatalogV2]] = OrderedDict()
 _catalog_cache_lock = Lock()
 
 
-def _coordinate(latitude_deg: float, longitude_deg: float) -> tuple[float, float]:
+def _source_coordinate(latitude_deg: float, longitude_deg: float) -> tuple[float, float]:
     if isinstance(latitude_deg, bool) or isinstance(longitude_deg, bool):
         raise ValueError("Aid coordinates must be numeric geographic values.")
     lat, lon = float(latitude_deg), float(longitude_deg)
@@ -56,9 +61,17 @@ def _coordinate(latitude_deg: float, longitude_deg: float) -> tuple[float, float
     return (0.0 if lat == 0 else lat, 0.0 if lon == 0 else lon)
 
 
+def normalize_aid_coordinate(latitude_deg: float, longitude_deg: float) -> tuple[float, float]:
+    """Normalize a representative anchor for stable keys, not proximity tests."""
+    lat, lon = _source_coordinate(latitude_deg, longitude_deg)
+    lat = round(lat, COORDINATE_DECIMAL_PLACES)
+    lon = round(lon, COORDINATE_DECIMAL_PLACES)
+    return (0.0 if lat == 0 else lat, 0.0 if lon == 0 else lon)
+
+
 def canonical_aid_key(latitude_deg: float, longitude_deg: float) -> str:
-    """A reversible coordinate key with no decimal rounding or hash collision."""
-    lat, lon = _coordinate(latitude_deg, longitude_deg)
+    """A reversible key for the normalized coordinate, with no hash collision."""
+    lat, lon = normalize_aid_coordinate(latitude_deg, longitude_deg)
     return f"chart-coordinate:{float(lat).hex()}:{float(lon).hex()}"
 
 
@@ -128,7 +141,7 @@ def _canonical_chart_type(record: CatalogRecordV2) -> str | None:
     # Coordinate keys can replace layer-bearing source keys after a merge. Keep
     # our auxiliary-only canonical records eligible without inventing a type.
     if (
-        metadata.get("identity_resolution") == RULE
+        metadata.get("identity_resolution") in _SOURCE_RULES
         and metadata.get("source_components_schema") == COMPONENT_SCHEMA
         and metadata.get("chart_coordinate_component_type") == "unknown"
     ):
@@ -147,15 +160,67 @@ def is_chart_aid(record: CatalogRecordV2) -> bool:
 
 
 def chart_coordinate_groups(records: Iterable[CatalogRecordV2]) -> tuple[tuple[int, ...], ...]:
-    """Return eligible aid row-index groups in exact-coordinate/key order."""
+    """Group aid coordinates within 20 cm, with bounded source-position diameter.
+
+    The sphere tree only gathers neighbors. WGS84 geodesic distances decide
+    membership, including across projection-grid and longitude-wrap boundaries.
+    Earlier canonical wrappers retain all source positions during this test.
+    """
+    from pyproj import Geod
+    from scipy.spatial import KDTree
+
     rows = tuple(records)
-    groups: dict[tuple[float, float], list[int]] = defaultdict(list)
-    for index, record in enumerate(rows):
-        if is_chart_aid(record):
-            groups[_coordinate(record.latitude_deg, record.longitude_deg)].append(index)
-    return tuple(
-        tuple(sorted(groups[coord], key=lambda i: rows[i].key)) for coord in sorted(groups)
-    )
+    eligible = [i for i, row in enumerate(rows) if is_chart_aid(row)]
+    if not eligible:
+        return ()
+    anchors = [_source_coordinate(rows[i].latitude_deg, rows[i].longitude_deg) for i in eligible]
+    points = [
+        tuple(
+            sorted(
+                {
+                    _source_coordinate(c["latitude_deg"], c["longitude_deg"])
+                    for c in _components(rows[i])
+                }
+            )
+        )
+        for i in eligible
+    ]
+    unit_vectors = [
+        (
+            cos(radians(lat)) * cos(radians(lon)),
+            cos(radians(lat)) * sin(radians(lon)),
+            sin(radians(lat)),
+        )
+        for lat, lon in anchors
+    ]
+    # Minimum WGS84 meridional radius bounds angular separation conservatively.
+    # The small anchor margin covers representative decimal normalization only.
+    radius = (COORDINATE_MERGE_RADIUS_M + 0.00002) / 6335439.327 + 1e-14
+    neighborhoods = KDTree(unit_vectors).query_ball_point(unit_vectors, radius)
+    geod = Geod(ellps="WGS84")
+    owners: dict[int, int] = {}
+    groups: list[list[int]] = []
+    group_points: list[set[tuple[float, float]]] = []
+    order = sorted(range(len(eligible)), key=lambda i: (anchors[i], rows[eligible[i]].key))
+    for i in order:
+        candidates = sorted({owners[j] for j in neighborhoods[i] if j in owners})
+        target = None
+        for group in candidates:
+            if all(
+                geod.inv(lon, lat, other_lon, other_lat)[2] <= COORDINATE_MERGE_RADIUS_M + 1e-9
+                for lat, lon in points[i]
+                for other_lat, other_lon in group_points[group]
+            ):
+                target = group
+                break
+        if target is None:
+            target = len(groups)
+            groups.append([])
+            group_points.append(set())
+        groups[target].append(eligible[i])
+        group_points[target].update(points[i])
+        owners[i] = target
+    return tuple(tuple(sorted(group, key=lambda i: rows[i].key)) for group in groups)
 
 
 def _json(value: Any) -> str:
@@ -179,7 +244,7 @@ def _restore(source: dict[str, Any]) -> CatalogRecordV2:
 def _components(record: CatalogRecordV2) -> list[dict[str, Any]]:
     metadata = dict(record.metadata)
     if (
-        metadata.get("identity_resolution") == RULE
+        metadata.get("identity_resolution") in _SOURCE_RULES
         and metadata.get("source_components_schema") == COMPONENT_SCHEMA
     ):
         components = metadata.get("source_components")
@@ -237,7 +302,7 @@ def _offset_signature(record: CatalogRecordV2) -> tuple[Any, ...]:
 
 
 def canonicalize_chart_records(records: Iterable[CatalogRecordV2]) -> tuple[CatalogRecordV2, ...]:
-    """Coalesce exact-location aids; preserve ambiguity and all source records."""
+    """Coalesce aid positions within 20 cm; preserve ambiguity and all source records."""
     rows = tuple(records)
     if any(not isinstance(row, CatalogRecordV2) for row in rows):
         raise TypeError("records must contain CatalogRecordV2 values.")
@@ -274,14 +339,16 @@ def canonicalize_chart_records(records: Iterable[CatalogRecordV2]) -> tuple[Cata
     external_coordinates: dict[str, set[tuple[float, float]]] = defaultdict(set)
     for row in rows:
         if not is_chart_aid(row) and (identity := _physical_id(row)) is not None:
-            external_coordinates[identity].add(_coordinate(row.latitude_deg, row.longitude_deg))
+            external_coordinates[identity].add(
+                normalize_aid_coordinate(row.latitude_deg, row.longitude_deg)
+            )
     # Visit identities once rather than scanning all IDs for every component.
     conflicts_by_root: dict[int, set[str]] = defaultdict(set)
     for identity, owners in identities.items():
         if len(owners) > 1:
             conflicts_by_root[find(next(iter(owners)))].add(identity)
     for index, originals in enumerate(original_rows):
-        coord = _coordinate(
+        coord = normalize_aid_coordinate(
             rows[groups[index][0]].latitude_deg, rows[groups[index][0]].longitude_deg
         )
         for original in originals:
@@ -314,7 +381,7 @@ def canonicalize_chart_records(records: Iterable[CatalogRecordV2]) -> tuple[Cata
             if any(_canonical_chart_type(row) == "physical_aid" for row in originals)
             else "unknown"
         )
-        coord = _coordinate(rows[group[0]].latitude_deg, rows[group[0]].longitude_deg)
+        coord = normalize_aid_coordinate(rows[group[0]].latitude_deg, rows[group[0]].longitude_deg)
         # A prior canonical merge still has one wrapper row but multiple leaves.
         merged = len(sources[index]) > 1
         key = canonical_aid_key(*coord) if merged else rows[group[0]].key
@@ -352,6 +419,8 @@ def canonicalize_chart_records(records: Iterable[CatalogRecordV2]) -> tuple[Cata
         metadata.update(
             {
                 "identity_resolution": RULE,
+                "coordinate_decimal_places": COORDINATE_DECIMAL_PLACES,
+                "coordinate_merge_radius_m": COORDINATE_MERGE_RADIUS_M,
                 "chart_coordinate_component_type": component_type,
                 "prior_physical_entity_ids": prior_ids,
                 "source_components_schema": COMPONENT_SCHEMA,
@@ -393,7 +462,7 @@ def canonicalize_chart_records(records: Iterable[CatalogRecordV2]) -> tuple[Cata
 
 
 def canonicalize_chart_aids(catalog: CatalogV2) -> CatalogV2:
-    """Apply exact-coordinate identity, reusing a bounded catalog-identity memo.
+    """Apply normalized-coordinate identity, reusing a bounded catalog-identity memo.
 
     The catalog, its records, and nested metadata/provenance must remain read-only
     while reused, as with PreparedPredictionContext. Construct a new catalog after
@@ -418,6 +487,7 @@ def canonicalize_chart_aids(catalog: CatalogV2) -> CatalogV2:
 
 
 __all__ = [
+    "normalize_aid_coordinate",
     "is_chart_aid",
     "chart_coordinate_groups",
     "canonical_aid_key",

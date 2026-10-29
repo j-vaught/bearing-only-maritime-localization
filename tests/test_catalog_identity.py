@@ -1,9 +1,9 @@
-"""Exact chart-aid identity and lossless source-component contract checks."""
+"""Normalized chart-aid identity and lossless source-component contract checks."""
 
 import json
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from math import copysign, nextafter
 
 import pytest
@@ -11,12 +11,15 @@ import pytest
 import maritime.catalog_identity as identity_module
 from maritime.catalog_identity import (
     COMPONENT_SCHEMA,
+    COORDINATE_DECIMAL_PLACES,
+    COORDINATE_MERGE_RADIUS_M,
     RULE,
     canonical_aid_key,
     canonicalize_chart_aids,
     canonicalize_chart_records,
     chart_coordinate_groups,
     is_chart_aid,
+    normalize_aid_coordinate,
 )
 from maritime.schemas.inputs_v2 import CatalogRecordV2, CatalogV2
 from maritime.search.prediction import _visible_feature_offset
@@ -42,10 +45,10 @@ def json_value(value):
     return json.loads(json.dumps(value, sort_keys=True))
 
 
-def test_exact_coordinates_merge_components_but_nearby_rows_do_not():
+def test_normalized_coordinates_merge_components_but_distinct_locations_do_not():
     first = record("beacon", kind="beacon")
     second = record("light", kind="light")
-    near = record("near", lat=nextafter(32.7, float("inf")))
+    near = record("near", lat=32.7 + 1e-5)
     assert chart_coordinate_groups([first, second, near]) == ((0, 1), (2,))
     result = canonicalize_chart_aids(catalog(first, second, near))
     assert len(result.records) == 2
@@ -53,9 +56,10 @@ def test_exact_coordinates_merge_components_but_nearby_rows_do_not():
     assert merged.key == canonical_aid_key(32.7, -79.9)
     assert merged.normalized_type == "physical_aid"
     assert (
-        next(row for row in result.records if row.key == "near").latitude_deg == near.latitude_deg
+        next(row for row in result.records if row.key == "near").latitude_deg
+        == normalize_aid_coordinate(near.latitude_deg, near.longitude_deg)[0]
     )
-    assert canonical_aid_key(0.1 + 0.2, 0.0) != canonical_aid_key(0.3, 0.0)
+    assert canonical_aid_key(0.1 + 0.2, 0.0) == canonical_aid_key(0.3, 0.0)
 
 
 def test_signed_zero_is_one_exact_coordinate_and_single_keys_are_preserved():
@@ -462,7 +466,7 @@ def test_auxiliary_only_group_remains_unknown_and_source_key_only_group_is_idemp
     assert output == canonicalize_chart_records([unrelated, *reversed(sources)])
 
 
-def test_auxiliary_grouping_uses_whole_exact_coordinate_without_promoting_other_rows():
+def test_auxiliary_grouping_uses_normalized_coordinate_without_promoting_other_rows():
     sources = [
         record("fog", kind="unknown", provenance=(("source_layer", "Harbor.Fog_Signal_point"),)),
         record(
@@ -477,7 +481,7 @@ def test_auxiliary_grouping_uses_whole_exact_coordinate_without_promoting_other_
     ]
     near = record(
         "near-retro",
-        lat=nextafter(32.7, float("inf")),
+        lat=32.7 + 1e-5,
         kind="unknown",
         metadata=(("component_layer", "Harbor.Retro_Reflector_point"),),
     )
@@ -501,4 +505,150 @@ def test_auxiliary_grouping_uses_whole_exact_coordinate_without_promoting_other_
     assert dict(merged.metadata)["source_component_count"] == 4
     assert output == canonicalize_chart_records(
         reversed([*sources, near, vessel, virtual, uncharted])
+    )
+
+
+def test_projection_roundoff_from_portland_normalizes_to_one_lossless_identity():
+    first = record("beacon", lat=43.711988900000506, lon=-70.18813330000012)
+    second = record("light", lat=43.711988899999994, lon=-70.1881333)
+    assert COORDINATE_DECIMAL_PLACES == 10
+    assert canonical_aid_key(first.latitude_deg, first.longitude_deg) == canonical_aid_key(
+        second.latitude_deg, second.longitude_deg
+    )
+    (merged,) = canonicalize_chart_records([first, second])
+    assert (merged.latitude_deg, merged.longitude_deg) == (43.7119889, -70.1881333)
+    metadata = dict(merged.metadata)
+    assert metadata["coordinate_decimal_places"] == 10
+    assert metadata["source_components"] == [json_value(asdict(first)), json_value(asdict(second))]
+    assert merged == canonicalize_chart_records([second, first])[0]
+    assert (merged,) == canonicalize_chart_records([merged])
+
+
+def test_adjacent_floats_merge_but_different_decimal_coordinates_remain_distinct():
+    one = record("a")
+    roundoff = record("b", lat=nextafter(one.latitude_deg, float("inf")))
+    other_lat = record("c", lat=one.latitude_deg + 1e-5)
+    other_lon = record("d", lon=one.longitude_deg + 1e-5)
+    assert chart_coordinate_groups([one, roundoff, other_lat, other_lon]) == ((0, 1), (3,), (2,))
+    assert len(canonicalize_chart_records([one, roundoff, other_lat, other_lon])) == 3
+    assert normalize_aid_coordinate(-0.0, 0.0) == (0.0, 0.0)
+
+
+@pytest.mark.parametrize(
+    "lat,lon", [(float("nan"), 0), (0, float("inf")), (91, 0), (0, -181), (True, 0)]
+)
+def test_coordinate_normalization_retains_validation(lat, lon):
+    with pytest.raises(ValueError):
+        normalize_aid_coordinate(lat, lon)
+
+
+def test_previous_rule_wrappers_are_flattened_during_normalization_upgrade():
+    sources = [
+        record("a", lat=43.711988900000506, lon=-70.18813330000012),
+        record("b", lat=43.711988899999994, lon=-70.1881333),
+    ]
+    wrappers = []
+    for source in sources:
+        wrappers.append(
+            replace(
+                source,
+                key="old-" + source.key,
+                metadata=(
+                    ("identity_resolution", "user_exact_coordinate_rule_v1"),
+                    ("source_components_schema", COMPONENT_SCHEMA),
+                    ("source_components", [json_value(asdict(source))]),
+                ),
+            )
+        )
+    (merged,) = canonicalize_chart_records(wrappers)
+    assert dict(merged.metadata)["source_components"] == [json_value(asdict(s)) for s in sources]
+    assert (merged,) == canonicalize_chart_records([merged])
+
+
+def test_previous_auxiliary_only_wrapper_keeps_eligibility_and_original_sources():
+    source = record(
+        "fog", kind="unknown", provenance=(("source_layer", "Harbor.Fog_Signal_point"),)
+    )
+    (canonical,) = canonicalize_chart_records([source])
+    metadata = dict(canonical.metadata)
+    metadata["identity_resolution"] = "user_exact_coordinate_rule_v1"
+    old = replace(
+        canonical, key="chart-coordinate:old", provenance=(), metadata=tuple(metadata.items())
+    )
+    assert is_chart_aid(old)
+    (upgraded,) = canonicalize_chart_records([old])
+    assert upgraded.normalized_type == "unknown"
+    assert dict(upgraded.metadata)["source_components"] == [json_value(asdict(source))]
+
+
+def test_roundoff_in_shared_identity_does_not_create_cross_location_ambiguity():
+    sources = [
+        record("a", metadata=(("physical_entity_id", "same-aid"),)),
+        record(
+            "b", lat=nextafter(32.7, float("inf")), metadata=(("physical_entity_id", "same-aid"),)
+        ),
+    ]
+    (merged,) = canonicalize_chart_records(sources)
+    assert dict(merged.metadata)["physical_linkage_status"] == "resolved"
+    assert not dict(merged.metadata)["identity_ambiguous"]
+
+
+def test_twenty_centimeter_radius_merges_across_decimal_grid_boundaries():
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    lon, lat, _ = geod.fwd(-79.9, 32.7, 90, 0.19)
+    first, second = record("a"), record("b", lat=lat, lon=lon)
+    assert COORDINATE_MERGE_RADIUS_M == 0.20
+    assert canonical_aid_key(first.latitude_deg, first.longitude_deg) != canonical_aid_key(lat, lon)
+    output = canonicalize_chart_records([first, second])
+    assert len(output) == 1
+    assert dict(output[0].metadata)["coordinate_merge_radius_m"] == 0.20
+    assert output == canonicalize_chart_records([second, first])
+    assert output == canonicalize_chart_records(output)
+
+
+def test_twenty_centimeter_radius_does_not_chain_merge_more_distant_aids():
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    sources = []
+    for key, distance in (("a", 0), ("b", 0.15), ("c", 0.30)):
+        lon, lat, _ = geod.fwd(-79.9, 32.7, 0, distance)
+        sources.append(record(key, lat=lat, lon=lon))
+    output = canonicalize_chart_records(sources)
+    assert len(output) == 2
+    assert output == canonicalize_chart_records(reversed(sources))
+    assert output == canonicalize_chart_records(output)
+    for row in output:
+        components = dict(row.metadata)["source_components"]
+        for a in components:
+            for b in components:
+                assert (
+                    geod.inv(
+                        a["longitude_deg"], a["latitude_deg"], b["longitude_deg"], b["latitude_deg"]
+                    )[2]
+                    <= 0.20
+                )
+
+
+def test_twenty_centimeter_radius_keeps_twenty_one_centimeter_separation():
+    from pyproj import Geod
+
+    lon, lat, _ = Geod(ellps="WGS84").fwd(-79.9, 32.7, 0, 0.21)
+    assert len(canonicalize_chart_records([record("a"), record("b", lat=lat, lon=lon)])) == 2
+
+
+def test_twenty_centimeter_radius_handles_longitude_wrap():
+    from pyproj import Geod
+
+    lon, lat, _ = Geod(ellps="WGS84").fwd(179.9999999, 32.7, 90, 0.19)
+    assert lon < 0
+    assert (
+        len(
+            canonicalize_chart_records(
+                [record("a", lat=32.7, lon=179.9999999), record("b", lat=lat, lon=lon)]
+            )
+        )
+        == 1
     )

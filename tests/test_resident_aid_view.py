@@ -1,15 +1,14 @@
-"""CPU checks for the lightweight exact-coordinate aid view over cached maps."""
+"""CPU checks for the lightweight normalized-coordinate aid view over cached maps."""
 
 import json
 from dataclasses import replace
-from math import nextafter
 
 import numpy as np
 import pytest
 from pyproj import Transformer
 from shapely.geometry import box
 
-from maritime.catalog_identity import canonical_aid_key
+from maritime.catalog_identity import canonical_aid_key, normalize_aid_coordinate
 from maritime.geometry.vector_map import VectorMap
 from maritime.schemas.inputs_v2 import CatalogRecordV2, CatalogV2
 from maritime.search.gpu.resident import aid_view
@@ -58,7 +57,7 @@ def test_exact_location_merge_preserves_map_vessels_and_nearby_aids(monkeypatch)
     catalog = _catalog(
         _record("beacon", bound=2, extent=0.2),
         _record("daymark", "daymark", bound=4, extent=0.7),
-        _record("nearby", lat=nextafter(LAT, float("inf"))),
+        _record("nearby", lat=LAT + 1e-5),
         _record("ship-a", "vessel"),
         _record("ship-b", "vessel"),
         _record("virtual", "virtual_aid"),
@@ -384,3 +383,74 @@ def test_empty_catalog_and_singleton_sidecar_round_trips(tmp_path):
         assert (tmp_path / f"aid-view-{key}.npz").exists()
         if records:
             assert again.object_keys == ("daymark",) and again.objects[0, 6] == 1
+
+
+@pytest.mark.parametrize("offset", [False, True])
+@pytest.mark.parametrize("separation_m", [0, 0.19])
+def test_normalized_roundoff_uses_same_position_in_scene_and_cached_object_view(
+    offset, separation_m
+):
+    coords = [(43.711988900000506, -70.18813330000012), (43.711988899999994, -70.1881333)]
+    if separation_m:
+        from pyproj import Geod
+
+        lon, lat, _ = Geod(ellps="WGS84").fwd(coords[0][1], coords[0][0], 90, separation_m)
+        coords[1] = (lat, lon)
+    metadata = {}
+    if offset:
+        metadata.update(visible_feature_offset_east_m=2.0, visible_feature_offset_north_m=4.0)
+    catalog = _catalog(
+        *[
+            _record(key, lat=lat, lon=lon, physical_entity_id="source-" + key, **metadata)
+            for key, (lat, lon) in zip(("beacon", "light"), coords, strict=True)
+        ]
+    )
+    base = _world(catalog)
+    original = base.objects.copy()
+    view = aid_view.canonicalize_prepared_world(base, catalog)
+    scene = PhysicalSceneV2(catalog)
+    assert len(view.objects) == len(scene.catalog.records) == 1
+    record = scene.catalog.records[0]
+    lat, lon = normalize_aid_coordinate(*coords[0])
+    assert (record.latitude_deg, record.longitude_deg) == (lat, lon)
+    if offset:
+        import math
+
+        from pyproj import Geod
+
+        lon, lat, _ = Geod(ellps="WGS84").fwd(
+            lon, lat, math.degrees(math.atan2(2, 4)), math.hypot(2, 4)
+        )
+    x, y = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True).transform(lon, lat)
+    np.testing.assert_array_equal(view.objects[0, :4], (x, y, lon, lat))
+    assert view.objects[0, 4] == 0 and view.objects[0, 7] == 1
+    assert view.position_support_complete and view.identities_complete
+    assert view.layers is base.layers and view.barriers is base.barriers
+    np.testing.assert_array_equal(base.objects, original)
+
+
+def test_previous_coordinate_wrapper_upgrades_without_cached_key_mismatch():
+    from maritime.catalog_identity import COMPONENT_SCHEMA
+
+    lat, lon = 43.711988900000506, -70.18813330000012
+    source = _catalog(_record("beacon", lat=lat, lon=lon), _record("light", lat=lat, lon=lon))
+    normalized = PhysicalSceneV2(source).catalog.records[0]
+    metadata = dict(normalized.metadata)
+    metadata["identity_resolution"] = "user_exact_coordinate_rule_v1"
+    metadata["source_components_schema"] = COMPONENT_SCHEMA
+    prior = replace(
+        normalized,
+        key="legacy-coordinate",
+        latitude_deg=lat,
+        longitude_deg=lon,
+        metadata=tuple(metadata.items()),
+    )
+    catalog = _catalog(prior)
+    base = _world(catalog)
+    view = aid_view.canonicalize_prepared_world(base, catalog)
+    expected = PhysicalSceneV2(catalog).catalog.records[0]
+    assert view.object_keys == (expected.key,)
+    assert expected.key == canonical_aid_key(lat, lon)
+    assert tuple(view.objects[0, [3, 2]]) == (expected.latitude_deg, expected.longitude_deg)
+    assert dict(expected.metadata)["source_component_count"] == 2
+    assert view.layers is base.layers

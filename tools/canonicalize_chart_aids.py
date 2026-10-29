@@ -1,4 +1,4 @@
-"""Write one physical chart aid per exact coordinate, retaining source components."""
+"""Coalesce chart aids within 20 cm, retaining complete source components."""
 
 from __future__ import annotations
 

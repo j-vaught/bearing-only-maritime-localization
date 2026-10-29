@@ -1,4 +1,4 @@
-"""Object-only exact-coordinate chart-aid view over a saved resident world.
+"""Object-only normalized-coordinate chart-aid view over a saved resident world.
 
 The base shoreline/coverage arrays and barriers are retained by reference. The
 source cache is never rewritten. This view is changed object data with its own
@@ -25,6 +25,7 @@ from maritime.catalog_identity import (
     canonicalize_chart_aids,
     chart_coordinate_groups,
     is_chart_aid,
+    normalize_aid_coordinate,
 )
 from maritime.schemas import object_types
 from maritime.schemas.inputs_v2 import CatalogRecordV2, CatalogV2
@@ -35,7 +36,7 @@ from maritime.serialization import contract_to_dict
 
 from .preparation import PreparedWorld, pack_tree
 
-POLICY_VERSION = "ExactCoordinateAidObjectViewV1"
+POLICY_VERSION = "CoordinateRadius20cmAidObjectViewV2"
 
 
 def _digest_bytes(payload: bytes) -> str:
@@ -142,24 +143,26 @@ def _build_view(world: PreparedWorld, original: CatalogV2) -> PreparedWorld:
     canonical = canonicalize_chart_aids(original)
     source_index = {key: i for i, key in enumerate(world.object_keys)}
     groups_by_key: dict[str, tuple[CatalogRecordV2, ...]] = {}
-    token_locations: dict[str, set[tuple[float, float]]] = {}
+    token_groups: dict[str, set[str]] = {}
+    canonical_keys = {
+        (r.latitude_deg, r.longitude_deg): r.key for r in canonical.records if is_chart_aid(r)
+    }
     for group_indices in chart_coordinate_groups(original.records):
         members = tuple(original.records[i] for i in group_indices)
         if not members:
             raise ValueError("Shared canonicalizer returned an empty chart-aid group.")
         first = members[0]
-        key = (
+        key = canonical_keys.get(
+            normalize_aid_coordinate(first.latitude_deg, first.longitude_deg),
             first.key
             if len(members) == 1
-            else canonical_aid_key(first.latitude_deg, first.longitude_deg)
+            else canonical_aid_key(first.latitude_deg, first.longitude_deg),
         )
         groups_by_key[key] = members
         for member in members:
             token = _identity_token(member)
             if token is not None:
-                token_locations.setdefault(token, set()).add(
-                    (member.latitude_deg, member.longitude_deg)
-                )
+                token_groups.setdefault(token, set()).add(key)
     forward = Transformer.from_crs("EPSG:4326", world.crs, always_xy=True)
     rows: list[np.ndarray] = []
     keys: list[str] = []
@@ -186,13 +189,11 @@ def _build_view(world: PreparedWorld, original: CatalogV2) -> PreparedWorld:
             metadata.get("visible_feature_offset_conflict", False)
             or metadata.get("visible_feature_offset_geometry_unsupported", False)
         )
-        if not np.all(source_rows[:, :4] == source_rows[0, :4]):
-            offset_conflict = True
         cross_location_alias = (
             metadata.get("identity_ambiguous") is True
             or metadata.get("physical_linkage_status") == "unresolved"
             or any(
-                token is not None and len(token_locations[token]) > 1
+                token is not None and len(token_groups[token]) > 1
                 for token in (_identity_token(m) for m in members)
             )
         )
@@ -208,13 +209,19 @@ def _build_view(world: PreparedWorld, original: CatalogV2) -> PreparedWorld:
         row[7] = float(
             np.all(source_rows[:, 7] == 1) and not cross_location_alias and not offset_conflict
         )
+        # Use exactly the normalized chart anchor and visible offset used by
+        # the canonical simulator catalog, not a raw cached source coordinate.
+        lon, lat = record.longitude_deg, record.latitude_deg
         if offset_conflict:
-            # A single visible location cannot be certified. Retain the chart
-            # coordinate as a nominal anchor and leave its support unbounded.
-            lon, lat = members[0].longitude_deg, members[0].latitude_deg
-            x, y = forward.transform(lon, lat)
-            row[:4] = (x, y, lon, lat)
             row[4] = np.inf
+        else:
+            east, north, quality = _visible_feature_offset(record)
+            if quality == "calibrated" and (east != 0 or north != 0):
+                lon, lat, _ = Geod(ellps="WGS84").fwd(
+                    lon, lat, math.degrees(math.atan2(east, north)), math.hypot(east, north)
+                )
+        x, y = forward.transform(lon, lat)
+        row[:4] = (x, y, lon, lat)
         rows.append(row)
         keys.append(record.key)
     objects = np.asarray(rows, dtype=np.float64).reshape((-1, 8))

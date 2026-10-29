@@ -1,0 +1,157 @@
+{
+  "author": "J.C. Vaught",
+  "rule": "user_coordinate_radius_rule_v2",
+  "merge_radius_m": 0.2,
+  "scope": "Saved-coordinate grouping only; no simulation, scoring, search, or cache rebuild",
+  "source_sha256": "3485ef963a60d1de46a945465bbc0186f6b155d145e796ee2f08345915c90433",
+  "saved_pairs_checked": 159,
+  "saved_pairs_merged": 159,
+  "sites": [
+    {
+      "site_id": "B1",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B2",
+      "saved_pairs": 4,
+      "merged_pairs": 4
+    },
+    {
+      "site_id": "B3",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B4",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B5",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B6",
+      "saved_pairs": 18,
+      "merged_pairs": 18
+    },
+    {
+      "site_id": "B7",
+      "saved_pairs": 20,
+      "merged_pairs": 20
+    },
+    {
+      "site_id": "B8",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B9",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B10",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B11",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B12",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B13",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B14",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B15",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B16",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B17",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    },
+    {
+      "site_id": "B18",
+      "saved_pairs": 20,
+      "merged_pairs": 20
+    },
+    {
+      "site_id": "B19",
+      "saved_pairs": 2,
+      "merged_pairs": 2
+    },
+    {
+      "site_id": "B20",
+      "saved_pairs": 23,
+      "merged_pairs": 23
+    },
+    {
+      "site_id": "B21",
+      "saved_pairs": 58,
+      "merged_pairs": 58
+    },
+    {
+      "site_id": "B22",
+      "saved_pairs": 1,
+      "merged_pairs": 1
+    },
+    {
+      "site_id": "B23",
+      "saved_pairs": 13,
+      "merged_pairs": 13
+    },
+    {
+      "site_id": "B24",
+      "saved_pairs": 0,
+      "merged_pairs": 0
+    }
+  ],
+  "warning_and_certification_sources_unchanged": {
+    "maritime/search/gpu/resident/engine.py": "ab667ddc96af569c8eb2c81e6e6d69ea80b7350f5b5e5600a7440a3b8543aab5",
+    "maritime/search/gpu/resident/parallel_prediction.py": "26e90384cb20b910e488f16a47a624bcb106cef8cbf574783a8acf1756395d60",
+    "maritime/search/gpu/resident/parallel_prediction.cu": "8d4f8dd4f210ac23129b2d645c8c13cec01ed9610c62bf1f32b7c25b03b24ebb",
+    "maritime/search/gpu/resident/distinct_pruning.py": "167e834fc9c495af072d4d81593fa2f252af9d13eb5c02e353473b34d41b221c",
+    "tools/select_resident_result.py": "cdef7aaac2ee7ce80c11f6083f88fa5ed506549779d42e92594becee86fb04d3"
+  },
+  "saved_catalog_conversion": {
+    "source_sha256": "cab16ce1d5b82863cd0654e564e84bf23cda4f720918eddad9ffcbedda65a2f0",
+    "source_records": 66668,
+    "normalized_records": 29163,
+    "normalized_chart_aids": 26895,
+    "non_aid_records": 2268,
+    "idempotent": true,
+    "source_rewritten": false,
+    "cache_built": false
+  },
+  "grouping_policy": "WGS84 geodesic radius 0.20 m; every source-position pair in a merged group must fit the radius. Source snapshots are retained, earlier exact-coordinate wrappers are upgraded losslessly, vessels are not merged.",
+  "focused_checks": {
+    "passed": 75,
+    "deselected": 6,
+    "exclusion": "Simulator execution tests excluded. No new observations, scoring, or localization search.",
+    "ruff": "passed",
+    "ty": "passed"
+  },
+  "saved_cache_policy": "Existing saved base cache and aid sidecar remain untouched. Changed object-view policy and implementation hashes create a separate object-sidecar identity on the next approved preparation."
+}
