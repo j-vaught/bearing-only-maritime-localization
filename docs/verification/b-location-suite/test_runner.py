@@ -76,11 +76,13 @@ class RunnerChecks(unittest.TestCase):
         )
 
     def test_search_boundary_has_no_truth_argument(self):
+        from maritime.search.gpu.resident import service
+
         self.assertEqual(
-            list(inspect.signature(runner.search_child).parameters),
-            ["world", "settings", "bearings", "directory"],
+            list(inspect.signature(service.PersistentSearchService.search).parameters),
+            ["self", "bearings", "tolerance", "directory", "timeout_s", "progress_check"],
         )
-        source = inspect.getsource(runner.search_child)
+        source = inspect.getsource(service._serve)
         self.assertNotIn('"truth.json"', source)
         self.assertNotIn("KnownWaterObserver", source)
         settings = runner.read(runner.REFERENCE)["settings"]

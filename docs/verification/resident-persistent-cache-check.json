@@ -1,0 +1,58 @@
+{
+  "author": "J.C. Vaught",
+  "scope": "Source changes and CPU-only mocked lifecycle checks. No CUDA execution or localization search.",
+  "reference": "runs/b-location-suite-20cm-eight-20261029/cache-after.json",
+  "caches": [
+    {
+      "path": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/prepared-cache/b6bcc2d3e0c0d960a2ba00e496d59ea37846dc3bb08f00ec773752d894caad90.npz",
+      "saved": {
+        "sha256": "8f7c4335b9881787c64d3d89c093f4de460eee5bff1ab6e17313e4bc059a987d",
+        "size": 1306233869,
+        "mtime_ns": 1793216304631740569
+      },
+      "current": {
+        "sha256": "8f7c4335b9881787c64d3d89c093f4de460eee5bff1ab6e17313e4bc059a987d",
+        "size": 1306233869,
+        "mtime_ns": 1793216304631740569
+      },
+      "unchanged": true
+    },
+    {
+      "path": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/resident-aid-objects/aid-view-af3d5ba2f4b3434ae1ffb0920a3f208a3c980b8a08fac817969c09b9a76f05ce.npz",
+      "saved": {
+        "sha256": "c2dbdaf8d43769002a13001104644a544d77725c00ae1a7a99887e9c59592259",
+        "size": 5842146,
+        "mtime_ns": 1793313262141137515
+      },
+      "current": {
+        "sha256": "c2dbdaf8d43769002a13001104644a544d77725c00ae1a7a99887e9c59592259",
+        "size": 5842146,
+        "mtime_ns": 1793313262141137515
+      },
+      "unchanged": true
+    }
+  ],
+  "new_search_executed": false,
+  "gpu_speedup_measured": false,
+  "checks": {
+    "uv_sync_gpu": "passed",
+    "ruff_format": "9 files already formatted",
+    "ruff_check": "passed",
+    "ty_check": "passed",
+    "cpu_only_tests": {
+      "command": "uv run pytest -q tests/test_resident_session.py tests/test_resident_service.py tests/test_resident_profiling.py docs/verification/b-location-suite/test_runner.py -k \"not tiny_gpu\"",
+      "passed": 48,
+      "gpu_test_deselected": 1,
+      "elapsed_s": 1.67
+    },
+    "independent_agent_review": "No unresolved service or runner blockers after fixes and repeated CPU-only checks.",
+    "protected_runtime_sources": "Pruning kernels, preparation, cache loaders, canonical object loader, and saved-output selector unchanged."
+  },
+  "source_sha256": {
+    "maritime/search/gpu/resident/engine.py": "10e3008f74a68fb912ba7f488568d70f1f8122ef435f310b9274aafb6deb6b1d",
+    "maritime/search/gpu/resident/session.py": "e0832cd718bb180560e05012730c9db5af3e161d57f886bd78872c7879a5973b",
+    "maritime/search/gpu/resident/service.py": "05513f72ba1c3d56e9aa79fd9b4d877dc30234eebd66fb81f0a8737003b069aa",
+    "maritime/search/gpu/resident/profiling.py": "d91ee5047edb9a3950ab665c84d150e304d26f50795ff7b4956be0607a678e6a",
+    "docs/verification/b-location-suite/run_suite.py": "3cb7e3596593d712e8a3c28ea0c7aea4cf52f1f1bdaa37685cec84b27495b4fb"
+  }
+}

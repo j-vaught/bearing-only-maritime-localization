@@ -382,7 +382,7 @@ class ProfiledResidentDevice(OptimizedResidentDevice):
         config: Any,
         device: int,
         *,
-        profile_dir: Path,
+        profile_dir: Path | None = None,
         sample_every: int = 1,
         host_profile: bool = False,
         nvtx: bool = False,
@@ -390,62 +390,157 @@ class ProfiledResidentDevice(OptimizedResidentDevice):
     ) -> None:
         if type(host_profile) is not bool:
             raise TypeError("host_profile must be a bool.")
+        if type(sample_every) is not int or sample_every < 1:
+            raise ValueError("sample_every must be a positive integer.")
+        if type(nvtx) is not bool:
+            raise TypeError("nvtx must be a bool.")
         super().__init__(world, config, device, **optimized_options)
-        self.profile = DeviceProfileCollector(
-            self.cp, self.stream, device, profile_dir, sample_every=sample_every, nvtx=nvtx
+        self._profile_sample_every, self._profile_nvtx = sample_every, nvtx
+        self._profile_host = host_profile
+        self.profile: DeviceProfileCollector | None = None
+        self._profile_search_output: Path | None = None
+        # Rebind only instrumentation wrappers between searches. The actual
+        # modules and the uploaded map remain owned by this device.
+        self._profile_raw_module = self.module
+        self._profile_raw_prediction_module = (
+            parallel_prediction._module(self) if self.use_parallel_prediction else None
         )
-        self.module = _ModuleProxy(self.module, self.profile, "baseline")
+        self._profile_raw_chart_module = (
+            chart_pruning.module_for(self, self.use_true_bearings)
+            if self.use_independent_chart_pruning
+            else None
+        )
+        self._profile_raw_assignment = self.assignment
+        if profile_dir is not None:
+            self._start_profile(Path(profile_dir))
+
+    def _start_profile(self, profile_dir: Path) -> None:
+        collector = DeviceProfileCollector(
+            self.cp,
+            self.stream,
+            self.device,
+            profile_dir,
+            sample_every=self._profile_sample_every,
+            nvtx=self._profile_nvtx,
+        )
+        self.profile = collector
+        self.module = _ModuleProxy(self._profile_raw_module, collector, "baseline")
         if self.use_parallel_prediction:
-            module = parallel_prediction._module(self)
-            self._parallel_prediction_module = _ModuleProxy(module, self.profile, "prediction")
+            self._parallel_prediction_module = _ModuleProxy(
+                self._profile_raw_prediction_module, collector, "prediction"
+            )
         if self.use_independent_chart_pruning:
-            module = chart_pruning.module_for(self, self.use_true_bearings)
             modules = getattr(self, "_independent_chart_modules")
-            modules[self.use_true_bearings] = _ModuleProxy(module, self.profile, "chart")
+            modules[self.use_true_bearings] = _ModuleProxy(
+                self._profile_raw_chart_module, collector, "chart"
+            )
         if not self.use_cooperative_matching:
             self.assignment = _KernelProxy(
-                self.assignment, self.profile, "assignment.baseline", kind="assignment"
+                self._profile_raw_assignment, collector, "assignment.baseline", kind="assignment"
             )
-        if host_profile:
-            self.profile.start_host_profile()
+        if self._profile_host:
+            collector.start_host_profile()
+
+    def begin_search(self, output_dir: Path) -> None:
+        """Start per-search accounting on the persistent device owner thread.
+
+        Profiles are a sibling of the engine's search output directory. An
+        An unused explicit constructor profile keeps its chosen directory for
+        the first search, including custom one-shot profile locations.
+        """
+        if getattr(self, "_closed", False):
+            raise RuntimeError("Cannot begin a search on a closed resident device.")
+        profile_dir = Path(output_dir).parent / "profile"
+        search_output = Path(output_dir).resolve()
+        current = self.profile
+        if current is not None and current._finished is None:
+            if (
+                self._profile_search_output in (None, search_output)
+                and current.prune_calls == 0
+                and current._span_count == 0
+                and not current._pending
+                and not current._stack
+            ):
+                self._profile_search_output = search_output
+                return
+            raise RuntimeError("Finish the current search profile before starting another.")
+        self._start_profile(profile_dir)
+        self._profile_search_output = search_output
+
+    def end_search(self) -> dict[str, Any]:
+        """Finalize the current profile while retaining the device inputs."""
+        return self.finish_profile()
+
+    def close(self) -> None:
+        """Finalize accounting and drop owned references on the device thread."""
+        if getattr(self, "_closed", False):
+            return
+        with self.cp.cuda.Device(self.device), self.stream:
+            current = self.profile
+            try:
+                if current is not None:
+                    self.finish_profile()
+            finally:
+                if current is not None and current._host_profiler is not None:
+                    current._host_profiler.disable()
+                self.profile = None
+                for name in (
+                    "_profile_raw_module",
+                    "_profile_raw_prediction_module",
+                    "_profile_raw_chart_module",
+                    "_profile_raw_assignment",
+                ):
+                    self.__dict__.pop(name, None)
+                super().close()
+
+    def _require_profile(self) -> DeviceProfileCollector:
+        if self.profile is None:
+            raise RuntimeError("Call begin_search before using a deferred profile device.")
+        return self.profile
 
     def seed(self, begin: int, end: int, ny: int) -> Any:
-        self.profile.before_seed()
-        if not self.profile.active:
+        profile = self._require_profile()
+        profile.before_seed()
+        if not profile.active:
             return super().seed(begin, end, ny)
-        with self.profile.span("stage.seed", "stage", {"begin": begin, "end": end, "ny": ny}):
+        with profile.span("stage.seed", "stage", {"begin": begin, "end": end, "ny": ny}):
             return super().seed(begin, end, ny)
 
     def prune(self, cells: Any, bearings: Any, tolerances: Any) -> Any:
-        self.profile.flush_ready()
-        self.profile.begin_batch()
-        if not self.profile.active:
+        profile = self._require_profile()
+        profile.flush_ready()
+        profile.begin_batch()
+        if not profile.active:
             return super().prune(cells, bearings, tolerances)
-        with self.profile.span("stage.prune", "stage", self._dimensions(cells, bearings)):
+        with profile.span("stage.prune", "stage", self._dimensions(cells, bearings)):
             return super().prune(cells, bearings, tolerances)
 
     def score(self, cells: Any, bearings: Any, tolerances: Any) -> Any:
-        if not self.profile.active:
+        profile = self._require_profile()
+        if not profile.active:
             return super().score(cells, bearings, tolerances)
-        with self.profile.span("stage.score", "stage", self._dimensions(cells, bearings)):
+        with profile.span("stage.score", "stage", self._dimensions(cells, bearings)):
             return super().score(cells, bearings, tolerances)
 
     def split(self, cells: Any) -> Any:
-        if not self.profile.active:
+        profile = self._require_profile()
+        if not profile.active:
             return super().split(cells)
-        with self.profile.span("stage.split", "stage", self._dimensions(cells)):
+        with profile.span("stage.split", "stage", self._dimensions(cells)):
             return super().split(cells)
 
     def _launch(self, name: str, n: int, args: tuple[Any, ...]) -> None:
-        if not self.profile.active:
+        profile = self._require_profile()
+        if not profile.active:
             return super()._launch(name, n, args)
-        with self.profile.span(f"operation.{name}", "operation", {"count": n}):
+        with profile.span(f"operation.{name}", "operation", {"count": n}):
             return super()._launch(name, n, args)
 
     def _cooperative_assignment(self, grid: Any, block: Any, args: tuple[Any, ...]) -> None:
-        if not self.profile.active:
+        profile = self._require_profile()
+        if not profile.active:
             return super()._cooperative_assignment(grid, block, args)
-        with self.profile.span(
+        with profile.span(
             "assignment.cooperative", "assignment", _argument_dimensions(grid, block, args)
         ):
             return super()._cooperative_assignment(grid, block, args)
@@ -461,7 +556,11 @@ class ProfiledResidentDevice(OptimizedResidentDevice):
         return result
 
     def finish_profile(self) -> dict[str, Any]:
-        return self.profile.finish()
+        """Return the saved report with the original finalization wall duration."""
+        started = perf_counter()
+        report = self._require_profile().finish()
+        report.setdefault("profile_finish_s", perf_counter() - started)
+        return report
 
 
 __all__ = ["DeviceProfileCollector", "ProfiledResidentDevice"]

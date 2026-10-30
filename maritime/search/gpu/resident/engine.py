@@ -22,6 +22,7 @@ import numpy as np
 from maritime.search.gpu.batch_assignment import _RAW_HUNGARIAN_SOURCE
 
 from .preparation import PreparedWorld
+from .session import ResidentSearchSession
 
 
 def _terminal_status_codes(
@@ -46,7 +47,7 @@ class ResidentConfig:
     range_numerical_margin_m: float = 0.001
     bearing_numerical_margin_deg: float = 0.000001
     batch_cells: int = 128
-    roots_per_task: int = 8
+    roots_per_task: int = 128
     object_capacity: int = 2048
     trusted_marker_labels: bool = False
     hard_bearing_bounds_asserted: bool = False
@@ -97,6 +98,7 @@ class ResidentDevice:
     """One device owns the map, catalog and computational workspaces."""
 
     def __init__(self, world: PreparedWorld, config: ResidentConfig, device: int) -> None:
+        self._closed = False
         self.cp = import_module("cupy")
         self.world, self.config, self.device = world, config, device
         cp = self.cp
@@ -143,6 +145,28 @@ class ResidentDevice:
         self.max_uncertainty = float(np.max(world.objects[:, 4], initial=0))
         if not isfinite(self.max_uncertainty):
             self.max_uncertainty = 0.0  # No marker pruning with unbounded positions.
+
+    def close(self) -> None:
+        """Drop device-owned buffers and kernels in their CUDA context.
+
+        Explicit field release breaks assignment-method cycles without touching
+        the process-wide allocator or buffers owned by other residents.
+        """
+        if getattr(self, "_closed", False):
+            return
+        with self.cp.cuda.Device(self.device), self.stream:
+            self.stream.synchronize()
+            for name in (
+                "map_args",
+                "object_args",
+                "barriers",
+                "module",
+                "assignment",
+                "_parallel_prediction_module",
+                "_independent_chart_modules",
+            ):
+                self.__dict__.pop(name, None)
+            self._closed = True
 
     def _launch(self, name: str, n: int, args: tuple[Any, ...]) -> None:
         if n:
@@ -378,7 +402,7 @@ def _atomic_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
     temporary.replace(path)
 
 
-def run_resident_search(
+def _run_resident_search(
     world: PreparedWorld,
     config: ResidentConfig,
     bearings_deg: np.ndarray,
@@ -387,6 +411,7 @@ def run_resident_search(
     *,
     resume: bool = False,
     device_factory: Any | None = None,
+    session: ResidentSearchSession | None = None,
 ) -> dict[str, Any]:
     """All per-cell work runs on the devices; results apply to centers only.
 
@@ -467,9 +492,10 @@ def run_resident_search(
     start_time = perf_counter()
     totals = dict(evaluated=0, pruned=0, terminal=0, completed_roots=0)
 
-    def worker(device: int) -> None:
+    def worker(device: int, resident: Any | None = None) -> None:
         nonlocal next_root
-        resident = factory(world, config, device)
+        if resident is None:
+            resident = factory(world, config, device)
         cp = resident.cp
         with cp.cuda.Device(device), resident.stream:
             db, dt = cp.asarray(bearings), cp.asarray(tolerances)
@@ -533,24 +559,88 @@ def run_resident_search(
                 else:
                     _atomic_npz(task_dir / "frontier.npz", {"cells": cp.asnumpy(queue)})
 
+    def one_shot_worker(device: int) -> None:
+        resident = factory(world, config, device)
+        cp = resident.cp
+        with cp.cuda.Device(device), resident.stream:
+            begin = getattr(resident, "begin_search", None)
+            end = getattr(resident, "end_search", None)
+            if begin is not None:
+                begin(output_dir)
+            try:
+                worker(device, resident)
+            finally:
+                resident.stream.synchronize()
+                if end is not None:
+                    end()
+
     try:
-        with ThreadPoolExecutor(max_workers=len(config.devices)) as pool:
-            futures = [pool.submit(worker, d) for d in config.devices]
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except BaseException:
-                    stop.set()
-                    raise
+        if session is not None:
+            session.execute_workers(worker, output_dir, stop)
+        else:
+            with ThreadPoolExecutor(max_workers=len(config.devices)) as pool:
+                futures = [pool.submit(one_shot_worker, d) for d in config.devices]
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                    except BaseException:
+                        stop.set()
+                        raise
     except BaseException:
         (output_dir / "failed.json").write_text(json.dumps(dict(totals, complete=False)) + "\n")
         raise
-    summary = dict(
+    summary: dict[str, Any] = dict(
         totals,
         complete=totals["completed_roots"] == total_roots,
         elapsed_s=perf_counter() - start_time,
         accuracy_evaluated=False,
         numerical_validation_accepted=config.numerical_validation_accepted,
     )
+    if session is not None:
+        summary["resident_session"] = {
+            "request_number": session.completed_requests + 1,
+            "devices": list(session.last_device_diagnostics.values()),
+            "map_buffers_retained": True,
+        }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary
+
+
+def run_resident_search(
+    world: PreparedWorld,
+    config: ResidentConfig,
+    bearings_deg: np.ndarray,
+    tolerances_deg: np.ndarray,
+    output_dir: Path,
+    *,
+    resume: bool = False,
+    device_factory: Any | None = None,
+    session: ResidentSearchSession | None = None,
+) -> dict[str, Any]:
+    """Search with fresh outputs, optionally retaining devices between requests.
+
+    Session construction does not execute a search. Each invocation still
+    requires user approval and preserves every surviving terminal center.
+    """
+    if session is None:
+        return _run_resident_search(
+            world,
+            config,
+            bearings_deg,
+            tolerances_deg,
+            output_dir,
+            resume=resume,
+            device_factory=device_factory,
+        )
+    if device_factory is not None:
+        raise ValueError("Specify device_factory on the session, not each request.")
+    with session.request(world, config):
+        return _run_resident_search(
+            world,
+            config,
+            bearings_deg,
+            tolerances_deg,
+            output_dir,
+            resume=resume,
+            session=session,
+        )

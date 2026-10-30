@@ -7,7 +7,6 @@ import csv
 import fcntl
 import hashlib
 import json
-import multiprocessing as mp
 import os
 import signal
 import subprocess
@@ -34,6 +33,11 @@ FIELDS = [
     "simulation_s",
     "search_s",
     "search_process_s",
+    "worker_startup_s",
+    "search_api_wall_s",
+    "profile_finish_s",
+    "gpu_buffers_reused",
+    "search_worker_pid",
     "selection_s",
     "accuracy_s",
     "total_s",
@@ -182,7 +186,7 @@ def gpu_snapshot():
     ).strip()
 
 
-def resource_guard():
+def resource_guard(owned_worker_pid=None):
     snapshot = gpu_snapshot()
     indexed = subprocess.check_output(
         ["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"], text=True
@@ -190,7 +194,7 @@ def resource_guard():
     compute = subprocess.check_output(
         ["nvidia-smi", "--query-compute-apps=gpu_uuid,pid", "--format=csv,noheader"], text=True
     )
-    if busy_devices(snapshot, indexed, compute):
+    if busy_devices(snapshot, indexed, compute, owned_worker_pid=owned_worker_pid):
         raise RuntimeError(
             f"Required GPU has an active compute context or over1GiB allocation. {snapshot}"
         )
@@ -200,20 +204,31 @@ def resource_guard():
     return {
         "gpu_snapshot": snapshot,
         "compute_contexts": compute,
-        "guard": "No selected compute context and <=1GiB memory; ignore stale utilization",
+        "guard": ("Only the owned worker may exceed1GiB; foreign contexts forbidden"),
+        "owned_worker_pid": owned_worker_pid,
     }
 
 
-def busy_devices(snapshot, indexed, compute):
+def busy_devices(snapshot, indexed, compute, *, owned_worker_pid=None):
     index_uuids = {
         int(line.split(",")[0]): line.split(",")[1].strip() for line in indexed.splitlines()
     }
-    active = {line.split(",")[0].strip() for line in compute.splitlines() if line.strip()}
+    contexts = {}
+    for line in compute.splitlines():
+        if not line.strip():
+            continue
+        uuid, pid = [value.strip() for value in line.split(",")]
+        contexts.setdefault(uuid, set()).add(int(pid))
     busy = []
     for line in snapshot.splitlines():
         fields = [value.strip() for value in line.split(",")]
         index = int(fields[0])
-        if index in (0, 1, 2) and (int(fields[3]) > 1024 or index_uuids[index] in active):
+        active = contexts.get(index_uuids[index], set())
+        owned_only = owned_worker_pid is not None and active == {owned_worker_pid}
+        if index in (0, 1, 2) and (
+            active - ({owned_worker_pid} if owned_worker_pid is not None else set())
+            or (int(fields[3]) > 1024 and not owned_only)
+        ):
             busy.append(index)
     return busy
 
@@ -281,10 +296,10 @@ def prepare(settings, *, refresh_aid_view=False):
             str(object_dir / f"aid-view-{object_key}.npz"),
         ],
         "search_world_loading": (
-            "Loaded once in supervisor, inherited read-only by sequential fork children"
+            "Loaded once in supervisor, inherited read-only by one persistent search child"
         ),
         "device_upload": (
-            "Each search child creates fresh GPU buffers; upload is included in search timing"
+            "GPU map buffers survive sequential requests in one child; first search includes upload"
         ),
         "cpu_roles": [
             "simulation",
@@ -417,48 +432,23 @@ def simulate(row, layers, scene, simulation_settings, directory):
     return markers, len(run.measurements.measurements)
 
 
-def search_child(world, settings, bearings, directory):
-    """Only world, measurement bearings and truth-free settings enter this API."""
-    os.setsid()
-    with (directory / "search.log").open("w", buffering=1) as log:
-        os.dup2(log.fileno(), 1)
-        os.dup2(log.fileno(), 2)
-        try:
-            import numpy as np
-
-            from maritime.search.gpu.resident.engine import ResidentConfig, run_resident_search
-            from maritime.search.gpu.resident.profiling import ProfiledResidentDevice
-
-            devices = []
-
-            def factory(prepared, config, device):
-                resident = ProfiledResidentDevice(
-                    prepared, config, device, profile_dir=directory / "profile", sample_every=10
-                )
-                devices.append(resident)
-                return resident
-
-            (directory / "profile").mkdir()
-            started = time.perf_counter()
-            summary = run_resident_search(
-                world,
-                ResidentConfig(**settings["search"]),
-                np.asarray(bearings),
-                np.full(len(bearings), settings["marker_tolerance_deg"]),
-                directory / "search",
-                device_factory=factory,
-            )
-            save(
-                directory / "search-process-summary.json",
-                {
-                    "summary": summary,
-                    "api_wall_s": time.perf_counter() - started,
-                    "profiles": [device.finish_profile() for device in devices],
-                },
-            )
-        except BaseException:
-            traceback.print_exc()
-            raise
+def check_search_resource_ceiling(directory):
+    progress = directory / "search/progress.jsonl"
+    if not progress.exists():
+        return
+    with progress.open("rb") as stream:
+        stream.seek(max(0, progress.stat().st_size - 65536))
+        lines = stream.read().splitlines()
+    if not lines:
+        return
+    try:
+        last = json.loads(lines[-1])
+    except json.JSONDecodeError:
+        return
+    if last["terminal"] > 2_000_000 or last["evaluated"] > 50_000_000:
+        raise RuntimeError(
+            "Resource ceiling reached. 2 million terminal or 50 million evaluated cells"
+        )
 
 
 def geodesic_after_freeze(estimate_path, freeze_path, truth_path):
@@ -528,6 +518,8 @@ def run_suite(args):
     (output / "supervisor.pid").write_text(f"{os.getpid()}\n")
     settings = read(REFERENCE)["settings"]
     settings.pop("measurements")
+    settings["search"]["roots_per_task"] = 128
+    settings["search"]["batch_cells"] = max(settings["search"]["batch_cells"], 128)
     simulation_settings = read(SIM_SETTINGS)
     all_rows = sites()
     selected = (
@@ -564,7 +556,8 @@ def run_suite(args):
         if args.normalized_catalog_check
         else "saved_charleston_frame",
         "selected_sites": [row["site_id"] for row in rows],
-        "resource_guard": "No selected compute context; allocation <=1GiB",
+        "resource_guard": "Only owned persistent search worker contexts permitted after startup",
+        "gpu_residency": "One map upload per device for sequential suite requests",
         "aid_filter": "Detected physical_aid reports only; vessels and unknown reports excluded",
         "selection_timeout_s": 120,
         "terminal_ceiling": 2_000_000,
@@ -651,234 +644,274 @@ def run_suite(args):
         return
     records = []
     aid_counts = []
-    context = mp.get_context("fork")
-    for row in rows:
-        site = row["site_id"]
-        site_dir = output / site
-        site_dir.mkdir(exist_ok=True)
-        result_path = site_dir / "result.json"
-        if result_path.exists() and resume_matches(read(result_path), provenance_hash):
-            records.append(read(result_path))
-            summarize(output, records, len(rows))
-            continue
-        directory = site_dir / datetime.now(UTC).strftime("attempt-%Y%m%dT%H%M%S%fZ")
-        directory.mkdir()
-        record = {
-            **row,
-            "status": "running",
-            "started_utc": now(),
-            "provenance_sha256": provenance_hash,
-            "gpus": "0,1,2",
-            "attempt_directory": str(directory),
-            "shared_preparation_s": shared["shared_preparation_s"],
-            "base_cache_hit": shared["base_cache_hit"],
-            "object_cache_hit": shared["object_cache_hit"],
-            "prepared_world_reused": True,
-        }
-        start = time.perf_counter()
-        child = None
-        search_start = None
-        save(output / "status.json", {"stage": "site", "site_id": site, "updated_utc": now()})
-        save(result_path, record)
-        try:
-            save(directory / "gpu-before.json", {"snapshot": resource_guard()})
-            save(
-                output / "status.json",
-                {"stage": "simulation", "site_id": site, "updated_utc": now()},
-            )
-            print(json.dumps({"stage": "simulation", "site_id": site, "utc": now()}), flush=True)
-            sim_start = time.perf_counter()
-            markers, total_reports = simulate(
-                row, vector_map, scene, simulation_settings, directory
-            )
-            record.update(
-                simulation_s=time.perf_counter() - sim_start,
-                positive_marker_reports=len(markers),
-                total_reports=total_reports,
-            )
-            aid_counts.append(
-                {
-                    "site_id": site,
-                    "positive_marker_reports": len(markers),
-                    "eligible": eligible_aid_count(len(markers), args.minimum_positive_aids),
-                }
-            )
-            save(
-                output / "aid-counts-and-eligibility.json",
-                {"minimum_positive_aids": args.minimum_positive_aids, "counted_sites": aid_counts},
-            )
-            print(json.dumps({"stage": "aid_count_filter", **aid_counts[-1]}), flush=True)
-            if not eligible_aid_count(len(markers), args.minimum_positive_aids):
-                record.update(
-                    status="skipped_aid_count",
-                    reason=(
-                        f"Detected {len(markers)} positive aid reports; "
-                        f"minimum is {args.minimum_positive_aids}"
-                    ),
-                )
+    from maritime.search.gpu.resident.service import PersistentSearchService
+
+    service = PersistentSearchService(world, settings["search"], output)
+    try:
+        for row in rows:
+            site = row["site_id"]
+            site_dir = output / site
+            site_dir.mkdir(exist_ok=True)
+            result_path = site_dir / "result.json"
+            if result_path.exists() and resume_matches(read(result_path), provenance_hash):
+                records.append(read(result_path))
+                summarize(output, records, len(rows))
                 continue
-            if not markers:
-                raise ValueError(
-                    "Precondition failed. Positive chart-aid observations are required"
-                )
-            if len(markers) > 256:
-                raise ValueError("Precondition failed. Solver accepts at most 256 aid reports")
-            search_settings = {**settings, "measurements": str(directory / "measurements.json")}
-            save(directory / "settings.json", search_settings)
-            save(
-                output / "status.json",
-                {"stage": "full_coast_search", "site_id": site, "updated_utc": now()},
-            )
-            print(
-                json.dumps({"stage": "full_coast_search", "site_id": site, "utc": now()}),
-                flush=True,
-            )
-            child = context.Process(target=search_child, args=(world, settings, markers, directory))
-            search_start = time.perf_counter()
-            child.start()
-            (directory / "search.pid").write_text(f"{child.pid}\n")
-            while child.is_alive():
-                child.join(1)
-                if time.perf_counter() - search_start > args.search_timeout:
-                    stop_process(child)
-                    raise TimeoutError(f"Search exceeded {args.search_timeout} seconds")
-                progress = directory / "search/progress.jsonl"
-                if progress.exists():
-                    with progress.open("rb") as stream:
-                        stream.seek(max(0, progress.stat().st_size - 65536))
-                        lines = stream.read().splitlines()
-                    if lines:
-                        try:
-                            last = json.loads(lines[-1])
-                        except json.JSONDecodeError:
-                            continue
-                        if last["terminal"] > 2_000_000 or last["evaluated"] > 50_000_000:
-                            stop_process(child)
-                            raise RuntimeError(
-                                "Resource ceiling reached. 2 million terminal "
-                                "or 50 million evaluated cells"
-                            )
-            record["search_process_s"] = time.perf_counter() - search_start
-            if child.exitcode:
-                raise RuntimeError(f"Search child exited {child.exitcode}; see search.log")
-            summary = read(directory / "search/summary.json")
-            record.update({key: summary[key] for key in ("evaluated", "pruned", "terminal")})
-            record.update(
-                search_s=summary["elapsed_s"],
-                expanded=summary["evaluated"] - summary["pruned"] - summary["terminal"],
-            )
-            if not summary["complete"]:
-                raise RuntimeError("Full coast search incomplete")
-            save(
-                output / "status.json",
-                {"stage": "selection", "site_id": site, "updated_utc": now()},
-            )
-            record["selection_s"] = bounded_command(
-                command(
-                    "tools.select_resident_result",
-                    directory / "search",
-                    directory / "estimate.json",
-                    "--device",
-                    "0",
-                ),
-                directory,
-                "selection",
-                120,
-            )
-            freeze = {"frozen_utc": now(), "estimate_sha256": digest(directory / "estimate.json")}
-            save(directory / "estimate-freeze.json", freeze)
-            estimate = read(directory / "estimate.json")
-            counts = estimate["status_counts"]
-            record.update(
-                consistent=counts["0"],
-                inconsistent=counts["1"],
-                unresolved=counts["2"],
-                land=counts["3"],
-            )
-            if estimate["estimate"] is None:
-                raise ValueError("No consistent center available after completed full coast search")
-            selected = estimate["estimate"]
-            record.update(
-                estimated_latitude_deg=selected["latitude_deg"],
-                estimated_longitude_deg=selected["longitude_deg"],
-                matched_markers=selected["matched_positive_markers"],
-            )
-            accuracy_start = time.perf_counter()
-            accuracy = geodesic_after_freeze(
-                directory / "estimate.json",
-                directory / "estimate-freeze.json",
-                directory / "truth.json",
-            )
-            save(directory / "accuracy.json", accuracy)
-            record.update(
-                position_error_m=accuracy["position_error_m"],
-                accuracy_s=time.perf_counter() - accuracy_start,
-                status="completed",
-            )
-        except TimeoutError as error:
-            record.update(status="timeout", reason=str(error))
-        except Exception as error:
-            record.update(
-                status="invalid" if "Observer must lie" in str(error) else "failed",
-                reason=str(error),
-            )
-            (directory / "exception.txt").write_text(traceback.format_exc())
-        finally:
-            if child is not None and child.pid is not None:
-                stop_process(child)
+            directory = site_dir / datetime.now(UTC).strftime("attempt-%Y%m%dT%H%M%S%fZ")
+            directory.mkdir()
+            record = {
+                **row,
+                "status": "running",
+                "started_utc": now(),
+                "provenance_sha256": provenance_hash,
+                "gpus": "0,1,2",
+                "attempt_directory": str(directory),
+                "shared_preparation_s": shared["shared_preparation_s"],
+                "base_cache_hit": shared["base_cache_hit"],
+                "object_cache_hit": shared["object_cache_hit"],
+                "prepared_world_reused": True,
+            }
+            start = time.perf_counter()
+            search_start = None
+            save(output / "status.json", {"stage": "site", "site_id": site, "updated_utc": now()})
+            save(result_path, record)
+            try:
                 save(
-                    directory / "process-cleanup.json",
+                    directory / "gpu-before.json",
+                    {"snapshot": resource_guard(owned_worker_pid=service.pid)},
+                )
+                save(
+                    output / "status.json",
+                    {"stage": "simulation", "site_id": site, "updated_utc": now()},
+                )
+                print(
+                    json.dumps({"stage": "simulation", "site_id": site, "utc": now()}), flush=True
+                )
+                sim_start = time.perf_counter()
+                markers, total_reports = simulate(
+                    row, vector_map, scene, simulation_settings, directory
+                )
+                record.update(
+                    simulation_s=time.perf_counter() - sim_start,
+                    positive_marker_reports=len(markers),
+                    total_reports=total_reports,
+                )
+                aid_counts.append(
                     {
-                        "search_pid": child.pid,
-                        "live_group_members": group_members(child.pid),
-                        "verified_utc": now(),
-                        "gpu_snapshot_after": gpu_snapshot(),
+                        "site_id": site,
+                        "positive_marker_reports": len(markers),
+                        "eligible": eligible_aid_count(len(markers), args.minimum_positive_aids),
+                    }
+                )
+                save(
+                    output / "aid-counts-and-eligibility.json",
+                    {
+                        "minimum_positive_aids": args.minimum_positive_aids,
+                        "counted_sites": aid_counts,
                     },
                 )
-            if search_start is not None:
-                record.setdefault("search_process_s", time.perf_counter() - search_start)
-                progress = directory / "search/progress.jsonl"
-                if progress.exists():
-                    with progress.open("rb") as stream:
-                        stream.seek(max(0, progress.stat().st_size - 65536))
-                        lines = stream.read().splitlines()
-                    for line in reversed(lines):
-                        try:
-                            last = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-                        for key in ("evaluated", "pruned", "terminal"):
-                            record.setdefault(key, last[key])
-                        record.setdefault("search_s", last["elapsed_s"])
-                        record.setdefault(
-                            "expanded", last["evaluated"] - last["pruned"] - last["terminal"]
-                        )
-                        break
-            record.update(ended_utc=now(), total_s=time.perf_counter() - start)
-            save(result_path, record)
-            save(directory / "result.json", record)
-            records.append(record)
-            summarize(output, records, len(rows))
-            print(
-                json.dumps(
+                print(json.dumps({"stage": "aid_count_filter", **aid_counts[-1]}), flush=True)
+                if not eligible_aid_count(len(markers), args.minimum_positive_aids):
+                    record.update(
+                        status="skipped_aid_count",
+                        reason=(
+                            f"Detected {len(markers)} positive aid reports; "
+                            f"minimum is {args.minimum_positive_aids}"
+                        ),
+                    )
+                    continue
+                if not markers:
+                    raise ValueError(
+                        "Precondition failed. Positive chart-aid observations are required"
+                    )
+                if len(markers) > 256:
+                    raise ValueError("Precondition failed. Solver accepts at most 256 aid reports")
+                search_settings = {**settings, "measurements": str(directory / "measurements.json")}
+                save(directory / "settings.json", search_settings)
+                save(
+                    output / "status.json",
+                    {"stage": "full_coast_search", "site_id": site, "updated_utc": now()},
+                )
+                print(
+                    json.dumps({"stage": "full_coast_search", "site_id": site, "utc": now()}),
+                    flush=True,
+                )
+                service.start()
+                search_start = time.perf_counter()
+                (directory / "search.pid").write_text(f"{service.pid}\n")
+                response = service.search(
+                    markers,
+                    settings["marker_tolerance_deg"],
+                    directory,
+                    timeout_s=args.search_timeout,
+                    progress_check=lambda: check_search_resource_ceiling(directory),
+                )
+                record["search_process_s"] = time.perf_counter() - search_start
+                metadata = response["metadata"]
+                record.update(
+                    worker_startup_s=service.startup_s if metadata["cold_start"] else 0.0,
+                    search_api_wall_s=metadata["api_wall_s"],
+                    profile_finish_s=metadata["profile_finish_s"],
+                    gpu_buffers_reused=metadata["gpu_buffers_reused"],
+                    search_worker_pid=metadata["worker_pid"],
+                )
+                summary = response["summary"]
+                record.update({key: summary[key] for key in ("evaluated", "pruned", "terminal")})
+                record.update(
+                    search_s=summary["elapsed_s"],
+                    expanded=summary["evaluated"] - summary["pruned"] - summary["terminal"],
+                )
+                if not summary["complete"]:
+                    raise RuntimeError("Full coast search incomplete")
+                save(
+                    output / "status.json",
+                    {"stage": "selection", "site_id": site, "updated_utc": now()},
+                )
+                record["selection_s"] = bounded_command(
+                    command(
+                        "tools.select_resident_result",
+                        directory / "search",
+                        directory / "estimate.json",
+                        "--device",
+                        "0",
+                    ),
+                    directory,
+                    "selection",
+                    120,
+                )
+                freeze = {
+                    "frozen_utc": now(),
+                    "estimate_sha256": digest(directory / "estimate.json"),
+                }
+                save(directory / "estimate-freeze.json", freeze)
+                estimate = read(directory / "estimate.json")
+                counts = estimate["status_counts"]
+                record.update(
+                    consistent=counts["0"],
+                    inconsistent=counts["1"],
+                    unresolved=counts["2"],
+                    land=counts["3"],
+                )
+                if estimate["estimate"] is None:
+                    raise ValueError(
+                        "No consistent center available after completed full coast search"
+                    )
+                selected = estimate["estimate"]
+                record.update(
+                    estimated_latitude_deg=selected["latitude_deg"],
+                    estimated_longitude_deg=selected["longitude_deg"],
+                    matched_markers=selected["matched_positive_markers"],
+                )
+                accuracy_start = time.perf_counter()
+                accuracy = geodesic_after_freeze(
+                    directory / "estimate.json",
+                    directory / "estimate-freeze.json",
+                    directory / "truth.json",
+                )
+                save(directory / "accuracy.json", accuracy)
+                record.update(
+                    position_error_m=accuracy["position_error_m"],
+                    accuracy_s=time.perf_counter() - accuracy_start,
+                    status="completed",
+                )
+            except TimeoutError as error:
+                record.update(status="timeout", reason=str(error))
+            except Exception as error:
+                record.update(
+                    status="invalid" if "Observer must lie" in str(error) else "failed",
+                    reason=str(error),
+                )
+                (directory / "exception.txt").write_text(traceback.format_exc())
+            finally:
+                save(
+                    directory / "worker-state.json",
                     {
-                        key: record.get(key)
-                        for key in ("site_id", "status", "search_s", "position_error_m", "reason")
-                    }
-                ),
-                flush=True,
+                        "search_pid": service.pid,
+                        "persistent": True,
+                        "poisoned": service.poisoned,
+                        "retained_between_sites": service.ready,
+                        "verified_utc": now(),
+                    },
+                )
+                if search_start is not None:
+                    record.setdefault("search_process_s", time.perf_counter() - search_start)
+                    progress = directory / "search/progress.jsonl"
+                    if progress.exists():
+                        with progress.open("rb") as stream:
+                            stream.seek(max(0, progress.stat().st_size - 65536))
+                            lines = stream.read().splitlines()
+                        for line in reversed(lines):
+                            try:
+                                last = json.loads(line)
+                            except json.JSONDecodeError:
+                                continue
+                            for key in ("evaluated", "pruned", "terminal"):
+                                record.setdefault(key, last[key])
+                            record.setdefault("search_s", last["elapsed_s"])
+                            record.setdefault(
+                                "expanded", last["evaluated"] - last["pruned"] - last["terminal"]
+                            )
+                            break
+                record.update(ended_utc=now(), total_s=time.perf_counter() - start)
+                save(result_path, record)
+                save(directory / "result.json", record)
+                records.append(record)
+                summarize(output, records, len(rows))
+                print(
+                    json.dumps(
+                        {
+                            key: record.get(key)
+                            for key in (
+                                "site_id",
+                                "status",
+                                "search_s",
+                                "position_error_m",
+                                "reason",
+                            )
+                        }
+                    ),
+                    flush=True,
+                )
+            if service.poisoned:
+                remaining = [pending["site_id"] for pending in rows[rows.index(row) + 1 :]]
+                save(
+                    output / "status.json",
+                    {
+                        "stage": "halted_worker_failure",
+                        "site_id": site,
+                        "reason": record.get("reason"),
+                        "remaining_sites": remaining,
+                        "updated_utc": now(),
+                    },
+                )
+                break
+    finally:
+        try:
+            service.close()
+            if service.pid is not None:
+                clear_group(service.pid)
+            save(
+                output / "worker-cleanup.json",
+                {
+                    "search_pid": service.pid,
+                    "live_group_members": group_members(service.pid) if service.pid else [],
+                    "verified_utc": now(),
+                },
             )
-    after = {
-        p: {
-            "sha256": digest(p),
-            "size": Path(p).stat().st_size,
-            "mtime_ns": Path(p).stat().st_mtime_ns,
-        }
-        for p in shared["cache_paths"]
-    }
-    save(output / "cache-after.json", after)
-    if before != after:
-        raise RuntimeError("Immutable cache fingerprints changed")
+        finally:
+            after = {
+                p: {
+                    "sha256": digest(p),
+                    "size": Path(p).stat().st_size,
+                    "mtime_ns": Path(p).stat().st_mtime_ns,
+                }
+                for p in shared["cache_paths"]
+            }
+            save(output / "cache-after.json", after)
+            if before != after:
+                raise RuntimeError("Immutable cache fingerprints changed")
+    if service.poisoned:
+        return
     save(
         output / "status.json",
         {
@@ -915,6 +948,11 @@ def main():
         parser.error("search timeout must be positive")
     if args.minimum_positive_aids < 16:
         parser.error("Approved policy requires more than15 detected positive aid reports")
+
+    def terminate_supervisor(signum, frame):
+        raise SystemExit(f"Supervisor received signal {signum}")
+
+    signal.signal(signal.SIGTERM, terminate_supervisor)
     try:
         run_suite(args)
     except BaseException as error:

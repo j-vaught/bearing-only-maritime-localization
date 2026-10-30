@@ -3,6 +3,7 @@
 import json
 import os
 import pstats
+import weakref
 from pathlib import Path
 from threading import Thread, get_ident
 from types import SimpleNamespace
@@ -19,6 +20,12 @@ class FakeStream:
         self.time_ms = 0.0
         self.completed_ms = -1.0
         self.synchronizations = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
 
     def synchronize(self):
         self.completed_ms = self.time_ms
@@ -264,6 +271,207 @@ def test_finishing_active_span_and_overwriting_existing_evidence_are_rejected(tm
     collector.finish()
     with pytest.raises(FileExistsError):
         DeviceProfileCollector(fake_cp(), FakeStream(), 0, tmp_path)
+
+
+def fake_profiled_device(monkeypatch, profile_dir=None):
+    """Construct instrumentation against CPU-only stand-ins, without CUDA imports."""
+    calls = {"construction": 0, "prediction_module": 0, "chart_module": 0, "kernel": 0}
+    stream = FakeStream()
+
+    def kernel(grid, block, args, **kwargs):
+        calls["kernel"] += 1
+        stream.time_ms += 1
+
+    baseline = SimpleNamespace(get_function=lambda name: kernel)
+    prediction = SimpleNamespace(get_function=lambda name: kernel)
+    chart = SimpleNamespace(get_function=lambda name: kernel)
+
+    def initialize(self, world, config, device, **options):
+        calls["construction"] += 1
+        self.cp, self.stream, self.device = fake_cp(), stream, device
+        self.world, self.config, self.module = world, config, baseline
+        self.map_args, self.object_args = (object(),), (object(),)
+        self.assignment = kernel
+        self.use_parallel_prediction = True
+        self.use_independent_chart_pruning = True
+        self.use_cooperative_matching = False
+        self.use_true_bearings = True
+
+    def prediction_module(self):
+        calls["prediction_module"] += 1
+        self._parallel_prediction_module = prediction
+        return prediction
+
+    def chart_module(self, true_bearings):
+        calls["chart_module"] += 1
+        self._independent_chart_modules = {true_bearings: chart}
+        return chart
+
+    monkeypatch.setattr(profiling.OptimizedResidentDevice, "__init__", initialize)
+    monkeypatch.setattr(profiling.parallel_prediction, "_module", prediction_module)
+    monkeypatch.setattr(profiling.chart_pruning, "module_for", chart_module)
+    resident = ProfiledResidentDevice(
+        SimpleNamespace(objects=[]),
+        SimpleNamespace(object_capacity=16),
+        0,
+        profile_dir=profile_dir,
+        sample_every=10,
+    )
+    return resident, calls, (baseline, prediction, chart, kernel)
+
+
+def test_reusable_profiles_keep_buffers_modules_and_separate_observations(tmp_path, monkeypatch):
+    resident, calls, raw = fake_profiled_device(monkeypatch)
+    buffers = resident.map_args, resident.object_args
+    assert resident.profile is None
+    with pytest.raises(RuntimeError, match="begin_search"):
+        resident.finish_profile()
+
+    profiles = []
+    for name in ("first", "second"):
+        resident.begin_search(tmp_path / name / "search")
+        collector = resident._require_profile()
+        assert collector.prune_calls == 0
+        collector.begin_batch()
+        resident.module.get_function("seed_cells")((1,), (128,), ())
+        resident._parallel_prediction_module.get_function("pp_pairs")((1,), (128,), ())
+        resident._independent_chart_modules[True].get_function("prune")((1,), (128,), ())
+        resident.assignment((1,), (128,), ())
+        report = resident.end_search()
+        assert resident.finish_profile() is report
+        profiles.append(report)
+        assert (resident.map_args, resident.object_args) == buffers
+        assert resident.module._module is raw[0]
+        assert resident._parallel_prediction_module._module is raw[1]
+        assert resident._independent_chart_modules[True]._module is raw[2]
+        assert resident.assignment._kernel is raw[3]
+        assert collector._finished is report
+        assert report["summary_data"]["sampling"]["prune_calls"] == 1
+        records = rows(report["raw_records"])
+        assert len(records) == 4
+        assert [row["id"] for row in records] == [0, 1, 2, 3]
+        assert {row["batch_index"] for row in records} == {0}
+    assert calls == {"construction": 1, "prediction_module": 1, "chart_module": 1, "kernel": 8}
+    assert profiles[0]["raw_records"] != profiles[1]["raw_records"]
+    assert len(rows(profiles[0]["raw_records"])) == 4
+
+
+def test_profile_lifecycle_rejects_unfinished_and_existing_outputs(tmp_path, monkeypatch):
+    output = tmp_path / "first" / "search"
+    resident, _, _ = fake_profiled_device(monkeypatch, output.parent / "profile")
+    initial = resident.profile
+    resident.begin_search(output)
+    assert resident.profile is initial
+    with pytest.raises(RuntimeError, match="Finish"):
+        resident.begin_search(tmp_path / "second" / "search")
+    resident._require_profile().begin_batch()
+    with pytest.raises(RuntimeError, match="Finish"):
+        resident.begin_search(output)
+    report = resident.end_search()
+    with pytest.raises(FileExistsError):
+        resident.begin_search(output)
+    assert resident.finish_profile() is report
+    resident.begin_search(tmp_path / "second" / "search")
+    assert resident.profile is not initial
+    resident.end_search()
+
+
+def test_initial_custom_profile_directory_is_preserved(tmp_path, monkeypatch):
+    custom = tmp_path / "custom-profiling-location"
+    first_search = tmp_path / "first" / "search"
+    resident, _, _ = fake_profiled_device(monkeypatch, custom)
+    initial = resident.profile
+    resident.begin_search(first_search)
+    assert resident.profile is initial
+    assert resident._require_profile().profile_dir == custom
+    with pytest.raises(RuntimeError, match="Finish"):
+        resident.begin_search(tmp_path / "second" / "search")
+    resident.end_search()
+    second_search = tmp_path / "second" / "search"
+    resident.begin_search(second_search)
+    assert resident._require_profile().profile_dir == second_search.parent / "profile"
+    resident.end_search()
+
+
+def test_profile_finalization_duration_is_measured_once(tmp_path, monkeypatch):
+    resident, _, _ = fake_profiled_device(monkeypatch)
+    resident.begin_search(tmp_path / "first" / "search")
+    collector = resident._require_profile()
+    original_finish = collector.finish
+    clock = [10.0]
+    monkeypatch.setattr(profiling, "perf_counter", lambda: clock[0])
+
+    def finish():
+        clock[0] += 0.75
+        return original_finish()
+
+    monkeypatch.setattr(collector, "finish", finish)
+    report = resident.end_search()
+    assert report["profile_finish_s"] == 0.75
+    clock[0] = 100.0
+    assert resident.finish_profile() is report
+    assert report["profile_finish_s"] == 0.75
+    assert resident.end_search() is report
+    assert report["profile_finish_s"] == 0.75
+
+
+def test_profile_close_drops_raw_and_proxy_references_without_recounting(tmp_path, monkeypatch):
+    resident, _, raw = fake_profiled_device(monkeypatch)
+    resident.begin_search(tmp_path / "first" / "search")
+    collector = resident._require_profile()
+    collector.begin_batch()
+    resident.module.get_function("seed_cells")((1,), (128,), ())
+    report = resident.end_search()
+    saved_report = json.loads(json.dumps(report))
+    proxy_reference = weakref.ref(resident.module)
+    collector_reference = weakref.ref(collector)
+    # Retain the instance and deliberately add the method cycle used by the
+    # cooperative assignment path. Explicit close must still release its fields.
+    resident._profile_raw_assignment = resident._cooperative_assignment
+    del collector, raw
+    resident.close()
+    assert resident._closed
+    assert resident.profile is None
+    assert proxy_reference() is None
+    assert collector_reference() is None
+    for name in (
+        "map_args",
+        "object_args",
+        "barriers",
+        "module",
+        "assignment",
+        "_parallel_prediction_module",
+        "_independent_chart_modules",
+        "_profile_raw_module",
+        "_profile_raw_prediction_module",
+        "_profile_raw_chart_module",
+        "_profile_raw_assignment",
+    ):
+        assert name not in resident.__dict__
+    assert report == saved_report
+    synchronizations = resident.stream.synchronizations
+    resident.close()
+    assert resident.stream.synchronizations == synchronizations
+    with pytest.raises(RuntimeError, match="closed"):
+        resident.begin_search(tmp_path / "second" / "search")
+
+
+def test_profile_close_finalizes_pending_collector(tmp_path, monkeypatch):
+    resident, _, _ = fake_profiled_device(monkeypatch)
+    resident.begin_search(tmp_path / "first" / "search")
+    collector = resident._require_profile()
+    collector.begin_batch()
+    resident.module.get_function("seed_cells")((1,), (128,), ())
+    assert collector._pending
+    resident.close()
+    report = collector._finished
+    assert report is not None
+    assert report["profile_finish_s"] >= 0
+    assert report["summary_data"]["pending_spans"] == 0
+    assert report["summary_data"]["sampling"]["prune_calls"] == 1
+    assert len(rows(report["raw_records"])) == 1
+    assert resident.profile is None
+    assert resident._closed
 
 
 @pytest.mark.skipif(
