@@ -1,0 +1,90 @@
+{
+  "evaluated": 151211,
+  "pruned": 122218,
+  "terminal": 1049,
+  "completed_roots": 39435,
+  "complete": true,
+  "elapsed_s": 3.3597725182771683,
+  "accuracy_evaluated": false,
+  "numerical_validation_accepted": true,
+  "resident_session": {
+    "request_number": 19,
+    "devices": [
+      {
+        "device": 2,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 139142144513728
+      },
+      {
+        "device": 0,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 139142165485248
+      },
+      {
+        "device": 1,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 139142157092544
+      }
+    ],
+    "map_buffers_retained": true
+  },
+  "dynamic_score_sharing": {
+    "enabled": true,
+    "mode": "terminal scoring to idle peer GPUs",
+    "map_bytes_moved": 0,
+    "candidate_bytes_moved": 25984,
+    "byte_budget": 33554432,
+    "max_gpu_migrations_per_cell": 1,
+    "transport": "pinned host staging, two DMA legs, no CPU geometry",
+    "handoffs": 3,
+    "records": [
+      {
+        "packet": 0,
+        "source": 2,
+        "destination": 0,
+        "cells": 174,
+        "bytes": 11136,
+        "payload_bytes": 5568,
+        "copy_ms": 0.7790719866752625,
+        "score_ms": 805.435302734375,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 2,
+        "source": 2,
+        "destination": 1,
+        "cells": 116,
+        "bytes": 7424,
+        "payload_bytes": 3712,
+        "copy_ms": 0.33318400755524635,
+        "score_ms": 660.0362548828125,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 1,
+        "source": 2,
+        "destination": 0,
+        "cells": 116,
+        "bytes": 7424,
+        "payload_bytes": 3712,
+        "copy_ms": 0.3532799854874611,
+        "score_ms": 674.0640869140625,
+        "gpu_migrations": 1,
+        "failed": false
+      }
+    ],
+    "forecast_score_ms_per_cell": 4.51729920546132,
+    "forecast_copy_ms": 0.2748866526007653,
+    "skipped_handoffs": {
+      "no_idle_peer": 3
+    }
+  }
+}

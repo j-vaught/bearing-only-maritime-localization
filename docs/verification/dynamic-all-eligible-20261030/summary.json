@@ -1,0 +1,20 @@
+{
+  "author": "J.C. Vaught",
+  "eligible_sites": 20,
+  "minimum_detected_charting_aids": 16,
+  "all_observations_unchanged": true,
+  "all_estimates_and_terminal_arrays_identical": true,
+  "all_errors_unchanged": true,
+  "saved_caches_unchanged": true,
+  "one_gpu_session_all_sites": true,
+  "gpu_preload_excluded": true,
+  "excluded_warmup": "One full-coast Charleston search",
+  "old_sum_search_s": 426.5177519544959,
+  "new_sum_search_s": 278.6851638806984,
+  "total_time_reduction_percent": 34.66035994899678,
+  "raw_run": "/home/jvaught2/projects/bearing-only-maritime-localization/runs/dynamic-all-eligible-20261030T040818Z",
+  "engine_revision_at_launch": "58695aaaebc3563f96508bd4b32ca7f39e23fbb6",
+  "published_driver_revision": "f593d27",
+  "source_note": "The driver received a type-annotation-only correction after launch; the search implementation and runtime arguments were unchanged.",
+  "new_hardware_counter_data_available": false
+}
