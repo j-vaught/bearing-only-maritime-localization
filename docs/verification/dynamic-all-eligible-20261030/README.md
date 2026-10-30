@@ -51,3 +51,5 @@ The driver checks the completed timing suite, profiles only Philadelphia on GPUs
 [NVIDIA counter-access requirements](https://developer.nvidia.com/nvidia-development-tools-solutions-err_nvgpuctrperm-permission-issue-performance-counters) and [Nsight Compute collection options](https://docs.nvidia.com/nsight-compute/NsightComputeCli/) describe the permissions and kernel filters used here.
 
 The raw timing run is /home/jvaught2/projects/bearing-only-maritime-localization/runs/dynamic-all-eligible-20261030T040818Z. The executed search implementation was revision 58695aaaebc3563f96508bd4b32ca7f39e23fbb6. The published timing driver is revision f593d27. A type-annotation-only edit followed launch; numerical search code and runtime settings were unchanged.
+
+A subsequent [non-admin software source profile](../philadelphia-software-profile-20261030/README.md) succeeded on saved Philadelphia batches. It provides instruction-level counts and compiled-resource measurements while the hardware-counter restriction remains in place.

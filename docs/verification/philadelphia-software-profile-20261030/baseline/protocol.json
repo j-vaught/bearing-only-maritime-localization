@@ -1,0 +1,16 @@
+{
+  "source_commit": "2bafebe530ca92817e3aee5b3b70ce1654a8ec4a",
+  "search_executed": false,
+  "device": 0,
+  "saved_site": "B11",
+  "reference": "/home/jvaught2/projects/bearing-only-maritime-localization/runs/dynamic-all-eligible-20261030T040818Z/B11",
+  "batches": [
+    "/home/jvaught2/projects/bearing-only-maritime-localization/runs/dynamic-all-eligible-20261030T040818Z/B11/search/roots-13440-13568-gpu-2/leaf-00000509.npz",
+    "/home/jvaught2/projects/bearing-only-maritime-localization/runs/dynamic-all-eligible-20261030T040818Z/B11/search/roots-3840-3968-gpu-0/leaf-00000969.npz",
+    "/home/jvaught2/projects/bearing-only-maritime-localization/runs/dynamic-all-eligible-20261030T040818Z/B11/search/roots-4736-4864-gpu-2/leaf-00000182.npz"
+  ],
+  "cells_per_batch_limit": 64,
+  "instrumented": false,
+  "full_search_error_m_previously_verified": 2.060522725327833,
+  "timing_scope": "Saved terminal-cell replay; not full-search performance"
+}

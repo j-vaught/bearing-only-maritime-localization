@@ -1,0 +1,22 @@
+{
+  "kernel": "pp_pairs",
+  "attributes": {
+    "max_threads_per_block": 640,
+    "shared_size_bytes": 0,
+    "const_size_bytes": 0,
+    "local_size_bytes": 1328,
+    "num_regs": 90,
+    "ptx_version": 89,
+    "binary_version": 89,
+    "cache_mode_ca": 0,
+    "max_dynamic_shared_size_bytes": 49152,
+    "preferred_shared_memory_carveout": -1
+  },
+  "threads_per_block": 128,
+  "theoretical_active_blocks_per_sm": 5,
+  "theoretical_active_threads_per_sm": 640,
+  "max_threads_per_sm": 1536,
+  "theoretical_occupancy_percent": 41.666666666666664,
+  "multiprocessors": 142,
+  "occupancy_is_static_limit_not_measured_runtime_occupancy": true
+}
