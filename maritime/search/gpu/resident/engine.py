@@ -110,14 +110,7 @@ class ResidentDevice:
             self.sharing_peers = set()
             if config.share_terminal_work:
                 self.sharing_stream = cp.cuda.Stream(non_blocking=True)
-                for peer in config.devices:
-                    if peer != device and cp.cuda.runtime.deviceCanAccessPeer(device, peer):
-                        self.sharing_peers.add(peer)
-                        try:
-                            cp.cuda.runtime.deviceEnablePeerAccess(peer)
-                        except cp.cuda.runtime.CUDARuntimeError as error:
-                            if error.status != 704:  # cudaErrorPeerAccessAlreadyEnabled.
-                                raise
+                self.sharing_peers = set(config.devices) - {device}
             with self.stream:
                 bounds, children, edges, offsets = [], [], [], []
                 nb = ne = 0
@@ -528,10 +521,12 @@ def _run_resident_search(
         copy_ms = score_ms = 0.0
         assert broker is not None
         try:
+            packet.ready.synchronize()
+            with cp.cuda.Device(packet.source):
+                copy_ms = float(cp.cuda.get_elapsed_time(packet.d2h_begin, packet.ready))
             with resident.sharing_stream:
-                resident.sharing_stream.wait_event(packet.ready)
                 copy_begin.record(resident.sharing_stream)
-                cells = cp.array(packet.cells, copy=True)
+                cells = cp.asarray(packet.staging, blocking=False)
                 copy_end.record(resident.sharing_stream)
             resident.stream.wait_event(copy_end)
             hook = getattr(resident, "begin_remote_score", None)
@@ -541,7 +536,7 @@ def _run_resident_search(
             scored = resident.score(cells, db, dt)
             score_end.record(resident.stream)
             score_end.synchronize()
-            copy_ms = float(cp.cuda.get_elapsed_time(copy_begin, copy_end))
+            copy_ms += float(cp.cuda.get_elapsed_time(copy_begin, copy_end))
             score_ms = float(cp.cuda.get_elapsed_time(score_begin, score_end))
             folder = output_dir / f"roots-{packet.begin}-{packet.end}-gpu-{device}"
             folder.mkdir(exist_ok=True)
@@ -609,7 +604,30 @@ def _run_resident_search(
                             offset = terminal_count
                             for packet in packets:
                                 start = offset - packet.count
-                                broker.publish(packet, terminal[start:offset], ready)
+                                payload = terminal[start:offset]
+                                pinned = cp.cuda.alloc_pinned_memory(payload.nbytes)
+                                staging = np.frombuffer(
+                                    pinned, dtype=np.float64, count=payload.size
+                                ).reshape(payload.shape)
+                                d2h_begin, d2h_end = cp.cuda.Event(), cp.cuda.Event()
+                                with resident.sharing_stream:
+                                    resident.sharing_stream.wait_event(ready)
+                                    d2h_begin.record(resident.sharing_stream)
+                                    cp.asnumpy(
+                                        payload,
+                                        out=staging,
+                                        stream=resident.sharing_stream,
+                                        blocking=False,
+                                    )
+                                    d2h_end.record(resident.sharing_stream)
+                                broker.publish(
+                                    packet,
+                                    payload,
+                                    d2h_end,
+                                    staging=staging,
+                                    pinned=pinned,
+                                    d2h_begin=d2h_begin,
+                                )
                                 offset = start
                             terminal = terminal[:offset]
                             handed_off.extend(packets)

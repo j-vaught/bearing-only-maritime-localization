@@ -18,6 +18,9 @@ class ScorePacket:
     count: int
     cells: Any = None
     ready: Any = None
+    staging: Any = None
+    pinned: Any = None
+    d2h_begin: Any = None
     done: Event = field(default_factory=Event)
     error: BaseException | None = None
 
@@ -93,7 +96,7 @@ class ScoreBroker:
                 return []
             packets = []
             for destination in destinations:
-                size = chunk * 4 * 8
+                size = chunk * 4 * 8 * 2
                 if self.bytes_reserved + size > self.byte_budget:
                     self.rejections["byte_budget"] = self.rejections.get("byte_budget", 0) + 1
                     break
@@ -106,11 +109,21 @@ class ScoreBroker:
                 packets.append(packet)
             return packets
 
-    def publish(self, packet: ScorePacket, cells: Any, ready: Any) -> None:
+    def publish(
+        self,
+        packet: ScorePacket,
+        cells: Any,
+        ready: Any,
+        *,
+        staging: Any = None,
+        pinned: Any = None,
+        d2h_begin: Any = None,
+    ) -> None:
         with self.condition:
             if len(cells) != packet.count or packet.destination in self.pending:
                 raise RuntimeError("Invalid or duplicate score packet")
             packet.cells, packet.ready = cells, ready
+            packet.staging, packet.pinned, packet.d2h_begin = staging, pinned, d2h_begin
             self.pending[packet.destination] = packet
             self.condition.notify_all()
 
@@ -147,14 +160,16 @@ class ScoreBroker:
                     "source": packet.source,
                     "destination": packet.destination,
                     "cells": packet.count,
-                    "bytes": packet.count * 32,
+                    "bytes": packet.count * 64,
+                    "payload_bytes": packet.count * 32,
                     "copy_ms": copy_ms,
                     "score_ms": score_ms,
-                    "hops": 1,
+                    "gpu_migrations": 1,
                     "failed": error is not None,
                 }
             )
             packet.cells = None
+            packet.staging = packet.pinned = None
             packet.done.set()
             self.condition.notify_all()
 
@@ -176,7 +191,8 @@ class ScoreBroker:
             "map_bytes_moved": 0,
             "candidate_bytes_moved": self.bytes_reserved,
             "byte_budget": self.byte_budget,
-            "max_hops_per_cell": 1,
+            "max_gpu_migrations_per_cell": 1,
+            "transport": "pinned host staging, two DMA legs, no CPU geometry",
             "handoffs": len(self.records),
             "records": self.records,
             "forecast_score_ms_per_cell": self.score_ms_per_cell,

@@ -21,9 +21,9 @@ def test_balances_ready_cells_only_once_and_respects_one_packet_per_peer():
         broker.finish(packet, copy_ms=0.05, score_ms=10)
         broker.wait(packet, Event())
     report = broker.summary()
-    assert report["candidate_bytes_moved"] == 114 * 32
+    assert report["candidate_bytes_moved"] == 114 * 64
     assert report["map_bytes_moved"] == 0
-    assert report["max_hops_per_cell"] == 1
+    assert report["max_gpu_migrations_per_cell"] == 1
     assert all(p.cells is None for p in packets)
 
 
@@ -37,7 +37,7 @@ def test_small_packets_and_transfer_cost_cannot_trigger_migration():
 
 
 def test_byte_limit_and_peer_capability_are_hard_bounds():
-    broker = ScoreBroker((0, 1, 2), byte_budget=57 * 32)
+    broker = ScoreBroker((0, 1, 2), byte_budget=57 * 64)
     broker.mark_idle(1)
     broker.mark_idle(2)
     assert broker.reserve(0, 171, 0, 1, set()) == []
