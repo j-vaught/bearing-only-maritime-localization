@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
+from maritime.resident_cli import check_resolution
 from maritime.search.gpu.resident.cache import load_or_prepare, preparation_identity
 from maritime.search.gpu.resident.preparation import PackedTree, PreparedWorld
-from tools.run_resident_marker_search import check_resolution
 
 
 def _world():
@@ -172,7 +172,7 @@ from maritime.search.gpu.resident.engine import ResidentDevice
 import maritime.serialization as serialization
 from maritime.geometry.vector_map import VectorMap
 from maritime.schemas.inputs_v2 import MapV2, CatalogV2
-from tools.run_resident_marker_search import main
+from maritime.resident_cli import main
 
 settings, output, cache, counter, mode = sys.argv[1:]
 original_prepare = preparation.prepare_world

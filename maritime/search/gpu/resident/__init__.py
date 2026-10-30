@@ -1,4 +1,4 @@
-"""Explicitly experimental GPU-resident search; execution requires user approval.
+"""GPU-resident coast-wide localization.
 
-Importing this package does not import CuPy, initialize CUDA, or launch a search.
+Importing the package does not initialize CUDA or execute a search.
 """

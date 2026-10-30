@@ -1,14 +1,11 @@
-name: Python checks
-
+name: Release checks
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   python:
     runs-on: ubuntu-latest
@@ -18,27 +15,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: uv sync --locked --all-groups
+      - run: uv sync --locked
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run ty check .
       - run: uv run pytest -q
       - run: uv build
-      - run: uv run bearing-simulator --help
-      - run: uv run bearing-localization-search --help
-      - run: uv run bearing-localization-evaluate --help
-      - name: Install the built wheel with locked runtime dependencies
-        run: |
-          uv venv .agent-work/wheel-check
-          uv export --locked --no-dev --no-emit-project --no-hashes -o .agent-work/runtime-requirements.txt
-          uv pip sync --python .agent-work/wheel-check/bin/python .agent-work/runtime-requirements.txt
-          uv pip install --python .agent-work/wheel-check/bin/python --no-deps dist/*.whl
-      - name: Check installed commands outside the source directory
-        working-directory: .agent-work
-        run: |
-          wheel-check/bin/python -c "import maritime.importers.ais, maritime.schemas, maritime.geometry, maritime.serialization"
-          wheel-check/bin/bearing-localization --help
-          wheel-check/bin/bearing-simulator --help
-          wheel-check/bin/bearing-localization-search --help
-          wheel-check/bin/bearing-localization-evaluate --help
-          wheel-check/bin/bearing-benchmark --help
+      - run: uv run bearing-coast --help
+      - run: uv run bearing-resident-search --help

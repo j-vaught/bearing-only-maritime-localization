@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
+import lzma
 from pathlib import Path
 
 import pytest
@@ -16,13 +16,21 @@ def test_map_bytes_match_sources() -> None:
     root = Path(__file__).resolve().parents[2]
     sources = json.loads((root / "data/sources.json").read_text())
     payload = sources["map"]
-    archive = root / "data" / payload["archive_filename"]
-    archive_bytes = archive.read_bytes()
-    raw_bytes = gzip.decompress(archive_bytes)
-
-    assert hashlib.sha256(archive_bytes).hexdigest() == payload["archive_sha256"]
-    assert len(raw_bytes) == payload["raw_bytes"]
-    assert hashlib.sha256(raw_bytes).hexdigest() == payload["raw_sha256"]
+    archive_digest, raw_digest = hashlib.sha256(), hashlib.sha256()
+    decoder = lzma.LZMADecompressor()
+    raw_size = 0
+    for segment in payload["archive_parts"]:
+        chunk = (root / "data" / segment["filename"]).read_bytes()
+        assert hashlib.sha256(chunk).hexdigest() == segment["sha256"]
+        assert len(chunk) == segment["bytes"]
+        archive_digest.update(chunk)
+        raw = decoder.decompress(chunk)
+        raw_digest.update(raw)
+        raw_size += len(raw)
+    assert decoder.eof
+    assert archive_digest.hexdigest() == payload["archive_sha256"]
+    assert raw_size == payload["raw_bytes"]
+    assert raw_digest.hexdigest() == payload["raw_sha256"]
 
 
 def test_vector_map_indexed_and_unindexed_los_preserve_exact_geometry() -> None:

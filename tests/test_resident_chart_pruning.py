@@ -20,8 +20,8 @@ def _resident(records=(), *, complete=True, bounded=True):
     from maritime.search.gpu.resident.preparation import prepare_world
 
     cp = pytest.importorskip("cupy")
-    if cp.cuda.runtime.getDeviceCount() <= 3:
-        pytest.skip("GPU3 is required to leave the running search untouched")
+    if cp.cuda.runtime.getDeviceCount() < 1:
+        pytest.skip("CUDA device required")
     x, y = ORIGIN
     catalog = CatalogV2(tuple(records), "2023-07-15T12:00:30Z", "test", "test", "test")
     world = prepare_world(
@@ -38,13 +38,13 @@ def _resident(records=(), *, complete=True, bounded=True):
     )
     config = ResidentConfig(
         (x - 1, x + 1, y - 1, y + 1),
-        (3,),
+        (0,),
         radius_m=1000.0,
         trusted_marker_labels=True,
         hard_bearing_bounds_asserted=True,
         numerical_validation_accepted=True,
     )
-    return cp, ResidentDevice(world, config, 3)
+    return cp, ResidentDevice(world, config, 0)
 
 
 def _record(distance=500.0, bearing=0.0):
@@ -58,7 +58,7 @@ def test_independent_complete_chart_proofs_work_without_shoreline(case):
     cp, gpu = _resident(records)
     bearings = [180.0] if case == "bearing" else [0.0, 0.1] if case == "count" else [0.0]
     x, y = ORIGIN
-    with cp.cuda.Device(3), gpu.stream:
+    with cp.cuda.Device(0), gpu.stream:
         cells = cp.asarray([[x - 1, y - 1, x + 1, y + 1]])
         obs, tol = cp.asarray(bearings), cp.full(len(bearings), 0.5)
         baseline = gpu.prune(cells, obs, tol)
@@ -75,7 +75,7 @@ def test_independent_complete_chart_proofs_work_without_shoreline(case):
 def test_missing_catalog_or_position_certificate_never_creates_a_prune(complete, bounded):
     cp, gpu = _resident((_record(5000.0),), complete=complete, bounded=bounded)
     x, y = ORIGIN
-    with cp.cuda.Device(3), gpu.stream:
+    with cp.cuda.Device(0), gpu.stream:
         state = prune_chart_geometry(
             gpu, cp.asarray([[x - 1, y - 1, x + 1, y + 1]]), cp.asarray([180.0]), cp.asarray([0.5])
         )
@@ -136,7 +136,7 @@ def test_true_bearing_envelope_contains_interior_boundary_and_object_uncertainty
                 angle, _, distance = GEOD.inv(plon, plat, tlon, tlat)
                 observed.append((angle % 360, distance))
         witnesses.append(observed)
-    with cp.cuda.Device(3), gpu.stream:
+    with cp.cuda.Device(0), gpu.stream:
         result = _bounds(cp, gpu, np.asarray(cells), np.asarray(objects))
     supported = 0
     for output, observed in zip(result, witnesses, strict=True):
@@ -159,7 +159,7 @@ def test_true_bearing_allowance_shrinks_with_cells_and_unsupported_domain_retain
         [[x - w / 2, y - w / 2, x + w / 2, y + w / 2] for w in [1000.0, 100.0, 10.0, 1.0]]
     )
     objects = np.tile([ox, oy, lon, lat, 0.0, 0.0, 1.0, 1.0], (4, 1))
-    with cp.cuda.Device(3), gpu.stream:
+    with cp.cuda.Device(0), gpu.stream:
         result = _bounds(cp, gpu, cells, objects)
         invalid = _bounds(cp, gpu, np.asarray([[2000000.0, 0.0, 2000001.0, 1.0]]), objects[:1])
     assert np.all(np.diff(result[:, 1]) < 0)
@@ -174,12 +174,12 @@ def test_true_bearing_mode_does_not_require_the_old_projection_angle_allowance()
 
     cp, old = _resident()
     world = replace(old.world, azimuth_error_deg=None)
-    new = OptimizedResidentDevice(world, old.config, 3)
-    fallback = OptimizedResidentDevice(world, old.config, 3, independent_chart_pruning=False)
+    new = OptimizedResidentDevice(world, old.config, 0)
+    fallback = OptimizedResidentDevice(world, old.config, 0, independent_chart_pruning=False)
     assert new.marker_proofs
     assert not fallback.marker_proofs
     x, y = ORIGIN
-    with cp.cuda.Device(3), new.stream:
+    with cp.cuda.Device(0), new.stream:
         result = new.prune(
             cp.asarray([[x - 1, y - 1, x + 1, y + 1]]), cp.asarray([0.0]), cp.asarray([0.5])
         )

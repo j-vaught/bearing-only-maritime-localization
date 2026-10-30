@@ -3,7 +3,7 @@
 All baseline source files, prepared arrays and cache identity stay unchanged.
 The true-bearing variant uses a reviewed whole-cell geodesic envelope rather
 than a fixed projected-to-true bearing allowance. Unsupported cases retain
-all angular possibilities. See docs/resident-pruning-bounds.md.
+all angular possibilities.
 """
 
 from pathlib import Path

@@ -1,8 +1,0 @@
-{
-  "canonical_profiled_kernels": 3,
-  "duplicate_source_tables_reconciled": true,
-  "source_counts_equal_raw_metric_aggregates": true,
-  "saved_cache_fingerprints_equal_before_after_both_replays": true,
-  "all_six_saved_array_fields_equal_for_192_cells_in_each_replay": true,
-  "remaining_gpu_processes": "GPU-c1ac767b-2eb6-6a70-6409-44664d62ef58, 325489, 25674 MiB"
-}

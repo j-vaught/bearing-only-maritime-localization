@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 import pytest
 from pyproj import CRS, Geod, Transformer
 from shapely.geometry import box
@@ -80,7 +82,9 @@ def _group(
 
 
 def _predicted(
-    *groups: PredictedVisibleGroup, coverage: str = "known", unresolved=()
+    *groups: PredictedVisibleGroup,
+    coverage: Literal["known", "unresolved"] = "known",
+    unresolved=(),
 ) -> PredictedGroupSet:
     return PredictedGroupSet(
         groups=tuple(groups),

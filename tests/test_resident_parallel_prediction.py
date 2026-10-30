@@ -1,6 +1,5 @@
 """Tiny device parity checks for the opt-in candidate/object-pair path."""
 
-
 import numpy as np
 import pytest
 from pyproj import Geod, Transformer
@@ -17,8 +16,8 @@ ORIGIN = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True).transfo
 
 def _gpu(records, *, capacity=32, land=None, unknown=None):
     cp = pytest.importorskip("cupy")
-    if cp.cuda.runtime.getDeviceCount() < 4:
-        pytest.skip("This check is restricted to physical CUDA device 3")
+    if cp.cuda.runtime.getDeviceCount() < 1:
+        pytest.skip("CUDA device required")
     x, y = ORIGIN
     vm = VectorMap(
         land,
@@ -41,13 +40,13 @@ def _gpu(records, *, capacity=32, land=None, unknown=None):
     )
     cfg = ResidentConfig(
         (x - 2, x + 2, y - 2, y + 2),
-        (3,),
+        (0,),
         object_capacity=capacity,
         numerical_validation_accepted=True,
         trusted_marker_labels=True,
         hard_bearing_bounds_asserted=True,
     )
-    return cp, ResidentDevice(world, cfg, 3)
+    return cp, ResidentDevice(world, cfg, 0)
 
 
 def _record(key, bearing, distance, kind="physical_aid", width=0.0):
@@ -103,7 +102,7 @@ def _baseline(resident, cells):
 
 def _compare(resident, xy):
     cp = resident.cp
-    with cp.cuda.Device(3), resident.stream:
+    with cp.cuda.Device(0), resident.stream:
         xy = cp.asarray(xy, dtype=cp.float64)
         cells = cp.concatenate((xy - 0.25, xy + 0.25), axis=1)
         reference = _baseline(resident, cells)

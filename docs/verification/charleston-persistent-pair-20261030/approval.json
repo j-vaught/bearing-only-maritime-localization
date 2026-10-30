@@ -1,7 +1,0 @@
-{
-  "scope": "Exactly two full-coast Charleston requests on GPUs 0,1,2",
-  "observations": "One corrected simulator frame, reused without regeneration",
-  "source_commit": "645ceb9328229c31b6c4c712be6c28e0f82edd79",
-  "runner_sha256": "1a1e29f98bd5a7570b2bbd890a0369644b14b4e1479b5244b534b78fad9903f7",
-  "created_utc": "2026-10-30T00:51:22.591595+00:00"
-}

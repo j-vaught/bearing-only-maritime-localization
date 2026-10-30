@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bearing-only-maritime-localization"
-version = "0.1.0"
+version = "0.2.0"
 description = "Simulation benchmarks for bearing-only maritime localization with incomplete object identity."
 authors = [{ name = "J.C. Vaught", email = "jvaught@sc.edu" }]
 requires-python = ">=3.11"
@@ -14,11 +14,8 @@ dependencies = ["numpy>=2.0", "scipy>=1.14", "shapely>=2.0", "pyproj>=3.6"]
 gpu = ["cupy-cuda12x[ctk]>=13.0; sys_platform == \"linux\""]
 
 [project.scripts]
-bearing-localization = "maritime.cli:main"
-bearing-localization-search = "maritime.search_cli:main"
-bearing-localization-evaluate = "maritime.evaluate_cli:main"
-bearing-simulator = "maritime.simulator.cli:main"
-bearing-benchmark = "maritime.benchmark_cli:main"
+bearing-coast = "maritime.coast_cli:main"
+bearing-resident-search = "maritime.resident_cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8.0", "ruff>=0.9", "ty>=0.0.1a0"]

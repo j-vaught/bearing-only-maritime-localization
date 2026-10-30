@@ -1,8 +1,0 @@
-{
-  "author": "J.C. Vaught",
-  "verified_utc": "2026-10-29T21:50:44.791147+00:00",
-  "gpu_state": "0, 15 MiB, 0 %\n1, 15 MiB, 0 %\n2, 38 MiB, 0 %\n3, 25697 MiB, 0 %\n",
-  "remaining_compute_apps": "325489, GPU-c1ac767b-2eb6-6a70-6409-44664d62ef58\n",
-  "live_suite_supervisors": "",
-  "initial_unfiltered_cache_fingerprints_also_unchanged": true
-}

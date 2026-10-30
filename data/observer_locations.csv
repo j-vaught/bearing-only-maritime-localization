@@ -1,25 +1,21 @@
-site_id,port,usace_2024_rank,latitude_deg,longitude_deg,reference_anchor_latitude_deg,reference_anchor_longitude_deg,anchor_distance_km,placement_note,current_map_water_status,current_map_sha256
-B1,Searsport ME,147,44.345,-68.91,44.46,-68.92,12.81,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B2,Portland ME,75,43.665,-70.225,43.65,-70.25,2.61,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B3,Portsmouth NH,140,43.065,-70.7,43.08,-70.75,4.39,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B4,Boston,57,42.34,-71.0,42.35,-71.03,2.70,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B5,Providence,73,41.775,-71.38,41.81,-71.40,4.23,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B6,New Haven,51,41.270076,-72.912766,41.27,-72.91,0.24,Water cell nearest New Haven Harbor anchor,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B7,Bridgeport CT,98,41.145,-73.185,41.17,-73.19,2.81,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B8,Port Jefferson NY,105,40.955314,-73.083954,40.95,-73.07,1.36,Water cell nearest Port Jefferson Harbor anchor,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B9,New York and New Jersey,4,40.681022,-74.059726,40.68,-74.06,0.12,Water cell nearest New York Harbor anchor,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B10,South Jersey,32,39.965,-75.12,39.94,-75.12,2.78,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B11,Philadelphia,18,39.889620,-75.138211,39.89,-75.14,0.16,Water cell nearest Philadelphia waterfront anchor,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B12,Wilmington DE,70,39.714252,-75.503412,39.72,-75.53,2.42,Water cell nearest Wilmington Delaware port anchor,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B13,Baltimore,15,39.228619,-76.559072,39.23,-76.56,0.17,Water cell nearest Baltimore Harbor anchor,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B14,Virginia Hampton Roads,8,36.96,-76.36,36.95,-76.33,2.89,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B15,Morehead City,136,34.71,-76.73,34.72,-76.70,2.96,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B16,Wilmington NC,62,34.175,-77.96,34.23,-77.95,6.18,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B17,Charleston,24,32.77,-79.905,32.78,-79.93,2.59,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B18,Savannah,12,31.948621,-80.850187,31.95,-80.85,0.15,Water cell nearest Savannah and Tybee Roads approach anchor,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B19,Brunswick GA,81,31.12,-81.49,31.15,-81.50,3.47,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B20,Jacksonville,36,30.4,-81.4,30.39,-81.42,2.22,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B21,Port Canaveral,71,28.45,-80.64,28.41,-80.60,5.92,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B22,Palm Beach,109,26.765,-80.045,26.77,-80.05,0.75,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B23,Port Everglades,28,26.075,-80.1,26.09,-80.12,2.60,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
-B24,PortMiami,54,25.76,-80.175,25.77,-80.18,1.22,User-selected position following chart review,water,00a4a741e8792595dfe6c2d9e36c4b17883e7730c1937d2cf27766d6b3b8caba
+site_id,port,latitude_deg,longitude_deg,detected_charting_aids
+B1,Portland ME,43.665,-70.225,62
+B2,Boston,42.34,-71.0,74
+B3,Providence,41.775,-71.38,32
+B4,New Haven,41.270076,-72.912766,36
+B5,Bridgeport CT,41.145,-73.185,24
+B6,Port Jefferson NY,40.955314,-73.083954,26
+B7,New York and New Jersey,40.681022,-74.059726,68
+B8,Philadelphia,39.889620,-75.138211,18
+B9,Wilmington DE,39.714252,-75.503412,32
+B10,Baltimore,39.228619,-76.559072,47
+B11,Virginia Hampton Roads,36.96,-76.36,97
+B12,Morehead City,34.71,-76.73,65
+B13,Wilmington NC,34.175,-77.96,24
+B14,Charleston,32.77,-79.905,67
+B15,Savannah,31.948621,-80.850187,21
+B16,Brunswick GA,31.12,-81.49,26
+B17,Jacksonville,30.4,-81.4,21
+B18,Port Canaveral,28.45,-80.64,57
+B19,Palm Beach,26.765,-80.045,33
+B20,PortMiami,25.76,-80.175,57

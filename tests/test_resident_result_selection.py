@@ -11,8 +11,8 @@ import pytest
 
 def test_frozen_selector_uses_valid_residuals_and_coordinate_ties(tmp_path):
     cp = pytest.importorskip("cupy")
-    if cp.cuda.runtime.getDeviceCount() <= 3:
-        pytest.skip("GPU3 preserves the existing run")
+    if cp.cuda.runtime.getDeviceCount() < 1:
+        pytest.skip("CUDA device required")
     search = tmp_path / "search"
     search.mkdir()
     (search / "summary.json").write_text(json.dumps({"complete": True}))
@@ -31,7 +31,7 @@ def test_frozen_selector_uses_valid_residuals_and_coordinate_ties(tmp_path):
     )
     output = tmp_path / "estimate.json"
     result = subprocess.run(
-        [sys.executable, "tools/select_resident_result.py", str(search), str(output)],
+        [sys.executable, "-m", "maritime.search.gpu.resident.selection", str(search), str(output)],
         cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
         text=True,
@@ -47,22 +47,8 @@ def test_frozen_selector_uses_valid_residuals_and_coordinate_ties(tmp_path):
     assert selected["truth_used_for_selection"] is False
 
 
-def test_cache_only_wrapper_rejects_miss_before_calling_input_builder(tmp_path):
-    from tools.run_cached_resident_only import _required_cache
-
-    called = []
-
-    def builder():
-        called.append(True)
-        raise AssertionError("Input map reconstruction must never start")
-
-    with pytest.raises(RuntimeError, match="rebuilding is disabled"):
-        _required_cache(tmp_path, "a" * 64, builder)
-    assert called == []
-
-
 def test_evaluator_rejects_changed_estimate_before_opening_truth(tmp_path, monkeypatch):
-    from tools.evaluate_frozen_resident_position import main
+    from maritime.evaluation.resident import main
 
     estimate, freeze = tmp_path / "estimate.json", tmp_path / "freeze.json"
     estimate.write_text("{}")

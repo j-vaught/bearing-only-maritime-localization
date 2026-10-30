@@ -1,78 +1,28 @@
 # Bearing-only maritime localization
 
-Locate a boat from true-north object bearings, optional types, a catalog of known objects, and a land/water map. Search receives no boat position, target distances, or observation-to-catalog identities.
+J.C. Vaught.
 
-## Install and run
+Locate a vessel from true-north charting-aid bearings across the eastern seaboard. The GPU search uses land blocking, distinct-marker pruning, coarse-to-fine refinement, and dynamic scoring across available GPUs. Search receives bearings and known objects, without the vessel's true position or object associations.
 
-Use Python 3.11 and [uv](https://docs.astral.sh/uv/). Run from the repository root.
+The repository includes the complete runtime map, AIS and charting-aid catalog, sensor configuration, and 20 eligible test locations numbered B1–B20. Each location has at least 16 detected charting aids under the supplied sensor configuration. Charleston is B14. The map archive has three checksum-verified parts that are assembled automatically. Inputs are expanded and verified automatically.
 
-```text
-uv sync --locked --all-groups
-uv run python examples/simulate.py
-uv run python examples/wedge.py
+Use Linux, Python 3.11, compatible NVIDIA GPUs, and `uv`. Run these commands from the repository root. Choose a storage directory with room for the unpacked inputs and reusable spatial index.
+
+```sh
+uv sync --locked --extra gpu
+uv run bearing-coast prepare --storage /path/to/storage
+uv run bearing-coast sites
+uv run bearing-coast run --site B14 --devices 0,1,2 --storage /path/to/storage
 ```
 
-Every example uses the full East Coast map and selects AIS, chart aids, or both from `data/`. The compressed files unpack automatically into that same folder after checksum verification. No additional dataset download is required.
+Preparation runs on the CPU once and saves a reusable map/object index. Search queries, visibility checks, matching, and refinement run on the selected GPUs. CPU work handles simulation, file loading, scheduling, and post-search evaluation. Maps remain loaded across sites and repeats within one invocation. Candidate transfers use pinned host staging and have a fixed traffic budget.
 
-Edit the settings at the top of an example to choose an observer, visibility range, candidate budget, or method. Set `CATALOG_MODE` to `"ais"`, `"chart_aids"`, or `"both"`. Observer IDs refer to `data/observer_locations.csv`. The table records each location's current map status. B1 is in known water. Simulation rejects positions on land or outside known coverage.
-
-## Examples
-
-| Python file | Purpose |
-|---|---|
-| [simulate.py](examples/simulate.py) | Generate visible bearings and separate truth, without running search. |
-| [grid.py](examples/grid.py) | Uniform grid search. |
-| [hierarchical.py](examples/hierarchical.py) | Coarse-to-fine search. |
-| [randomized.py](examples/randomized.py) | Seeded randomized search. |
-| [pairwise.py](examples/pairwise.py) | Pairwise bearing-intersection proposals. |
-| [wedge.py](examples/wedge.py) | Geodesic reverse-bearing proposals and seed refinement. |
-| [branch_bound.py](examples/branch_bound.py) | Region subdivision with explicit unresolved-bound status. |
-| [gpu.py](examples/gpu.py) | Grid candidate scoring using optional GPUs. |
-| [compare_algorithms.py](examples/compare_algorithms.py) | Run methods on the same observations. |
-| [compare_types.py](examples/compare_types.py) | Compare type labels enabled and disabled on identical bearings. |
-| [compare_ranges.py](examples/compare_ranges.py) | Compare 1, 5 and 10 km visibility. |
-| [compare_backends.py](examples/compare_backends.py) | Compare CPU and GPU requests sequentially. |
-| [compare_catalogs.py](examples/compare_catalogs.py) | Compare AIS only, chart aids only, and both on identical observations. |
-
-The catalog comparison simulates one scene containing both vessels and chart aids, then changes only the catalog supplied to search. Every run sees the same bearings, noise, clutter and angular merges. Evaluation adjusts the available catalog associations and support count for each mode before search starts.
-
-```text
-uv run python examples/compare_catalogs.py
+```sh
+uv run bearing-coast run --all --devices 0,1,2 --storage /path/to/storage
+uv run bearing-coast run --site B14 --repeats 2 --devices 0,1,2 --storage /path/to/storage
+uv run bearing-coast search --measurements measurements.json --devices 0,1,2 --storage /path/to/storage
 ```
 
-The scripts share `examples/_data.py` for verified data loading and `examples/_common.py` for simulation, process handoff, and result reporting. They do not contain separate copies of the dataset. Small synthetic fixtures live under `tests/`.
+Results are written to a new directory under the storage directory's `runs/`. Simulated runs include measurements, a separate truth file, a frozen estimate, WGS84 error in meters, and timing tables in JSON and CSV. External-measurement search does not load simulator truth. Use `--output` to choose a different destination and `--help` to inspect command options.
 
-## Outputs
-
-Each search invocation writes a new timestamped folder under `runs/`. It contains measurements, separate truth, search settings, ranked results, a process log, and a summary. Comparison examples also write `comparison.csv` and `comparison.json`.
-
-The summary reports the best hypothesis's geodesic position error separately from accepted-fix error. Ambiguity, failure, and budget exhaustion remain explicit. `search_process_ms` includes interpreter startup, full input loading, search, and output writing; data unpacking and simulation happen before that interval.
-
-These are editable manual experiments. Default budgets do not complete a coast-wide search, and the 25 km grid is a coarse demonstration. Catalog selection changes which objects search knows. The full geographic search domain stays unchanged and is defined in `examples/_common.py`. Range and land visibility limit detections, not the search domain. Dynamic-map branch-and-bound does not currently have a certified exclusion bound. An uncalibrated result may remain ambiguous.
-
-## Data and software
-
-All data files are directly under [data/](data/README.md). `objects-ais.json.gz`, `objects-chart-aids.json.gz`, and `map.json.gz` are the shared runtime inputs. `data/sources.json` provides loading metadata, source descriptions, and checksums for these inputs. `observer_locations.csv` is simulator/evaluator truth; search receives only bearings, catalog, map, and configuration.
-
-All Python software is under `maritime/`. The repository name and installed command names stay the same.
-
-| Folder or file | Purpose |
-|---|---|
-| `maritime/importers/` | Convert external AIS, chart, and recorded-bearing data. |
-| `maritime/schemas/` | Define and validate objects, observations, maps, and results. |
-| `maritime/geometry/` | Coordinates, bearings, distance, land visibility, and spatial queries. |
-| `maritime/serialization.py` | Read and write the standard JSON formats. |
-| `maritime/simulator/` | Generate observations and separate truth. |
-| `maritime/search/` | Estimate positions from bearings. |
-| `maritime/evaluation/` | Compare estimates against truth. |
-
-Imports use the `maritime` package, such as `from maritime.schemas import MeasurementSetV2`. The programs remain separate, and search never imports simulator or evaluation internals. The examples read the prepared dataset directly; `importers` is used when converting new external data. Tests are named by the behavior they check.
-
-For GPU examples, use Linux with compatible NVIDIA hardware and install the optional extra.
-
-```text
-uv sync --locked --all-groups --extra gpu
-uv run python examples/gpu.py
-```
-
-No benchmark or recurring job starts automatically.
+`config/search.json` controls the search domain and resolution. `config/sensor.json` controls the 10 km sensor range, missed detections, vessel-only extra detections, and bearing noise bounded by ±0.5°. `data/sources.json` records input checksums and provenance. Unknown map coverage remains unknown. Tests run with `uv run pytest -q`.

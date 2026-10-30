@@ -1,4 +1,4 @@
-"""Tiny GPU3 CLI lifecycle check for the shared physical-aid object policy."""
+"""Tiny GPU CLI lifecycle check for the shared physical-aid object policy."""
 
 import json
 import subprocess
@@ -25,8 +25,8 @@ from maritime.serialization import write_contract
 
 def test_cli_reuses_raw_map_and_object_view_for_optimized_refinement(tmp_path):
     cp = pytest.importorskip("cupy")
-    if cp.cuda.runtime.getDeviceCount() <= 3:
-        pytest.skip("GPU3 required to preserve the current run")
+    if cp.cuda.runtime.getDeviceCount() < 1:
+        pytest.skip("CUDA device required")
     x, y = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True).transform(-79.905, 32.77)
     lon, lat, _ = Geod(ellps="WGS84").fwd(-79.905, 32.77, 0, 1000)
     stamp = "2023-07-15T12:00:30Z"
@@ -79,7 +79,7 @@ def test_cli_reuses_raw_map_and_object_view_for_optimized_refinement(tmp_path):
         },
         "search": {
             "bounds_en_m": [x - 0.5, x + 0.5, y - 0.5, y + 0.5],
-            "devices": [3],
+            "devices": [0],
             "initial_size_m": 1,
             "terminal_size_m": 0.5,
             "object_capacity": 8,
@@ -104,7 +104,7 @@ def test_cli_reuses_raw_map_and_object_view_for_optimized_refinement(tmp_path):
     ]
     first = tmp_path / "first"
     process = subprocess.run(
-        [sys.executable, "tools/run_resident_marker_search.py", *common, "--output", str(first)],
+        [sys.executable, "-m", "maritime.resident_cli", *common, "--output", str(first)],
         cwd=root,
         capture_output=True,
         text=True,
@@ -126,7 +126,7 @@ import maritime.search.gpu.resident.cache as base_cache
 def forbidden(*args, **kwargs): raise AssertionError("Rebuilt cached index")
 preparation.prepare_world=forbidden
 aid_view._build_view=forbidden
-from tools.run_resident_marker_search import main
+from maritime.resident_cli import main
 main()
 """
     process = subprocess.run(

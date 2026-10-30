@@ -10,15 +10,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SEARCH_ROOTS = (
-    "maritime.search",
-    "maritime.search_cli",
-    "maritime.algorithms",
-    "maritime.ransac",
-    "maritime.backends",
-)
+SEARCH_ROOTS = ("maritime.search", "maritime.resident_cli")
 SIMULATOR_ROOTS = ("maritime.simulator",)
-EVALUATION_ROOTS = ("maritime.evaluation", "maritime.evaluate_cli")
+EVALUATION_ROOTS = ("maritime.evaluation",)
 COMMON_ROOTS = ("maritime.schemas", "maritime.geometry", "maritime.serialization")
 IMPORTER_ROOTS = ("maritime.importers",)
 
@@ -240,7 +234,7 @@ def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
     is_search = (
         caller == "maritime.search"
         or caller.startswith("maritime.search.")
-        or caller == "maritime.search_cli"
+        or caller == "maritime.resident_cli"
         or caller in {
             "maritime.algorithms",
             "maritime.ransac",
@@ -260,7 +254,7 @@ def guarded_import_module(name, package=None):
     is_search = (
         caller == "maritime.search"
         or caller.startswith("maritime.search.")
-        or caller == "maritime.search_cli"
+        or caller == "maritime.resident_cli"
         or caller in {
             "maritime.algorithms",
             "maritime.ransac",
@@ -279,14 +273,8 @@ importlib.import_module = guarded_import_module
 import maritime.search as package
 for entry in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
     importlib.import_module(entry.name)
-importlib.import_module("maritime.search_cli")
-legacy_search_modules = (
-    "maritime.algorithms",
-    "maritime.ransac",
-    "maritime.backends",
-)
-for name in legacy_search_modules:
-    importlib.import_module(name)
+importlib.import_module("maritime.resident_cli")
+
 """
     result = subprocess.run(
         [sys.executable, "-c", guard_script],

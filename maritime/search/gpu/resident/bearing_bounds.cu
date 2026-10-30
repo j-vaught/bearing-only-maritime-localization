@@ -1,4 +1,4 @@
-// Whole-cell WGS84 bearing envelope. See docs/resident-pruning-bounds.md.
+// Whole-cell WGS84 bearing envelope.
 // Conditional on inverse-position <=1cm and configured geodesic/bearing errors.
 // The .99 lower scale bound is restricted to this EPSG32618 domain.
 __device__ bool true_bearing_envelope(const double* c,const double* o,

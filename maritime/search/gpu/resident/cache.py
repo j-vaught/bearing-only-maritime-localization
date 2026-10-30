@@ -33,7 +33,7 @@ FORMAT = "ResidentPreparedWorldV1"
 # prepared point predicates changed; land_geometry, coverage, unknown layers,
 # object projection and every prepared array are unchanged. Preserve the old
 # identity only for this reviewed full-file revision. All other digests still
-# invalidate normally. See docs/charleston-visibility-fix.md.
+# invalidate normally.
 _FIXED_VECTOR_MAP_SHA256 = "9625f17bd95ea6a40096d90eb32c9f12bbf151e69f114fd5cb352d106c5f6e22"
 _LEGACY_VECTOR_MAP_SHA256 = "f597429ddca266502f5233feb9d856fd3c70e217a608c085eb6ddb4e0c26809c"
 _VECTOR_MAP_PREPARATION_COMPATIBILITY = {_FIXED_VECTOR_MAP_SHA256: _LEGACY_VECTOR_MAP_SHA256}

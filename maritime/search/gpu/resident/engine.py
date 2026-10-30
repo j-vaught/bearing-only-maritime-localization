@@ -427,9 +427,8 @@ def _run_resident_search(
 ) -> dict[str, Any]:
     """All per-cell work runs on the devices; results apply to centers only.
 
-    Geometry and catalog preparation is outside this API. Execution of this
-    experimental API requires separate approval. Automatic resume is not yet
-    implemented; periodic frontier snapshots and leaf outputs are preserved.
+    Geometry and catalog preparation is outside this API. Periodic frontier
+    snapshots and leaf outputs are preserved. Automatic resume is not implemented.
     """
     if resume:
         raise NotImplementedError(
@@ -453,7 +452,7 @@ def _run_resident_search(
     output_dir.mkdir(parents=True, exist_ok=False)
     manifest = dict(
         schema="ResidentSearchV1",
-        implementation_status="experimental_validation_pending",
+        implementation_status="resident_gpu",
         config=asdict(config),
         dynamic_score_sharing_enabled=enabled,
         cpu_roles=[
@@ -498,7 +497,6 @@ def _run_resident_search(
         marker_bearings_deg=bearings.tolist(),
         marker_tolerances_deg=tolerances.tolist(),
         object_keys=world.object_keys,
-        approval_note="User approval is required before invoking this experimental API.",
     )
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     x0, x1, y0, y1 = config.bounds_en_m
@@ -746,8 +744,8 @@ def run_resident_search(
 ) -> dict[str, Any]:
     """Search with fresh outputs, optionally retaining devices between requests.
 
-    Session construction does not execute a search. Each invocation still
-    requires user approval and preserves every surviving terminal center.
+    Session construction does not execute a search. Each invocation preserves
+    every surviving terminal center.
     """
     if session is None:
         return _run_resident_search(

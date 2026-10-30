@@ -1,28 +1,15 @@
-.agent-work/
 .venv/
+.venv-*/
 __pycache__/
+*.pyc
 .ruff_cache/
-.mypy_cache/
 .pytest_cache/
+.mypy_cache/
 .hypothesis/
 .coverage
 .tox/
-dist/
 build/
+dist/
 *.egg-info/
-
-# Recreated from the committed compressed data.
-/data/objects-ais.json
-/data/objects-chart-aids.json
-/data/objects-combined.json
-/data/map.json
-# Generated example records; figures remain trackable.
-/runs/**/*.json
-/runs/**/*.csv
-/runs/**/*.log
-
-# Reusable compiled input/index cache; figures remain trackable.
-/.cache/resident-world
-
-# Derived canonical object index; the saved base map cache stays separate.
-/.cache/resident-aid-objects/
+.agent-work/
+.cache/

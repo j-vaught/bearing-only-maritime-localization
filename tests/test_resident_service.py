@@ -1,12 +1,10 @@
 """CPU-only IPC and supervisor checks. No localization or CUDA work executes."""
 
-import importlib.util
 import os
 import subprocess
 import sys
 import time
 from contextlib import nullcontext
-from pathlib import Path
 
 import pytest
 
@@ -104,37 +102,6 @@ def test_startup_exit_cleans_up(monkeypatch, tmp_path):
         worker.start(timeout_s=2)
     assert worker.poisoned
     assert not worker.process.is_alive()
-
-
-def _runner():
-    root = Path(__file__).resolve().parents[1]
-    spec = importlib.util.spec_from_file_location(
-        "suite_service_checks", root / "docs/verification/b-location-suite/run_suite.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_resource_guard_exempts_only_exact_owned_context():
-    runner = _runner()
-    snapshot = "0, GPU, 11000, 3000, 0\n1, GPU, 11000, 200, 0\n2, GPU, 11000, 200, 0"
-    indexed = "0, uuid0\n1, uuid1\n2, uuid2"
-    assert runner.busy_devices(snapshot, indexed, "uuid0, 123", owned_worker_pid=123) == []
-    assert runner.busy_devices(snapshot, indexed, "uuid0, 456", owned_worker_pid=123) == [0]
-    assert runner.busy_devices(
-        snapshot, indexed, "uuid0, 123\nuuid0, 456", owned_worker_pid=123
-    ) == [0]
-    assert runner.busy_devices(snapshot, indexed, "", owned_worker_pid=123) == [0]
-
-
-def test_resource_guard_keeps_first_start_policy():
-    runner = _runner()
-    indexed = "0, uuid0\n1, uuid1\n2, uuid2"
-    snapshot = "0, GPU, 11000, 200, 0\n1, GPU, 11000, 200, 0\n2, GPU, 11000, 200, 0"
-    assert runner.busy_devices(snapshot, indexed, "") == []
-    assert runner.busy_devices(snapshot, indexed, "uuid1, 456") == [1]
 
 
 class _Connection:
@@ -304,95 +271,6 @@ def test_real_service_loop_closes_cleanly_on_parent_disconnect(fake_real_loop, t
     assert calls == []
     assert instances[0].closed and connection.closed and parent.closed
     assert [row["stage"] for row in connection.responses] == ["ready"]
-
-
-def test_suite_stops_after_poison_without_simulating_later_sites(monkeypatch, tmp_path):
-    import argparse
-
-    runner = _runner()
-    rows = [
-        {"site_id": f"B{i}", "port": f"Port {i}", "latitude_deg": "0", "longitude_deg": "0"}
-        for i in range(1, 25)
-    ]
-    settings = {
-        "map": "fake-map",
-        "catalog": "fake-catalog",
-        "measurements": "fake-measurements",
-        "search": {"batch_cells": 512, "roots_per_task": 8},
-        "marker_tolerance_deg": 0.5,
-    }
-    original_read = runner.read
-    simulated = []
-
-    def fake_read(path):
-        if path == runner.REFERENCE:
-            return {"settings": settings}
-        if path == runner.SIM_SETTINGS:
-            return {"sensor": {}, "seed": 11}
-        return original_read(path)
-
-    class FakeService:
-        def __init__(self, *args):
-            self.pid = None
-            self.poisoned = False
-            self.ready = False
-            self.closed = False
-            self.startup_s = 0.0
-
-        def start(self):
-            pass
-
-        def search(self, *args, **kwargs):
-            self.poisoned = True
-            raise TimeoutError("fake worker timeout")
-
-        def close(self):
-            self.closed = True
-
-    def fake_simulate(row, *args):
-        simulated.append(row["site_id"])
-        return [10] * 16, 16
-
-    monkeypatch.setattr(runner, "read", fake_read)
-    monkeypatch.setattr(runner, "sites", lambda: rows)
-    monkeypatch.setattr(runner, "digest", lambda path: "fake-hash")
-    monkeypatch.setattr(runner, "gpu_snapshot", lambda: "fake-gpu")
-    monkeypatch.setattr(runner, "resource_guard", lambda **kwargs: {})
-    monkeypatch.setattr(
-        runner,
-        "prepare",
-        lambda *args, **kwargs: (
-            object(),
-            object(),
-            object(),
-            {
-                "cache_paths": [],
-                "shared_preparation_s": 0.0,
-                "base_cache_hit": True,
-                "object_cache_hit": True,
-            },
-        ),
-    )
-    monkeypatch.setattr(runner, "normalized_catalog_alignment", lambda *args: {"passed": True})
-    monkeypatch.setattr(runner, "simulate", fake_simulate)
-    monkeypatch.setattr(service, "PersistentSearchService", FakeService)
-    args = argparse.Namespace(
-        output=tmp_path,
-        site_ids="B1,B2",
-        search_timeout=1,
-        minimum_positive_aids=16,
-        refresh_aid_view=False,
-        normalized_catalog_check=True,
-        dry_run=False,
-        preflight_only=False,
-    )
-    runner.run_suite(args)
-    assert simulated == ["B1"]
-    assert not (tmp_path / "B2").exists()
-    assert original_read(tmp_path / "status.json")["stage"] == "halted_worker_failure"
-    assert original_read(tmp_path / "status.json")["remaining_sites"] == ["B2"]
-    assert (tmp_path / "cache-after.json").is_file()
-    assert original_read(tmp_path / "B1/result.json")["status"] == "timeout"
 
 
 def test_unexpected_worker_exit_cleans_remaining_descendants(fake_service, tmp_path):
