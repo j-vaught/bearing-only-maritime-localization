@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -176,6 +177,19 @@ def fake_real_loop(monkeypatch, tmp_path):
         def __exit__(self, *args):
             self.closed = True
 
+        def request(self, world, config):
+            assert world is self.world and config is self.config
+            return nullcontext(self)
+
+        def execute_workers(self, worker, output_dir, stop):
+            reused = self.device is not None
+            if self.device is None:
+                self.device = self.device_factory(self.world, self.config, 0)
+            worker(0, self.device)
+            self.last_device_diagnostics = {
+                0: {"device": 0, "created": not reused, "reused": reused}
+            }
+
     class FakeDevice:
         def __init__(self, world, config, device, *, sample_every):
             self.map_token = object()
@@ -232,6 +246,34 @@ def test_real_service_loop_reuses_session_and_isolates_requests(fake_real_loop, 
     assert [row["profile_finish_s"] for row in metadata] == [0.012, 0.012]
     for directory in (first, second):
         assert (directory / "search-process-summary.json").is_file()
+
+
+def test_preload_creates_device_without_search_and_first_search_reuses_it(fake_real_loop, tmp_path):
+    calls, instances = fake_real_loop
+    preload, run = tmp_path / "preload", tmp_path / "run"
+    preload.mkdir()
+    run.mkdir()
+    connection = _Connection(
+        [
+            {"command": "prepare", "directory": str(preload)},
+            {"command": "search", "directory": str(run), "bearings": [10], "tolerances": [0.5]},
+            {"command": "close"},
+        ]
+    )
+    service._serve(
+        connection,
+        _Connection(),
+        object(),
+        {"bounds_en_m": (0, 1, 0, 1), "devices": (0,)},
+        tmp_path,
+    )
+    assert [r["stage"] for r in connection.responses] == ["ready", "prepared", "completed"]
+    assert connection.responses[1]["search_executed"] is False
+    assert connection.responses[1]["devices"][0]["created"]
+    assert len(calls) == 1
+    assert calls[0][3] is instances[0].device.map_token
+    assert connection.responses[2]["metadata"]["gpu_buffers_reused"]
+    assert not connection.responses[2]["metadata"]["cold_start"]
 
 
 def test_real_service_loop_rejects_truth_fields_before_search(fake_real_loop, tmp_path):

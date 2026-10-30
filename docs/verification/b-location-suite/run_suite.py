@@ -558,6 +558,7 @@ def run_suite(args):
         "selected_sites": [row["site_id"] for row in rows],
         "resource_guard": "Only owned persistent search worker contexts permitted after startup",
         "gpu_residency": "One map upload per device for sequential suite requests",
+        "preload_gpus": getattr(args, "preload_gpus", False),
         "aid_filter": "Detected physical_aid reports only; vessels and unknown reports excluded",
         "selection_timeout_s": 120,
         "terminal_ceiling": 2_000_000,
@@ -647,6 +648,7 @@ def run_suite(args):
     from maritime.search.gpu.resident.service import PersistentSearchService
 
     service = PersistentSearchService(world, settings["search"], output)
+    preloaded = False
     try:
         for row in rows:
             site = row["site_id"]
@@ -737,6 +739,16 @@ def run_suite(args):
                     flush=True,
                 )
                 service.start()
+                if getattr(args, "preload_gpus", False) and not preloaded:
+                    preload_dir = output / "gpu-preload"
+                    preload_dir.mkdir()
+                    save(output / "status.json", {"stage": "gpu_map_preload", "updated_utc": now()})
+                    preload = service.prepare(preload_dir)
+                    save(
+                        output / "gpu-preload.json",
+                        {**preload, "worker_startup_s": service.startup_s},
+                    )
+                    preloaded = True
                 search_start = time.perf_counter()
                 (directory / "search.pid").write_text(f"{service.pid}\n")
                 response = service.search(
@@ -942,6 +954,11 @@ def main():
         help="Check current normalized simulator/search object agreement",
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--preload-gpus",
+        action="store_true",
+        help="Upload GPU maps before timing the first site; no preliminary search",
+    )
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args()
     if args.search_timeout <= 0:

@@ -11,6 +11,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
+from threading import Event
 from typing import Any
 
 
@@ -42,6 +43,28 @@ def _serve(
                     break
                 if request == {"command": "close"}:
                     break
+                if set(request) == {"command", "directory"} and request["command"] == "prepare":
+                    directory = Path(request["directory"]).resolve()
+                    if (
+                        not directory.is_relative_to(output_root.resolve())
+                        or not directory.is_dir()
+                    ):
+                        raise ValueError("Preparation directory must exist under suite output root")
+                    started = time.perf_counter()
+                    with session.request(world, config):
+                        session.execute_workers(
+                            lambda device, resident: None, directory / "search", Event()
+                        )
+                    connection.send(
+                        {
+                            "stage": "prepared",
+                            "worker_pid": os.getpid(),
+                            "elapsed_s": time.perf_counter() - started,
+                            "devices": list(session.last_device_diagnostics.values()),
+                            "search_executed": False,
+                        }
+                    )
+                    continue
                 if set(request) != {"command", "bearings", "tolerances", "directory"}:
                     raise ValueError("Unexpected search request fields")
                 if request["command"] != "search":
@@ -149,6 +172,20 @@ class PersistentSearchService:
             return self.connection.recv()
         except EOFError:
             raise RuntimeError("Persistent search worker exited without a response") from None
+
+    def prepare(self, directory: Path, *, timeout_s: float = 120) -> dict[str, Any]:
+        """Upload map/catalog inputs without seeding or searching any cells."""
+        self.start()
+        try:
+            self.connection.send({"command": "prepare", "directory": str(directory)})
+            response = self._receive(timeout_s)
+            if response.get("stage") != "prepared" or response.get("search_executed") is not False:
+                raise RuntimeError(f"Persistent worker preparation failed. {response}")
+            return response
+        except BaseException:
+            self.poisoned = True
+            self.close(force=True)
+            raise
 
     def search(
         self,
