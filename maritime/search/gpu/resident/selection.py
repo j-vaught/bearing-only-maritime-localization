@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
 
 import numpy as np
@@ -36,7 +37,7 @@ def select_position(search: Path, output: Path, device: int = 0) -> dict:
         with np.load(path, allow_pickle=False) as data:
             for key in arrays:
                 arrays[key].append(data[key])
-    import cupy as cp
+    cp = import_module("cupy")
 
     inverse = Transformer.from_crs("EPSG:32618", "EPSG:4326", always_xy=True)
     with cp.cuda.Device(device):
