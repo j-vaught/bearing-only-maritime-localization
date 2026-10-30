@@ -1,0 +1,168 @@
+{
+  "author": "J.C. Vaught",
+  "scope": "All 20 approved sites; full Eastern Seaboard; preloaded GPUs 0-2",
+  "source_csv": "../results.csv",
+  "source_csv_sha256": "3e6cde4efdb8406b691f6daa7332f6f8bb2d8b7456db95106e9c7f2563667ce6",
+  "rows": [
+    {
+      "site": "B2",
+      "port": "Portland ME",
+      "aids": 62,
+      "status": "completed",
+      "search_s": 0.974035460036248,
+      "error_m": 2.2459275103319025
+    },
+    {
+      "site": "B4",
+      "port": "Boston",
+      "aids": 74,
+      "status": "completed",
+      "search_s": 0.8850841340608895,
+      "error_m": 0.2667277624697946
+    },
+    {
+      "site": "B5",
+      "port": "Providence",
+      "aids": 32,
+      "status": "completed",
+      "search_s": 24.362586535979062,
+      "error_m": 3.56543193667121
+    },
+    {
+      "site": "B6",
+      "port": "New Haven",
+      "aids": 36,
+      "status": "completed",
+      "search_s": 4.62377809220925,
+      "error_m": 0.9329296526183358
+    },
+    {
+      "site": "B7",
+      "port": "Bridgeport CT",
+      "aids": 24,
+      "status": "completed",
+      "search_s": 16.867561831139028,
+      "error_m": 2.3383598148920237
+    },
+    {
+      "site": "B8",
+      "port": "Port Jefferson NY",
+      "aids": 26,
+      "status": "completed",
+      "search_s": 1.3384273750707507,
+      "error_m": 1.841855930161129
+    },
+    {
+      "site": "B9",
+      "port": "New York and New Jersey",
+      "aids": 68,
+      "status": "completed",
+      "search_s": 1.1108267968520522,
+      "error_m": 0.8625782321929029
+    },
+    {
+      "site": "B11",
+      "port": "Philadelphia",
+      "aids": 18,
+      "status": "completed",
+      "search_s": 264.24364153668284,
+      "error_m": 2.060522725327833
+    },
+    {
+      "site": "B12",
+      "port": "Wilmington DE",
+      "aids": 32,
+      "status": "completed",
+      "search_s": 7.496131596155465,
+      "error_m": 1.3677121286445617
+    },
+    {
+      "site": "B13",
+      "port": "Baltimore",
+      "aids": 47,
+      "status": "completed",
+      "search_s": 1.2123680408112705,
+      "error_m": 1.1878439692148353
+    },
+    {
+      "site": "B14",
+      "port": "Virginia Hampton Roads",
+      "aids": 97,
+      "status": "completed",
+      "search_s": 0.7735820850357413,
+      "error_m": 1.2771396876808354
+    },
+    {
+      "site": "B15",
+      "port": "Morehead City",
+      "aids": 65,
+      "status": "completed",
+      "search_s": 0.9027469949796796,
+      "error_m": 0.7928184200127477
+    },
+    {
+      "site": "B16",
+      "port": "Wilmington NC",
+      "aids": 24,
+      "status": "completed",
+      "search_s": 81.53283768612891,
+      "error_m": 0.7424118686022323
+    },
+    {
+      "site": "B17",
+      "port": "Charleston",
+      "aids": 67,
+      "status": "completed",
+      "search_s": 0.8331152983009815,
+      "error_m": 0.8560632403386089
+    },
+    {
+      "site": "B18",
+      "port": "Savannah",
+      "aids": 21,
+      "status": "completed",
+      "search_s": 5.787351769860834,
+      "error_m": 23.45564118214372
+    },
+    {
+      "site": "B19",
+      "port": "Brunswick GA",
+      "aids": 26,
+      "status": "completed",
+      "search_s": 1.2702238815836608,
+      "error_m": 0.39553968561762054
+    },
+    {
+      "site": "B20",
+      "port": "Jacksonville",
+      "aids": 21,
+      "status": "completed",
+      "search_s": 4.490137744229287,
+      "error_m": 1.2639793057816449
+    },
+    {
+      "site": "B21",
+      "port": "Port Canaveral",
+      "aids": 57,
+      "status": "completed",
+      "search_s": 0.8891880898736417,
+      "error_m": 0.2172849917798253
+    },
+    {
+      "site": "B22",
+      "port": "Palm Beach",
+      "aids": 33,
+      "status": "completed",
+      "search_s": 5.978277421090752,
+      "error_m": 0.4082858162709077
+    },
+    {
+      "site": "B24",
+      "port": "PortMiami",
+      "aids": 57,
+      "status": "completed",
+      "search_s": 0.945849584415555,
+      "error_m": 0.6138164923036211
+    }
+  ]
+}
