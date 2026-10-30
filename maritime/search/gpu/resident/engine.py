@@ -610,8 +610,10 @@ def _run_resident_search(
                                     pinned, dtype=np.float64, count=payload.size
                                 ).reshape(payload.shape)
                                 d2h_begin, d2h_end = cp.cuda.Event(), cp.cuda.Event()
-                                with resident.sharing_stream:
-                                    resident.sharing_stream.wait_event(ready)
+                                sharing_stream = resident.sharing_stream
+                                assert sharing_stream is not None
+                                with sharing_stream:
+                                    sharing_stream.wait_event(ready)
                                     d2h_begin.record(resident.sharing_stream)
                                     cp.asnumpy(
                                         payload,

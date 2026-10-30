@@ -1,0 +1,64 @@
+{
+  "evaluated": 1141,
+  "pruned": 959,
+  "terminal": 78,
+  "completed_roots": 725,
+  "complete": true,
+  "elapsed_s": 0.176675614900887,
+  "accuracy_evaluated": false,
+  "numerical_validation_accepted": true,
+  "resident_session": {
+    "request_number": 3,
+    "devices": [
+      {
+        "device": 2,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 137851405551296
+      },
+      {
+        "device": 0,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 137851476858560
+      },
+      {
+        "device": 1,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 137851413944000
+      }
+    ],
+    "map_buffers_retained": true
+  },
+  "dynamic_score_sharing": {
+    "enabled": true,
+    "mode": "terminal scoring to idle peer GPUs",
+    "map_bytes_moved": 0,
+    "candidate_bytes_moved": 2496,
+    "byte_budget": 33554432,
+    "max_gpu_migrations_per_cell": 1,
+    "transport": "pinned host staging, two DMA legs, no CPU geometry",
+    "handoffs": 1,
+    "records": [
+      {
+        "packet": 0,
+        "source": 1,
+        "destination": 0,
+        "cells": 39,
+        "bytes": 2496,
+        "payload_bytes": 1248,
+        "copy_ms": 0.28729600086808205,
+        "score_ms": 61.9400634765625,
+        "gpu_migrations": 1,
+        "failed": false
+      }
+    ],
+    "forecast_score_ms_per_cell": 1.0033949225010017,
+    "forecast_copy_ms": 0.13745920017361643,
+    "skipped_handoffs": {}
+  }
+}
