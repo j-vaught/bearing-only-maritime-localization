@@ -1,0 +1,28 @@
+{
+  "shared_preparation_s": 51.71170669188723,
+  "cache_load_s": 7.203776472713798,
+  "simulator_map_scene_load_s": 44.50793090509251,
+  "base_cache_hit": true,
+  "object_cache_hit": true,
+  "object_refresh_allowed": false,
+  "base_cache_key": "b6bcc2d3e0c0d960a2ba00e496d59ea37846dc3bb08f00ec773752d894caad90",
+  "object_cache_key": "af3d5ba2f4b3434ae1ffb0920a3f208a3c980b8a08fac817969c09b9a76f05ce",
+  "catalog_records": 66668,
+  "canonical_simulator_records": 29163,
+  "canonical_search_objects": 29163,
+  "cache_paths": [
+    "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/prepared-cache/b6bcc2d3e0c0d960a2ba00e496d59ea37846dc3bb08f00ec773752d894caad90.npz",
+    "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/resident-aid-objects/aid-view-af3d5ba2f4b3434ae1ffb0920a3f208a3c980b8a08fac817969c09b9a76f05ce.npz"
+  ],
+  "search_world_loading": "Loaded once in supervisor, inherited read-only by one persistent search child",
+  "device_upload": "GPU map buffers survive sequential requests in one child; first search includes upload",
+  "cpu_roles": [
+    "simulation",
+    "input_loading",
+    "kernel_launch",
+    "root_dispatch",
+    "scalar_progress",
+    "file_io",
+    "posthoc_geodesic"
+  ]
+}
