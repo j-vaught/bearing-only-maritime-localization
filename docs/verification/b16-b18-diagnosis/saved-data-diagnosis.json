@@ -1,0 +1,239 @@
+{
+  "author": "J.C. Vaught",
+  "scope": "Posthoc bearing geometry and saved candidate/profile inspection only. No search, simulation, visibility query, or assignment rerun.",
+  "B18": {
+    "aid_count": 21,
+    "correct_generating_correspondences": 21,
+    "range_m_min_median_max": [
+      7170.703367755659,
+      8210.761831047981,
+      9993.264873143156
+    ],
+    "truth_generating_residual_sum_deg": 2.1684283145982306,
+    "selected_residual_sum_deg_from_saved_positions": 1.9628620594544373,
+    "saved_selected_residual_sum_deg": 1.9628620600722968,
+    "max_absolute_angular_noise_deg": 0.30556103923322553,
+    "geometry_information_eigenvalues": [
+      3.2918705844192634e-08,
+      2.6561788775972977e-07
+    ],
+    "geometry_condition_ratio": 8.068904318928103,
+    "linearized_geometry_sigma_axes_m": [
+      16.03262891332648,
+      5.644135843120278
+    ],
+    "linearized_geometry_note": "Local small-angle unbounded-Gaussian model using underlying sigma1/6degree, known associations. Descriptive sensitivity, not a certificate or calibrated uncertainty interval.",
+    "error_weak_direction_alignment": 0.9742899591793894,
+    "error_east_north_m": [
+      20.152906278028556,
+      12.001144604348104
+    ],
+    "consistent_centers": 18705,
+    "consistent_center_error_m_min_median_max": [
+      0.10732854979359548,
+      45.141955600933066,
+      114.28823314062811
+    ],
+    "nearest_truth_saved_consistent_center_error_m": 0.10732854979359548,
+    "nearest_truth_saved_consistent_center_residual_sum_deg": 2.1651402142450706,
+    "consistent_center_extent_en_m": [
+      -53334.942547483486,
+      3549687.5441571814,
+      -53215.923992795986,
+      3549778.486539994
+    ]
+  },
+  "B16": {
+    "source": "/home/jvaught2/projects/bearing-only-maritime-localization/runs/b-location-suite-aids16-retry-20261029/B16/attempt-20261029T214235983174Z",
+    "earlier_catalog_result": true,
+    "summary": {
+      "evaluated": 800623,
+      "pruned": 284891,
+      "terminal": 325435,
+      "completed_roots": 39435,
+      "complete": true,
+      "elapsed_s": 371.49643658613786,
+      "accuracy_evaluated": false,
+      "numerical_validation_accepted": true
+    },
+    "terminal_centers_by_device": {
+      "0": 3807,
+      "1": 319174,
+      "2": 2454
+    },
+    "last_progress_by_device": {
+      "0": {
+        "stage": "resident_search",
+        "device": 0,
+        "evaluated": 445451,
+        "pruned": 245193,
+        "terminal": 9961,
+        "completed_roots": 39419,
+        "active_task_frontier": 0,
+        "batch_gpu_stream_elapsed_ms": 187.9012451171875,
+        "elapsed_s": 10.970737786963582,
+        "assigned_roots": 39435,
+        "total_roots": 39435
+      },
+      "1": {
+        "stage": "resident_search",
+        "device": 1,
+        "evaluated": 800623,
+        "pruned": 284891,
+        "terminal": 325435,
+        "completed_roots": 39427,
+        "active_task_frontier": 0,
+        "batch_gpu_stream_elapsed_ms": 213.45762634277344,
+        "elapsed_s": 371.4952813498676,
+        "assigned_roots": 39435,
+        "total_roots": 39435
+      },
+      "2": {
+        "stage": "resident_search",
+        "device": 2,
+        "evaluated": 444627,
+        "pruned": 245116,
+        "terminal": 9214,
+        "completed_roots": 39416,
+        "active_task_frontier": 0,
+        "batch_gpu_stream_elapsed_ms": 0.4505600035190582,
+        "elapsed_s": 10.768036677036434,
+        "assigned_roots": 39435,
+        "total_roots": 39435
+      }
+    },
+    "profiles": [
+      {
+        "device": 0,
+        "sampling": {
+          "every_n_batches": 10,
+          "prune_calls": 2758,
+          "sampled_batches": 276,
+          "means_are_measured_samples_not_extrapolated": true
+        },
+        "total_sampled_stream_ms": 348.6809291318059,
+        "top_exclusive": [
+          {
+            "label": "kernel.chart.gather_distinct_chart_objects",
+            "count": 276,
+            "event_stream_exclusive_ms_total": 134.3883527033031
+          },
+          {
+            "label": "stage.prune",
+            "count": 276,
+            "event_stream_exclusive_ms_total": 90.88192029460333
+          },
+          {
+            "label": "kernel.chart.build_distinct_chart_incidence",
+            "count": 276,
+            "event_stream_exclusive_ms_total": 37.457312003476545
+          },
+          {
+            "label": "stage.split",
+            "count": 276,
+            "event_stream_exclusive_ms_total": 32.394624043256044
+          },
+          {
+            "label": "operation.seed_cells",
+            "count": 169,
+            "event_stream_exclusive_ms_total": 18.087519515305758
+          },
+          {
+            "label": "kernel.chart.match_distinct_chart_incidence",
+            "count": 276,
+            "event_stream_exclusive_ms_total": 13.219104069285095
+          }
+        ]
+      },
+      {
+        "device": 1,
+        "sampling": {
+          "every_n_batches": 10,
+          "prune_calls": 1994,
+          "sampled_batches": 200,
+          "means_are_measured_samples_not_extrapolated": true
+        },
+        "total_sampled_stream_ms": 36771.083844002336,
+        "top_exclusive": [
+          {
+            "label": "kernel.prediction.pp_pairs",
+            "count": 70,
+            "event_stream_exclusive_ms_total": 35080.2858581543
+          },
+          {
+            "label": "kernel.chart.gather_distinct_chart_objects",
+            "count": 270,
+            "event_stream_exclusive_ms_total": 482.65564704686403
+          },
+          {
+            "label": "stage.score",
+            "count": 70,
+            "event_stream_exclusive_ms_total": 358.9961256228853
+          },
+          {
+            "label": "kernel.chart.build_distinct_chart_incidence",
+            "count": 270,
+            "event_stream_exclusive_ms_total": 328.1345281561371
+          },
+          {
+            "label": "operation.predict_groups",
+            "count": 70,
+            "event_stream_exclusive_ms_total": 168.96394292078912
+          },
+          {
+            "label": "assignment.cooperative",
+            "count": 70,
+            "event_stream_exclusive_ms_total": 73.30300778150558
+          }
+        ]
+      },
+      {
+        "device": 2,
+        "sampling": {
+          "every_n_batches": 10,
+          "prune_calls": 3513,
+          "sampled_batches": 352,
+          "means_are_measured_samples_not_extrapolated": true
+        },
+        "total_sampled_stream_ms": 379.7822387441993,
+        "top_exclusive": [
+          {
+            "label": "stage.prune",
+            "count": 352,
+            "event_stream_exclusive_ms_total": 133.94255939405411
+          },
+          {
+            "label": "kernel.chart.gather_distinct_chart_objects",
+            "count": 352,
+            "event_stream_exclusive_ms_total": 112.41462386213243
+          },
+          {
+            "label": "operation.seed_cells",
+            "count": 274,
+            "event_stream_exclusive_ms_total": 38.73974384646863
+          },
+          {
+            "label": "stage.split",
+            "count": 352,
+            "event_stream_exclusive_ms_total": 35.19999998062849
+          },
+          {
+            "label": "kernel.chart.build_distinct_chart_incidence",
+            "count": 352,
+            "event_stream_exclusive_ms_total": 23.80300803319551
+          },
+          {
+            "label": "kernel.chart.match_distinct_chart_incidence",
+            "count": 352,
+            "event_stream_exclusive_ms_total": 11.902880056761205
+          }
+        ]
+      }
+    ]
+  },
+  "B18_source_sha256": {
+    "estimate.json": "25209a243b3b315fae4baa9edb124b72524c0075caa1836ee50645a442997501",
+    "truth.json": "9d6de2c44dc5d3a5f65205a78acde47099dcc4f3bda6036ec9c246a70d9cb109",
+    "measurements.json": "9079f6a1ad4c1749c75407113a725b7dcff93ce6783af7408fb2eacd325057e6"
+  }
+}

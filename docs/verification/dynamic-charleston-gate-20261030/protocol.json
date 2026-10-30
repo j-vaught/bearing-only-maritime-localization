@@ -1,0 +1,14 @@
+{
+  "source_commit": "608de57526d87523d6fb78f097c60733db06c8dd",
+  "observations_sha256": "21f48711f3c9808f62b0a6384777ffbaebf9c19a36e2fc4cc426793332c07e4b",
+  "gate": "All saved arrays and selected estimates identical; median paired speedup >1.05; at least4/5 wins; at leastone real handoff",
+  "warmups_per_stage": 2,
+  "pairs_per_stage": 5,
+  "order": "Alternating fixed/dynamic and dynamic/fixed",
+  "devices": [
+    0,
+    1,
+    2
+  ],
+  "land_pruning_changed": false
+}

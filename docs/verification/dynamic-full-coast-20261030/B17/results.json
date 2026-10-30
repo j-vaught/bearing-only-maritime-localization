@@ -1,0 +1,149 @@
+[
+  {
+    "site": "B17",
+    "port": "Charleston",
+    "observed_aids": 67,
+    "trial": "warm-fixed",
+    "pair": null,
+    "dynamic": false,
+    "search_s": 1.2471726252697408,
+    "error_m": 0.8560632403386089,
+    "terminal_by_device": {
+      "0": 0,
+      "1": 171,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {}
+  },
+  {
+    "site": "B17",
+    "port": "Charleston",
+    "observed_aids": 67,
+    "trial": "warm-dynamic",
+    "pair": null,
+    "dynamic": true,
+    "search_s": 0.8501895722001791,
+    "error_m": 0.8560632403386089,
+    "terminal_by_device": {
+      "0": 0,
+      "1": 171,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {
+      "enabled": true,
+      "mode": "terminal scoring to idle peer GPUs",
+      "map_bytes_moved": 0,
+      "candidate_bytes_moved": 0,
+      "byte_budget": 33554432,
+      "max_gpu_migrations_per_cell": 1,
+      "transport": "pinned host staging, two DMA legs, no CPU geometry",
+      "handoffs": 0,
+      "records": [],
+      "forecast_score_ms_per_cell": 0.21378469902172426,
+      "forecast_copy_ms": 0.1,
+      "skipped_handoffs": {
+        "no_idle_peer": 1
+      }
+    }
+  },
+  {
+    "site": "B17",
+    "port": "Charleston",
+    "observed_aids": 67,
+    "trial": "pair-1-fixed",
+    "pair": 1,
+    "dynamic": false,
+    "search_s": 0.8796985959634185,
+    "error_m": 0.8560632403386089,
+    "terminal_by_device": {
+      "0": 0,
+      "1": 0,
+      "2": 171
+    },
+    "outputs_identical": true,
+    "sharing": {}
+  },
+  {
+    "site": "B17",
+    "port": "Charleston",
+    "observed_aids": 67,
+    "trial": "pair-1-dynamic",
+    "pair": 1,
+    "dynamic": true,
+    "search_s": 0.8686036849394441,
+    "error_m": 0.8560632403386089,
+    "terminal_by_device": {
+      "0": 171,
+      "1": 0,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {
+      "enabled": true,
+      "mode": "terminal scoring to idle peer GPUs",
+      "map_bytes_moved": 0,
+      "candidate_bytes_moved": 0,
+      "byte_budget": 33554432,
+      "max_gpu_migrations_per_cell": 1,
+      "transport": "pinned host staging, two DMA legs, no CPU geometry",
+      "handoffs": 0,
+      "records": [],
+      "forecast_score_ms_per_cell": 0.30244965848866967,
+      "forecast_copy_ms": 0.1,
+      "skipped_handoffs": {
+        "no_idle_peer": 1
+      }
+    }
+  },
+  {
+    "site": "B17",
+    "port": "Charleston",
+    "observed_aids": 67,
+    "trial": "pair-2-dynamic",
+    "pair": 2,
+    "dynamic": true,
+    "search_s": 0.8383410419337451,
+    "error_m": 0.8560632403386089,
+    "terminal_by_device": {
+      "0": 0,
+      "1": 171,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {
+      "enabled": true,
+      "mode": "terminal scoring to idle peer GPUs",
+      "map_bytes_moved": 0,
+      "candidate_bytes_moved": 0,
+      "byte_budget": 33554432,
+      "max_gpu_migrations_per_cell": 1,
+      "transport": "pinned host staging, two DMA legs, no CPU geometry",
+      "handoffs": 0,
+      "records": [],
+      "forecast_score_ms_per_cell": 0.2137787115085892,
+      "forecast_copy_ms": 0.1,
+      "skipped_handoffs": {
+        "no_idle_peer": 1
+      }
+    }
+  },
+  {
+    "site": "B17",
+    "port": "Charleston",
+    "observed_aids": 67,
+    "trial": "pair-2-fixed",
+    "pair": 2,
+    "dynamic": false,
+    "search_s": 0.8246340020559728,
+    "error_m": 0.8560632403386089,
+    "terminal_by_device": {
+      "0": 0,
+      "1": 171,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {}
+  }
+]

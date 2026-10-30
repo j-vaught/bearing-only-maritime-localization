@@ -1,0 +1,15 @@
+# Charleston check after distinct-marker pruning
+
+The approved regional search completed on GPU0 and selected a position 2.150054 meters from the simulated observer. It matched all 64 positive chart-aid reports with consistent status and zero flags. The estimate was frozen before the separate evaluator read truth. Its center, residual and all 59 consistent candidate centers exactly match the previous regional run on the same grid.
+
+The search completed all 725 initial cells, refining every surviving region from 1000-meter cells to at most 1-meter cells. It evaluated 1,341 regions, compared with 16,465 previously, reducing evaluated regions by 91.855 percent. Search-loop wall time was 1.819 seconds. The complete pipeline took 13.713 seconds, including saved-input loading, cache preservation checks, GPU selection and separate accuracy evaluation. The previous regional profile took 21.013 seconds, but its instrumentation differs, so this is not a controlled timing comparison.
+
+The 171 terminal centers comprise 59 consistent, 40 inconsistent and 72 unresolved centers. Previously, the same region produced 59 consistent, 538 inconsistent, one unresolved and five land centers. Independent inspection confirmed that the additional 71 unresolved centers previously had incomplete nominal grouped matches with zero numerical flags. They are now retained because the conservative physical-object graph still permits a distinct explanation. This removes the old nominal-match-failure shortcut. The original boundary-warning center remains unresolved.
+
+All 72 unresolved centers lie within 12.326 meters of the selected estimate. Their nominal matches explain 60 through 63 of the 64 observations. The raw graph is a necessary feasibility test and can admit explanations that the full visibility and grouping model cannot realize. The saved cache has zero universal rectangular land barriers, and the raw graph does not invoke full polygon sight-line tests. Consequently, known-occluded raw aids can still supply its edges. The final nominal predictor does use full shoreline sight lines. A further safe proof can remove known-blocked edges at exact terminal centers while retaining unknown visibility; uncertain target positions still require universal blockage proof. The saved outputs do not attribute every unresolved center to blockage or grouping. The regional result does not establish the remaining unresolved count across the full Eastern Seaboard.
+
+Both saved caches were hits, rebuilding was disabled, and their full SHA-256 digests, sizes and nanosecond modification times match before and after. The previous run and frozen estimate were preserved. GPUs1–3 were excluded, and no coast-wide search was launched.
+
+The [complete saved result](verification/charleston-distinct-marker-check.json) includes settings, frozen selection, accuracy, comparison and cache fingerprints. The [terminal-center archive](verification/charleston-distinct-marker-check-terminal-results.npz) retains every terminal center, status, flag, residual, assignment and rejection reason together with its manifest.
+
+Written by J.C. Vaught.

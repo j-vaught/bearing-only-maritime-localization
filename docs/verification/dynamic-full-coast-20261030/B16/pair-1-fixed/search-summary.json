@@ -1,0 +1,37 @@
+{
+  "evaluated": 306943,
+  "pruned": 158332,
+  "terminal": 81734,
+  "completed_roots": 39435,
+  "complete": true,
+  "elapsed_s": 81.77602953882888,
+  "accuracy_evaluated": false,
+  "numerical_validation_accepted": true,
+  "resident_session": {
+    "request_number": 2,
+    "devices": [
+      {
+        "device": 2,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 132421276776128
+      },
+      {
+        "device": 1,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 132421258950336
+      },
+      {
+        "device": 0,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 132421250557632
+      }
+    ],
+    "map_buffers_retained": true
+  }
+}

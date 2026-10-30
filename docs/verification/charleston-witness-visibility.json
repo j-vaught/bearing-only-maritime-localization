@@ -1,0 +1,545 @@
+{
+  "in_range_objects": 425,
+  "gpu_visibility_counts": {
+    "1": 258,
+    "0": 167
+  },
+  "predicted_nonvessel_groups": 73,
+  "flags": 8,
+  "point_state": 0,
+  "expected_marker_reports": 89,
+  "expected_representative_present": 46,
+  "reports_with_any_nominal_gate_edge": 61,
+  "missing_expected_representatives": [
+    {
+      "observation": 86,
+      "expected_key": "enc-physical:6feaae25013b37441fa2",
+      "expected_range": 4361.3979982437795,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:6feaae25013b37441fa2": 1
+      },
+      "nearest_predicted_angle_error": 7.8323775635820425
+    },
+    {
+      "observation": 87,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSEC.000:source_object_id=206685",
+      "expected_range": 4862.332887055719,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:9abbf37b096fbcac4865": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSEC.000:source_object_id=206685": 1
+      },
+      "nearest_predicted_angle_error": 12.785740827997301
+    },
+    {
+      "observation": 106,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206722",
+      "expected_range": 2634.900825094061,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:8946a4559086d55a96eb": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206722": 1
+      },
+      "nearest_predicted_angle_error": 9.234056762608304
+    },
+    {
+      "observation": 101,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206756",
+      "expected_range": 3099.536894465696,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:116323766dfeccfa107b": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206756": 1
+      },
+      "nearest_predicted_angle_error": 12.222455833220351
+    },
+    {
+      "observation": 108,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206760",
+      "expected_range": 1613.5317044815135,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:b7dfeea117518126ee06": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206760": 1
+      },
+      "nearest_predicted_angle_error": 7.103560551619296
+    },
+    {
+      "observation": 104,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206724",
+      "expected_range": 1512.2079785296883,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:77c6c0373eb21c8afc50": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206724": 1
+      },
+      "nearest_predicted_angle_error": 9.677466289176493
+    },
+    {
+      "observation": 122,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206709",
+      "expected_range": 7361.45650404453,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:c7401d6058b1c2e2fae7": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206709": 1
+      },
+      "nearest_predicted_angle_error": 1.0616772333304993
+    },
+    {
+      "observation": 121,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206697",
+      "expected_range": 7281.84671005652,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:c65370d114f8a0610891": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206697": 1
+      },
+      "nearest_predicted_angle_error": 1.0405209605708023
+    },
+    {
+      "observation": 138,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206708",
+      "expected_range": 8724.40636189412,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:3ed17d9a2f486fc73965": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206708": 1
+      },
+      "nearest_predicted_angle_error": 0.07286350653441787
+    },
+    {
+      "observation": 141,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206706",
+      "expected_range": 8701.252309720514,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:7c5f8ab381d18e47e73a": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206706": 1
+      },
+      "nearest_predicted_angle_error": 0.030128114100591574
+    },
+    {
+      "observation": 139,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206715",
+      "expected_range": 5247.586615792889,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:b3de62f629f1b40ea678": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206715": 1
+      },
+      "nearest_predicted_angle_error": 0.07695987453143971
+    },
+    {
+      "observation": 133,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206748",
+      "expected_range": 5867.545122166072,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:f940594487b319a78f9b": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206748": 1
+      },
+      "nearest_predicted_angle_error": 0.0497393263103163
+    },
+    {
+      "observation": 130,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206703",
+      "expected_range": 6521.892598343828,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:42915b856b3a2d548155": 1,
+        "enc-physical:22b7ddda9760ecf3131b": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206703": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206705": 1
+      },
+      "nearest_predicted_angle_error": 0.21854007776556728
+    },
+    {
+      "observation": 143,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206732",
+      "expected_range": 8581.972144912856,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:30ec12b4bbc286d7bf77": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206732": 1
+      },
+      "nearest_predicted_angle_error": 0.40352689529851204
+    },
+    {
+      "observation": 136,
+      "expected_key": "enc-component:coastal:Coastal.Light_point:US3SC1CB.000:source_object_id=726548",
+      "expected_range": 3868.462242761679,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:16837fc35452af864ac2": 1,
+        "enc-component:coastal:Coastal.Light_point:US3SC1CB.000:source_object_id=726548": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206734": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206754": 1
+      },
+      "nearest_predicted_angle_error": 0.5231021491042611
+    },
+    {
+      "observation": 96,
+      "expected_key": "enc-physical:65467b67a97f844a9b4d",
+      "expected_range": 1495.1083143630487,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:65467b67a97f844a9b4d": 1
+      },
+      "nearest_predicted_angle_error": 20.932573733185905
+    },
+    {
+      "observation": 129,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206686",
+      "expected_range": 7560.847137955119,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:ba05991ba683d3de663f": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206686": 1
+      },
+      "nearest_predicted_angle_error": 0.04179381317089792
+    },
+    {
+      "observation": 128,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206755",
+      "expected_range": 7688.192683852979,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:c372d53a7ab6fe9b3d2e": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206755": 1
+      },
+      "nearest_predicted_angle_error": 0.3477819088341789
+    },
+    {
+      "observation": 117,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206704",
+      "expected_range": 5624.18306771421,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:66a0b756d71d003b443a": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206704": 1
+      },
+      "nearest_predicted_angle_error": 1.1105952971979036
+    },
+    {
+      "observation": 2,
+      "expected_key": "enc-physical:247250f8d5f804d7c884",
+      "expected_range": 8713.12108138633,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:247250f8d5f804d7c884": 1
+      },
+      "nearest_predicted_angle_error": 2.6924866170965345
+    },
+    {
+      "observation": 160,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206725",
+      "expected_range": 4940.773940197067,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:a6066fccd618f9490469": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206725": 1
+      },
+      "nearest_predicted_angle_error": 1.3327291115160733
+    },
+    {
+      "observation": 162,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206727",
+      "expected_range": 5424.030933617834,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:9f9c018fd329e9036f5e": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206727": 1
+      },
+      "nearest_predicted_angle_error": 6.967185846529077
+    },
+    {
+      "observation": 0,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206718",
+      "expected_range": 6278.77702839255,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:1d15dd9b82c8f01d0e30": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206718": 1
+      },
+      "nearest_predicted_angle_error": 2.8786504942574993
+    },
+    {
+      "observation": 6,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206729",
+      "expected_range": 6406.512713410941,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:fe02475b506316098126": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206729": 1
+      },
+      "nearest_predicted_angle_error": 0.366857636162905
+    },
+    {
+      "observation": 3,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206687",
+      "expected_range": 7005.812438621784,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:1dc8c080b1a36e2f1753": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206687": 1
+      },
+      "nearest_predicted_angle_error": 1.7269528333429207
+    },
+    {
+      "observation": 149,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSFD.000:source_object_id=206788",
+      "expected_range": 9297.948779876315,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:93ff8921bb9ea0aaee25": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSFD.000:source_object_id=206788": 1
+      },
+      "nearest_predicted_angle_error": 0.033849605060652266
+    },
+    {
+      "observation": 125,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSFD.000:source_object_id=206791",
+      "expected_range": 9618.649049336378,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:d19e6ea096e781d8969e": 1,
+        "enc-physical:b15b8f07adee3014d95c": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSFD.000:source_object_id=206791": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSFD.000:source_object_id=206806": 1
+      },
+      "nearest_predicted_angle_error": 0.4535924181869291
+    },
+    {
+      "observation": 120,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSFD.000:source_object_id=206807",
+      "expected_range": 9999.21168814136,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:ba3e3d40cb3865bf90c4": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSFD.000:source_object_id=206807": 1
+      },
+      "nearest_predicted_angle_error": 0.5054327387273929
+    },
+    {
+      "observation": 124,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSFD.000:source_object_id=206808",
+      "expected_range": 9760.845619688049,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:4761bf19c0468ecd3b4e": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSFD.000:source_object_id=206808": 1
+      },
+      "nearest_predicted_angle_error": 0.8464581753709695
+    },
+    {
+      "observation": 1,
+      "expected_key": "enc-physical:e0be88e0f09aa51b55fd",
+      "expected_range": 9674.883830427108,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-physical:e0be88e0f09aa51b55fd": 1
+      },
+      "nearest_predicted_angle_error": 2.532523966589565
+    },
+    {
+      "observation": 42,
+      "expected_key": "enc-component:overview:Overview.Light_point:US1GC09M.000:source_object_id=153462",
+      "expected_range": 5935.315793673388,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:coastal:Coastal.Light_point:US3SC1CB.000:source_object_id=726545": 1,
+        "enc-component:coastal:Coastal.Light_point:US3SC1CB.000:source_object_id=726550": 1,
+        "enc-component:coastal:Coastal.Light_point:US3SC1CB.000:source_object_id=726553": 1,
+        "enc-component:general:General.Light_point:US2EC02M.000:source_object_id=384864": 1,
+        "enc-component:general:General.Light_point:US2EC02M.000:source_object_id=384874": 1,
+        "enc-component:general:General.Light_point:US2EC02M.000:source_object_id=384903": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSDE.000:source_object_id=206662": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSDE.000:source_object_id=206671": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSDE.000:source_object_id=206672": 1,
+        "enc-component:overview:Overview.Light_point:US1GC09M.000:source_object_id=153462": 1,
+        "enc-component:overview:Overview.Light_point:US1GC09M.000:source_object_id=153463": 1,
+        "enc-component:overview:Overview.Light_point:US1GC09M.000:source_object_id=153465": 1,
+        "enc-component:overview:Overview.Light_point:US1GLBCF.000:source_object_id=154016": 1,
+        "enc-component:overview:Overview.Light_point:US1GLBCF.000:source_object_id=154017": 1,
+        "enc-component:overview:Overview.Light_point:US1GLBCF.000:source_object_id=154018": 1
+      },
+      "nearest_predicted_angle_error": 4.953173779794952
+    },
+    {
+      "observation": 155,
+      "expected_key": "enc-component:coastal:Coastal.Light_point:US3SC1CB.000:source_object_id=726555",
+      "expected_range": 3683.533673151311,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:coastal:Coastal.Light_point:US3SC1CB.000:source_object_id=726555": 1,
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206743": 1
+      },
+      "nearest_predicted_angle_error": 0.3771885320601882
+    },
+    {
+      "observation": 72,
+      "expected_key": "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDC.000:source_object_id=93424",
+      "expected_range": 7372.430074352338,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDC.000:source_object_id=93424": 1
+      },
+      "nearest_predicted_angle_error": 0.2808593192595481
+    },
+    {
+      "observation": 84,
+      "expected_key": "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDC.000:source_object_id=93425",
+      "expected_range": 4454.667242114817,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDC.000:source_object_id=93425": 1
+      },
+      "nearest_predicted_angle_error": 6.128971174826688
+    },
+    {
+      "observation": 71,
+      "expected_key": "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDC.000:source_object_id=93426",
+      "expected_range": 7034.116655147688,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDC.000:source_object_id=93426": 1
+      },
+      "nearest_predicted_angle_error": 0.3406164158183742
+    },
+    {
+      "observation": 40,
+      "expected_key": "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDE.000:source_object_id=93441",
+      "expected_range": 4512.789590540575,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSDE.000:source_object_id=93441": 1
+      },
+      "nearest_predicted_angle_error": 2.7712049558608385
+    },
+    {
+      "observation": 90,
+      "expected_key": "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSEC.000:source_object_id=93443",
+      "expected_range": 8045.748109868138,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSEC.000:source_object_id=93443": 1
+      },
+      "nearest_predicted_angle_error": 25.2759109085747
+    },
+    {
+      "observation": 91,
+      "expected_key": "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSEC.000:source_object_id=93445",
+      "expected_range": 8017.24555293205,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSEC.000:source_object_id=93445": 1
+      },
+      "nearest_predicted_angle_error": 25.901224010178453
+    },
+    {
+      "observation": 4,
+      "expected_key": "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSED.000:source_object_id=93449",
+      "expected_range": 5913.959123873828,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSED.000:source_object_id=93449": 1
+      },
+      "nearest_predicted_angle_error": 1.178553461682725
+    },
+    {
+      "observation": 146,
+      "expected_key": "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSED.000:source_object_id=93467",
+      "expected_range": 8876.0401950842,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Beacon_Special_Purpose_General_point:US5CHSED.000:source_object_id=93467": 1
+      },
+      "nearest_predicted_angle_error": 0.0531961087469881
+    },
+    {
+      "observation": 112,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSEC.000:source_object_id=206684",
+      "expected_range": 9535.651553045478,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Light_point:US5CHSEC.000:source_object_id=206684": 1
+      },
+      "nearest_predicted_angle_error": 3.1733438498984583
+    },
+    {
+      "observation": 9,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206700",
+      "expected_range": 3321.5527962187193,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Light_point:US5CHSED.000:source_object_id=206700": 1
+      },
+      "nearest_predicted_angle_error": 2.9497442773484863
+    },
+    {
+      "observation": 19,
+      "expected_key": "enc-component:harbour:Harbor.Light_point:US5CHSEE.000:source_object_id=206761",
+      "expected_range": 6673.180175131984,
+      "expected_kind": 1.0,
+      "gpu_visibility": 1,
+      "group_member_vis": {
+        "enc-component:harbour:Harbor.Light_point:US5CHSEE.000:source_object_id=206761": 1
+      },
+      "nearest_predicted_angle_error": 0.7442878037127798
+    }
+  ],
+  "scope": "Read-only single true-position prediction diagnosis on GPU 3; no full search",
+  "comparison": "Saved simulator truth marker representatives versus resident GPU prediction",
+  "interpretation": "All 43 missing expected marker representatives and their group members exist as chart aids in the saved cache but their GPU sight lines are blocked.",
+  "limitations": "The simulator and search settings name the same map. This does not establish which visibility implementation is wrong. Numerical-boundary flag 8 is separate from the dropped blocked rays.",
+  "baseline_source_hashes": {
+    "maritime/search/gpu/resident/engine.py": "10f7700aeea6d9acdd615d6793f3e1c4743a7161f40e9638a09032e054ee325c",
+    "maritime/search/gpu/resident/kernels.cu": "9726f85b9358573574ca80a2e6f18ba10b348a11bd0e7a317ea7a4354cb339b7",
+    "maritime/search/gpu/resident/preparation.py": "2e663ff9e6419c902ebba57f92f3de922e0b956e828f1d2915039e4fc914778c",
+    "maritime/search/gpu/batch_assignment.py": "9a682cbaa22ecea16fb734ab217f7b6c85546a6c0e4a94e403eeb5a42e66c81c"
+  }
+}

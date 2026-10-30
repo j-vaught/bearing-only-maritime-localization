@@ -20,3 +20,9 @@ build/
 /runs/**/*.json
 /runs/**/*.csv
 /runs/**/*.log
+
+# Reusable compiled input/index cache; figures remain trackable.
+/.cache/resident-world
+
+# Derived canonical object index; the saved base map cache stays separate.
+/.cache/resident-aid-objects/

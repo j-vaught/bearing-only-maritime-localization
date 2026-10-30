@@ -1,0 +1,53 @@
+{
+  "evaluated": 102903,
+  "pruned": 86958,
+  "terminal": 78,
+  "completed_roots": 39435,
+  "complete": true,
+  "elapsed_s": 1.2448533056303859,
+  "accuracy_evaluated": false,
+  "numerical_validation_accepted": true,
+  "resident_session": {
+    "request_number": 18,
+    "devices": [
+      {
+        "device": 0,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 139142165485248
+      },
+      {
+        "device": 1,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 139142157092544
+      },
+      {
+        "device": 2,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 139142144513728
+      }
+    ],
+    "map_buffers_retained": true
+  },
+  "dynamic_score_sharing": {
+    "enabled": true,
+    "mode": "terminal scoring to idle peer GPUs",
+    "map_bytes_moved": 0,
+    "candidate_bytes_moved": 0,
+    "byte_budget": 33554432,
+    "max_gpu_migrations_per_cell": 1,
+    "transport": "pinned host staging, two DMA legs, no CPU geometry",
+    "handoffs": 0,
+    "records": [],
+    "forecast_score_ms_per_cell": 0.3109881357046274,
+    "forecast_copy_ms": 0.1,
+    "skipped_handoffs": {
+      "no_idle_peer": 1
+    }
+  }
+}

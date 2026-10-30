@@ -1,0 +1,42 @@
+{
+  "author": "J.C. Vaught",
+  "created_utc": "2026-10-29T21:49:45.129806+00:00",
+  "recorded_sites": 24,
+  "all24_recorded": true,
+  "minimum_positive_aids": 16,
+  "eligible_frames": 20,
+  "attempted_searches": 20,
+  "status_counts": {
+    "skipped_aid_count": 4,
+    "failed": 8,
+    "completed": 11,
+    "timeout": 1
+  },
+  "successful_estimates": 11,
+  "mean_search_s_all_searched": 63.51290806103498,
+  "mean_error_m_successful_estimates": 1.6777362299638232,
+  "median_error_m_successful_estimates": 1.753628004458505,
+  "max_error_m_successful_estimates": 3.56543193667121,
+  "shared_preparation_s_original": 48.10330064687878,
+  "shared_preparation_s_retry": 48.61271249689162,
+  "timing_note": "Search time excludes simulation, preparation, selection and accuracy",
+  "original_root": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/b-location-suite-aids16-20261029",
+  "retry_root": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/b-location-suite-aids16-retry-20261029",
+  "retry_sites": [
+    "B9",
+    "B10",
+    "B11",
+    "B12",
+    "B13",
+    "B14",
+    "B15",
+    "B16",
+    "B20",
+    "B21",
+    "B22",
+    "B23",
+    "B24"
+  ],
+  "estimator_simulator_and_scientific_settings_identical": true,
+  "prior_stopped_B1_root": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/b-location-suite-20261029"
+}

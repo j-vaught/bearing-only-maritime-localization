@@ -1,0 +1,7 @@
+{
+  "position_error_m": 0.4082858162709077,
+  "method": "WGS84 ellipsoidal geodesic, no fitted alignment",
+  "evaluated_utc": "2026-10-30T04:13:29.894585+00:00",
+  "estimate_sha256": "6f60c5a1b62be16d97505ff63105bc61fa3bff0b613d57507d5f9103bb17003c",
+  "truth_used_to_select_or_refine": false
+}

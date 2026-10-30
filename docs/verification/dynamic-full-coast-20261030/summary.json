@@ -1,0 +1,188 @@
+{
+  "author": "J.C. Vaught",
+  "raw_run": "/home/jvaught2/projects/bearing-only-maritime-localization/runs/dynamic-coastwide-comparison-20261030T033953Z",
+  "scope": "Every trial searches the entire eastern seaboard. Five frozen site frames, two alternating pairs per site.",
+  "source_commit": "1d1680c88d10c2dfa9468d3aab28ac70aef21a8f",
+  "measured_searches": 20,
+  "warmup_searches": 2,
+  "cache_unchanged": true,
+  "default_scheduler_changed": false,
+  "all_outputs_identical": true,
+  "sites": [
+    {
+      "site": "B17",
+      "port": "Charleston",
+      "aids": 67,
+      "fixed_mean_s": 0.8521662990096956,
+      "dynamic_mean_s": 0.8534723634365946,
+      "time_reduction_percent": -0.15326403172910563,
+      "error_m_both_modes": 0.8560632403386089,
+      "wins": 1,
+      "pairs": 2,
+      "terminal_count": 171,
+      "first_fixed_terminal_by_device": {
+        "0": 0,
+        "1": 0,
+        "2": 171
+      },
+      "first_dynamic_terminal_by_device": {
+        "0": 171,
+        "1": 0,
+        "2": 0
+      },
+      "dynamic_candidate_dma_bytes": [
+        0,
+        0
+      ],
+      "dynamic_handoffs": [
+        0,
+        0
+      ],
+      "dynamic_copy_ms_sum": [
+        0,
+        0
+      ],
+      "outputs_identical": true
+    },
+    {
+      "site": "B5",
+      "port": "Providence",
+      "aids": 32,
+      "fixed_mean_s": 24.390466813463718,
+      "dynamic_mean_s": 15.125117593910545,
+      "time_reduction_percent": 37.98758461826009,
+      "error_m_both_modes": 3.56543193667121,
+      "wins": 2,
+      "pairs": 2,
+      "terminal_count": 22764,
+      "first_fixed_terminal_by_device": {
+        "0": 22647,
+        "1": 0,
+        "2": 117
+      },
+      "first_dynamic_terminal_by_device": {
+        "0": 6540,
+        "1": 10769,
+        "2": 5455
+      },
+      "dynamic_candidate_dma_bytes": [
+        760192,
+        759168
+      ],
+      "dynamic_handoffs": [
+        71,
+        75
+      ],
+      "dynamic_copy_ms_sum": [
+        26.816032022237778,
+        23.126943983137608
+      ],
+      "outputs_identical": true
+    },
+    {
+      "site": "B7",
+      "port": "Bridgeport CT",
+      "aids": 24,
+      "fixed_mean_s": 17.05807705805637,
+      "dynamic_mean_s": 9.810011403402314,
+      "time_reduction_percent": 42.49052006264014,
+      "error_m_both_modes": 2.3383598148920237,
+      "wins": 2,
+      "pairs": 2,
+      "terminal_count": 22857,
+      "first_fixed_terminal_by_device": {
+        "0": 354,
+        "1": 22495,
+        "2": 8
+      },
+      "first_dynamic_terminal_by_device": {
+        "0": 6180,
+        "1": 10872,
+        "2": 5805
+      },
+      "dynamic_candidate_dma_bytes": [
+        743872,
+        799040
+      ],
+      "dynamic_handoffs": [
+        74,
+        81
+      ],
+      "dynamic_copy_ms_sum": [
+        21.9534720107913,
+        22.281247991137207
+      ],
+      "outputs_identical": true
+    },
+    {
+      "site": "B16",
+      "port": "Wilmington NC",
+      "aids": 24,
+      "fixed_mean_s": 81.77611285052262,
+      "dynamic_mean_s": 49.14744383236393,
+      "time_reduction_percent": 39.89999998874997,
+      "error_m_both_modes": 0.7424118686022323,
+      "wins": 2,
+      "pairs": 2,
+      "terminal_count": 81734,
+      "first_fixed_terminal_by_device": {
+        "0": 191,
+        "1": 251,
+        "2": 81292
+      },
+      "first_dynamic_terminal_by_device": {
+        "0": 23166,
+        "1": 38003,
+        "2": 20565
+      },
+      "dynamic_candidate_dma_bytes": [
+        2770496,
+        2552896
+      ],
+      "dynamic_handoffs": [
+        269,
+        232
+      ],
+      "dynamic_copy_ms_sum": [
+        93.79081595689058,
+        79.8811840750277
+      ],
+      "outputs_identical": true
+    },
+    {
+      "site": "B11",
+      "port": "Philadelphia",
+      "aids": 18,
+      "fixed_mean_s": 264.5515719910618,
+      "dynamic_mean_s": 173.89922108501196,
+      "time_reduction_percent": 34.2664192935178,
+      "error_m_both_modes": 2.060522725327833,
+      "wins": 2,
+      "pairs": 2,
+      "terminal_count": 411200,
+      "first_fixed_terminal_by_device": {
+        "0": 7929,
+        "1": 104505,
+        "2": 298766
+      },
+      "first_dynamic_terminal_by_device": {
+        "0": 99426,
+        "1": 160885,
+        "2": 150889
+      },
+      "dynamic_candidate_dma_bytes": [
+        9830464,
+        8775168
+      ],
+      "dynamic_handoffs": [
+        873,
+        740
+      ],
+      "dynamic_copy_ms_sum": [
+        285.9924164637923,
+        255.74172805901617
+      ],
+      "outputs_identical": true
+    }
+  ]
+}

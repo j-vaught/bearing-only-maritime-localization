@@ -288,10 +288,24 @@ def _bearing_error(
     sigma_deg: float,
     outlier_probability: float,
     heading_bias_deg: float,
+    max_error_deg: float | None = None,
 ) -> float:
     if _rng(seed, "outlier", key).random() < outlier_probability:
         return float(_rng(seed, "outlier-bearing", key).uniform(0.0, 360.0))
-    error = float(_rng(seed, "bearing-noise", key).normal(0.0, sigma_deg))
+    rng = _rng(seed, "bearing-noise", key)
+    if max_error_deg == 0.0 or sigma_deg == 0.0:
+        error = 0.0
+    else:
+        # Rejection sampling preserves the truncated Gaussian shape instead
+        # of clipping rejected draws into point masses at the limits.
+        for _ in range(10000):
+            error = float(rng.normal(0.0, sigma_deg))
+            if max_error_deg is None or abs(error) <= max_error_deg:
+                break
+        else:
+            raise ValueError(
+                "Bearing truncation failed; sigma is too large for the requested bound."
+            )
     return (bearing_deg + heading_bias_deg + error) % 360.0
 
 
@@ -347,6 +361,11 @@ def run_simulator_v2(
         if not is_visual_entity(record.normalized_type or record.raw_type):
             continue
         metadata = _metadata(record.metadata)
+        if metadata.get("visible_feature_offset_geometry_unsupported") is True:
+            raise ValueError(
+                f"Chart aid {record.key!r} has conflicting or unsupported component offsets; "
+                "supply a supported physical observation point before simulation."
+            )
         catalog_key = record.key
         physical_entity_id = metadata.get("physical_entity_id")
         if physical_entity_id is None:
@@ -383,6 +402,11 @@ def run_simulator_v2(
         if not is_visual_entity(label):
             continue
         metadata = _metadata(item.metadata)
+        if metadata.get("visible_feature_offset_geometry_unsupported") is True:
+            raise ValueError(
+                f"Chart aid {item.object_id!r} has conflicting or unsupported component offsets; "
+                "supply a supported physical observation point before simulation."
+            )
         lon, lat = _offset_position(item.longitude_deg, item.latitude_deg, metadata)
         raw_width = metadata.get("angular_half_width_deg", 0.0)
         if not isinstance(raw_width, (int, float)) or not isfinite(raw_width) or raw_width < 0.0:
@@ -476,6 +500,7 @@ def run_simulator_v2(
                 sigma_deg=sensor.bearing_sigma_deg,
                 outlier_probability=sensor.outlier_probability,
                 heading_bias_deg=mismatch.heading_bias_deg,
+                max_error_deg=sensor.bearing_max_error_deg,
             )
             measurements.append(
                 MeasurementV2(
@@ -524,7 +549,7 @@ def run_simulator_v2(
                 bearing_deg=float(clutter_rng.uniform(0.0, 360.0)),
                 timestamp_utc=timestamp_utc,
                 sigma_deg=sensor.bearing_sigma_deg,
-                object_type=None,
+                object_type="vessel" if sensor.report_type_labels else None,
                 angular_half_width_deg=0.0,
             )
         )

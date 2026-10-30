@@ -148,8 +148,12 @@ def test_combined_runtime_catalog_deduplicates_aid_components_and_keeps_raw_rows
     physical = resolved[0]
     metadata = dict(physical.metadata)
     provenance = dict(physical.provenance)
-    assert metadata["source_component_count"] == 2
-    assert {row["feature_id"] for row in metadata["source_components"]} == {
+    assert metadata["source_component_count"] == 1
+    # The original combined record and its two ENC source features survive
+    # losslessly inside the canonical input-record snapshot.
+    original_metadata = dict(metadata["source_components"][0]["metadata"])
+    assert original_metadata["source_component_count"] == 2
+    assert {row["feature_id"] for row in original_metadata["source_components"]} == {
         "approach-beacon",
         "coastal-light",
     }
@@ -581,10 +585,12 @@ def test_colocated_distinct_aids_make_one_detection() -> None:
         ),
         seed=6,
     )
-    assert len(catalog.records) == 2
+    assert len(catalog.records) == 1
+    assert dict(catalog.records[0].metadata)["source_component_count"] == 2
     assert len(prediction.groups) == 1
+    assert len(prediction.groups[0].member_keys) == 1
     assert len(simulation.diagnostics.groups) == 1
-    assert len(simulation.diagnostics.groups[0].catalog_member_physical_ids) == 2
+    assert len(simulation.diagnostics.groups[0].catalog_member_physical_ids) == 1
 
 
 def test_near_but_distinct_aids_remain_separate_groups() -> None:

@@ -1,0 +1,10 @@
+{
+  "real_detections": 163,
+  "missed_groups": 22,
+  "extra_vessels": 1,
+  "total_detections": 164,
+  "max_abs_actual_bearing_error_deg": 0.4575014761513785,
+  "required_max_error_deg": 0.5,
+  "noise_bound_verified": true,
+  "verification_only_uses_truth_not_search_inputs": true
+}

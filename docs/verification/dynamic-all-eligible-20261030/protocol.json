@@ -1,0 +1,38 @@
+{
+  "source_commit": "58695aaaebc3563f96508bd4b32ca7f39e23fbb6",
+  "saved_suite": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/b-location-suite-preloaded-20261030T005811Z",
+  "eligible_sites": [
+    "B2",
+    "B4",
+    "B5",
+    "B6",
+    "B7",
+    "B8",
+    "B9",
+    "B11",
+    "B12",
+    "B13",
+    "B14",
+    "B15",
+    "B16",
+    "B17",
+    "B18",
+    "B19",
+    "B20",
+    "B21",
+    "B22",
+    "B24"
+  ],
+  "minimum_positive_aids": 16,
+  "scope": "Full eastern seaboard at every site",
+  "observations_regenerated": false,
+  "hardware_profile": false,
+  "searches_per_site": 1,
+  "warmup_excluded": true,
+  "devices": [
+    0,
+    1,
+    2
+  ],
+  "one_resident_session_for_all_sites": true
+}

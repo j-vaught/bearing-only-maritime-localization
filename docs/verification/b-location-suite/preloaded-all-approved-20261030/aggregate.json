@@ -1,0 +1,13 @@
+{
+  "updated_utc": "2026-10-30T01:06:52.544428+00:00",
+  "recorded_sites": 20,
+  "expected_sites": 20,
+  "all_selected_sites_recorded": true,
+  "all24_recorded": false,
+  "status_counts": {
+    "completed": 20
+  },
+  "completed_count": 20,
+  "mean_search_s_completed": 21.325887597724794,
+  "mean_error_m_completed": 2.3346435176528146
+}

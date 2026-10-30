@@ -1,0 +1,66 @@
+{
+  "map": "runs/charleston-search/20261026T222955253680Z/projected-valid-map.json",
+  "catalog": "runs/resident-charleston-coastwide-10km-20261028-inputs/nominal-simulation-catalog.json",
+  "marker_tolerance_deg": 0.5,
+  "search": {
+    "bounds_en_m": [
+      -220366.49772326474,
+      1424309.6784374337,
+      2699585.3102704627,
+      5088044.413143414
+    ],
+    "devices": [
+      0,
+      1,
+      2
+    ],
+    "radius_m": 10000.0,
+    "initial_size_m": 10000.0,
+    "terminal_size_m": 1.0,
+    "batch_cells": 512,
+    "roots_per_task": 8,
+    "object_capacity": 2048,
+    "device_workspace_budget_bytes": 2000000000,
+    "checkpoint_every_batches": 100,
+    "trusted_marker_labels": true,
+    "hard_bearing_bounds_asserted": true,
+    "numerical_validation_accepted": true
+  },
+  "preparation": {
+    "chart_geometry_geojson": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            1524309.6784374337,
+            2599585.3102704627
+          ],
+          [
+            1524309.6784374337,
+            5188044.413143414
+          ],
+          [
+            -320366.49772326474,
+            5188044.413143414
+          ],
+          [
+            -320366.49772326474,
+            2599585.3102704627
+          ],
+          [
+            1524309.6784374337,
+            2599585.3102704627
+          ]
+        ]
+      ]
+    },
+    "catalog_complete": true,
+    "catalog_objects_cover_envelope": true,
+    "identities_certified": true,
+    "exact_positions_asserted": true,
+    "nominal_offsets_asserted": false,
+    "max_projection_scale": 2.0,
+    "azimuth_error_deg": 30.0
+  },
+  "measurements": "/mnt/12TB_Drive/dspire/atlantis-master/JACKIE_drone_training/maritime-localization/runs/b-location-suite-20cm-eight-20261029/B2/attempt-20261029T223458617405Z/measurements.json"
+}

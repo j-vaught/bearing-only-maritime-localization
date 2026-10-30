@@ -1,9 +1,10 @@
 {
   "visibility_radius_m": 10000.0,
   "angular_resolution_deg": 0.1,
-  "bearing_sigma_deg": 0.5,
+  "bearing_sigma_deg": 0.16666666666666666,
   "detection_probability": 0.9,
-  "type_error_probability": 0.05,
+  "type_error_probability": 0.0,
   "expected_clutter_reports": 1.0,
-  "outlier_probability": 0.05
+  "outlier_probability": 0.0,
+  "bearing_max_error_deg": 0.5
 }

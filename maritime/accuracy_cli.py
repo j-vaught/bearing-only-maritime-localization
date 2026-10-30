@@ -19,6 +19,7 @@ from typing import Any, Literal, cast
 import numpy as np
 from pyproj import CRS, Transformer
 
+from maritime.catalog_identity import canonicalize_chart_aids
 from maritime.evaluation.metrics import (
     SupportManifest,
     evaluate_localization,
@@ -56,6 +57,7 @@ from maritime.search.parallel_candidates import (
     CandidatePositionInput,
     PersistentCandidatePool,
 )
+from maritime.search.progress import ProgressCallback, SearchProgressReporter
 from maritime.search.proposals.cache import (
     ProposalCacheContext,
     load_proposal_cache,
@@ -501,6 +503,7 @@ def _search_dispatch(
     branch_max_regions: int,
     telemetry: SearchTelemetry | None = None,
     proposal_cache_input_hashes: dict[str, str] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[LocalizationResult, dict[str, Any], int, bool]:
     config = scorer.config
     if algorithm == "grid":
@@ -509,11 +512,13 @@ def _search_dispatch(
                 GpuCandidateScorer,
                 score_candidate_positions_batched,
             )
-            from maritime.search.reference_grid import enumerate_grid_points
+            from maritime.search.reference_grid import enumerate_grid_points, grid_shape
 
             if not isinstance(scorer, GpuCandidateScorer):
                 raise TypeError("GPU grid search requires GpuCandidateScorer.")
             assert config.bounds_xy is not None
+            shape = grid_shape(config.bounds_xy, spacing_m)
+            total = shape[0] * shape[1]
             from maritime.search.candidate_order import order_candidate_positions
 
             positions = order_candidate_positions(
@@ -526,6 +531,16 @@ def _search_dispatch(
                 positions,
                 candidate_limit=config.candidate_budget,
                 certificate_scope="finite_candidate_set",
+                progress_callback=(
+                    (
+                        lambda completed, progress_total: progress_callback(
+                            "gpu_grid", completed, progress_total
+                        )
+                    )
+                    if progress_callback is not None
+                    else None
+                ),
+                progress_total=min(total, config.candidate_budget),
             )
         else:
             run = run_grid_search_v2(scorer, grid_spacing_m=spacing_m)
@@ -587,6 +602,16 @@ def _search_dispatch(
                 enumerate_grid_points(bounds, spacing_m),
                 candidate_limit=config.candidate_budget,
                 certificate_scope="finite_candidate_set",
+                progress_callback=(
+                    (
+                        lambda completed, progress_total: progress_callback(
+                            "gpu_reference_grid", completed, progress_total
+                        )
+                    )
+                    if progress_callback is not None
+                    else None
+                ),
+                progress_total=min(total, config.candidate_budget),
             )
             outcome_counts = dict(run.outcome_counts)
             evaluated = run.candidate_count
@@ -835,8 +860,8 @@ def _search_dispatch(
         return result, diagnostics, scoring_run.candidate_count, False
     if algorithm in ("wedge_geodesic", "wedge_geodesic_seeded"):
         seeded = algorithm == "wedge_geodesic_seeded"
-        if seeded and config.backend != "cpu":
-            raise ValueError("wedge_geodesic_seeded requires the CPU backend.")
+        if seeded and config.backend == "gpu" and config.candidate_workers != 1:
+            raise ValueError("GPU-seeded geodesic search requires candidate_workers=1.")
         bounds = config.bounds_xy
         if bounds is None:
             raise ValueError("Geodesic wedge search requires finite config.bounds_xy.")
@@ -982,6 +1007,15 @@ def _search_dispatch(
                         source_chunk_size=config.proposal_chunk_size,
                         observation_sigmas_deg=observation_sigmas,
                         solver_tolerance_deg=config.proposal_solver_tolerance_deg,
+                        progress_callback=(
+                            (
+                                lambda completed, total: progress_callback(
+                                    "geodesic_proposals", completed, total
+                                )
+                            )
+                            if progress_callback is not None
+                            else None
+                        ),
                     )
                 cache_save_stage = (
                     telemetry.stage("proposal_cache_save")
@@ -1123,11 +1157,39 @@ def _search_dispatch(
                     telemetry.stage("exact_scoring") if telemetry is not None else nullcontext()
                 )
                 with scoring_stage:
-                    scoring_run = score_candidate_positions(
-                        scorer,
-                        [candidate.position_xy for candidate in candidate_inputs],
-                        candidate_limit=config.candidate_budget,
-                    )
+                    candidate_positions = [candidate.position_xy for candidate in candidate_inputs]
+                    if config.backend == "gpu":
+                        from maritime.search.gpu.search_adapter import (
+                            GpuCandidateScorer,
+                            score_candidate_positions_batched,
+                        )
+
+                        if not isinstance(scorer, GpuCandidateScorer):
+                            raise TypeError("GPU-seeded search requires GpuCandidateScorer.")
+                        scoring_run = score_candidate_positions_batched(
+                            scorer,
+                            candidate_positions,
+                            batch_size=8,
+                            candidate_limit=config.candidate_budget,
+                            progress_callback=(
+                                (
+                                    lambda completed, total: progress_callback(
+                                        "gpu_candidate_scoring", completed, total
+                                    )
+                                )
+                                if progress_callback is not None
+                                else None
+                            ),
+                            progress_total=max(
+                                1, min(len(candidate_positions), config.candidate_budget)
+                            ),
+                        )
+                    else:
+                        scoring_run = score_candidate_positions(
+                            scorer,
+                            candidate_positions,
+                            candidate_limit=config.candidate_budget,
+                        )
             else:
                 pool: PersistentCandidatePool | None = None
                 startup_stage = (
@@ -1564,7 +1626,7 @@ class SearchV2Session:
         normalized_crs = CRS.from_user_input(projected_crs).to_string()
         catalog_bytes = normalized_catalog_path.read_bytes()
         map_bytes = normalized_map_path.read_bytes()
-        catalog = loads_contract(catalog_bytes.decode("utf-8"), CatalogV2)
+        catalog = canonicalize_chart_aids(loads_contract(catalog_bytes.decode("utf-8"), CatalogV2))
         map_input = loads_contract(map_bytes.decode("utf-8"), MapV2)
         vector_map = VectorMap.from_map_v2(map_input, target_crs=normalized_crs)
         snapshot = _StaticSearchSnapshot(
@@ -1656,6 +1718,7 @@ def _search_v2_request(
     expansion_request_timeout_s: float = 1_800.0,
     telemetry_path: str | Path | None = None,
     device_ids: Sequence[int] | None = None,
+    progress_interval_s: float = 0.0,
     _session: SearchV2Session,
     _clock: Callable[[], float],
     _timing_started: float,
@@ -1678,6 +1741,9 @@ def _search_v2_request(
     )
     if not isfinite(expansion_request_timeout_s) or expansion_request_timeout_s <= 0.0:
         raise ValueError("expansion_request_timeout_s must be finite and positive.")
+    if not isfinite(progress_interval_s) or progress_interval_s < 0.0:
+        raise ValueError("progress_interval_s must be finite and nonnegative.")
+    progress = SearchProgressReporter(progress_interval_s) if progress_interval_s > 0.0 else None
     expansion_deadline = (
         _timing_started + expansion_request_timeout_s if expand_assignments_enabled else None
     )
@@ -1842,6 +1908,7 @@ def _search_v2_request(
                     "catalog_sha256": _session._snapshot.catalog_sha256,
                     "map_sha256": _session._snapshot.map_sha256,
                 },
+                progress_callback=progress,
             )
     diagnostics["algorithm"] = selected_algorithm
     diagnostics["assignment_expansion_config"] = (
@@ -2425,6 +2492,7 @@ def search_v2_files(
     expansion_request_timeout_s: float = 1_800.0,
     telemetry_path: str | Path | None = None,
     device_ids: Sequence[int] | None = None,
+    progress_interval_s: float = 0.0,
     _request_started_at: float | None = None,
 ) -> LocalizationResult:
     """Run one cold v2 request, preserving the historical file API."""
@@ -2462,6 +2530,7 @@ def search_v2_files(
         expansion_request_timeout_s=expansion_request_timeout_s,
         telemetry_path=telemetry_path,
         device_ids=device_ids,
+        progress_interval_s=progress_interval_s,
         _session=session,
         _clock=clock,
         _timing_started=started,
@@ -2728,6 +2797,12 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
         help="GPU device index. Repeat to use multiple GPUs; required for GPU backend.",
     )
     parser.add_argument("--telemetry-output", type=Path)
+    parser.add_argument(
+        "--progress-interval-s",
+        type=float,
+        default=5.0,
+        help="Print live stage progress and ETA at this interval; use 0 to disable.",
+    )
     args = parser.parse_args(argv)
     if (
         min(args.spacing_m, args.wedge_cell_size_m, args.refine_initial_step_m) <= 0
@@ -2783,6 +2858,7 @@ def search_v2_main(argv: Sequence[str] | None = None) -> int:
             "expansion_max_branches": args.expansion_max_branches,
             "expansion_request_timeout_s": args.expansion_request_timeout_s,
             "device_ids": args.device_id,
+            "progress_interval_s": args.progress_interval_s,
         }
         if args.requests_jsonl is not None:
             results = _run_jsonl_searches(

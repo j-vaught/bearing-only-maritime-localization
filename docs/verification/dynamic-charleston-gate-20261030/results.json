@@ -1,0 +1,326 @@
+[
+  {
+    "trial": "warm-fixed",
+    "pair": null,
+    "dynamic": false,
+    "search_s": 0.22399050509557128,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 78,
+      "1": 0,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {}
+  },
+  {
+    "trial": "warm-dynamic",
+    "pair": null,
+    "dynamic": true,
+    "search_s": 0.176675614900887,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 39,
+      "1": 39,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {
+      "enabled": true,
+      "mode": "terminal scoring to idle peer GPUs",
+      "map_bytes_moved": 0,
+      "candidate_bytes_moved": 2496,
+      "byte_budget": 33554432,
+      "max_gpu_migrations_per_cell": 1,
+      "transport": "pinned host staging, two DMA legs, no CPU geometry",
+      "handoffs": 1,
+      "records": [
+        {
+          "packet": 0,
+          "source": 1,
+          "destination": 0,
+          "cells": 39,
+          "bytes": 2496,
+          "payload_bytes": 1248,
+          "copy_ms": 0.28729600086808205,
+          "score_ms": 61.9400634765625,
+          "gpu_migrations": 1,
+          "failed": false
+        }
+      ],
+      "forecast_score_ms_per_cell": 1.0033949225010017,
+      "forecast_copy_ms": 0.13745920017361643,
+      "skipped_handoffs": {}
+    }
+  },
+  {
+    "trial": "pair-1-fixed",
+    "pair": 1,
+    "dynamic": false,
+    "search_s": 0.11767768766731024,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 0,
+      "1": 78,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {}
+  },
+  {
+    "trial": "pair-1-dynamic",
+    "pair": 1,
+    "dynamic": true,
+    "search_s": 0.17347873700782657,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 39,
+      "1": 0,
+      "2": 39
+    },
+    "outputs_identical": true,
+    "sharing": {
+      "enabled": true,
+      "mode": "terminal scoring to idle peer GPUs",
+      "map_bytes_moved": 0,
+      "candidate_bytes_moved": 2496,
+      "byte_budget": 33554432,
+      "max_gpu_migrations_per_cell": 1,
+      "transport": "pinned host staging, two DMA legs, no CPU geometry",
+      "handoffs": 1,
+      "records": [
+        {
+          "packet": 0,
+          "source": 2,
+          "destination": 0,
+          "cells": 39,
+          "bytes": 2496,
+          "payload_bytes": 1248,
+          "copy_ms": 0.27884800359606743,
+          "score_ms": 67.0719985961914,
+          "gpu_migrations": 1,
+          "failed": false
+        }
+      ],
+      "forecast_score_ms_per_cell": 1.0120449500450721,
+      "forecast_copy_ms": 0.1357696007192135,
+      "skipped_handoffs": {}
+    }
+  },
+  {
+    "trial": "pair-2-dynamic",
+    "pair": 2,
+    "dynamic": true,
+    "search_s": 0.11316886125132442,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 39,
+      "1": 39,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {
+      "enabled": true,
+      "mode": "terminal scoring to idle peer GPUs",
+      "map_bytes_moved": 0,
+      "candidate_bytes_moved": 2496,
+      "byte_budget": 33554432,
+      "max_gpu_migrations_per_cell": 1,
+      "transport": "pinned host staging, two DMA legs, no CPU geometry",
+      "handoffs": 1,
+      "records": [
+        {
+          "packet": 0,
+          "source": 1,
+          "destination": 0,
+          "cells": 39,
+          "bytes": 2496,
+          "payload_bytes": 1248,
+          "copy_ms": 0.12131199613213539,
+          "score_ms": 68.12630462646484,
+          "gpu_migrations": 1,
+          "failed": false
+        }
+      ],
+      "forecast_score_ms_per_cell": 0.7121588040865385,
+      "forecast_copy_ms": 0.10426239922642709,
+      "skipped_handoffs": {}
+    }
+  },
+  {
+    "trial": "pair-2-fixed",
+    "pair": 2,
+    "dynamic": false,
+    "search_s": 0.12007141811773181,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 0,
+      "1": 78,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {}
+  },
+  {
+    "trial": "pair-3-fixed",
+    "pair": 3,
+    "dynamic": false,
+    "search_s": 0.11844155611470342,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 0,
+      "1": 0,
+      "2": 78
+    },
+    "outputs_identical": true,
+    "sharing": {}
+  },
+  {
+    "trial": "pair-3-dynamic",
+    "pair": 3,
+    "dynamic": true,
+    "search_s": 0.1132994438521564,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 39,
+      "1": 39,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {
+      "enabled": true,
+      "mode": "terminal scoring to idle peer GPUs",
+      "map_bytes_moved": 0,
+      "candidate_bytes_moved": 2496,
+      "byte_budget": 33554432,
+      "max_gpu_migrations_per_cell": 1,
+      "transport": "pinned host staging, two DMA legs, no CPU geometry",
+      "handoffs": 1,
+      "records": [
+        {
+          "packet": 0,
+          "source": 0,
+          "destination": 1,
+          "cells": 39,
+          "bytes": 2496,
+          "payload_bytes": 1248,
+          "copy_ms": 0.2353919968008995,
+          "score_ms": 68.55401611328125,
+          "gpu_migrations": 1,
+          "failed": false
+        }
+      ],
+      "forecast_score_ms_per_cell": 0.7121900963416468,
+      "forecast_copy_ms": 0.12707839936017992,
+      "skipped_handoffs": {}
+    }
+  },
+  {
+    "trial": "pair-4-dynamic",
+    "pair": 4,
+    "dynamic": true,
+    "search_s": 0.11007440323010087,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 39,
+      "1": 39,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {
+      "enabled": true,
+      "mode": "terminal scoring to idle peer GPUs",
+      "map_bytes_moved": 0,
+      "candidate_bytes_moved": 2496,
+      "byte_budget": 33554432,
+      "max_gpu_migrations_per_cell": 1,
+      "transport": "pinned host staging, two DMA legs, no CPU geometry",
+      "handoffs": 1,
+      "records": [
+        {
+          "packet": 0,
+          "source": 0,
+          "destination": 1,
+          "cells": 39,
+          "bytes": 2496,
+          "payload_bytes": 1248,
+          "copy_ms": 0.11401600018143654,
+          "score_ms": 69.5116195678711,
+          "gpu_migrations": 1,
+          "failed": false
+        }
+      ],
+      "forecast_score_ms_per_cell": 0.6958767449794672,
+      "forecast_copy_ms": 0.10280320003628732,
+      "skipped_handoffs": {}
+    }
+  },
+  {
+    "trial": "pair-4-fixed",
+    "pair": 4,
+    "dynamic": false,
+    "search_s": 0.11234223330393434,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 78,
+      "1": 0,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {}
+  },
+  {
+    "trial": "pair-5-fixed",
+    "pair": 5,
+    "dynamic": false,
+    "search_s": 0.11780832475051284,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 0,
+      "1": 78,
+      "2": 0
+    },
+    "outputs_identical": true,
+    "sharing": {}
+  },
+  {
+    "trial": "pair-5-dynamic",
+    "pair": 5,
+    "dynamic": true,
+    "search_s": 0.11416701693087816,
+    "error_m": 0.26470169372215374,
+    "terminal_by_device": {
+      "0": 39,
+      "1": 0,
+      "2": 39
+    },
+    "outputs_identical": true,
+    "sharing": {
+      "enabled": true,
+      "mode": "terminal scoring to idle peer GPUs",
+      "map_bytes_moved": 0,
+      "candidate_bytes_moved": 2496,
+      "byte_budget": 33554432,
+      "max_gpu_migrations_per_cell": 1,
+      "transport": "pinned host staging, two DMA legs, no CPU geometry",
+      "handoffs": 1,
+      "records": [
+        {
+          "packet": 0,
+          "source": 2,
+          "destination": 0,
+          "cells": 39,
+          "bytes": 2496,
+          "payload_bytes": 1248,
+          "copy_ms": 0.10134400054812431,
+          "score_ms": 68.62137603759766,
+          "gpu_migrations": 1,
+          "failed": false
+        }
+      ],
+      "forecast_score_ms_per_cell": 0.7132603712815505,
+      "forecast_copy_ms": 0.10026880010962488,
+      "skipped_handoffs": {}
+    }
+  }
+]

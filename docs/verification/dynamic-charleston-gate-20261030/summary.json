@@ -1,0 +1,22 @@
+{
+  "passed_output_equivalence": true,
+  "timing_gate_passed": false,
+  "regional_only": true,
+  "coastwide_executed": false,
+  "fixed_median_s": 0.11780832475051284,
+  "dynamic_median_s": 0.1132994438521564,
+  "median_reduction_percent": 3.8273024490459995,
+  "fixed_mean_s": 0.11726824399083853,
+  "dynamic_mean_s": 0.12483769245445728,
+  "mean_increase_percent": 6.454815221936894,
+  "copy_ms_min_max": [
+    0.10134400054812431,
+    0.27884800359606743
+  ],
+  "bytes_per_dynamic_trial_including_both_legs": 2496,
+  "logical_payload_bytes_per_dynamic_trial": 1248,
+  "position_error_m": 0.26470169372215374,
+  "new_scheduler_default_enabled": false,
+  "unit_checks_passed": 54,
+  "separate_gpu_test_deselected": 1
+}

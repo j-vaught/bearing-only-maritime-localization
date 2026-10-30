@@ -1,0 +1,124 @@
+{
+  "schema": "ResidentBlindEstimateV1",
+  "created_utc": "2026-10-30T04:01:52.065474+00:00",
+  "selection_rule": "Minimum sum absolute residual; ties east then north",
+  "full_region_search_complete": true,
+  "search_summary": {
+    "evaluated": 931987,
+    "pruned": 297649,
+    "terminal": 411200,
+    "completed_roots": 39435,
+    "complete": true,
+    "elapsed_s": 264.3833919148892,
+    "accuracy_evaluated": false,
+    "numerical_validation_accepted": true,
+    "resident_session": {
+      "request_number": 5,
+      "devices": [
+        {
+          "device": 0,
+          "created": false,
+          "reused": true,
+          "initialization_s": 0.0,
+          "owner_thread_id": 132421276776128
+        },
+        {
+          "device": 2,
+          "created": false,
+          "reused": true,
+          "initialization_s": 0.0,
+          "owner_thread_id": 132421250557632
+        },
+        {
+          "device": 1,
+          "created": false,
+          "reused": true,
+          "initialization_s": 0.0,
+          "owner_thread_id": 132421258950336
+        }
+      ],
+      "map_buffers_retained": true
+    }
+  },
+  "positive_marker_reports": 18,
+  "terminal_centers": 411200,
+  "consistent_centers": 219,
+  "fully_matched_centers_including_unresolved": 220,
+  "status_counts": {
+    "0": 219,
+    "1": 38146,
+    "2": 372659,
+    "3": 176
+  },
+  "estimate": {
+    "east_m": 488183.001788454,
+    "north_m": 4415513.349821243,
+    "longitude_deg": -75.13821532274825,
+    "latitude_deg": 39.889601743364516,
+    "sum_absolute_bearing_residual_deg": 2.254644809694696,
+    "status": 0,
+    "flags": 0,
+    "matched_positive_markers": 18,
+    "matched_object_keys": [
+      "enc-physical:d05a8a8b133521068589",
+      "enc-physical:cf531c9fe0fc064abe0a",
+      "enc-physical:e0960fdce0566e535d3b",
+      "enc-physical:ce3dc4a05ea2a5ab9046",
+      "enc-physical:5b3e93efd2a578203986",
+      "chart-coordinate:0x1.3f0a34a1c83c4p+5:-0x1.2c97a5f41aef7p+6",
+      "enc-physical:e75f1dd505ccbf7d5736",
+      "chart-coordinate:0x1.3f15f55d0ecedp+5:-0x1.2c929e10f79f1p+6",
+      "chart-coordinate:0x1.3f11729e830d6p+5:-0x1.2c96ab946de0bp+6",
+      "chart-coordinate:0x1.3f0efd5e65102p+5:-0x1.2c9b214baa228p+6",
+      "enc-physical:d17b7a1ba7ae65299777",
+      "enc-physical:561a1072e8407ee170e5",
+      "chart-coordinate:0x1.3f0a2a836148fp+5:-0x1.2cae9ca339559p+6",
+      "enc-physical:2351219891ee30b1bba9",
+      "chart-coordinate:0x1.3f0ae5f237c06p+5:-0x1.2cb1cd9549a8cp+6",
+      "enc-physical:a27fd6e6cdf2dca1df77",
+      "chart-coordinate:0x1.3f073b503826bp+5:-0x1.2cc8a4b47fcefp+6",
+      "chart-coordinate:0x1.3f25614df8b15p+5:-0x1.2c8d4b05b7cfep+6"
+    ]
+  },
+  "diagnostic_best_complete_assignment": {
+    "east_m": 488183.001788454,
+    "north_m": 4415513.349821243,
+    "longitude_deg": -75.13821532274825,
+    "latitude_deg": 39.889601743364516,
+    "sum_absolute_bearing_residual_deg": 2.254644809694696,
+    "status": 0,
+    "flags": 0,
+    "matched_positive_markers": 18,
+    "matched_object_keys": [
+      "enc-physical:d05a8a8b133521068589",
+      "enc-physical:cf531c9fe0fc064abe0a",
+      "enc-physical:e0960fdce0566e535d3b",
+      "enc-physical:ce3dc4a05ea2a5ab9046",
+      "enc-physical:5b3e93efd2a578203986",
+      "chart-coordinate:0x1.3f0a34a1c83c4p+5:-0x1.2c97a5f41aef7p+6",
+      "enc-physical:e75f1dd505ccbf7d5736",
+      "chart-coordinate:0x1.3f15f55d0ecedp+5:-0x1.2c929e10f79f1p+6",
+      "chart-coordinate:0x1.3f11729e830d6p+5:-0x1.2c96ab946de0bp+6",
+      "chart-coordinate:0x1.3f0efd5e65102p+5:-0x1.2c9b214baa228p+6",
+      "enc-physical:d17b7a1ba7ae65299777",
+      "enc-physical:561a1072e8407ee170e5",
+      "chart-coordinate:0x1.3f0a2a836148fp+5:-0x1.2cae9ca339559p+6",
+      "enc-physical:2351219891ee30b1bba9",
+      "chart-coordinate:0x1.3f0ae5f237c06p+5:-0x1.2cb1cd9549a8cp+6",
+      "enc-physical:a27fd6e6cdf2dca1df77",
+      "chart-coordinate:0x1.3f073b503826bp+5:-0x1.2cc8a4b47fcefp+6",
+      "chart-coordinate:0x1.3f25614df8b15p+5:-0x1.2c8d4b05b7cfep+6"
+    ]
+  },
+  "manifest_sha256": "56b7dfb694a40748a29449a71aa867f79638c807846fca76f71aa39a9acdf02d",
+  "summary_sha256": "ede6da90cf179af7ef92d4dcb45cd92352709413b07e5cc3b016ab44db82136d",
+  "all_leaf_outputs_sha256": "57a27950e2df77194596e81c4d2170bb3c3d9109b45dd4d34874a8be60fed0db",
+  "selector_source_sha256": "cdef7aaac2ee7ce80c11f6083f88fa5ed506549779d42e92594becee86fb04d3",
+  "truth_used_for_selection": false,
+  "selection_device": 0,
+  "cpu_roles": [
+    "read_saved_outputs",
+    "format_selected_coordinates",
+    "write_estimate"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "approved_scope": "Pruning-only recording with saved inputs/cache, GPUs0\u20132; no terminal scoring or new accuracy experiment",
+  "source_commit": "a6ce56c10c78f7db02020d5b8afffa8665d49b80",
+  "created_utc": "2026-10-29T17:45:44.374521+00:00",
+  "devices": [
+    0,
+    1,
+    2
+  ],
+  "cache_rebuild_forbidden": true,
+  "recorder_sha256": "69ed763ff149970f808b048f9f4ff630690f2706eb1e13126a1ee718328cd12f"
+}

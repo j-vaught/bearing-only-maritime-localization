@@ -57,11 +57,15 @@ class VectorMap:
             if unknown is not None:
                 effective_land = effective_land.difference(unknown)
         self._land = effective_land
-        self._land_parts = tuple(_polygon_parts(effective_land))
+        self._land_parts = tuple(_polygonal_parts(effective_land))
         self._tree = STRtree(self._land_parts) if self._land_parts else None
         self._prepared_coverage = prep(coverage) if coverage is not None else None
         self._prepared_unknown = prep(unknown) if unknown is not None else None
-        self._prepared_land = prep(self._land) if not self._land.is_empty else None
+        # Clipping can retain isolated lines/points alongside polygons. Only
+        # polygon interiors are land; keep the original geometry for packing.
+        self._prepared_land = (
+            prep(GeometryCollection(self._land_parts)) if self._land_parts else None
+        )
 
     @classmethod
     def from_map_v2(

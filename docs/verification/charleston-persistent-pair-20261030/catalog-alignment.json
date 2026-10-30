@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "rule": "user_coordinate_radius_rule_v2",
+  "merge_radius_m": 0.2,
+  "objects_checked": 29163,
+  "max_projected_coordinate_error_m": 0.0,
+  "reference_frame_replayed": false,
+  "search_executed": false
+}

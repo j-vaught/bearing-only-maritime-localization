@@ -9,6 +9,7 @@ from math import atan2, degrees, isfinite
 from time import perf_counter
 from typing import Literal
 
+from maritime.catalog_identity import canonicalize_chart_aids
 from maritime.geometry.spatial_index import GeographicSpatialIndex
 from maritime.geometry.vector_map import VectorMap
 from maritime.schemas.inputs_v2 import CatalogV2, MeasurementSetV2
@@ -94,6 +95,7 @@ class CandidateScorer:
             raise TypeError("vector_map must be a VectorMap instance.")
         if not isinstance(config, SearchConfig):
             raise TypeError("config must be a SearchConfig instance.")
+        catalog = canonicalize_chart_aids(catalog)
         self.measurements = measurements
         self.catalog = catalog
         self.vector_map = vector_map

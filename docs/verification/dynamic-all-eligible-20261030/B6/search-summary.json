@@ -1,0 +1,162 @@
+{
+  "evaluated": 103051,
+  "pruned": 83180,
+  "terminal": 3967,
+  "completed_roots": 39435,
+  "complete": true,
+  "elapsed_s": 3.4607737227343023,
+  "accuracy_evaluated": false,
+  "numerical_validation_accepted": true,
+  "resident_session": {
+    "request_number": 6,
+    "devices": [
+      {
+        "device": 0,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 139142165485248
+      },
+      {
+        "device": 2,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 139142144513728
+      },
+      {
+        "device": 1,
+        "created": false,
+        "reused": true,
+        "initialization_s": 0.0,
+        "owner_thread_id": 139142157092544
+      }
+    ],
+    "map_buffers_retained": true
+  },
+  "dynamic_score_sharing": {
+    "enabled": true,
+    "mode": "terminal scoring to idle peer GPUs",
+    "map_bytes_moved": 0,
+    "candidate_bytes_moved": 90048,
+    "byte_budget": 33554432,
+    "max_gpu_migrations_per_cell": 1,
+    "transport": "pinned host staging, two DMA legs, no CPU geometry",
+    "handoffs": 9,
+    "records": [
+      {
+        "packet": 1,
+        "source": 2,
+        "destination": 1,
+        "cells": 119,
+        "bytes": 7616,
+        "payload_bytes": 3808,
+        "copy_ms": 0.27747200429439545,
+        "score_ms": 199.79539489746094,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 0,
+        "source": 2,
+        "destination": 0,
+        "cells": 119,
+        "bytes": 7616,
+        "payload_bytes": 3808,
+        "copy_ms": 0.23545600101351738,
+        "score_ms": 214.20361328125,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 2,
+        "source": 2,
+        "destination": 0,
+        "cells": 146,
+        "bytes": 9344,
+        "payload_bytes": 4672,
+        "copy_ms": 0.37804798781871796,
+        "score_ms": 245.057861328125,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 3,
+        "source": 2,
+        "destination": 1,
+        "cells": 146,
+        "bytes": 9344,
+        "payload_bytes": 4672,
+        "copy_ms": 0.5187520124018192,
+        "score_ms": 253.30982971191406,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 4,
+        "source": 2,
+        "destination": 0,
+        "cells": 216,
+        "bytes": 13824,
+        "payload_bytes": 6912,
+        "copy_ms": 0.20278400275856256,
+        "score_ms": 318.9317321777344,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 5,
+        "source": 2,
+        "destination": 1,
+        "cells": 217,
+        "bytes": 13888,
+        "payload_bytes": 6944,
+        "copy_ms": 1.1858239509165287,
+        "score_ms": 327.5840759277344,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 6,
+        "source": 2,
+        "destination": 0,
+        "cells": 208,
+        "bytes": 13312,
+        "payload_bytes": 6656,
+        "copy_ms": 0.35551998671144247,
+        "score_ms": 277.2615966796875,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 7,
+        "source": 2,
+        "destination": 0,
+        "cells": 118,
+        "bytes": 7552,
+        "payload_bytes": 3776,
+        "copy_ms": 0.11126400344073772,
+        "score_ms": 179.60569763183594,
+        "gpu_migrations": 1,
+        "failed": false
+      },
+      {
+        "packet": 8,
+        "source": 2,
+        "destination": 1,
+        "cells": 118,
+        "bytes": 7552,
+        "payload_bytes": 3776,
+        "copy_ms": 0.366912005469203,
+        "score_ms": 181.3348846435547,
+        "gpu_migrations": 1,
+        "failed": false
+      }
+    ],
+    "forecast_score_ms_per_cell": 1.463941392068399,
+    "forecast_copy_ms": 0.36115710102052295,
+    "skipped_handoffs": {
+      "no_idle_peer": 5
+    }
+  }
+}

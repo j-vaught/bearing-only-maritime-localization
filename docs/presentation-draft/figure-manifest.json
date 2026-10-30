@@ -1,0 +1,881 @@
+{
+  "schema": "MaritimePresentationFiguresV1",
+  "author": "J.C. Vaught",
+  "date": "2026-10-29",
+  "outline_revision": "455f4e8",
+  "main_slide_count": 33,
+  "backup_slide_count": 8,
+  "data_exports": {
+    "data/canonical-triple.json": {
+      "sha256": "40f9f646c596556b9599571341257390b64cce5a62c746c0b4ae218b8918f8c4",
+      "bytes": 10202
+    },
+    "data/catalog-coast.json": {
+      "sha256": "e9a8a5b90a9b29dc19d5afc90d1b20528f88dbfc3705cac863e89ddb1385c4fa",
+      "bytes": 6313248
+    },
+    "data/frame.json": {
+      "sha256": "e2eccfd0f9b8997232d2e604f00e48887594351041d33267e3c530d4ca6f0cc1",
+      "bytes": 56549
+    },
+    "data/heading-demo.json": {
+      "sha256": "0f173f24bfb9ed351e097a1ac2c51b574231b4a7560fbda3725b92a8865185b7",
+      "bytes": 425
+    },
+    "data/map-canonical-triple.json": {
+      "sha256": "ff8040587505f6a943cf340d2c81be7a999ab8add13a0eee930c62d72370aa3b",
+      "bytes": 5890
+    },
+    "data/map-canonical.json": {
+      "sha256": "ff8040587505f6a943cf340d2c81be7a999ab8add13a0eee930c62d72370aa3b",
+      "bytes": 5890
+    },
+    "data/map-charleston.json": {
+      "sha256": "d881b2dacb258ab9a0b27c7981187e7ac6d7ba3a07161ee5c1debd86f2aafbc0",
+      "bytes": 495543
+    },
+    "data/map-coast-display.json": {
+      "sha256": "b4a714d602d6f215c5ee44f57b6407ff6da4d96f7a41a02e5c290cd28b22fdbf",
+      "bytes": 1104685
+    },
+    "data/map-coast.json": {
+      "sha256": "f1a0f7a639bd09316adf8db7965345b309a2668aec8d63bf5a5ec2ac8e1b5d89",
+      "bytes": 8231153
+    },
+    "data/map-land-los.json": {
+      "sha256": "b9a18f110f1ae58b8b4ec07393c60f5becaaef703c36c5025b32bc0e61f01db9",
+      "bytes": 17684
+    },
+    "data/map-merge.json": {
+      "sha256": "5bf7c377078f60902404d1107eb139b707a07af556cd64690b37b8160f108b84",
+      "bytes": 16597
+    },
+    "data/map-merged-pair.json": {
+      "sha256": "e5adf494b5408e24d304d929d7ef41b49912a5205c238f1c8516efdabe596543",
+      "bytes": 24800
+    },
+    "data/map-norfolk.json": {
+      "sha256": "9f5f6b1db5ce833f2430c07aa94133097f1dda5536c63a4e5fe6427c06883fdf",
+      "bytes": 289441
+    },
+    "data/map-portland.json": {
+      "sha256": "022b6d1088c13dcbb812ef47687838df3b44af02c48fb7c3e6a3ed3bc99580f9",
+      "bytes": 245818
+    },
+    "data/map-result-harbor.json": {
+      "sha256": "71e42cea38da6b0f426407ab822bf9afd776e2324c76df42a9f627e037fc170e",
+      "bytes": 33448
+    },
+    "data/measurements.json": {
+      "sha256": "429893f8a3bd736f422c9652b306444e3a13f4206da949124522fe0c3a313e4b",
+      "bytes": 54785
+    },
+    "data/noise-density.json": {
+      "sha256": "cbb76f55d3f4e2eac219717e31c5f6c95c6229220fc8855773e4e0562e55873b",
+      "bytes": 5441
+    },
+    "data/noise-histogram.json": {
+      "sha256": "0035e83da685f1067c7a69c337eb1bb9ab09909b688428d53752a8fcb57f9088",
+      "bytes": 574
+    },
+    "data/observers.json": {
+      "sha256": "011f38145fd891f8ab3fc14d480afff142589cf54b49ee1c5be0f31f637a87a0",
+      "bytes": 5352
+    },
+    "data/range-scenes.json": {
+      "sha256": "1e2cac7b558a16eabfd295df2168198e31ccb8c4f6f369375efc438235f8a829",
+      "bytes": 8070
+    },
+    "data/result.json": {
+      "sha256": "a0320f5c18adb5294ff96fa4ca3734ccfd1f75c7a2dc628a21c846b8efb0059f",
+      "bytes": 81748
+    },
+    "data/run-result.json": {
+      "sha256": "f283d6e320f9312e40106fff327971c6504d7fd71434b420a0e7d256be7206bd",
+      "bytes": 8317
+    },
+    "data/simulation.json": {
+      "sha256": "4ef5b872499c4c44cdcb289067905593327a51f390643d53186a1d7bb839f619",
+      "bytes": 166352
+    },
+    "data/sources.json": {
+      "sha256": "d721f9ec1549fcba86a3a1da837fc9b57031327f9808054c0bc5d19c1a7adcff",
+      "bytes": 11637
+    },
+    "data/technical.json": {
+      "sha256": "840e7d54c1ea742aaa0d441d91390d6770886266486a1d5e9c7d58f7f6556435",
+      "bytes": 1751
+    },
+    "data/terminal-cells.json": {
+      "sha256": "2cbdbc82b4a0da41873e77dfe615753c52fc6f22eafca58dd5078732a3148710",
+      "bytes": 81331
+    }
+  },
+  "figures": [
+    {
+      "slide": 1,
+      "title": "Bearing-only maritime localization",
+      "planned_asset": "F01",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/01.pdf": {
+          "sha256": "9259ff02fd4e3318113286d6b2f496ff483117235f293bf1445f5f24239d310f",
+          "bytes": 388157
+        },
+        "figures/01.png": {
+          "sha256": "3c19b1895df1899ff11da1382f3e90ee57681b5913810cc42f2b2fc41d56091f",
+          "bytes": 141921
+        }
+      }
+    },
+    {
+      "slide": 2,
+      "title": "Where is the observer?",
+      "planned_asset": "F01",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/02.pdf": {
+          "sha256": "56a8ed3f9d60cff79234e88275ccd8d0e187a8f90808f9a75c640ba721efd266",
+          "bytes": 385019
+        },
+        "figures/02.png": {
+          "sha256": "3aa99119d83f63990ee52755f6a1aa659dcc6707ef591bb8b5b1a0087630df81",
+          "bytes": 148142
+        }
+      }
+    },
+    {
+      "slide": 3,
+      "title": "Range uncertainty",
+      "planned_asset": "F03",
+      "evidence_status": "declared_mathematical_construction",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/03.pdf": {
+          "sha256": "185e0d499c3c01eb45499b633c526e988bb62c4149a6134afdc96787f0026f46",
+          "bytes": 148008
+        },
+        "figures/03.png": {
+          "sha256": "b2b46a188a774040ffac08afe986e39e4cb5a9d86ab626f2af4251636d1fc23a",
+          "bytes": 153690
+        }
+      }
+    },
+    {
+      "slide": 4,
+      "title": "Bearings relative to true north",
+      "planned_asset": "F04",
+      "evidence_status": "declared_heading_conversion_on_saved_geometry",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/04.pdf": {
+          "sha256": "5dd2eeaf438eee022e54081c68d335f0844b37bddfe02724d08c3750bfd560eb",
+          "bytes": 142343
+        },
+        "figures/04.png": {
+          "sha256": "460e02f078c4b186f225146851af05f0e35ed9f5c80a89ec266e73c91d9049ef",
+          "bytes": 162522
+        }
+      }
+    },
+    {
+      "slide": 5,
+      "title": "Bearings without supplied object identities",
+      "planned_asset": "F05",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/05.pdf": {
+          "sha256": "9918dc7a0e4da3bb34791379cc057f0c8ee799d58f36a1832de3c89ab512c924",
+          "bytes": 136694
+        },
+        "figures/05.png": {
+          "sha256": "bad5d1f995ab06f86748fa7b5a3b5b63c83722140a49b5b9333045aec80f59e3",
+          "bytes": 232003
+        }
+      }
+    },
+    {
+      "slide": 6,
+      "title": "The system",
+      "planned_asset": "F06",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/06.pdf": {
+          "sha256": "ecd8922edb9c4756dc94bda1cb7886e45a0cf3ecd20d5b68a21efcfc05d91059",
+          "bytes": 727249
+        },
+        "figures/06.png": {
+          "sha256": "3530065f703212fd7175b1dfcf7d873b3a86048f882beef3cbe9b91904597743",
+          "bytes": 227145
+        }
+      }
+    },
+    {
+      "slide": 7,
+      "title": "Geographic data sources",
+      "planned_asset": "F07",
+      "evidence_status": "pending_documentary_capture",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/07.pdf": {
+          "sha256": "2e59a5d2b74dad43f7d60955712b0fe7a48b06d6ef9b0dfabb483a4fdf5fb3d0",
+          "bytes": 243937
+        },
+        "figures/07.png": {
+          "sha256": "805b5747b3606fbfefac4fa3c63a6765573d7aa400953fec218520d1872bb4c6",
+          "bytes": 150274
+        }
+      }
+    },
+    {
+      "slide": 8,
+      "title": "The Eastern Seaboard catalog",
+      "planned_asset": "F08",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/08.pdf": {
+          "sha256": "416fbb95d392a34c6a5bfe069de63ae37465909b49404149b99957e9a8b101f5",
+          "bytes": 615374
+        },
+        "figures/08.png": {
+          "sha256": "b9e72978f701bef94e75459e00e59948f3a56f5691b5e433c758766e598ea145",
+          "bytes": 120249
+        }
+      }
+    },
+    {
+      "slide": 9,
+      "title": "Charleston\u2019s mapped objects",
+      "planned_asset": "F10",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/09.pdf": {
+          "sha256": "6946576a2381d21061541c210e7eeaaf53c614f641c4c973d6ecc5a60a0aca8e",
+          "bytes": 136197
+        },
+        "figures/09.png": {
+          "sha256": "289426f9e64321381b6ab7a79aa880f0853bc2ec0ced3ddc7d09e39267a508b1",
+          "bytes": 126113
+        }
+      }
+    },
+    {
+      "slide": 10,
+      "title": "Three components, one location",
+      "planned_asset": "F11",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/10.pdf": {
+          "sha256": "a9103514826ccec342141183b666ca57fc76a757fa0838d5ff0e42decd21c012",
+          "bytes": 34042
+        },
+        "figures/10.png": {
+          "sha256": "bea5b16f75b5dce62169f7f5ce69bcb317cf35290a8bafac212d74b47f01c08c",
+          "bytes": 58697
+        }
+      }
+    },
+    {
+      "slide": 11,
+      "title": "The AIS snapshot",
+      "planned_asset": "F12",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/11.pdf": {
+          "sha256": "1e2b90b6cf909d2fab4905cc08f5bfddbd17a0086ca9db7e97810914b9d824a7",
+          "bytes": 297475
+        },
+        "figures/11.png": {
+          "sha256": "547dfec521fdcf56c1b4003fe7be24bc72d9740df486cdc17cea4a41d1596efb",
+          "bytes": 142883
+        }
+      }
+    },
+    {
+      "slide": 12,
+      "title": "Test locations",
+      "planned_asset": "F13",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/12.pdf": {
+          "sha256": "1a805a37983503e518be0cda6faef49045770a825b2343811f15020cf02340ec",
+          "bytes": 283801
+        },
+        "figures/12.png": {
+          "sha256": "e797bb23caafaf75a37d44721f56ff9b234863a5c1b6d1fe9623d62b5228630e",
+          "bytes": 139174
+        }
+      }
+    },
+    {
+      "slide": 13,
+      "title": "What the simulator produces",
+      "planned_asset": "F14",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/13.pdf": {
+          "sha256": "b5ddf8c879ae35388365553fee14d1d03fd32a247222fc0f08a9f5aebddbbe90",
+          "bytes": 140385
+        },
+        "figures/13.png": {
+          "sha256": "a321551e9425f436edca14b806d0a26bea8dd3019cd49b3f1a33729ae7964527",
+          "bytes": 245244
+        }
+      }
+    },
+    {
+      "slide": 14,
+      "title": "Sensor configuration",
+      "planned_asset": "F15",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/14.pdf": {
+          "sha256": "e0ce82df050811b0775e581291e1f6bbed2c321ab460d4dfdc11ad9f97c9a795",
+          "bytes": 147866
+        },
+        "figures/14.png": {
+          "sha256": "688e3a9be3eba6a1c565f71f76720783bfe6f8801222c69b6abd7ad7459be284",
+          "bytes": 154538
+        }
+      }
+    },
+    {
+      "slide": 15,
+      "title": "Visibility range changes the scene",
+      "planned_asset": "F16",
+      "evidence_status": "saved_radius_filtered_visibility",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/15.pdf": {
+          "sha256": "e10fe8b5d9891a4b531a355496cd36d534e9f674dfe7b761c17db596bd168c1a",
+          "bytes": 476104
+        },
+        "figures/15.png": {
+          "sha256": "17f501618ed70ca44710e45b91c74c7a6304a2cf0b9406d109f60217e0a2d970",
+          "bytes": 94598
+        }
+      }
+    },
+    {
+      "slide": 16,
+      "title": "Land blocks sight lines",
+      "planned_asset": "F17",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/16.pdf": {
+          "sha256": "fa0e3c06252734373da415aa9df39f2a8ae447e9219f9a7b7e0ab2edac676545",
+          "bytes": 133502
+        },
+        "figures/16.png": {
+          "sha256": "7177a89fe9e42973325f740b8c41e45d430eb537dd76a9c16ab83a9afe1bc75c",
+          "bytes": 124039
+        }
+      }
+    },
+    {
+      "slide": 17,
+      "title": "Angular merging",
+      "planned_asset": "F18",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/17.pdf": {
+          "sha256": "5610d76c5f652ed136d710f0a70f6efc17d67b54e9f23dd4f2bde733d4657e6b",
+          "bytes": 38659
+        },
+        "figures/17.png": {
+          "sha256": "eb94762ec8a99023b3d2b0be07948688a5a286b916b2db1ecc91b4e978eaa03e",
+          "bytes": 78023
+        }
+      }
+    },
+    {
+      "slide": 18,
+      "title": "Bounded angular noise",
+      "planned_asset": "F19",
+      "evidence_status": "saved_frame_error_histogram",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/18.pdf": {
+          "sha256": "2abb5880725ba80c6e2316da3a239aeea7d59d3d90d2d6a30325d57e90f84f64",
+          "bytes": 31119
+        },
+        "figures/18.png": {
+          "sha256": "e8b937b6140b9549812194d8e3f7b4c8115584ad56e58747730ff0b853465677",
+          "bytes": 48827
+        }
+      }
+    },
+    {
+      "slide": 19,
+      "title": "Missed objects and extra vessel reports",
+      "planned_asset": "F20",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/19.pdf": {
+          "sha256": "b194903732492005dc2e2b49ea94375eb70804600d9232cfd78a745cd5c00826",
+          "bytes": 30997
+        },
+        "figures/19.png": {
+          "sha256": "8fbe2d011183b98499b41d6ebae6af6669ba245ea2a905c0f24d1eac04e23cd8",
+          "bytes": 55935
+        }
+      }
+    },
+    {
+      "slide": 20,
+      "title": "Worked harbor examples",
+      "planned_asset": "F21",
+      "evidence_status": "pending_scenario_recording",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/20.pdf": {
+          "sha256": "163b99da94436e1c765db8fd7fff5c86983cfce29b0dcda5c36dec1aff9fa5be",
+          "bytes": 267029
+        },
+        "figures/20.png": {
+          "sha256": "22e0a3395886f1e3c5be86dcd53bc1e243124da602175a821c27e00bce96e77c",
+          "bytes": 142632
+        }
+      }
+    },
+    {
+      "slide": 21,
+      "title": "What the search must establish",
+      "planned_asset": "F22",
+      "evidence_status": "declared_mathematical_construction",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/21.pdf": {
+          "sha256": "5614a9ac340a7f11cf54fcb72ffda0111ff10d06325a866193525cc581f63c8b",
+          "bytes": 25524
+        },
+        "figures/21.png": {
+          "sha256": "3e54cb5fa85cfc4bcf4e1791648a08032d0ab115a529593e4dd4e319d14a4e61",
+          "bytes": 65843
+        }
+      }
+    },
+    {
+      "slide": 22,
+      "title": "Exhaustive search, even across multiple GPUs",
+      "planned_asset": "F23",
+      "evidence_status": "declared_mathematical_construction",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/22.pdf": {
+          "sha256": "c63443ab59e09782912d12246dba56c2eb62248bfd39ca0689a94ef0f3ed725b",
+          "bytes": 28877
+        },
+        "figures/22.png": {
+          "sha256": "bf2f1fa7bf251e45918990760ee9dabfde90e48a0bea19e3be4eda81444a307f",
+          "bytes": 84486
+        }
+      }
+    },
+    {
+      "slide": 23,
+      "title": "Coarse-to-fine search",
+      "planned_asset": "F24",
+      "evidence_status": "declared_mathematical_construction",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/23.pdf": {
+          "sha256": "22834c2d0072a352674b94ede719411b1b796901dd1556908502bd0736034478",
+          "bytes": 25582
+        },
+        "figures/23.png": {
+          "sha256": "909bf545a01376a00a8268d91813b7dd83b5d5b6f13d91b38f080ef57d167728",
+          "bytes": 49998
+        }
+      }
+    },
+    {
+      "slide": 24,
+      "title": "Pruning",
+      "planned_asset": "F25",
+      "evidence_status": "current_code_conditions_and_recorded_decisions",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/24.pdf": {
+          "sha256": "bf4614dbb0e3efe85ffec96f7622d4aef28b869876887e9e8a7efe517f6f5c97",
+          "bytes": 28842
+        },
+        "figures/24.png": {
+          "sha256": "9c08c57fef95ba80090609b081824c55e94d6861f68533a7d019fd69792630fc",
+          "bytes": 93584
+        }
+      }
+    },
+    {
+      "slide": 25,
+      "title": "Distinct markers must explain distinct reports",
+      "planned_asset": "F26",
+      "evidence_status": "recorded_gpu_incidence_witness",
+      "drawing_source": "pruning/witness.typ",
+      "files": {
+        "figures/25.pdf": {
+          "sha256": "b6ca453b87b15c0a40c19580aa86c61dc7bc4e3d1dfc0a6fdfc11b76656fab40",
+          "bytes": 39494
+        },
+        "figures/25.png": {
+          "sha256": "bf41dd86c1a0594241c26e34f4a6cbee0ec84d999111d05a868f631505e8f41b",
+          "bytes": 106846
+        }
+      }
+    },
+    {
+      "slide": 26,
+      "title": "Deterministic marker scoring",
+      "planned_asset": "F27",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/26.pdf": {
+          "sha256": "28da5241de6f7b5c173761f8ca35c3e39d3c568613091a59d97be0dae8a68864",
+          "bytes": 33957
+        },
+        "figures/26.png": {
+          "sha256": "c6975c5dd7dc747402503709531b128e7f4a473f714ea4bd45f13e33de7a6333",
+          "bytes": 101626
+        }
+      }
+    },
+    {
+      "slide": 27,
+      "title": "The coast-wide search contracts toward Charleston",
+      "planned_asset": "F29",
+      "evidence_status": "recorded_current_pruning_trace_with_frozen_terminal_overlay",
+      "drawing_source": "pruning/pruning-movie.typ",
+      "files": {
+        "figures/27.pdf": {
+          "sha256": "1fb8427a40a8a5a6323405c22e0d533d03eb13d113af370e3a66a07c9c37f10e",
+          "bytes": 284355
+        },
+        "figures/27.png": {
+          "sha256": "487a73094593607bc19c0f8a7f0231ebd77cd1074907c569e53f9403e5c086ba",
+          "bytes": 147966
+        }
+      }
+    },
+    {
+      "slide": 28,
+      "title": "Recorded search workload",
+      "planned_asset": "F30",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/28.pdf": {
+          "sha256": "8d49c804c6954c18f692334c5d631c48043085c2c204075bac8177ab27b30db2",
+          "bytes": 25627
+        },
+        "figures/28.png": {
+          "sha256": "e7691cc7792f9068342e497f4ab717482314c66ed5d1f0b2c7da42dd422dfa98",
+          "bytes": 66305
+        }
+      }
+    },
+    {
+      "slide": 29,
+      "title": "The selected Charleston position",
+      "planned_asset": "F31",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/29.pdf": {
+          "sha256": "eff1268179cd7432f24ba4e3b5f051fb029e9a1293ed95b9ed18756219e1aad1",
+          "bytes": 37162
+        },
+        "figures/29.png": {
+          "sha256": "bc06fd5de404037a354102f844445e9761f7c56b57e8686de0c0c0a6cc968c01",
+          "bytes": 213799
+        }
+      }
+    },
+    {
+      "slide": 30,
+      "title": "The remaining local alternatives",
+      "planned_asset": "F32",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/30.pdf": {
+          "sha256": "56b24586b494f0bfadd4e3604ae0665d361b1c8ec461c5a6b268056db363f3c0",
+          "bytes": 34349
+        },
+        "figures/30.png": {
+          "sha256": "3f627d9e1058b354802df3b050b444bbfd7655c64523145d725f529e240e976f",
+          "bytes": 134330
+        }
+      }
+    },
+    {
+      "slide": 31,
+      "title": "Chart aids versus chart aids plus AIS",
+      "planned_asset": "F33",
+      "evidence_status": "pending_combined_objective_and_paired_evaluation",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/31.pdf": {
+          "sha256": "a75abf134827025a951e78a97f884136d9a326e7e127354fddc235a15c7f6c98",
+          "bytes": 21493
+        },
+        "figures/31.png": {
+          "sha256": "9380150953f26c84a33bc6fb2ab4d97c6df897a979f2edecc634e2443cfd84a0",
+          "bytes": 210104
+        }
+      }
+    },
+    {
+      "slide": 32,
+      "title": "Time to locate the observer",
+      "planned_asset": "F34",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/32.pdf": {
+          "sha256": "c894254eb5c826cf1859e032e4cb946becbe0f0b5781ceae87bf336635648cfe",
+          "bytes": 146628
+        },
+        "figures/32.png": {
+          "sha256": "3140dd2b49094bc461ee46eede7a865483094c6a5930f2673b0497a3788bd60a",
+          "bytes": 140394
+        }
+      }
+    },
+    {
+      "slide": 33,
+      "title": "Current capability and next evaluation",
+      "planned_asset": "F31",
+      "evidence_status": "saved_data_render",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/33.pdf": {
+          "sha256": "b04a984ce311657c417cf5b014f29601d3189202955bc1c04f93c0bd105627b5",
+          "bytes": 147386
+        },
+        "figures/33.png": {
+          "sha256": "070a43b8ccdadb0141cb0a9e3cc66c50907ae20802dba5d0730b9e761562b1f9",
+          "bytes": 144501
+        }
+      }
+    },
+    {
+      "slide": "A1",
+      "title": "Bearing and coordinate conventions",
+      "planned_asset": "F04",
+      "evidence_status": "declared_heading_conversion_on_saved_geometry",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/A1.pdf": {
+          "sha256": "c50743437cdacefa5dd4e6ec4b00a5f70917b8d850c749e7621a6bbc0ff896a5",
+          "bytes": 142343
+        },
+        "figures/A1.png": {
+          "sha256": "460e02f078c4b186f225146851af05f0e35ed9f5c80a89ec266e73c91d9049ef",
+          "bytes": 162522
+        }
+      }
+    },
+    {
+      "slide": "A2",
+      "title": "Complete sensor specification",
+      "planned_asset": "F15",
+      "evidence_status": "saved_data_or_declared_calculation",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/A2.pdf": {
+          "sha256": "2993c3246db5e69f9125b64edae54104296cb580350ac6cfc0cf971eb9923048",
+          "bytes": 23618
+        },
+        "figures/A2.png": {
+          "sha256": "43e3bf851b10365315b96273250fcf844e37a4b250d5a86ffac89da07c2f2e01",
+          "bytes": 67980
+        }
+      }
+    },
+    {
+      "slide": "A3",
+      "title": "Whole-cell uncertainty envelope",
+      "planned_asset": "F22",
+      "evidence_status": "saved_data_or_declared_calculation",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/A3.pdf": {
+          "sha256": "b7033423b126b33a3cec065e5f85364705465621cd55ecb39f2441862e82fca9",
+          "bytes": 25101
+        },
+        "figures/A3.png": {
+          "sha256": "618f423b0bbbb9d4229424102cfd1308d48d4284178bc32416dd21e473b4fea1",
+          "bytes": 60954
+        }
+      }
+    },
+    {
+      "slide": "A4",
+      "title": "Injective feasibility proof",
+      "planned_asset": "F26",
+      "evidence_status": "code_proof_with_recorded_witness_reference",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/A4.pdf": {
+          "sha256": "14af7524c01e17c228572b6c1cece96ff0d84bbf304513b5d681de278a245601",
+          "bytes": 26379
+        },
+        "figures/A4.png": {
+          "sha256": "d7200df9f047c1b6103eec7b6fdd990b4388a9a1a029136d0410b0fcb782e3a1",
+          "bytes": 65343
+        }
+      }
+    },
+    {
+      "slide": "A5",
+      "title": "Exhaustive count arithmetic",
+      "planned_asset": "F23",
+      "evidence_status": "saved_data_or_declared_calculation",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/A5.pdf": {
+          "sha256": "41dd9ba742c39845bdb2c1f6dfa559d45052e684d232151c20f74206cfb30799",
+          "bytes": 26327
+        },
+        "figures/A5.png": {
+          "sha256": "3eb5bc902678e37ea3ee02b399ff321156d56a9def9ac8aa4901d034da1bff34",
+          "bytes": 70668
+        }
+      }
+    },
+    {
+      "slide": "A6",
+      "title": "Catalog provenance and epochs",
+      "planned_asset": "F07",
+      "evidence_status": "saved_data_or_declared_calculation",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/A6.pdf": {
+          "sha256": "9762eb0e1bd08c91cecc0f2cd8257c03e807e93f536997b387fdcd4b92a525d4",
+          "bytes": 24142
+        },
+        "figures/A6.png": {
+          "sha256": "c4c6c1ad50ecffb55c7d8cadbfa982e59e66a986a61cc4f28ba088103907e6ad",
+          "bytes": 68523
+        }
+      }
+    },
+    {
+      "slide": "A7",
+      "title": "Timing definitions",
+      "planned_asset": "F34",
+      "evidence_status": "saved_data_or_declared_calculation",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/A7.pdf": {
+          "sha256": "e0a73fda1d73082ff84a4d03fbd4b0c05d58399825119c8c9eefbff127ec2234",
+          "bytes": 22359
+        },
+        "figures/A7.png": {
+          "sha256": "cb53ee0539811ec822874e80c14b0007dede80e60e1398dfe5049ae5dd858394",
+          "bytes": 48218
+        }
+      }
+    },
+    {
+      "slide": "A8",
+      "title": "Remaining unresolved centers",
+      "planned_asset": "F32",
+      "evidence_status": "saved_data_or_declared_calculation",
+      "drawing_source": "figures.typ; map.typ; technical.typ",
+      "files": {
+        "figures/A8.pdf": {
+          "sha256": "455851323036804d6dacfa1b49e5f9f2a1219f0438877391621bbd167a9ee04a",
+          "bytes": 34349
+        },
+        "figures/A8.png": {
+          "sha256": "3f627d9e1058b354802df3b050b444bbfd7655c64523145d725f529e240e976f",
+          "bytes": 134330
+        }
+      }
+    }
+  ],
+  "media": {
+    "pruning/movie/pruning-playback.mp4": {
+      "sha256": "f57662f9808930d05cde4aea61724c94ae2d2d27a51692d159c5d1b3c06b4b61",
+      "bytes": 755035,
+      "width": 1920,
+      "height": 1080,
+      "r_frame_rate": "24/1",
+      "duration": "38.000000",
+      "nb_frames": "912"
+    },
+    "videos/recorded-result-overview.mp4": {
+      "sha256": "705eb367c8b697808d6fa14c948ba86fc7158987cac35a8e7c19ef99270be243",
+      "bytes": 322502,
+      "width": 1920,
+      "height": 1080,
+      "r_frame_rate": "24/1",
+      "duration": "11.958333",
+      "nb_frames": "287"
+    },
+    "videos/scene-to-bearings.mp4": {
+      "sha256": "2451bc9171080db5d27ce0aa6238b557f7df77ea629b78e935481f74bb74588c",
+      "bytes": 318354,
+      "width": 1920,
+      "height": 1080,
+      "r_frame_rate": "24/1",
+      "duration": "12.000000",
+      "nb_frames": "288"
+    }
+  },
+  "deck": {
+    "file": "slides.pdf",
+    "sha256": "89d1f102d1ffffbff900a668b68c3d72771979c4dc6e614bbc71e365e92d2cfe",
+    "bytes": 3796907
+  },
+  "render_scope": "Original saved experiment outputs, approved pruning-only GPU replay, and declared calculations. No terminal scoring or simulation was rerun.",
+  "pending": "Combined observed-AIS localization comparison and additional-port localization evaluation.",
+  "source_documents": {
+    "slides.typ": "326cf84cf131ccc516641ad972eaf09a50186d2bc64bfca451d32dfa9735c39a",
+    "slides.json": "a2f91a35b6d8eb64dae7de2e795b4acf6f5aaf017d8e646ae4586cf009e18b2a",
+    "notes.md": "d353402e41dba5224618750afb9e5db850be89dc6923345c8c4fb22ac19c1088",
+    "figures.typ": "6bf8eb1d450351b302a3b0b97072444b615be1ea42155654522024468c9d44bf",
+    "map.typ": "90c4e2b7c3dd273d740f231dbf68c02bc73d59d77e39fa7f5e4cf578b1e006e3",
+    "technical.typ": "f41ad3a9eebfa37faa9913ecb45047855649e1976d44e104b0f1af36d5c00780"
+  },
+  "pagination": {
+    "format": "page / total",
+    "total_pages": 41,
+    "sections": [
+      "Introduction",
+      "Geographic data",
+      "Simulator",
+      "Search",
+      "Results",
+      "Technical backup"
+    ]
+  },
+  "recording_source_revision": "a6ce56c",
+  "pruning_recording": {
+    "trace": "pruning/pruning-trace.npz",
+    "trace_sha256": "3cdd8903cbd66e8a6e6b13cecb75b1ef15460ae4f4b3a6e9056743878f989089",
+    "parity": "pruning/parity.json",
+    "all_decisions": 64875,
+    "terminal_rectangles_exactly_match": 397,
+    "terminal_scoring_executed": false,
+    "caches_unchanged": true,
+    "movie": "pruning/movie/pruning-playback.mp4",
+    "witness": "pruning/witness.json"
+  }
+}

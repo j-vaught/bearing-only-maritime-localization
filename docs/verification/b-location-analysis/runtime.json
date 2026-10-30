@@ -1,0 +1,223 @@
+{
+  "author": "J.C. Vaught",
+  "source_sha256": "24423809cc81aefcc84e6e6fb5efdf7dad08f40f779e63789964cb46961b632c",
+  "time_scope": "Search only, excluding preparation, simulation, and selection. B11 is right-censored at the 600 s watchdog.",
+  "rows": [
+    {
+      "site": "B1",
+      "port": "Searsport ME",
+      "aids": 3,
+      "status": "skipped_aid_count",
+      "search_s": null,
+      "plot_search_s": null,
+      "error_m": null
+    },
+    {
+      "site": "B2",
+      "port": "Portland ME",
+      "aids": 67,
+      "status": "failed",
+      "search_s": 8.19175317324698,
+      "plot_search_s": 8.19175317324698,
+      "error_m": null
+    },
+    {
+      "site": "B3",
+      "port": "Portsmouth NH",
+      "aids": 14,
+      "status": "skipped_aid_count",
+      "search_s": null,
+      "plot_search_s": null,
+      "error_m": null
+    },
+    {
+      "site": "B4",
+      "port": "Boston",
+      "aids": 79,
+      "status": "completed",
+      "search_s": 8.175225920975208,
+      "plot_search_s": 8.175225920975208,
+      "error_m": 0.875253962638143
+    },
+    {
+      "site": "B5",
+      "port": "Providence",
+      "aids": 33,
+      "status": "completed",
+      "search_s": 14.530378237832338,
+      "plot_search_s": 14.530378237832338,
+      "error_m": 3.56543193667121
+    },
+    {
+      "site": "B6",
+      "port": "New Haven",
+      "aids": 34,
+      "status": "failed",
+      "search_s": 16.580104036722332,
+      "plot_search_s": 16.580104036722332,
+      "error_m": null
+    },
+    {
+      "site": "B7",
+      "port": "Bridgeport CT",
+      "aids": 24,
+      "status": "failed",
+      "search_s": 60.39819986606017,
+      "plot_search_s": 60.39819986606017,
+      "error_m": null
+    },
+    {
+      "site": "B8",
+      "port": "Port Jefferson NY",
+      "aids": 25,
+      "status": "completed",
+      "search_s": 8.878142201341689,
+      "plot_search_s": 8.878142201341689,
+      "error_m": 1.841855930161129
+    },
+    {
+      "site": "B9",
+      "port": "New York and New Jersey",
+      "aids": 66,
+      "status": "completed",
+      "search_s": 8.153641093987972,
+      "plot_search_s": 8.153641093987972,
+      "error_m": 0.9424969456630262
+    },
+    {
+      "site": "B10",
+      "port": "South Jersey",
+      "aids": 8,
+      "status": "skipped_aid_count",
+      "search_s": null,
+      "plot_search_s": null,
+      "error_m": null
+    },
+    {
+      "site": "B11",
+      "port": "Philadelphia",
+      "aids": 17,
+      "status": "timeout",
+      "search_s": 597.4141478477977,
+      "plot_search_s": 600,
+      "error_m": null
+    },
+    {
+      "site": "B12",
+      "port": "Wilmington DE",
+      "aids": 30,
+      "status": "completed",
+      "search_s": 11.435310697183013,
+      "plot_search_s": 11.435310697183013,
+      "error_m": 1.3321148759348196
+    },
+    {
+      "site": "B13",
+      "port": "Baltimore",
+      "aids": 49,
+      "status": "completed",
+      "search_s": 8.615781679283828,
+      "plot_search_s": 8.615781679283828,
+      "error_m": 1.9415635631752717
+    },
+    {
+      "site": "B14",
+      "port": "Virginia Hampton Roads",
+      "aids": 100,
+      "status": "completed",
+      "search_s": 7.813942257780582,
+      "plot_search_s": 7.813942257780582,
+      "error_m": 2.0761644099585754
+    },
+    {
+      "site": "B15",
+      "port": "Morehead City",
+      "aids": 70,
+      "status": "completed",
+      "search_s": 7.941480373032391,
+      "plot_search_s": 7.941480373032391,
+      "error_m": 1.3238734953981257
+    },
+    {
+      "site": "B16",
+      "port": "Wilmington NC",
+      "aids": 20,
+      "status": "completed",
+      "search_s": 371.49643658613786,
+      "plot_search_s": 371.49643658613786,
+      "error_m": 0.7424118686022323
+    },
+    {
+      "site": "B17",
+      "port": "Charleston",
+      "aids": 64,
+      "status": "completed",
+      "search_s": 7.819304667878896,
+      "plot_search_s": 7.819304667878896,
+      "error_m": 2.060303536941018
+    },
+    {
+      "site": "B18",
+      "port": "Savannah",
+      "aids": 20,
+      "status": "failed",
+      "search_s": 88.9510567956604,
+      "plot_search_s": 88.9510567956604,
+      "error_m": null
+    },
+    {
+      "site": "B19",
+      "port": "Brunswick GA",
+      "aids": 28,
+      "status": "failed",
+      "search_s": 9.139109066221863,
+      "plot_search_s": 9.139109066221863,
+      "error_m": null
+    },
+    {
+      "site": "B20",
+      "port": "Jacksonville",
+      "aids": 23,
+      "status": "failed",
+      "search_s": 9.027434969320893,
+      "plot_search_s": 9.027434969320893,
+      "error_m": null
+    },
+    {
+      "site": "B21",
+      "port": "Port Canaveral",
+      "aids": 53,
+      "status": "failed",
+      "search_s": 8.396342520136386,
+      "plot_search_s": 8.396342520136386,
+      "error_m": null
+    },
+    {
+      "site": "B22",
+      "port": "Palm Beach",
+      "aids": 33,
+      "status": "failed",
+      "search_s": 8.792965108063072,
+      "plot_search_s": 8.792965108063072,
+      "error_m": null
+    },
+    {
+      "site": "B23",
+      "port": "Port Everglades",
+      "aids": 15,
+      "status": "skipped_aid_count",
+      "search_s": null,
+      "plot_search_s": null,
+      "error_m": null
+    },
+    {
+      "site": "B24",
+      "port": "PortMiami",
+      "aids": 58,
+      "status": "completed",
+      "search_s": 8.50740412203595,
+      "plot_search_s": 8.50740412203595,
+      "error_m": 1.753628004458505
+    }
+  ]
+}

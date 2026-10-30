@@ -1,0 +1,4 @@
+{"stage": "saved_prepared_world_loading", "utc": "2026-10-29T21:09:57.754563+00:00"}
+{"stage": "canonical_object_cache_loading", "utc": "2026-10-29T21:10:01.251292+00:00"}
+{"stage": "simulator_raw_layers_loading", "utc": "2026-10-29T21:10:05.183261+00:00"}
+{"stage": "canonical_simulator_scene_loading", "utc": "2026-10-29T21:10:35.079235+00:00"}

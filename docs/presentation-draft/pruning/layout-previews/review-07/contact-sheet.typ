@@ -1,0 +1,21 @@
+#set page(width: 960pt,height: 1280pt,margin: 10pt)
+#set text(font: "Arial",size: 10pt)
+#grid(columns: (1fr,1fr,1fr),gutter: 6pt,
+[#image("frames/frame-01.png",width: 100%)\ Initial grid],
+[#image("frames/frame-02.png",width: 100%)\ 10000 m],
+[#image("frames/frame-03.png",width: 100%)\ 5000 m],
+[#image("frames/frame-04.png",width: 100%)\ 2500 m],
+[#image("frames/frame-05.png",width: 100%)\ 1250 m],
+[#image("frames/frame-06.png",width: 100%)\ 625 m],
+[#image("frames/frame-07.png",width: 100%)\ 312.5 m],
+[#image("frames/frame-08.png",width: 100%)\ 156.25 m],
+[#image("frames/frame-09.png",width: 100%)\ 78.125 m],
+[#image("frames/frame-10.png",width: 100%)\ 39.0625 m],
+[#image("frames/frame-11.png",width: 100%)\ 19.5312 m],
+[#image("frames/frame-12.png",width: 100%)\ 9.76562 m],
+[#image("frames/frame-13.png",width: 100%)\ 4.88281 m],
+[#image("frames/frame-14.png",width: 100%)\ 2.44141 m],
+[#image("frames/frame-15.png",width: 100%)\ 1.2207 m],
+[#image("frames/frame-16.png",width: 100%)\ 0.610352 m],
+[#image("frames/frame-17.png",width: 100%)\ Final scoring],
+)

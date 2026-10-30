@@ -1,0 +1,19 @@
+{
+  "selection": "Keep only the doubled and quadrupled views, not baseline comparisons",
+  "reference": "Charleston crop at the39.0625m stage (16x total zoom)",
+  "stages": [
+    {
+      "cell_size_m": 19.53125,
+      "relative_zoom": 2,
+      "total_zoom": 32,
+      "image": "19p53125m-2x.png"
+    },
+    {
+      "cell_size_m": 9.765625,
+      "relative_zoom": 4,
+      "total_zoom": 64,
+      "image": "9p765625m-4x.png"
+    }
+  ],
+  "full_video_rebuilt": false
+}

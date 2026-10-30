@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import isfinite
 
+from maritime.catalog_identity import (
+    canonicalize_chart_aids,
+    canonicalize_chart_records,
+    is_chart_aid,
+)
 from maritime.geometry.vector_map import VectorMap
-from maritime.schemas.inputs_v2 import CatalogV2, MeasurementSetV2
+from maritime.schemas.inputs_v2 import CatalogRecordV2, CatalogV2, MeasurementSetV2
 from maritime.schemas.truth import EvaluationTruth
 
 
@@ -57,6 +62,49 @@ class PhysicalSceneV2:
         ):
             raise ValueError("Physical object IDs must be unique and distinct from catalog keys.")
 
+        if not self.uncataloged_physical_objects:
+            object.__setattr__(self, "catalog", canonicalize_chart_aids(self.catalog))
+            return
+
+        catalog_keys = {record.key for record in self.catalog.records}
+        catalog_aid_locations = {
+            (record.latitude_deg, record.longitude_deg)
+            for record in self.catalog.records
+            if is_chart_aid(record)
+        }
+        physical_rows = tuple(
+            CatalogRecordV2(
+                key=item.object_id,
+                latitude_deg=item.latitude_deg,
+                longitude_deg=item.longitude_deg,
+                raw_type=item.raw_type,
+                normalized_type=item.normalized_type,
+                metadata=item.metadata,
+            )
+            for item in self.uncataloged_physical_objects
+        )
+        rows = canonicalize_chart_records((*self.catalog.records, *physical_rows))
+        known, unknown = [], []
+        for row in rows:
+            catalogued = row.key in catalog_keys or (
+                is_chart_aid(row) and (row.latitude_deg, row.longitude_deg) in catalog_aid_locations
+            )
+            if catalogued:
+                known.append(row)
+            else:
+                unknown.append(
+                    PhysicalObjectV2(
+                        row.key,
+                        row.longitude_deg,
+                        row.latitude_deg,
+                        row.raw_type,
+                        row.normalized_type,
+                        row.metadata,
+                    )
+                )
+        object.__setattr__(self, "catalog", replace(self.catalog, records=tuple(known)))
+        object.__setattr__(self, "uncataloged_physical_objects", tuple(unknown))
+
 
 @dataclass(frozen=True, slots=True)
 class KnownWaterObserver:
@@ -81,11 +129,12 @@ class SensorConfigurationV2:
 
     visibility_radius_m: float = 10_000.0
     angular_resolution_deg: float = 0.1
-    bearing_sigma_deg: float = 0.5
+    bearing_sigma_deg: float = 1.0 / 6.0
+    bearing_max_error_deg: float | None = 0.5
     detection_probability: float = 0.9
-    type_error_probability: float = 0.05
+    type_error_probability: float = 0.0
     expected_clutter_reports: float = 1.0
-    outlier_probability: float = 0.05
+    outlier_probability: float = 0.0
     report_type_labels: bool = True
 
     def __post_init__(self) -> None:
@@ -93,6 +142,15 @@ class SensorConfigurationV2:
             value = getattr(self, name)
             if not isfinite(value) or value < 0.0:
                 raise ValueError(f"{name} must be finite and nonnegative.")
+        if self.bearing_max_error_deg is not None:
+            if (
+                isinstance(self.bearing_max_error_deg, bool)
+                or not isfinite(self.bearing_max_error_deg)
+                or self.bearing_max_error_deg < 0
+            ):
+                raise ValueError("bearing_max_error_deg must be finite and nonnegative or None.")
+            if self.outlier_probability != 0:
+                raise ValueError("A hard bearing bound requires outlier_probability=0.")
         if self.visibility_radius_m == 0.0:
             raise ValueError("visibility_radius_m must be positive.")
         if (

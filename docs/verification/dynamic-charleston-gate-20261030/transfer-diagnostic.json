@@ -1,0 +1,116 @@
+[
+  {
+    "source": 0,
+    "destination": 1,
+    "array_copy_exact": false,
+    "explicit_peer_exact": false,
+    "pinned_staging_exact": true,
+    "copy_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "explicit_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "source": 0,
+    "destination": 2,
+    "array_copy_exact": false,
+    "explicit_peer_exact": false,
+    "pinned_staging_exact": true,
+    "copy_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "explicit_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "source": 1,
+    "destination": 0,
+    "array_copy_exact": false,
+    "explicit_peer_exact": false,
+    "pinned_staging_exact": true,
+    "copy_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "explicit_first": [
+      1.0,
+      2.0,
+      3.0,
+      4.0
+    ]
+  },
+  {
+    "source": 1,
+    "destination": 2,
+    "array_copy_exact": false,
+    "explicit_peer_exact": false,
+    "pinned_staging_exact": true,
+    "copy_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "explicit_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "source": 2,
+    "destination": 0,
+    "array_copy_exact": false,
+    "explicit_peer_exact": false,
+    "pinned_staging_exact": true,
+    "copy_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "explicit_first": [
+      1.0,
+      2.0,
+      3.0,
+      4.0
+    ]
+  },
+  {
+    "source": 2,
+    "destination": 1,
+    "array_copy_exact": false,
+    "explicit_peer_exact": false,
+    "pinned_staging_exact": true,
+    "copy_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "explicit_first": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  }
+]

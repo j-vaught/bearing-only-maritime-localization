@@ -1,0 +1,12 @@
+{
+  "approved_sites": 20,
+  "completed_estimates": 20,
+  "median_search_s": 1.3043256283272058,
+  "median_error_m": 1.0603868109165855,
+  "mean_error_m": 2.3346435176528146,
+  "estimates_under4m": 19,
+  "total_search_s": 426.5177519544959,
+  "shared_input_loading_s": 51.20957050938159,
+  "gpu_preload_s": 2.304692950565368,
+  "selection_s_total": 19.59712613373995
+}

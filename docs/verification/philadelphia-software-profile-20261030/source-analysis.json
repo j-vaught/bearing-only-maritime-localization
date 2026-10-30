@@ -1,0 +1,469 @@
+{
+  "scope": "Three saved Philadelphia batches; 64 terminal cells each. Software source instrumentation, no hardware counters.",
+  "source_export_note": "The source-page exporter emitted two identical tables per kernel. Each pair was verified identical, retained once, and reconciled exactly against its canonical raw-report kernel ID.",
+  "batches": [
+    {
+      "batch": 0,
+      "totals": {
+        "branch_inst_executed": 635820611,
+        "inst_executed": 5533983686,
+        "memory_l2_theoretical_sectors_global": 1133280982,
+        "memory_l2_theoretical_sectors_local": 354389726,
+        "smsp__branch_targets_threads_divergent": 11770277,
+        "smsp__branch_targets_threads_uniform": 624050334,
+        "thread_inst_executed": 14662767012,
+        "thread_inst_executed_true": 13514183010
+      },
+      "warp_lane_active_fraction": 0.08279956991636855,
+      "warp_lane_predicated_on_fraction": 0.07631360029681519,
+      "mean_active_threads_per_executed_warp_instruction": 2.6495862373237937,
+      "mean_predicated_on_threads_per_executed_warp_instruction": 2.442035209498086,
+      "divergent_branch_fraction": 0.018511946288573524,
+      "top_opcodes_warp": [
+        [
+          "IMAD",
+          1388784151
+        ],
+        [
+          "BRA",
+          635700958
+        ],
+        [
+          "LDG",
+          502624216
+        ],
+        [
+          "DSETP",
+          435426945
+        ],
+        [
+          "ISETP",
+          349290347
+        ],
+        [
+          "DFMA",
+          336113306
+        ],
+        [
+          "DADD",
+          295079866
+        ],
+        [
+          "DMUL",
+          210580373
+        ],
+        [
+          "IADD3",
+          202538567
+        ],
+        [
+          "BSYNC",
+          186961399
+        ],
+        [
+          "BSSY",
+          175198182
+        ],
+        [
+          "STL",
+          131263828
+        ],
+        [
+          "LDL",
+          121740917
+        ],
+        [
+          "SEL",
+          116771030
+        ],
+        [
+          "LOP3",
+          88929449
+        ],
+        [
+          "PRMT",
+          71181414
+        ],
+        [
+          "BREAK",
+          70198787
+        ],
+        [
+          "FSEL",
+          68646271
+        ],
+        [
+          "FSETP",
+          62966068
+        ],
+        [
+          "MUFU",
+          47221545
+        ]
+      ],
+      "top_opcodes_thread_true": [
+        [
+          "IMAD",
+          3061810880
+        ],
+        [
+          "DFMA",
+          1275711339
+        ],
+        [
+          "LDG",
+          1232059087
+        ],
+        [
+          "DSETP",
+          1196241819
+        ],
+        [
+          "ISETP",
+          921905657
+        ],
+        [
+          "DMUL",
+          832577900
+        ],
+        [
+          "PRMT",
+          622561886
+        ],
+        [
+          "BRA",
+          568825282
+        ],
+        [
+          "DADD",
+          562276921
+        ],
+        [
+          "SEL",
+          483191433
+        ],
+        [
+          "BSSY",
+          468643607
+        ],
+        [
+          "BSYNC",
+          468643607
+        ]
+      ],
+      "local_load_store_thread_true": 447592124,
+      "theoretical_global_sector_bytes": 36264991424,
+      "theoretical_local_sector_bytes": 11340471232,
+      "double_instruction_warp_fraction": 0.23079223981651614
+    },
+    {
+      "batch": 1,
+      "totals": {
+        "branch_inst_executed": 397181164,
+        "inst_executed": 3610094402,
+        "memory_l2_theoretical_sectors_global": 869912052,
+        "memory_l2_theoretical_sectors_local": 254934897,
+        "smsp__branch_targets_threads_divergent": 11295814,
+        "smsp__branch_targets_threads_uniform": 385885350,
+        "thread_inst_executed": 12817558638,
+        "thread_inst_executed_true": 11839965962
+      },
+      "warp_lane_active_fraction": 0.11095241919867668,
+      "warp_lane_predicated_on_fraction": 0.10249010001165615,
+      "mean_active_threads_per_executed_warp_instruction": 3.550477414357654,
+      "mean_predicated_on_threads_per_executed_warp_instruction": 3.2796832003729968,
+      "divergent_branch_fraction": 0.028439953914833685,
+      "top_opcodes_warp": [
+        [
+          "IMAD",
+          870633791
+        ],
+        [
+          "BRA",
+          397002152
+        ],
+        [
+          "LDG",
+          317484920
+        ],
+        [
+          "DSETP",
+          282117110
+        ],
+        [
+          "DFMA",
+          245049268
+        ],
+        [
+          "ISETP",
+          228603483
+        ],
+        [
+          "DADD",
+          180223575
+        ],
+        [
+          "DMUL",
+          158192206
+        ],
+        [
+          "IADD3",
+          126488460
+        ],
+        [
+          "BSYNC",
+          124026997
+        ],
+        [
+          "BSSY",
+          112734051
+        ],
+        [
+          "SEL",
+          84554043
+        ],
+        [
+          "STL",
+          82675664
+        ],
+        [
+          "LDL",
+          74225337
+        ],
+        [
+          "PRMT",
+          66492184
+        ],
+        [
+          "LOP3",
+          61694322
+        ],
+        [
+          "FSEL",
+          49021806
+        ],
+        [
+          "FSETP",
+          46152694
+        ],
+        [
+          "BREAK",
+          42754376
+        ],
+        [
+          "MUFU",
+          34608376
+        ]
+      ],
+      "top_opcodes_thread_true": [
+        [
+          "IMAD",
+          2569717547
+        ],
+        [
+          "DFMA",
+          1190563996
+        ],
+        [
+          "LDG",
+          1052775401
+        ],
+        [
+          "DSETP",
+          1046528905
+        ],
+        [
+          "ISETP",
+          805993106
+        ],
+        [
+          "DMUL",
+          780332001
+        ],
+        [
+          "PRMT",
+          612642145
+        ],
+        [
+          "BRA",
+          471831942
+        ],
+        [
+          "DADD",
+          453466371
+        ],
+        [
+          "SEL",
+          449536883
+        ],
+        [
+          "BSSY",
+          408941727
+        ],
+        [
+          "BSYNC",
+          408941727
+        ]
+      ],
+      "local_load_store_thread_true": 357950697,
+      "theoretical_global_sector_bytes": 27837185664,
+      "theoretical_local_sector_bytes": 8157916704,
+      "double_instruction_warp_fraction": 0.2397671813015376
+    },
+    {
+      "batch": 2,
+      "totals": {
+        "branch_inst_executed": 393005933,
+        "inst_executed": 3326236041,
+        "memory_l2_theoretical_sectors_global": 810256691,
+        "memory_l2_theoretical_sectors_local": 250582860,
+        "smsp__branch_targets_threads_divergent": 8225232,
+        "smsp__branch_targets_threads_uniform": 384780701,
+        "thread_inst_executed": 12628962346,
+        "thread_inst_executed_true": 11663770528
+      },
+      "warp_lane_active_fraction": 0.1186491483009278,
+      "warp_lane_predicated_on_fraction": 0.10958116757415053,
+      "mean_active_threads_per_executed_warp_instruction": 3.79677274562969,
+      "mean_predicated_on_threads_per_executed_warp_instruction": 3.506597362372817,
+      "divergent_branch_fraction": 0.020929027552365222,
+      "top_opcodes_warp": [
+        [
+          "IMAD",
+          856726835
+        ],
+        [
+          "BRA",
+          392859601
+        ],
+        [
+          "LDG",
+          309522283
+        ],
+        [
+          "DSETP",
+          259150194
+        ],
+        [
+          "ISETP",
+          216027267
+        ],
+        [
+          "DFMA",
+          177905131
+        ],
+        [
+          "DADD",
+          172371217
+        ],
+        [
+          "IADD3",
+          129267816
+        ],
+        [
+          "BSYNC",
+          115528065
+        ],
+        [
+          "DMUL",
+          114479975
+        ],
+        [
+          "BSSY",
+          107303374
+        ],
+        [
+          "STL",
+          84969597
+        ],
+        [
+          "LDL",
+          78900053
+        ],
+        [
+          "SEL",
+          61546504
+        ],
+        [
+          "PRMT",
+          48203908
+        ],
+        [
+          "LOP3",
+          44999921
+        ],
+        [
+          "BREAK",
+          43622470
+        ],
+        [
+          "FSEL",
+          35749173
+        ],
+        [
+          "FSETP",
+          33467406
+        ],
+        [
+          "MUFU",
+          25095607
+        ]
+      ],
+      "top_opcodes_thread_true": [
+        [
+          "IMAD",
+          2555665790
+        ],
+        [
+          "DFMA",
+          1152156779
+        ],
+        [
+          "LDG",
+          1044675228
+        ],
+        [
+          "DSETP",
+          1030222416
+        ],
+        [
+          "ISETP",
+          797016672
+        ],
+        [
+          "DMUL",
+          757179834
+        ],
+        [
+          "PRMT",
+          598052886
+        ],
+        [
+          "BRA",
+          472590590
+        ],
+        [
+          "DADD",
+          449146434
+        ],
+        [
+          "SEL",
+          435641778
+        ],
+        [
+          "BSSY",
+          403593717
+        ],
+        [
+          "BSYNC",
+          403593717
+        ]
+      ],
+      "local_load_store_thread_true": 361940036,
+      "theoretical_global_sector_bytes": 25928214112,
+      "theoretical_local_sector_bytes": 8018651520,
+      "double_instruction_warp_fraction": 0.21763534159240386
+    }
+  ],
+  "instruction_totals_verified_against_raw_report": true
+}

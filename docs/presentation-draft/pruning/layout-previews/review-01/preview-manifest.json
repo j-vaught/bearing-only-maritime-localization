@@ -1,0 +1,23 @@
+{
+  "scope": "Single saved-stage layout preview only",
+  "source_stage": "pruning/movie/stages/stage-04.json",
+  "generation": 3,
+  "cell_size_m": 1250,
+  "retained": 1103,
+  "rejected": 4017,
+  "legend": "Lilaq0.6.0",
+  "compass": "True north at viewport center; transparent background",
+  "full_video_rebuilt": false,
+  "files": {
+    "source-before.typ": "14ad25c49f70180929359109169b0ea394a59932d3d07a8f896d12ba81fb6259",
+    "pruning-movie.typ": "628f48ff9a6091c268215fef3367262691774be68cca99da3df0a7dec19bca3a",
+    "README.md": "8b53090c9bbd1c8eccd64e5b36c8e2b902ebd0096ce0973d1858cc1deab77a22",
+    "frame.json": "edd4396526a52aa1a00814b0495bfce24ae583486e7c846a80efacb86bd2a2d8",
+    "frame.png": "00c04eb8bd8dd92dd301446c8b2782b9d8aa23a7059b6c786beb891dbb9e0c17",
+    "frame-03.png": "00c04eb8bd8dd92dd301446c8b2782b9d8aa23a7059b6c786beb891dbb9e0c17",
+    "frame-02.png": "1c6a954d151c49239dcaa7b3dbe94d2b306ccdf2dd3b807f485e50570ea09b81",
+    "frame.pdf": "794a7feb0cd9c99bcf05e7ca80fdcc80683d8138202ddbd32377bac3da0ed0fc",
+    "builder-before.py": "e2fb11253ff80521e5966a281ee162b2b77e626ad94409aa3a618434d9baf023",
+    "build_pruning_movie.py": "8b7c55ef8212fbb057f455a5261a7f1bcec138bf2c891ca498ad1739703f7357"
+  }
+}
