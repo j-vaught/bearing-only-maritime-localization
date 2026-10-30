@@ -515,6 +515,12 @@ class ProfiledResidentDevice(OptimizedResidentDevice):
         with profile.span("stage.prune", "stage", self._dimensions(cells, bearings)):
             return super().prune(cells, bearings, tolerances)
 
+    def begin_remote_score(self) -> None:
+        """Start independent sampling for a received scoring packet."""
+        profile = self._require_profile()
+        profile.flush_ready()
+        profile.begin_batch()
+
     def score(self, cells: Any, bearings: Any, tolerances: Any) -> Any:
         profile = self._require_profile()
         if not profile.active:

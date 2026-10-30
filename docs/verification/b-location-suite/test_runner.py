@@ -80,7 +80,15 @@ class RunnerChecks(unittest.TestCase):
 
         self.assertEqual(
             list(inspect.signature(service.PersistentSearchService.search).parameters),
-            ["self", "bearings", "tolerance", "directory", "timeout_s", "progress_check"],
+            [
+                "self",
+                "bearings",
+                "tolerance",
+                "directory",
+                "timeout_s",
+                "progress_check",
+                "sharing",
+            ],
         )
         source = inspect.getsource(service._serve)
         self.assertNotIn('"truth.json"', source)

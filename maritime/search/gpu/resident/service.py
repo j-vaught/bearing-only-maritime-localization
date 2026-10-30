@@ -65,7 +65,8 @@ def _serve(
                         }
                     )
                     continue
-                if set(request) != {"command", "bearings", "tolerances", "directory"}:
+                fields = {"command", "bearings", "tolerances", "directory"}
+                if set(request) not in (fields, fields | {"sharing"}):
                     raise ValueError("Unexpected search request fields")
                 if request["command"] != "search":
                     raise ValueError("Unknown search request")
@@ -82,6 +83,7 @@ def _serve(
                             np.asarray(request["tolerances"], dtype=np.float64),
                             directory / "search",
                             session=session,
+                            **({"sharing": request["sharing"]} if "sharing" in request else {}),
                         )
                         api_wall_s = time.perf_counter() - started
                         profiles = list(session.last_lifecycle_results.values())
@@ -195,20 +197,22 @@ class PersistentSearchService:
         *,
         timeout_s: float,
         progress_check: Any = None,
+        sharing: bool | None = None,
     ) -> dict[str, Any]:
         self.start()
         if self.poisoned:
             raise RuntimeError("Persistent worker is unavailable after a failed request")
         started = time.perf_counter()
         try:
-            self.connection.send(
-                {
-                    "command": "search",
-                    "bearings": bearings,
-                    "tolerances": [tolerance] * len(bearings),
-                    "directory": str(directory),
-                }
-            )
+            request = {
+                "command": "search",
+                "bearings": bearings,
+                "tolerances": [tolerance] * len(bearings),
+                "directory": str(directory),
+            }
+            if sharing is not None:
+                request["sharing"] = sharing
+            self.connection.send(request)
             while not self.connection.poll(0.2):
                 if not self.process.is_alive():
                     raise RuntimeError("Persistent search worker exited during search")

@@ -54,12 +54,14 @@ class ResidentConfig:
     numerical_validation_accepted: bool = False
     checkpoint_every_batches: int = 25
     device_workspace_budget_bytes: int = 2_000_000_000
+    share_terminal_work: bool = False
 
     def __post_init__(self) -> None:
         for name in (
             "trusted_marker_labels",
             "hard_bearing_bounds_asserted",
             "numerical_validation_accepted",
+            "share_terminal_work",
         ):
             if type(getattr(self, name)) is not bool:
                 raise TypeError(f"{name} must be a bool, not a truthy setting.")
@@ -104,6 +106,18 @@ class ResidentDevice:
         cp = self.cp
         with cp.cuda.Device(device):
             self.stream = cp.cuda.Stream(non_blocking=True)
+            self.sharing_stream = None
+            self.sharing_peers = set()
+            if config.share_terminal_work:
+                self.sharing_stream = cp.cuda.Stream(non_blocking=True)
+                for peer in config.devices:
+                    if peer != device and cp.cuda.runtime.deviceCanAccessPeer(device, peer):
+                        self.sharing_peers.add(peer)
+                        try:
+                            cp.cuda.runtime.deviceEnablePeerAccess(peer, 0)
+                        except cp.cuda.runtime.CUDARuntimeError as error:
+                            if error.status != 704:  # cudaErrorPeerAccessAlreadyEnabled.
+                                raise
             with self.stream:
                 bounds, children, edges, offsets = [], [], [], []
                 nb = ne = 0
@@ -156,6 +170,9 @@ class ResidentDevice:
             return
         with self.cp.cuda.Device(self.device), self.stream:
             self.stream.synchronize()
+            sharing_stream = getattr(self, "sharing_stream", None)
+            if sharing_stream is not None:
+                sharing_stream.synchronize()
             for name in (
                 "map_args",
                 "object_args",
@@ -164,6 +181,7 @@ class ResidentDevice:
                 "assignment",
                 "_parallel_prediction_module",
                 "_independent_chart_modules",
+                "sharing_stream",
             ):
                 self.__dict__.pop(name, None)
             self._closed = True
@@ -412,6 +430,7 @@ def _run_resident_search(
     resume: bool = False,
     device_factory: Any | None = None,
     session: ResidentSearchSession | None = None,
+    sharing: bool | None = None,
 ) -> dict[str, Any]:
     """All per-cell work runs on the devices; results apply to centers only.
 
@@ -424,6 +443,9 @@ def _run_resident_search(
             "Automatic resume is pending validation; snapshots are preserved."
         )
     factory = ResidentDevice if device_factory is None else device_factory
+    enabled = config.share_terminal_work if sharing is None else sharing
+    if type(enabled) is not bool or (enabled and not config.share_terminal_work):
+        raise ValueError("Work sharing must be explicitly enabled in the fixed configuration")
     if not callable(factory):
         raise TypeError("device_factory must construct a resident device.")
     bearings = np.asarray(bearings_deg, dtype=np.float64)
@@ -440,6 +462,7 @@ def _run_resident_search(
         schema="ResidentSearchV1",
         implementation_status="experimental_validation_pending",
         config=asdict(config),
+        dynamic_score_sharing_enabled=enabled,
         cpu_roles=[
             "input_preparation",
             "kernel_launch",
@@ -491,9 +514,49 @@ def _run_resident_search(
     control_lock, stop = Lock(), Event()
     start_time = perf_counter()
     totals = dict(evaluated=0, pruned=0, terminal=0, completed_roots=0)
+    active_roots = 0
+    broker = None
+    if enabled:
+        from .work_sharing import ScoreBroker
+
+        broker = ScoreBroker(config.devices)
+
+    def receive_score(resident: Any, device: int, packet: Any, db: Any, dt: Any) -> None:
+        cp = resident.cp
+        copy_begin, copy_end = cp.cuda.Event(), cp.cuda.Event()
+        score_begin, score_end = cp.cuda.Event(), cp.cuda.Event()
+        copy_ms = score_ms = 0.0
+        assert broker is not None
+        try:
+            with resident.sharing_stream:
+                resident.sharing_stream.wait_event(packet.ready)
+                copy_begin.record(resident.sharing_stream)
+                cells = cp.array(packet.cells, copy=True)
+                copy_end.record(resident.sharing_stream)
+            resident.stream.wait_event(copy_end)
+            hook = getattr(resident, "begin_remote_score", None)
+            if hook is not None:
+                hook()
+            score_begin.record(resident.stream)
+            scored = resident.score(cells, db, dt)
+            score_end.record(resident.stream)
+            score_end.synchronize()
+            copy_ms = float(cp.cuda.get_elapsed_time(copy_begin, copy_end))
+            score_ms = float(cp.cuda.get_elapsed_time(score_begin, score_end))
+            folder = output_dir / f"roots-{packet.begin}-{packet.end}-gpu-{device}"
+            folder.mkdir(exist_ok=True)
+            _atomic_npz(
+                folder / f"leaf-peer-{packet.identifier:08d}.npz",
+                {key: cp.asnumpy(value) for key, value in scored.items()},
+            )
+        except BaseException as error:
+            broker.finish(packet, copy_ms=copy_ms, score_ms=score_ms, error=error)
+            raise
+        else:
+            broker.finish(packet, copy_ms=copy_ms, score_ms=score_ms)
 
     def worker(device: int, resident: Any | None = None) -> None:
-        nonlocal next_root
+        nonlocal next_root, active_roots
         if resident is None:
             resident = factory(world, config, device)
         cp = resident.cp
@@ -504,12 +567,26 @@ def _run_resident_search(
                 with control_lock:
                     begin = next_root
                     if begin >= total_roots:
-                        return
-                    end = min(total_roots, begin + config.roots_per_task)
-                    next_root = end
+                        if broker is None or active_roots == 0:
+                            return
+                        end = begin
+                    else:
+                        end = min(total_roots, begin + config.roots_per_task)
+                        next_root = end
+                        active_roots += 1
+                if begin == end:
+                    assert broker is not None
+                    broker.mark_idle(device)
+                    packet = broker.take(device)
+                    if packet is None:
+                        broker.pause()
+                    else:
+                        receive_score(resident, device, packet, db, dt)
+                    continue
                 queue = resident.seed(begin, end, ny)
                 task_dir = output_dir / f"roots-{begin}-{end}-gpu-{device}"
-                task_dir.mkdir()
+                task_dir.mkdir(exist_ok=True)
+                handed_off = []
                 while len(queue) and not stop.is_set():
                     batch, queue = queue[: config.batch_cells], queue[config.batch_cells :]
                     event_start, event_end = cp.cuda.Event(), cp.cuda.Event()
@@ -521,10 +598,33 @@ def _run_resident_search(
                     )
                     terminal, expand = survivor[small], survivor[~small]
                     queue = cp.concatenate((queue, resident.split(expand)))
+                    terminal_count = len(terminal)
+                    if broker is not None and terminal_count:
+                        packets = broker.reserve(
+                            device, terminal_count, begin, end, resident.sharing_peers
+                        )
+                        if packets:
+                            ready = cp.cuda.Event()
+                            ready.record(resident.stream)
+                            offset = terminal_count
+                            for packet in packets:
+                                start = offset - packet.count
+                                broker.publish(packet, terminal[start:offset], ready)
+                                offset = start
+                            terminal = terminal[:offset]
+                            handed_off.extend(packets)
+                    score_begin = cp.cuda.Event() if broker is not None and len(terminal) else None
+                    if score_begin is not None:
+                        score_begin.record(resident.stream)
                     scored = resident.score(terminal, db, dt) if len(terminal) else None
                     event_end.record(resident.stream)
                     event_end.synchronize()
                     elapsed_gpu_ms = float(cp.cuda.get_elapsed_time(event_start, event_end))
+                    if score_begin is not None:
+                        assert broker is not None
+                        broker.observe_local(
+                            len(terminal), float(cp.cuda.get_elapsed_time(score_begin, event_end))
+                        )
                     pruned = int(cp.count_nonzero(states).item())
                     if scored is not None:
                         _atomic_npz(
@@ -536,7 +636,7 @@ def _run_resident_search(
                     with control_lock:
                         totals["evaluated"] += len(batch)
                         totals["pruned"] += pruned
-                        totals["terminal"] += len(terminal)
+                        totals["terminal"] += terminal_count
                         progress = dict(
                             stage="resident_search",
                             device=device,
@@ -551,11 +651,15 @@ def _run_resident_search(
                             stream.write(json.dumps(progress) + "\n")
                     batch_id += 1
                 if not len(queue):
+                    if broker is not None:
+                        for packet in handed_off:
+                            broker.wait(packet, stop)
                     (task_dir / "complete.json").write_text(
                         json.dumps({"begin": begin, "end": end}) + "\n"
                     )
                     with control_lock:
                         totals["completed_roots"] += end - begin
+                        active_roots -= 1
                 else:
                     _atomic_npz(task_dir / "frontier.npz", {"cells": cp.asnumpy(queue)})
 
@@ -602,6 +706,8 @@ def _run_resident_search(
             "devices": list(session.last_device_diagnostics.values()),
             "map_buffers_retained": True,
         }
+    if broker is not None:
+        summary["dynamic_score_sharing"] = broker.summary()
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary
 
@@ -616,6 +722,7 @@ def run_resident_search(
     resume: bool = False,
     device_factory: Any | None = None,
     session: ResidentSearchSession | None = None,
+    sharing: bool | None = None,
 ) -> dict[str, Any]:
     """Search with fresh outputs, optionally retaining devices between requests.
 
@@ -631,6 +738,7 @@ def run_resident_search(
             output_dir,
             resume=resume,
             device_factory=device_factory,
+            sharing=sharing,
         )
     if device_factory is not None:
         raise ValueError("Specify device_factory on the session, not each request.")
@@ -643,4 +751,5 @@ def run_resident_search(
             output_dir,
             resume=resume,
             session=session,
+            sharing=sharing,
         )
