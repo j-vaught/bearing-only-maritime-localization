@@ -114,7 +114,7 @@ class ResidentDevice:
                     if peer != device and cp.cuda.runtime.deviceCanAccessPeer(device, peer):
                         self.sharing_peers.add(peer)
                         try:
-                            cp.cuda.runtime.deviceEnablePeerAccess(peer, 0)
+                            cp.cuda.runtime.deviceEnablePeerAccess(peer)
                         except cp.cuda.runtime.CUDARuntimeError as error:
                             if error.status != 704:  # cudaErrorPeerAccessAlreadyEnabled.
                                 raise

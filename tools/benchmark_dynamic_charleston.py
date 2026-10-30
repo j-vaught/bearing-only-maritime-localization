@@ -132,6 +132,7 @@ def main() -> None:
         def factory(prepared, cfg, device):
             return ProfiledResidentDevice(prepared, cfg, device, sample_every=10)
 
+        runner.save(output / "status.json", {"stage": name, "phase": "gpu_preload"})
         with ResidentSearchSession(world, config, device_factory=factory) as session:
             preload = directory / "preload"
             preload.mkdir()
@@ -253,6 +254,9 @@ def main() -> None:
             },
         )
         runner.save(output / "status.json", {"stage": "finished", "gates": gates})
+    except BaseException as error:
+        runner.save(output / "status.json", {"stage": "failed", "error": str(error)})
+        raise
     finally:
         after = fingerprints()
         runner.save(output / "cache-after.json", after)
