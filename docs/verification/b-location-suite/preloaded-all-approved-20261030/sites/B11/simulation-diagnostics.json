@@ -1,0 +1,317 @@
+{
+  "in_range_physical_count": 74,
+  "line_of_sight_visible_physical_count": 19,
+  "merged_physical_group_count": 19,
+  "detected_physical_group_count": 18,
+  "clutter_report_count": 1,
+  "groups": [
+    {
+      "member_object_ids": [
+        "chart-coordinate:0x1.3f184bf1701a4p+5:-0x1.2c89cbc63c8fdp+6"
+      ],
+      "representative_object_id": "chart-coordinate:0x1.3f184bf1701a4p+5:-0x1.2c89cbc63c8fdp+6",
+      "catalog_member_keys": [
+        "chart-coordinate:0x1.3f184bf1701a4p+5:-0x1.2c89cbc63c8fdp+6"
+      ],
+      "representative_catalog_key": "chart-coordinate:0x1.3f184bf1701a4p+5:-0x1.2c89cbc63c8fdp+6",
+      "catalog_member_physical_ids": [
+        "chart-coordinate:0x1.3f184bf1701a4p+5:-0x1.2c89cbc63c8fdp+6"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": false,
+      "observation_index": null
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:d05a8a8b133521068589"
+      ],
+      "representative_object_id": "enc-physical:d05a8a8b133521068589",
+      "catalog_member_keys": [
+        "enc-physical:d05a8a8b133521068589"
+      ],
+      "representative_catalog_key": "enc-physical:d05a8a8b133521068589",
+      "catalog_member_physical_ids": [
+        "enc-physical:d05a8a8b133521068589"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 0
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:cf531c9fe0fc064abe0a"
+      ],
+      "representative_object_id": "enc-physical:cf531c9fe0fc064abe0a",
+      "catalog_member_keys": [
+        "enc-physical:cf531c9fe0fc064abe0a"
+      ],
+      "representative_catalog_key": "enc-physical:cf531c9fe0fc064abe0a",
+      "catalog_member_physical_ids": [
+        "enc-physical:cf531c9fe0fc064abe0a"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 1
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:e0960fdce0566e535d3b"
+      ],
+      "representative_object_id": "enc-physical:e0960fdce0566e535d3b",
+      "catalog_member_keys": [
+        "enc-physical:e0960fdce0566e535d3b"
+      ],
+      "representative_catalog_key": "enc-physical:e0960fdce0566e535d3b",
+      "catalog_member_physical_ids": [
+        "enc-physical:e0960fdce0566e535d3b"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 2
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:ce3dc4a05ea2a5ab9046"
+      ],
+      "representative_object_id": "enc-physical:ce3dc4a05ea2a5ab9046",
+      "catalog_member_keys": [
+        "enc-physical:ce3dc4a05ea2a5ab9046"
+      ],
+      "representative_catalog_key": "enc-physical:ce3dc4a05ea2a5ab9046",
+      "catalog_member_physical_ids": [
+        "enc-physical:ce3dc4a05ea2a5ab9046"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 3
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:5b3e93efd2a578203986"
+      ],
+      "representative_object_id": "enc-physical:5b3e93efd2a578203986",
+      "catalog_member_keys": [
+        "enc-physical:5b3e93efd2a578203986"
+      ],
+      "representative_catalog_key": "enc-physical:5b3e93efd2a578203986",
+      "catalog_member_physical_ids": [
+        "enc-physical:5b3e93efd2a578203986"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 4
+    },
+    {
+      "member_object_ids": [
+        "chart-coordinate:0x1.3f0a34a1c83c4p+5:-0x1.2c97a5f41aef7p+6"
+      ],
+      "representative_object_id": "chart-coordinate:0x1.3f0a34a1c83c4p+5:-0x1.2c97a5f41aef7p+6",
+      "catalog_member_keys": [
+        "chart-coordinate:0x1.3f0a34a1c83c4p+5:-0x1.2c97a5f41aef7p+6"
+      ],
+      "representative_catalog_key": "chart-coordinate:0x1.3f0a34a1c83c4p+5:-0x1.2c97a5f41aef7p+6",
+      "catalog_member_physical_ids": [
+        "chart-coordinate:0x1.3f0a34a1c83c4p+5:-0x1.2c97a5f41aef7p+6"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 5
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:e75f1dd505ccbf7d5736"
+      ],
+      "representative_object_id": "enc-physical:e75f1dd505ccbf7d5736",
+      "catalog_member_keys": [
+        "enc-physical:e75f1dd505ccbf7d5736"
+      ],
+      "representative_catalog_key": "enc-physical:e75f1dd505ccbf7d5736",
+      "catalog_member_physical_ids": [
+        "enc-physical:e75f1dd505ccbf7d5736"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 6
+    },
+    {
+      "member_object_ids": [
+        "chart-coordinate:0x1.3f15f55d0ecedp+5:-0x1.2c929e10f79f1p+6"
+      ],
+      "representative_object_id": "chart-coordinate:0x1.3f15f55d0ecedp+5:-0x1.2c929e10f79f1p+6",
+      "catalog_member_keys": [
+        "chart-coordinate:0x1.3f15f55d0ecedp+5:-0x1.2c929e10f79f1p+6"
+      ],
+      "representative_catalog_key": "chart-coordinate:0x1.3f15f55d0ecedp+5:-0x1.2c929e10f79f1p+6",
+      "catalog_member_physical_ids": [
+        "chart-coordinate:0x1.3f15f55d0ecedp+5:-0x1.2c929e10f79f1p+6"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 7
+    },
+    {
+      "member_object_ids": [
+        "chart-coordinate:0x1.3f11729e830d6p+5:-0x1.2c96ab946de0bp+6"
+      ],
+      "representative_object_id": "chart-coordinate:0x1.3f11729e830d6p+5:-0x1.2c96ab946de0bp+6",
+      "catalog_member_keys": [
+        "chart-coordinate:0x1.3f11729e830d6p+5:-0x1.2c96ab946de0bp+6"
+      ],
+      "representative_catalog_key": "chart-coordinate:0x1.3f11729e830d6p+5:-0x1.2c96ab946de0bp+6",
+      "catalog_member_physical_ids": [
+        "chart-coordinate:0x1.3f11729e830d6p+5:-0x1.2c96ab946de0bp+6"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 8
+    },
+    {
+      "member_object_ids": [
+        "chart-coordinate:0x1.3f0efd5e65102p+5:-0x1.2c9b214baa228p+6"
+      ],
+      "representative_object_id": "chart-coordinate:0x1.3f0efd5e65102p+5:-0x1.2c9b214baa228p+6",
+      "catalog_member_keys": [
+        "chart-coordinate:0x1.3f0efd5e65102p+5:-0x1.2c9b214baa228p+6"
+      ],
+      "representative_catalog_key": "chart-coordinate:0x1.3f0efd5e65102p+5:-0x1.2c9b214baa228p+6",
+      "catalog_member_physical_ids": [
+        "chart-coordinate:0x1.3f0efd5e65102p+5:-0x1.2c9b214baa228p+6"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 9
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:d17b7a1ba7ae65299777"
+      ],
+      "representative_object_id": "enc-physical:d17b7a1ba7ae65299777",
+      "catalog_member_keys": [
+        "enc-physical:d17b7a1ba7ae65299777"
+      ],
+      "representative_catalog_key": "enc-physical:d17b7a1ba7ae65299777",
+      "catalog_member_physical_ids": [
+        "enc-physical:d17b7a1ba7ae65299777"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 10
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:561a1072e8407ee170e5"
+      ],
+      "representative_object_id": "enc-physical:561a1072e8407ee170e5",
+      "catalog_member_keys": [
+        "enc-physical:561a1072e8407ee170e5"
+      ],
+      "representative_catalog_key": "enc-physical:561a1072e8407ee170e5",
+      "catalog_member_physical_ids": [
+        "enc-physical:561a1072e8407ee170e5"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 11
+    },
+    {
+      "member_object_ids": [
+        "chart-coordinate:0x1.3f0a2a836148fp+5:-0x1.2cae9ca339559p+6"
+      ],
+      "representative_object_id": "chart-coordinate:0x1.3f0a2a836148fp+5:-0x1.2cae9ca339559p+6",
+      "catalog_member_keys": [
+        "chart-coordinate:0x1.3f0a2a836148fp+5:-0x1.2cae9ca339559p+6"
+      ],
+      "representative_catalog_key": "chart-coordinate:0x1.3f0a2a836148fp+5:-0x1.2cae9ca339559p+6",
+      "catalog_member_physical_ids": [
+        "chart-coordinate:0x1.3f0a2a836148fp+5:-0x1.2cae9ca339559p+6"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 12
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:2351219891ee30b1bba9"
+      ],
+      "representative_object_id": "enc-physical:2351219891ee30b1bba9",
+      "catalog_member_keys": [
+        "enc-physical:2351219891ee30b1bba9"
+      ],
+      "representative_catalog_key": "enc-physical:2351219891ee30b1bba9",
+      "catalog_member_physical_ids": [
+        "enc-physical:2351219891ee30b1bba9"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 13
+    },
+    {
+      "member_object_ids": [
+        "chart-coordinate:0x1.3f0ae5f237c06p+5:-0x1.2cb1cd9549a8cp+6"
+      ],
+      "representative_object_id": "chart-coordinate:0x1.3f0ae5f237c06p+5:-0x1.2cb1cd9549a8cp+6",
+      "catalog_member_keys": [
+        "chart-coordinate:0x1.3f0ae5f237c06p+5:-0x1.2cb1cd9549a8cp+6"
+      ],
+      "representative_catalog_key": "chart-coordinate:0x1.3f0ae5f237c06p+5:-0x1.2cb1cd9549a8cp+6",
+      "catalog_member_physical_ids": [
+        "chart-coordinate:0x1.3f0ae5f237c06p+5:-0x1.2cb1cd9549a8cp+6"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 14
+    },
+    {
+      "member_object_ids": [
+        "enc-physical:a27fd6e6cdf2dca1df77"
+      ],
+      "representative_object_id": "enc-physical:a27fd6e6cdf2dca1df77",
+      "catalog_member_keys": [
+        "enc-physical:a27fd6e6cdf2dca1df77"
+      ],
+      "representative_catalog_key": "enc-physical:a27fd6e6cdf2dca1df77",
+      "catalog_member_physical_ids": [
+        "enc-physical:a27fd6e6cdf2dca1df77"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 15
+    },
+    {
+      "member_object_ids": [
+        "chart-coordinate:0x1.3f073b503826bp+5:-0x1.2cc8a4b47fcefp+6"
+      ],
+      "representative_object_id": "chart-coordinate:0x1.3f073b503826bp+5:-0x1.2cc8a4b47fcefp+6",
+      "catalog_member_keys": [
+        "chart-coordinate:0x1.3f073b503826bp+5:-0x1.2cc8a4b47fcefp+6"
+      ],
+      "representative_catalog_key": "chart-coordinate:0x1.3f073b503826bp+5:-0x1.2cc8a4b47fcefp+6",
+      "catalog_member_physical_ids": [
+        "chart-coordinate:0x1.3f073b503826bp+5:-0x1.2cc8a4b47fcefp+6"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 16
+    },
+    {
+      "member_object_ids": [
+        "chart-coordinate:0x1.3f25614df8b15p+5:-0x1.2c8d4b05b7cfep+6"
+      ],
+      "representative_object_id": "chart-coordinate:0x1.3f25614df8b15p+5:-0x1.2c8d4b05b7cfep+6",
+      "catalog_member_keys": [
+        "chart-coordinate:0x1.3f25614df8b15p+5:-0x1.2c8d4b05b7cfep+6"
+      ],
+      "representative_catalog_key": "chart-coordinate:0x1.3f25614df8b15p+5:-0x1.2c8d4b05b7cfep+6",
+      "catalog_member_physical_ids": [
+        "chart-coordinate:0x1.3f25614df8b15p+5:-0x1.2c8d4b05b7cfep+6"
+      ],
+      "identity_limited_catalog_member_keys": [],
+      "detected": true,
+      "observation_index": 17
+    }
+  ],
+  "observation_map_coverage": "known",
+  "heading_bias_deg": 0.0,
+  "catalog_displacement_east_m": 0.0,
+  "catalog_displacement_north_m": 0.0
+}

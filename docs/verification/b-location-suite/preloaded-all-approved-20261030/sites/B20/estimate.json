@@ -1,0 +1,130 @@
+{
+  "schema": "ResidentBlindEstimateV1",
+  "created_utc": "2026-10-30T01:06:39.194608+00:00",
+  "selection_rule": "Minimum sum absolute residual; ties east then north",
+  "full_region_search_complete": true,
+  "search_summary": {
+    "evaluated": 151211,
+    "pruned": 122218,
+    "terminal": 1049,
+    "completed_roots": 39435,
+    "complete": true,
+    "elapsed_s": 4.490137744229287,
+    "accuracy_evaluated": false,
+    "numerical_validation_accepted": true,
+    "resident_session": {
+      "request_number": 18,
+      "devices": [
+        {
+          "device": 0,
+          "created": false,
+          "reused": true,
+          "initialization_s": 0.0,
+          "owner_thread_id": 132242135062208
+        },
+        {
+          "device": 2,
+          "created": false,
+          "reused": true,
+          "initialization_s": 0.0,
+          "owner_thread_id": 132242151847616
+        },
+        {
+          "device": 1,
+          "created": false,
+          "reused": true,
+          "initialization_s": 0.0,
+          "owner_thread_id": 132242143454912
+        }
+      ],
+      "map_buffers_retained": true
+    }
+  },
+  "positive_marker_reports": 21,
+  "terminal_centers": 1049,
+  "consistent_centers": 83,
+  "fully_matched_centers_including_unresolved": 83,
+  "status_counts": {
+    "0": 83,
+    "1": 333,
+    "2": 632,
+    "3": 1
+  },
+  "estimate": {
+    "east_m": -115401.59293810849,
+    "north_m": 3380547.529508744,
+    "longitude_deg": -81.39998857205788,
+    "latitude_deg": 30.399994355038213,
+    "sum_absolute_bearing_residual_deg": 2.3165079557336696,
+    "status": 0,
+    "flags": 0,
+    "matched_positive_markers": 21,
+    "matched_object_keys": [
+      "chart-coordinate:0x1.e66638e44d1c1p+4:-0x1.457e9f0ca0217p+6",
+      "chart-coordinate:0x1.e65f290abb44ep+4:-0x1.4570bbccca489p+6",
+      "chart-coordinate:0x1.e647fbe2640dcp+4:-0x1.45361b3e49e7bp+6",
+      "chart-coordinate:0x1.e65594368349dp+4:-0x1.457148b3cdf84p+6",
+      "chart-coordinate:0x1.e65e4dae08bc6p+4:-0x1.4589e59f2ba9dp+6",
+      "chart-coordinate:0x1.e65837b4a233ap+4:-0x1.457ed7fcabb7bp+6",
+      "chart-coordinate:0x1.e6624066f85cap+4:-0x1.4593eae917863p+6",
+      "chart-coordinate:0x1.e65ccebd67d50p+4:-0x1.4592808c8259ep+6",
+      "chart-coordinate:0x1.e65dda3b4a58fp+4:-0x1.459853e2d6239p+6",
+      "chart-coordinate:0x1.e6539feff4f00p+4:-0x1.459afe535795fp+6",
+      "chart-coordinate:0x1.e652f1dfabccap+4:-0x1.459cba9b71e0fp+6",
+      "chart-coordinate:0x1.e65a690222193p+4:-0x1.459c017b2a42dp+6",
+      "chart-coordinate:0x1.e65070fbeb9e5p+4:-0x1.459e5994c6cc0p+6",
+      "chart-coordinate:0x1.e658a1ed2531fp+4:-0x1.459d868e241a9p+6",
+      "chart-coordinate:0x1.e6593392d4838p+4:-0x1.459da37ef5a96p+6",
+      "chart-coordinate:0x1.e6749f43fd85dp+4:-0x1.45b6b2eb7a370p+6",
+      "chart-coordinate:0x1.e6767480db5cbp+4:-0x1.45b5f13f72dc9p+6",
+      "chart-coordinate:0x1.e677e9e6b9072p+4:-0x1.45b5c1391ad3cp+6",
+      "chart-coordinate:0x1.e67fa2778eacdp+4:-0x1.45a6833c6002ap+6",
+      "chart-coordinate:0x1.e67925f12b50ep+4:-0x1.459f2c229db9cp+6",
+      "chart-coordinate:0x1.e668942338137p+4:-0x1.4588c6f0eab94p+6"
+    ]
+  },
+  "diagnostic_best_complete_assignment": {
+    "east_m": -115401.59293810849,
+    "north_m": 3380547.529508744,
+    "longitude_deg": -81.39998857205788,
+    "latitude_deg": 30.399994355038213,
+    "sum_absolute_bearing_residual_deg": 2.3165079557336696,
+    "status": 0,
+    "flags": 0,
+    "matched_positive_markers": 21,
+    "matched_object_keys": [
+      "chart-coordinate:0x1.e66638e44d1c1p+4:-0x1.457e9f0ca0217p+6",
+      "chart-coordinate:0x1.e65f290abb44ep+4:-0x1.4570bbccca489p+6",
+      "chart-coordinate:0x1.e647fbe2640dcp+4:-0x1.45361b3e49e7bp+6",
+      "chart-coordinate:0x1.e65594368349dp+4:-0x1.457148b3cdf84p+6",
+      "chart-coordinate:0x1.e65e4dae08bc6p+4:-0x1.4589e59f2ba9dp+6",
+      "chart-coordinate:0x1.e65837b4a233ap+4:-0x1.457ed7fcabb7bp+6",
+      "chart-coordinate:0x1.e6624066f85cap+4:-0x1.4593eae917863p+6",
+      "chart-coordinate:0x1.e65ccebd67d50p+4:-0x1.4592808c8259ep+6",
+      "chart-coordinate:0x1.e65dda3b4a58fp+4:-0x1.459853e2d6239p+6",
+      "chart-coordinate:0x1.e6539feff4f00p+4:-0x1.459afe535795fp+6",
+      "chart-coordinate:0x1.e652f1dfabccap+4:-0x1.459cba9b71e0fp+6",
+      "chart-coordinate:0x1.e65a690222193p+4:-0x1.459c017b2a42dp+6",
+      "chart-coordinate:0x1.e65070fbeb9e5p+4:-0x1.459e5994c6cc0p+6",
+      "chart-coordinate:0x1.e658a1ed2531fp+4:-0x1.459d868e241a9p+6",
+      "chart-coordinate:0x1.e6593392d4838p+4:-0x1.459da37ef5a96p+6",
+      "chart-coordinate:0x1.e6749f43fd85dp+4:-0x1.45b6b2eb7a370p+6",
+      "chart-coordinate:0x1.e6767480db5cbp+4:-0x1.45b5f13f72dc9p+6",
+      "chart-coordinate:0x1.e677e9e6b9072p+4:-0x1.45b5c1391ad3cp+6",
+      "chart-coordinate:0x1.e67fa2778eacdp+4:-0x1.45a6833c6002ap+6",
+      "chart-coordinate:0x1.e67925f12b50ep+4:-0x1.459f2c229db9cp+6",
+      "chart-coordinate:0x1.e668942338137p+4:-0x1.4588c6f0eab94p+6"
+    ]
+  },
+  "manifest_sha256": "5465197591f6d51f3115eaa5466f54dae1a8792209c75ca464000180b214aa17",
+  "summary_sha256": "d707fe9654d1a6a968516a2a756a1bd6615a40d2935563680dabdd029d9ce4ac",
+  "all_leaf_outputs_sha256": "71094a8003f5e2d54f03be14758e10b849938f6d9b54d3df74ba22ed284721c4",
+  "selector_source_sha256": "cdef7aaac2ee7ce80c11f6083f88fa5ed506549779d42e92594becee86fb04d3",
+  "truth_used_for_selection": false,
+  "selection_device": 0,
+  "cpu_roles": [
+    "read_saved_outputs",
+    "format_selected_coordinates",
+    "write_estimate"
+  ]
+}

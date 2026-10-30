@@ -1,0 +1,105 @@
+{
+  "minimum_positive_aids": 16,
+  "counted_sites": [
+    {
+      "site_id": "B2",
+      "positive_marker_reports": 62,
+      "eligible": true
+    },
+    {
+      "site_id": "B4",
+      "positive_marker_reports": 74,
+      "eligible": true
+    },
+    {
+      "site_id": "B5",
+      "positive_marker_reports": 32,
+      "eligible": true
+    },
+    {
+      "site_id": "B6",
+      "positive_marker_reports": 36,
+      "eligible": true
+    },
+    {
+      "site_id": "B7",
+      "positive_marker_reports": 24,
+      "eligible": true
+    },
+    {
+      "site_id": "B8",
+      "positive_marker_reports": 26,
+      "eligible": true
+    },
+    {
+      "site_id": "B9",
+      "positive_marker_reports": 68,
+      "eligible": true
+    },
+    {
+      "site_id": "B11",
+      "positive_marker_reports": 18,
+      "eligible": true
+    },
+    {
+      "site_id": "B12",
+      "positive_marker_reports": 32,
+      "eligible": true
+    },
+    {
+      "site_id": "B13",
+      "positive_marker_reports": 47,
+      "eligible": true
+    },
+    {
+      "site_id": "B14",
+      "positive_marker_reports": 97,
+      "eligible": true
+    },
+    {
+      "site_id": "B15",
+      "positive_marker_reports": 65,
+      "eligible": true
+    },
+    {
+      "site_id": "B16",
+      "positive_marker_reports": 24,
+      "eligible": true
+    },
+    {
+      "site_id": "B17",
+      "positive_marker_reports": 67,
+      "eligible": true
+    },
+    {
+      "site_id": "B18",
+      "positive_marker_reports": 21,
+      "eligible": true
+    },
+    {
+      "site_id": "B19",
+      "positive_marker_reports": 26,
+      "eligible": true
+    },
+    {
+      "site_id": "B20",
+      "positive_marker_reports": 21,
+      "eligible": true
+    },
+    {
+      "site_id": "B21",
+      "positive_marker_reports": 57,
+      "eligible": true
+    },
+    {
+      "site_id": "B22",
+      "positive_marker_reports": 33,
+      "eligible": true
+    },
+    {
+      "site_id": "B24",
+      "positive_marker_reports": 57,
+      "eligible": true
+    }
+  ]
+}

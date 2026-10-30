@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "sites_checked": 20,
+  "approved_ids_exact": true,
+  "all_estimate_freeze_and_manifest_summary_hashes_valid": true,
+  "all_wgs84_errors_recomputed": true,
+  "all_selected_matches_distinct_and_complete": true,
+  "all_selected_status_zero_and_flags_zero": true,
+  "all_sites_reused_preloaded_gpus": true,
+  "same_worker_and_owner_threads": true,
+  "both_cache_hashes_recomputed_unchanged": true,
+  "worker_cleanup_verified": true,
+  "preload_did_not_seed_prune_or_score": true,
+  "extra_searches_executed": 0
+}

@@ -1,0 +1,153 @@
+{
+  "passed": true,
+  "approved_sites": 20,
+  "accepted_estimates": 20,
+  "full_coast_all_sites": true,
+  "all_sites_preloaded": true,
+  "same_worker_and_owner_threads": true,
+  "cache_unchanged": true,
+  "independent_wgs84_errors_and_frozen_hashes": true,
+  "checks": [
+    {
+      "site": "B2",
+      "passed": true,
+      "error_m": 2.2459275103319025,
+      "search_s": 0.974035460036248,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B4",
+      "passed": true,
+      "error_m": 0.2667277624697946,
+      "search_s": 0.8850841340608895,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B5",
+      "passed": true,
+      "error_m": 3.56543193667121,
+      "search_s": 24.362586535979062,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B6",
+      "passed": true,
+      "error_m": 0.9329296526183358,
+      "search_s": 4.62377809220925,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B7",
+      "passed": true,
+      "error_m": 2.3383598148920237,
+      "search_s": 16.867561831139028,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B8",
+      "passed": true,
+      "error_m": 1.841855930161129,
+      "search_s": 1.3384273750707507,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B9",
+      "passed": true,
+      "error_m": 0.8625782321929029,
+      "search_s": 1.1108267968520522,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B11",
+      "passed": true,
+      "error_m": 2.060522725327833,
+      "search_s": 264.24364153668284,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B12",
+      "passed": true,
+      "error_m": 1.3677121286445617,
+      "search_s": 7.496131596155465,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B13",
+      "passed": true,
+      "error_m": 1.1878439692148353,
+      "search_s": 1.2123680408112705,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B14",
+      "passed": true,
+      "error_m": 1.2771396876808354,
+      "search_s": 0.7735820850357413,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B15",
+      "passed": true,
+      "error_m": 0.7928184200127477,
+      "search_s": 0.9027469949796796,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B16",
+      "passed": true,
+      "error_m": 0.7424118686022323,
+      "search_s": 81.53283768612891,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B17",
+      "passed": true,
+      "error_m": 0.8560632403386089,
+      "search_s": 0.8331152983009815,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B18",
+      "passed": true,
+      "error_m": 23.45564118214372,
+      "search_s": 5.787351769860834,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B19",
+      "passed": true,
+      "error_m": 0.39553968561762054,
+      "search_s": 1.2702238815836608,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B20",
+      "passed": true,
+      "error_m": 1.2639793057816449,
+      "search_s": 4.490137744229287,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B21",
+      "passed": true,
+      "error_m": 0.2172849917798253,
+      "search_s": 0.8891880898736417,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B22",
+      "passed": true,
+      "error_m": 0.4082858162709077,
+      "search_s": 5.978277421090752,
+      "all_devices_reused": true
+    },
+    {
+      "site": "B24",
+      "passed": true,
+      "error_m": 0.6138164923036211,
+      "search_s": 0.945849584415555,
+      "all_devices_reused": true
+    }
+  ],
+  "new_searches_executed_by_audit": 0
+}
