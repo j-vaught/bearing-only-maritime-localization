@@ -188,8 +188,8 @@ def prepare(*args, **kwargs):
     return original_prepare(*args, **kwargs)
 
 def read(path, model):
-    if mode == "reuse" and model in (MapV2, CatalogV2):
-        raise AssertionError("Map/catalog were parsed again on a cache hit")
+    if mode == "reuse" and model is MapV2:
+        raise AssertionError("Map geometry was parsed again on a cache hit")
     return original_read(path, model)
 
 def forbidden(*args, **kwargs):

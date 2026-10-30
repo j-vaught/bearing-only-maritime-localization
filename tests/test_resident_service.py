@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from contextlib import nullcontext
+from types import SimpleNamespace
 
 import pytest
 
@@ -53,6 +54,8 @@ def _startup_failure(connection, parent_connection, world, config, output_root):
 
 @pytest.fixture
 def fake_service(monkeypatch, tmp_path):
+    # These workers exercise IPC only and never access inherited CUDA state.
+    monkeypatch.setattr(service, "sys", SimpleNamespace(modules={}))
     monkeypatch.setattr(service, "_serve", _fake_worker)
     worker = service.PersistentSearchService(object(), {}, tmp_path)
     yield worker
@@ -96,6 +99,7 @@ def test_resource_limit_callback_stops_worker(fake_service, tmp_path):
 
 
 def test_startup_exit_cleans_up(monkeypatch, tmp_path):
+    monkeypatch.setattr(service, "sys", SimpleNamespace(modules={}))
     monkeypatch.setattr(service, "_serve", _startup_failure)
     worker = service.PersistentSearchService(object(), {}, tmp_path)
     with pytest.raises(RuntimeError, match="without a response"):
@@ -279,3 +283,9 @@ def test_unexpected_worker_exit_cleans_remaining_descendants(fake_service, tmp_p
     assert (tmp_path / "descendant.pid").exists()
     assert service._live_group_members(fake_service.pid) == []
     assert fake_service.poisoned
+
+
+def test_service_rejects_cuda_initialized_supervisor(monkeypatch, tmp_path):
+    monkeypatch.setattr(service, "sys", SimpleNamespace(modules={"cupy": object()}))
+    with pytest.raises(RuntimeError, match="before forking"):
+        service.PersistentSearchService(object(), {}, tmp_path)
