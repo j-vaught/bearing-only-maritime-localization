@@ -1,0 +1,14 @@
+{
+  "stage": "B7",
+  "fixed_median_s": 17.05807705805637,
+  "dynamic_median_s": 9.810011403402314,
+  "speedup": 1.7388437542631476,
+  "pair_wins": 2,
+  "actual_handoffs": 155,
+  "outputs_identical": true,
+  "passed": true,
+  "error_m": 2.3383598148920237,
+  "fixed_mean_s": 17.05807705805637,
+  "dynamic_mean_s": 9.810011403402314,
+  "median_time_reduction_percent": 42.49052006264014
+}

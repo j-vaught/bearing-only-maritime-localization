@@ -1,0 +1,75 @@
+{
+  "comparisons": [
+    {
+      "stage": "B17",
+      "fixed_median_s": 0.8521662990096956,
+      "dynamic_median_s": 0.8534723634365946,
+      "speedup": 0.9984697050744092,
+      "pair_wins": 1,
+      "actual_handoffs": 0,
+      "outputs_identical": true,
+      "passed": false,
+      "error_m": 0.8560632403386089,
+      "fixed_mean_s": 0.8521662990096956,
+      "dynamic_mean_s": 0.8534723634365946,
+      "median_time_reduction_percent": -0.15326403172910563
+    },
+    {
+      "stage": "B5",
+      "fixed_median_s": 24.390466813463718,
+      "dynamic_median_s": 15.125117593910545,
+      "speedup": 1.6125803096753082,
+      "pair_wins": 2,
+      "actual_handoffs": 146,
+      "outputs_identical": true,
+      "passed": true,
+      "error_m": 3.56543193667121,
+      "fixed_mean_s": 24.390466813463718,
+      "dynamic_mean_s": 15.125117593910545,
+      "median_time_reduction_percent": 37.98758461826009
+    },
+    {
+      "stage": "B7",
+      "fixed_median_s": 17.05807705805637,
+      "dynamic_median_s": 9.810011403402314,
+      "speedup": 1.7388437542631476,
+      "pair_wins": 2,
+      "actual_handoffs": 155,
+      "outputs_identical": true,
+      "passed": true,
+      "error_m": 2.3383598148920237,
+      "fixed_mean_s": 17.05807705805637,
+      "dynamic_mean_s": 9.810011403402314,
+      "median_time_reduction_percent": 42.49052006264014
+    },
+    {
+      "stage": "B16",
+      "fixed_median_s": 81.77611285052262,
+      "dynamic_median_s": 49.14744383236393,
+      "speedup": 1.6638935105038462,
+      "pair_wins": 2,
+      "actual_handoffs": 501,
+      "outputs_identical": true,
+      "passed": true,
+      "error_m": 0.7424118686022323,
+      "fixed_mean_s": 81.77611285052262,
+      "dynamic_mean_s": 49.14744383236393,
+      "median_time_reduction_percent": 39.89999998874997
+    },
+    {
+      "stage": "B11",
+      "fixed_median_s": 264.5515719910618,
+      "dynamic_median_s": 173.89922108501196,
+      "speedup": 1.521292449387877,
+      "pair_wins": 2,
+      "actual_handoffs": 1613,
+      "outputs_identical": true,
+      "passed": true,
+      "error_m": 2.060522725327833,
+      "fixed_mean_s": 264.5515719910618,
+      "dynamic_mean_s": 173.89922108501196,
+      "median_time_reduction_percent": 34.2664192935178
+    }
+  ],
+  "default_scheduler_changed": false
+}
